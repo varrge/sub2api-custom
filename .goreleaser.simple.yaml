@@ -64,7 +64,10 @@ release:
     owner: "{{ .Env.GITHUB_REPO_OWNER }}"
     name: "{{ .Env.GITHUB_REPO_NAME }}"
   draft: false
-  prerelease: auto
+  # `-custom.N` is our stable revision suffix, not a GitHub prerelease.
+  # /releases/latest ignores prereleases, so keep custom builds as full releases.
+  prerelease: false
+  make_latest: true
   name_template: "Sub2API {{.Version}} (Simple)"
   # 跳过上传二进制包
   skip_upload: true

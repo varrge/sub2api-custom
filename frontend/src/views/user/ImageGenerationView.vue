@@ -1,5 +1,6 @@
 <template>
-  <div class="mx-auto max-w-[1480px]">
+  <AppLayout>
+    <div class="mx-auto max-w-[1480px]">
     <header class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <div class="mb-2 flex items-center gap-2">
@@ -325,7 +326,8 @@
         </button>
       </template>
     </BaseDialog>
-  </div>
+    </div>
+  </AppLayout>
 </template>
 
 <script setup lang="ts">
@@ -343,6 +345,7 @@ import {
 import { BaseDialog, LoadingSpinner } from '@/components/common'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
+import AppLayout from '@/components/layout/AppLayout.vue'
 import { useAppStore } from '@/stores/app'
 import type { ApiKey } from '@/types'
 

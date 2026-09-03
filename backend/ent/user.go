@@ -101,11 +101,17 @@ type UserEdges struct {
 	PendingAuthSessions []*PendingAuthSession `json:"pending_auth_sessions,omitempty"`
 	// PlatformQuotas holds the value of the platform_quotas edge.
 	PlatformQuotas []*UserPlatformQuota `json:"platform_quotas,omitempty"`
+	// SupportTickets holds the value of the support_tickets edge.
+	SupportTickets []*SupportTicket `json:"support_tickets,omitempty"`
+	// SupportTicketMessages holds the value of the support_ticket_messages edge.
+	SupportTicketMessages []*SupportTicketMessage `json:"support_ticket_messages,omitempty"`
+	// SupportTicketReads holds the value of the support_ticket_reads edge.
+	SupportTicketReads []*SupportTicketRead `json:"support_ticket_reads,omitempty"`
 	// UserAllowedGroups holds the value of the user_allowed_groups edge.
 	UserAllowedGroups []*UserAllowedGroup `json:"user_allowed_groups,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [14]bool
+	loadedTypes [17]bool
 }
 
 // APIKeysOrErr returns the APIKeys value or an error if the edge
@@ -225,10 +231,37 @@ func (e UserEdges) PlatformQuotasOrErr() ([]*UserPlatformQuota, error) {
 	return nil, &NotLoadedError{edge: "platform_quotas"}
 }
 
+// SupportTicketsOrErr returns the SupportTickets value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) SupportTicketsOrErr() ([]*SupportTicket, error) {
+	if e.loadedTypes[13] {
+		return e.SupportTickets, nil
+	}
+	return nil, &NotLoadedError{edge: "support_tickets"}
+}
+
+// SupportTicketMessagesOrErr returns the SupportTicketMessages value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) SupportTicketMessagesOrErr() ([]*SupportTicketMessage, error) {
+	if e.loadedTypes[14] {
+		return e.SupportTicketMessages, nil
+	}
+	return nil, &NotLoadedError{edge: "support_ticket_messages"}
+}
+
+// SupportTicketReadsOrErr returns the SupportTicketReads value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) SupportTicketReadsOrErr() ([]*SupportTicketRead, error) {
+	if e.loadedTypes[15] {
+		return e.SupportTicketReads, nil
+	}
+	return nil, &NotLoadedError{edge: "support_ticket_reads"}
+}
+
 // UserAllowedGroupsOrErr returns the UserAllowedGroups value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) UserAllowedGroupsOrErr() ([]*UserAllowedGroup, error) {
-	if e.loadedTypes[13] {
+	if e.loadedTypes[16] {
 		return e.UserAllowedGroups, nil
 	}
 	return nil, &NotLoadedError{edge: "user_allowed_groups"}
@@ -502,6 +535,21 @@ func (_m *User) QueryPendingAuthSessions() *PendingAuthSessionQuery {
 // QueryPlatformQuotas queries the "platform_quotas" edge of the User entity.
 func (_m *User) QueryPlatformQuotas() *UserPlatformQuotaQuery {
 	return NewUserClient(_m.config).QueryPlatformQuotas(_m)
+}
+
+// QuerySupportTickets queries the "support_tickets" edge of the User entity.
+func (_m *User) QuerySupportTickets() *SupportTicketQuery {
+	return NewUserClient(_m.config).QuerySupportTickets(_m)
+}
+
+// QuerySupportTicketMessages queries the "support_ticket_messages" edge of the User entity.
+func (_m *User) QuerySupportTicketMessages() *SupportTicketMessageQuery {
+	return NewUserClient(_m.config).QuerySupportTicketMessages(_m)
+}
+
+// QuerySupportTicketReads queries the "support_ticket_reads" edge of the User entity.
+func (_m *User) QuerySupportTicketReads() *SupportTicketReadQuery {
+	return NewUserClient(_m.config).QuerySupportTicketReads(_m)
 }
 
 // QueryUserAllowedGroups queries the "user_allowed_groups" edge of the User entity.

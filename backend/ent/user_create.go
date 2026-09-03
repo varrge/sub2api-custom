@@ -19,6 +19,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/supportticket"
+	"github.com/Wei-Shaw/sub2api/ent/supportticketmessage"
+	"github.com/Wei-Shaw/sub2api/ent/supportticketread"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
@@ -563,6 +566,51 @@ func (_c *UserCreate) AddPlatformQuotas(v ...*UserPlatformQuota) *UserCreate {
 	return _c.AddPlatformQuotaIDs(ids...)
 }
 
+// AddSupportTicketIDs adds the "support_tickets" edge to the SupportTicket entity by IDs.
+func (_c *UserCreate) AddSupportTicketIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddSupportTicketIDs(ids...)
+	return _c
+}
+
+// AddSupportTickets adds the "support_tickets" edges to the SupportTicket entity.
+func (_c *UserCreate) AddSupportTickets(v ...*SupportTicket) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddSupportTicketIDs(ids...)
+}
+
+// AddSupportTicketMessageIDs adds the "support_ticket_messages" edge to the SupportTicketMessage entity by IDs.
+func (_c *UserCreate) AddSupportTicketMessageIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddSupportTicketMessageIDs(ids...)
+	return _c
+}
+
+// AddSupportTicketMessages adds the "support_ticket_messages" edges to the SupportTicketMessage entity.
+func (_c *UserCreate) AddSupportTicketMessages(v ...*SupportTicketMessage) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddSupportTicketMessageIDs(ids...)
+}
+
+// AddSupportTicketReadIDs adds the "support_ticket_reads" edge to the SupportTicketRead entity by IDs.
+func (_c *UserCreate) AddSupportTicketReadIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddSupportTicketReadIDs(ids...)
+	return _c
+}
+
+// AddSupportTicketReads adds the "support_ticket_reads" edges to the SupportTicketRead entity.
+func (_c *UserCreate) AddSupportTicketReads(v ...*SupportTicketRead) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddSupportTicketReadIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_c *UserCreate) Mutation() *UserMutation {
 	return _c.mutation
@@ -1098,6 +1146,54 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(userplatformquota.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.SupportTicketsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.SupportTicketsTable,
+			Columns: []string{user.SupportTicketsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(supportticket.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.SupportTicketMessagesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.SupportTicketMessagesTable,
+			Columns: []string{user.SupportTicketMessagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(supportticketmessage.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.SupportTicketReadsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.SupportTicketReadsTable,
+			Columns: []string{user.SupportTicketReadsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(supportticketread.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

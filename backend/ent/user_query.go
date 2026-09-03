@@ -22,6 +22,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/supportticket"
+	"github.com/Wei-Shaw/sub2api/ent/supportticketmessage"
+	"github.com/Wei-Shaw/sub2api/ent/supportticketread"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
@@ -50,6 +53,9 @@ type UserQuery struct {
 	withAuthIdentities        *AuthIdentityQuery
 	withPendingAuthSessions   *PendingAuthSessionQuery
 	withPlatformQuotas        *UserPlatformQuotaQuery
+	withSupportTickets        *SupportTicketQuery
+	withSupportTicketMessages *SupportTicketMessageQuery
+	withSupportTicketReads    *SupportTicketReadQuery
 	withUserAllowedGroups     *UserAllowedGroupQuery
 	modifiers                 []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
@@ -374,6 +380,72 @@ func (_q *UserQuery) QueryPlatformQuotas() *UserPlatformQuotaQuery {
 	return query
 }
 
+// QuerySupportTickets chains the current query on the "support_tickets" edge.
+func (_q *UserQuery) QuerySupportTickets() *SupportTicketQuery {
+	query := (&SupportTicketClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(supportticket.Table, supportticket.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.SupportTicketsTable, user.SupportTicketsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QuerySupportTicketMessages chains the current query on the "support_ticket_messages" edge.
+func (_q *UserQuery) QuerySupportTicketMessages() *SupportTicketMessageQuery {
+	query := (&SupportTicketMessageClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(supportticketmessage.Table, supportticketmessage.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.SupportTicketMessagesTable, user.SupportTicketMessagesColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QuerySupportTicketReads chains the current query on the "support_ticket_reads" edge.
+func (_q *UserQuery) QuerySupportTicketReads() *SupportTicketReadQuery {
+	query := (&SupportTicketReadClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(supportticketread.Table, supportticketread.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.SupportTicketReadsTable, user.SupportTicketReadsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
 // QueryUserAllowedGroups chains the current query on the "user_allowed_groups" edge.
 func (_q *UserQuery) QueryUserAllowedGroups() *UserAllowedGroupQuery {
 	query := (&UserAllowedGroupClient{config: _q.config}).Query()
@@ -601,6 +673,9 @@ func (_q *UserQuery) Clone() *UserQuery {
 		withAuthIdentities:        _q.withAuthIdentities.Clone(),
 		withPendingAuthSessions:   _q.withPendingAuthSessions.Clone(),
 		withPlatformQuotas:        _q.withPlatformQuotas.Clone(),
+		withSupportTickets:        _q.withSupportTickets.Clone(),
+		withSupportTicketMessages: _q.withSupportTicketMessages.Clone(),
+		withSupportTicketReads:    _q.withSupportTicketReads.Clone(),
 		withUserAllowedGroups:     _q.withUserAllowedGroups.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
@@ -751,6 +826,39 @@ func (_q *UserQuery) WithPlatformQuotas(opts ...func(*UserPlatformQuotaQuery)) *
 	return _q
 }
 
+// WithSupportTickets tells the query-builder to eager-load the nodes that are connected to
+// the "support_tickets" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithSupportTickets(opts ...func(*SupportTicketQuery)) *UserQuery {
+	query := (&SupportTicketClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withSupportTickets = query
+	return _q
+}
+
+// WithSupportTicketMessages tells the query-builder to eager-load the nodes that are connected to
+// the "support_ticket_messages" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithSupportTicketMessages(opts ...func(*SupportTicketMessageQuery)) *UserQuery {
+	query := (&SupportTicketMessageClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withSupportTicketMessages = query
+	return _q
+}
+
+// WithSupportTicketReads tells the query-builder to eager-load the nodes that are connected to
+// the "support_ticket_reads" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithSupportTicketReads(opts ...func(*SupportTicketReadQuery)) *UserQuery {
+	query := (&SupportTicketReadClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withSupportTicketReads = query
+	return _q
+}
+
 // WithUserAllowedGroups tells the query-builder to eager-load the nodes that are connected to
 // the "user_allowed_groups" edge. The optional arguments are used to configure the query builder of the edge.
 func (_q *UserQuery) WithUserAllowedGroups(opts ...func(*UserAllowedGroupQuery)) *UserQuery {
@@ -840,7 +948,7 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 	var (
 		nodes       = []*User{}
 		_spec       = _q.querySpec()
-		loadedTypes = [14]bool{
+		loadedTypes = [17]bool{
 			_q.withAPIKeys != nil,
 			_q.withRedeemCodes != nil,
 			_q.withSubscriptions != nil,
@@ -854,6 +962,9 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 			_q.withAuthIdentities != nil,
 			_q.withPendingAuthSessions != nil,
 			_q.withPlatformQuotas != nil,
+			_q.withSupportTickets != nil,
+			_q.withSupportTicketMessages != nil,
+			_q.withSupportTicketReads != nil,
 			_q.withUserAllowedGroups != nil,
 		}
 	)
@@ -970,6 +1081,31 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 		if err := _q.loadPlatformQuotas(ctx, query, nodes,
 			func(n *User) { n.Edges.PlatformQuotas = []*UserPlatformQuota{} },
 			func(n *User, e *UserPlatformQuota) { n.Edges.PlatformQuotas = append(n.Edges.PlatformQuotas, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withSupportTickets; query != nil {
+		if err := _q.loadSupportTickets(ctx, query, nodes,
+			func(n *User) { n.Edges.SupportTickets = []*SupportTicket{} },
+			func(n *User, e *SupportTicket) { n.Edges.SupportTickets = append(n.Edges.SupportTickets, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withSupportTicketMessages; query != nil {
+		if err := _q.loadSupportTicketMessages(ctx, query, nodes,
+			func(n *User) { n.Edges.SupportTicketMessages = []*SupportTicketMessage{} },
+			func(n *User, e *SupportTicketMessage) {
+				n.Edges.SupportTicketMessages = append(n.Edges.SupportTicketMessages, e)
+			}); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withSupportTicketReads; query != nil {
+		if err := _q.loadSupportTicketReads(ctx, query, nodes,
+			func(n *User) { n.Edges.SupportTicketReads = []*SupportTicketRead{} },
+			func(n *User, e *SupportTicketRead) {
+				n.Edges.SupportTicketReads = append(n.Edges.SupportTicketReads, e)
+			}); err != nil {
 			return nil, err
 		}
 	}
@@ -1408,6 +1544,96 @@ func (_q *UserQuery) loadPlatformQuotas(ctx context.Context, query *UserPlatform
 		node, ok := nodeids[fk]
 		if !ok {
 			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadSupportTickets(ctx context.Context, query *SupportTicketQuery, nodes []*User, init func(*User), assign func(*User, *SupportTicket)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(supportticket.FieldUserID)
+	}
+	query.Where(predicate.SupportTicket(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.SupportTicketsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.UserID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadSupportTicketMessages(ctx context.Context, query *SupportTicketMessageQuery, nodes []*User, init func(*User), assign func(*User, *SupportTicketMessage)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(supportticketmessage.FieldAuthorUserID)
+	}
+	query.Where(predicate.SupportTicketMessage(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.SupportTicketMessagesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.AuthorUserID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "author_user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadSupportTicketReads(ctx context.Context, query *SupportTicketReadQuery, nodes []*User, init func(*User), assign func(*User, *SupportTicketRead)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(supportticketread.FieldReaderUserID)
+	}
+	query.Where(predicate.SupportTicketRead(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.SupportTicketReadsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.ReaderUserID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "reader_user_id" returned %v for node %v`, fk, n.ID)
 		}
 		assign(node, n)
 	}

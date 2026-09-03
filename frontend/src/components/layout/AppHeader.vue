@@ -1,6 +1,6 @@
 <template>
   <header class="app-header glass sticky top-0 z-30 border-b border-gray-200/50 dark:border-dark-700/50">
-    <div class="flex h-16 items-center justify-between gap-2 px-2 sm:px-4 md:px-6">
+    <div class="relative flex h-16 items-center justify-between gap-2 px-2 sm:px-4 md:px-6">
       <!-- Left: Mobile Menu Toggle + Page Title -->
       <div class="flex min-w-0 shrink-0 items-center gap-2 sm:gap-4">
         <button
@@ -23,7 +23,7 @@
 
       <nav
         v-if="user"
-        class="quick-menu-slot min-w-10 flex-1"
+        class="quick-menu-slot"
         :aria-label="t('topQuickMenu.label')"
         data-testid="top-quick-menu"
       >
@@ -508,6 +508,12 @@ onBeforeUnmount(() => {
 }
 
 .quick-menu-slot {
+  position: absolute;
+  left: 50%;
+  display: flex;
+  width: clamp(2.5rem, calc(100% - 28rem), 35rem);
+  transform: translateX(-50%);
+  justify-content: center;
   container-type: inline-size;
 }
 

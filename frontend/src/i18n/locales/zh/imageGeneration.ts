@@ -19,7 +19,7 @@ export default {
     historyAll: '全部',
     noHistory: '暂无历史记录',
     title: '生图',
-    subtitle: '选择你的 API 密钥和图像模型，用文字或参考图生成高质量图片。',
+    subtitle: '用文字或参考图生成高质量图片。',
     providers: '支持 OpenAI · Gemini · Grok',
     loadingKeys: '正在加载可用密钥...',
     noKeysTitle: '暂无可用的生图密钥',

@@ -1570,7 +1570,7 @@ var (
 	// SupportTicketsColumns holds the columns for the "support_tickets" table.
 	SupportTicketsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "title", Type: field.TypeString},
+		{Name: "title", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(200)"}},
 		{Name: "category", Type: field.TypeString, Size: 20},
 		{Name: "priority", Type: field.TypeString, Size: 20, Default: "normal"},
 		{Name: "status", Type: field.TypeString, Size: 20, Default: "pending"},

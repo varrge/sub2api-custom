@@ -23,7 +23,7 @@ func (SupportTicket) Annotations() []schema.Annotation {
 func (SupportTicket) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("user_id"),
-		field.String("title").Validate(func(value string) error {
+		field.String("title").SchemaType(map[string]string{dialect.Postgres: "varchar(200)"}).Validate(func(value string) error {
 			_, err := domain.NormalizeSupportTicketTitle(value)
 			return err
 		}),

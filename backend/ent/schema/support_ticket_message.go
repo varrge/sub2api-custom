@@ -30,7 +30,10 @@ func (SupportTicketMessage) Fields() []ent.Field {
 			}
 			return nil
 		}),
-		field.String("body").SchemaType(map[string]string{dialect.Postgres: "text"}).MaxLen(domain.SupportTicketMessageMaxCharacters).NotEmpty(),
+		field.String("body").SchemaType(map[string]string{dialect.Postgres: "text"}).Validate(func(value string) error {
+			_, err := domain.NormalizeSupportTicketMessage(value)
+			return err
+		}),
 		field.Time("created_at").Immutable().Default(time.Now).SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 	}
 }

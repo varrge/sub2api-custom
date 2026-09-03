@@ -11,6 +11,10 @@ func TestSupportTicketTextNormalizationUsesCharacters(t *testing.T) {
 	title, err := NormalizeSupportTicketTitle("  账单问题  ")
 	require.NoError(t, err)
 	require.Equal(t, "账单问题", title)
+	exactTitle := strings.Repeat("界", SupportTicketTitleMaxCharacters)
+	title, err = NormalizeSupportTicketTitle(exactTitle)
+	require.NoError(t, err)
+	require.Equal(t, exactTitle, title)
 
 	_, err = NormalizeSupportTicketTitle(strings.Repeat("界", SupportTicketTitleMaxCharacters+1))
 	require.ErrorIs(t, err, ErrSupportTicketInvalidTitle)
@@ -18,6 +22,10 @@ func TestSupportTicketTextNormalizationUsesCharacters(t *testing.T) {
 	message, err := NormalizeSupportTicketMessage("  请协助处理  ")
 	require.NoError(t, err)
 	require.Equal(t, "请协助处理", message)
+	exactMessage := strings.Repeat("界", SupportTicketMessageMaxCharacters)
+	message, err = NormalizeSupportTicketMessage(exactMessage)
+	require.NoError(t, err)
+	require.Equal(t, exactMessage, message)
 
 	_, err = NormalizeSupportTicketMessage(strings.Repeat("界", SupportTicketMessageMaxCharacters+1))
 	require.ErrorIs(t, err, ErrSupportTicketInvalidMessage)

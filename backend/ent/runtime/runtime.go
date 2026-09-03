@@ -1883,21 +1883,7 @@ func init() {
 	// supportticketDescTitle is the schema descriptor for title field.
 	supportticketDescTitle := supportticketFields[1].Descriptor()
 	// supportticket.TitleValidator is a validator for the "title" field. It is called by the builders before save.
-	supportticket.TitleValidator = func() func(string) error {
-		validators := supportticketDescTitle.Validators
-		fns := [...]func(string) error{
-			validators[0].(func(string) error),
-			validators[1].(func(string) error),
-		}
-		return func(title string) error {
-			for _, fn := range fns {
-				if err := fn(title); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-	}()
+	supportticket.TitleValidator = supportticketDescTitle.Validators[0].(func(string) error)
 	// supportticketDescCategory is the schema descriptor for category field.
 	supportticketDescCategory := supportticketFields[2].Descriptor()
 	// supportticket.CategoryValidator is a validator for the "category" field. It is called by the builders before save.
@@ -2025,21 +2011,7 @@ func init() {
 	// supportticketmessageDescBody is the schema descriptor for body field.
 	supportticketmessageDescBody := supportticketmessageFields[3].Descriptor()
 	// supportticketmessage.BodyValidator is a validator for the "body" field. It is called by the builders before save.
-	supportticketmessage.BodyValidator = func() func(string) error {
-		validators := supportticketmessageDescBody.Validators
-		fns := [...]func(string) error{
-			validators[0].(func(string) error),
-			validators[1].(func(string) error),
-		}
-		return func(body string) error {
-			for _, fn := range fns {
-				if err := fn(body); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-	}()
+	supportticketmessage.BodyValidator = supportticketmessageDescBody.Validators[0].(func(string) error)
 	// supportticketmessageDescCreatedAt is the schema descriptor for created_at field.
 	supportticketmessageDescCreatedAt := supportticketmessageFields[4].Descriptor()
 	// supportticketmessage.DefaultCreatedAt holds the default value on creation for the created_at field.

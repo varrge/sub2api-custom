@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -119,6 +120,43 @@ func TestSupportTicketRepositoryLifecycleOwnershipAndUnread(t *testing.T) {
 	reopened, err := repo.UpdateStatus(ctx, detail.Ticket.ID, service.SupportTicketStatusInProgress)
 	require.NoError(t, err)
 	require.Equal(t, service.SupportTicketStatusInProgress, reopened.Status)
+}
+
+func TestSupportTicketRepositoryPersistsMultibyteTextAtCharacterLimits(t *testing.T) {
+	ctx := context.Background()
+	repo := NewSupportTicketRepository(testEntClient(t))
+	owner := supportTicketTestUser(t, service.RoleUser)
+	title := strings.Repeat("界", service.SupportTicketTitleMaxCharacters)
+	message := strings.Repeat("界", service.SupportTicketMessageMaxCharacters)
+
+	detail, err := repo.Create(ctx, service.CreateSupportTicketParams{
+		UserID:   owner.ID,
+		Title:    title,
+		Category: service.SupportTicketCategoryOther,
+		Message:  message,
+	})
+	require.NoError(t, err)
+	require.Equal(t, title, detail.Ticket.Title)
+	require.Equal(t, message, detail.Messages[0].Body)
+
+	opened, err := repo.OpenForUser(ctx, owner.ID, detail.Ticket.ID)
+	require.NoError(t, err)
+	require.Equal(t, title, opened.Ticket.Title)
+	require.Equal(t, message, opened.Messages[0].Body)
+
+	_, err = repo.Create(ctx, service.CreateSupportTicketParams{
+		UserID:   owner.ID,
+		Title:    strings.Repeat("界", service.SupportTicketTitleMaxCharacters+1),
+		Category: service.SupportTicketCategoryOther,
+		Message:  "valid",
+	})
+	require.ErrorIs(t, err, service.ErrSupportTicketInvalidTitle)
+
+	_, err = repo.ReplyByUser(ctx, owner.ID, service.ReplySupportTicketParams{
+		TicketID: detail.Ticket.ID,
+		Message:  strings.Repeat("界", service.SupportTicketMessageMaxCharacters+1),
+	})
+	require.ErrorIs(t, err, service.ErrSupportTicketInvalidMessage)
 }
 
 func TestSupportTicketRepositoryFiltersOrderingAndPagination(t *testing.T) {

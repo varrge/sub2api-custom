@@ -23,7 +23,10 @@ func (SupportTicket) Annotations() []schema.Annotation {
 func (SupportTicket) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("user_id"),
-		field.String("title").MaxLen(domain.SupportTicketTitleMaxCharacters).NotEmpty(),
+		field.String("title").Validate(func(value string) error {
+			_, err := domain.NormalizeSupportTicketTitle(value)
+			return err
+		}),
 		field.String("category").MaxLen(20).Validate(func(value string) error {
 			if !domain.IsSupportTicketCategory(value) {
 				return domain.ErrSupportTicketInvalidCategory

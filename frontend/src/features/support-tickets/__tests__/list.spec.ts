@@ -85,8 +85,14 @@ const ticket = {
   updated_at: '2026-09-02T00:00:00Z',
 }
 
-function page() {
-  return { items: [ticket], total: 1, page: 1, page_size: 20, pages: 1 }
+function page(title = ticket.title) {
+  return { items: [{ ...ticket, title }], total: 1, page: 1, page_size: 20, pages: 1 }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => { resolve = done })
+  return { promise, resolve }
 }
 
 function mountList(admin = false) {
@@ -158,5 +164,32 @@ describe('support ticket list', () => {
     await flushPromises()
     expect(mocks.refreshAdminUnread).toHaveBeenCalledOnce()
     expect(mocks.refreshUserUnread).not.toHaveBeenCalled()
+  })
+
+  it('clears admin rows and reloads from the user endpoint when the reused route changes scope', async () => {
+    const staleAdminPage = deferred<ReturnType<typeof page>>()
+    const userPage = deferred<ReturnType<typeof page>>()
+    mocks.adminList
+      .mockResolvedValueOnce(page('Admin private ticket'))
+      .mockReturnValueOnce(staleAdminPage.promise)
+    mocks.userList.mockReturnValueOnce(userPage.promise)
+    const wrapper = mountList(true)
+    await flushPromises()
+    expect(wrapper.text()).toContain('Admin private ticket')
+
+    await wrapper.get('[data-test="refresh-tickets"]').trigger('click')
+    await wrapper.setProps({ admin: false })
+    expect(mocks.adminList).toHaveBeenCalledTimes(2)
+    expect(mocks.userList).toHaveBeenCalledOnce()
+    expect(wrapper.text()).not.toContain('Admin private ticket')
+
+    userPage.resolve(page('User ticket'))
+    await flushPromises()
+    expect(wrapper.text()).toContain('User ticket')
+
+    staleAdminPage.resolve(page('Stale admin ticket'))
+    await flushPromises()
+    expect(wrapper.text()).toContain('User ticket')
+    expect(wrapper.text()).not.toContain('Stale admin ticket')
   })
 })

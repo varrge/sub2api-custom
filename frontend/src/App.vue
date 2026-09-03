@@ -115,10 +115,10 @@ watch(
       return
     }
     if (supportTicketsEnabled && !supportTicketStore.userUnreadLoaded) {
-      supportTicketStore.refreshUserUnread().catch(() => undefined)
+      supportTicketStore.initializeUserUnread().catch(() => undefined)
     }
     if (isAdmin && !supportTicketStore.adminUnreadLoaded) {
-      supportTicketStore.refreshAdminUnread().catch(() => undefined)
+      supportTicketStore.initializeAdminUnread().catch(() => undefined)
     }
   },
   { immediate: true },

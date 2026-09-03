@@ -63,7 +63,13 @@
         <section class="card p-5 sm:p-6">
           <div class="mb-5 flex items-center justify-between">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('supportTickets.detail.conversation') }}</h2>
-            <button type="button" class="btn btn-secondary btn-sm" :disabled="loading" @click="loadDetail">
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              :disabled="loading"
+              data-test="refresh-ticket-detail"
+              @click="loadDetail"
+            >
               <Icon name="refresh" size="sm" :class="loading ? 'animate-spin' : ''" />
             </button>
           </div>
@@ -257,13 +263,13 @@ async function loadAttachments(detail: SupportTicket, sequence: number): Promise
 }
 
 async function loadDetail(): Promise<void> {
+  const sequence = ++loadSequence
+  revokeAttachmentURLs()
   const id = Number(route.params.id)
   if (!Number.isInteger(id) || id <= 0) {
     await router.replace('/404')
     return
   }
-  const sequence = ++loadSequence
-  revokeAttachmentURLs()
   loading.value = true
   try {
     const api = props.admin ? supportTicketsAdminAPI : supportTicketsUserAPI
@@ -277,6 +283,7 @@ async function loadDetail(): Promise<void> {
       ticket.value.unread = false
       await refreshUnread()
     } catch (error) {
+      if (sequence !== loadSequence) return
       if (await redirectDisabled(error)) return
       appStore.showError(extractApiErrorMessage(error, t('supportTickets.errors.loadDetail')))
     }
@@ -302,18 +309,21 @@ async function reply(): Promise<void> {
   if (contentError.value) return
 
   replying.value = true
+  const sequence = loadSequence
   try {
     const api = props.admin ? supportTicketsAdminAPI : supportTicketsUserAPI
     await api.reply(ticket.value.id, {
       content: replyForm.content,
       images: replyForm.images,
     })
+    if (sequence !== loadSequence) return
     replyForm.content = ''
     replyForm.images = []
     contentError.value = ''
     appStore.showSuccess(t('supportTickets.success.replied'))
     await loadDetail()
   } catch (error) {
+    if (sequence !== loadSequence) return
     if (await redirectDisabled(error)) return
     appStore.showError(extractApiErrorMessage(error, t('supportTickets.errors.reply')))
   } finally {
@@ -324,11 +334,15 @@ async function reply(): Promise<void> {
 async function changeStatus(status: SupportTicketStatus): Promise<void> {
   if (!props.admin || !ticket.value || !statusTransitions.value.includes(status)) return
   updating.value = true
+  const sequence = loadSequence
   try {
-    ticket.value = { ...ticket.value, ...await supportTicketsAdminAPI.updateStatus(ticket.value.id, status) }
+    const updated = await supportTicketsAdminAPI.updateStatus(ticket.value.id, status)
+    if (sequence !== loadSequence || !ticket.value) return
+    ticket.value = { ...ticket.value, ...updated }
     await unreadStore.refreshAdminUnread().catch(() => undefined)
     appStore.showSuccess(t('supportTickets.success.statusUpdated'))
   } catch (error) {
+    if (sequence !== loadSequence) return
     appStore.showError(extractApiErrorMessage(error, t('supportTickets.errors.update')))
   } finally {
     updating.value = false
@@ -340,18 +354,32 @@ async function changePriority(value: string | number | boolean | null, _option: 
   const priority = value as SupportTicketPriority
   if (priority === ticket.value.priority) return
   updating.value = true
+  const sequence = loadSequence
   try {
-    ticket.value = { ...ticket.value, ...await supportTicketsAdminAPI.updatePriority(ticket.value.id, priority) }
+    const updated = await supportTicketsAdminAPI.updatePriority(ticket.value.id, priority)
+    if (sequence !== loadSequence || !ticket.value) return
+    ticket.value = { ...ticket.value, ...updated }
     await unreadStore.refreshAdminUnread().catch(() => undefined)
     appStore.showSuccess(t('supportTickets.success.priorityUpdated'))
   } catch (error) {
+    if (sequence !== loadSequence) return
     appStore.showError(extractApiErrorMessage(error, t('supportTickets.errors.update')))
   } finally {
     updating.value = false
   }
 }
 
-watch(() => route.params.id, loadDetail, { immediate: true })
+watch(
+  [() => route.params.id, () => props.admin],
+  () => {
+    ticket.value = null
+    replyForm.content = ''
+    replyForm.images = []
+    contentError.value = ''
+    void loadDetail()
+  },
+  { immediate: true },
+)
 
 onBeforeUnmount(() => {
   loadSequence++

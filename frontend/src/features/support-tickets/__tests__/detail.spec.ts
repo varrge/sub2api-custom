@@ -119,6 +119,12 @@ function detail(status: 'pending' | 'in_progress' | 'closed' = 'pending') {
   }
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => { resolve = done })
+  return { promise, resolve }
+}
+
 function mountDetail(admin = false) {
   return mount(SupportTicketDetailView, {
     props: { admin },
@@ -209,5 +215,41 @@ describe('support ticket detail', () => {
     expect(mocks.adminGet).toHaveBeenCalledTimes(2)
     expect(wrapper.find('[data-test="ticket-status-in_progress"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="ticket-status-closed"]').exists()).toBe(true)
+  })
+
+  it('clears admin detail and reloads the same ID from the user endpoint when scope changes', async () => {
+    const adminDetail = detail()
+    adminDetail.title = 'Admin private detail'
+    const staleAdminDetail = detail()
+    staleAdminDetail.title = 'Stale admin detail'
+    const userDetail = detail()
+    userDetail.title = 'User detail'
+    userDetail.messages[0].content = 'User-visible conversation'
+    const staleAdminResponse = deferred<ReturnType<typeof detail>>()
+    const userResponse = deferred<ReturnType<typeof detail>>()
+    mocks.adminGet
+      .mockResolvedValueOnce(adminDetail)
+      .mockReturnValueOnce(staleAdminResponse.promise)
+    mocks.userGet.mockReturnValueOnce(userResponse.promise)
+    const wrapper = mountDetail(true)
+    await flushPromises()
+    expect(wrapper.text()).toContain('Admin private detail')
+
+    await wrapper.get('[data-test="refresh-ticket-detail"]').trigger('click')
+    await wrapper.setProps({ admin: false })
+    expect(mocks.adminGet).toHaveBeenCalledTimes(2)
+    expect(mocks.userGet).toHaveBeenCalledWith(12)
+    expect(wrapper.text()).not.toContain('Admin private detail')
+    expect(wrapper.find('[data-test="ticket-conversation"]').exists()).toBe(false)
+
+    userResponse.resolve(userDetail)
+    await flushPromises()
+    expect(wrapper.text()).toContain('User detail')
+    expect(wrapper.text()).toContain('User-visible conversation')
+
+    staleAdminResponse.resolve(staleAdminDetail)
+    await flushPromises()
+    expect(wrapper.text()).toContain('User detail')
+    expect(wrapper.text()).not.toContain('Stale admin detail')
   })
 })

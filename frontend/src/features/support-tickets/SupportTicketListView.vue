@@ -163,7 +163,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -321,5 +321,18 @@ function openTicket(ticket: SupportTicket): void {
   void router.push(props.admin ? `/admin/tickets/${ticket.id}` : `/tickets/${ticket.id}`)
 }
 
-onMounted(loadTickets)
+watch(
+  () => props.admin,
+  () => {
+    tickets.value = []
+    filters.user_search = ''
+    Object.assign(pagination, { page: 1, total: 0, pages: 1 })
+    void loadTickets()
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => {
+  loadSequence++
+})
 </script>

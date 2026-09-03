@@ -454,6 +454,8 @@ func TestSupportTicketRepositoryDetailReadIsExplicit(t *testing.T) {
 	owner := supportTicketTestUser(t, service.RoleUser)
 	other := supportTicketTestUser(t, service.RoleUser)
 	admin := supportTicketTestUser(t, service.RoleAdmin)
+	baselineUnread, err := repo.CountUnreadForAdmin(ctx, admin.ID)
+	require.NoError(t, err)
 	detail, err := repo.Create(ctx, supportTicketCreateParams(owner.ID, "explicit read", service.SupportTicketPriorityNormal))
 	require.NoError(t, err)
 
@@ -461,11 +463,11 @@ func TestSupportTicketRepositoryDetailReadIsExplicit(t *testing.T) {
 	require.NoError(t, err)
 	unread, err := repo.CountUnreadForAdmin(ctx, admin.ID)
 	require.NoError(t, err)
-	require.EqualValues(t, 1, unread, "detail fetch must not mark the ticket read")
+	require.Equal(t, baselineUnread+1, unread, "detail fetch must not mark the ticket read")
 	require.NoError(t, repo.MarkReadForAdmin(ctx, admin.ID, detail.Ticket.ID, adminDetail.LastOpposingMessageID))
 	unread, err = repo.CountUnreadForAdmin(ctx, admin.ID)
 	require.NoError(t, err)
-	require.Zero(t, unread)
+	require.Equal(t, baselineUnread, unread)
 
 	_, err = repo.OpenForUser(ctx, other.ID, detail.Ticket.ID)
 	require.ErrorIs(t, err, service.ErrSupportTicketNotFound)
@@ -479,6 +481,8 @@ func TestSupportTicketRepositoryMarksOnlyTheDetailSnapshotRead(t *testing.T) {
 	owner := supportTicketTestUser(t, service.RoleUser)
 	admin := supportTicketTestUser(t, service.RoleAdmin)
 	otherAdmin := supportTicketTestUser(t, service.RoleAdmin)
+	baselineUnread, err := repo.CountUnreadForAdmin(ctx, admin.ID)
+	require.NoError(t, err)
 	detail, err := repo.Create(ctx, supportTicketCreateParams(owner.ID, "snapshot read", service.SupportTicketPriorityNormal))
 	require.NoError(t, err)
 
@@ -494,7 +498,7 @@ func TestSupportTicketRepositoryMarksOnlyTheDetailSnapshotRead(t *testing.T) {
 	require.NoError(t, repo.MarkReadForAdmin(ctx, admin.ID, detail.Ticket.ID, snapshot.LastOpposingMessageID))
 	unread, err := repo.CountUnreadForAdmin(ctx, admin.ID)
 	require.NoError(t, err)
-	require.EqualValues(t, 1, unread, "the post-snapshot reply must remain unread")
+	require.Equal(t, baselineUnread+1, unread, "the post-snapshot reply must remain unread")
 
 	adminReply, err := repo.ReplyByAdmin(ctx, service.ReplySupportTicketParams{
 		TicketID: detail.Ticket.ID, AuthorID: admin.ID, Message: "admin-authored message",

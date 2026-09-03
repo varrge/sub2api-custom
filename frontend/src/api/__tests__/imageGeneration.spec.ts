@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { isLikelyImageModel, parseGeneratedImages, supportsImageGeneration } from '../imageGeneration'
+import {
+  isLikelyImageModel,
+  parseGeneratedImages,
+  supportedImageAspectRatios,
+  supportsImageGeneration,
+} from '../imageGeneration'
 
 describe('image generation helpers', () => {
   it('keeps supported image models and excludes video models', () => {
@@ -8,6 +13,8 @@ describe('image generation helpers', () => {
     expect(isLikelyImageModel('grok-imagine-video-1.5')).toBe(false)
     expect(isLikelyImageModel('imagen-3')).toBe(false)
     expect(supportsImageGeneration('anthropic')).toBe(false)
+    expect(supportedImageAspectRatios('openai', 'gpt-image-2')).toEqual(['auto', '3:2', '1:1', '2:3'])
+    expect(supportedImageAspectRatios('gemini', 'gemini-3-pro-image-preview')).toContain('21:9')
   })
 
   it('normalizes OpenAI and Gemini image responses', () => {

@@ -2,6 +2,7 @@ import { buildGatewayUrl } from './client'
 import type { GroupPlatform } from '@/types'
 
 export type ImageQuality = 'standard' | 'high'
+export type ImageAspectRatio = 'auto' | '21:9' | '16:9' | '3:2' | '4:3' | '1:1' | '3:4' | '2:3' | '9:16'
 
 export interface GeneratedImage {
   src: string
@@ -13,7 +14,7 @@ export interface GenerateImageOptions {
   platform: GroupPlatform
   model: string
   prompt: string
-  aspectRatio: '1:1' | '3:2' | '2:3'
+  aspectRatio: ImageAspectRatio
   quality: ImageQuality
   count: number
   referenceImages: File[]
@@ -43,6 +44,15 @@ function asString(value: unknown): string {
 
 export function supportsImageGeneration(platform: GroupPlatform | undefined): boolean {
   return platform ? supportedPlatforms.has(platform) : false
+}
+
+const fullAspectRatios: ImageAspectRatio[] = ['auto', '21:9', '16:9', '3:2', '4:3', '1:1', '3:4', '2:3', '9:16']
+
+export function supportedImageAspectRatios(platform: GroupPlatform | undefined, model: string): ImageAspectRatio[] {
+  if (platform === 'openai' || platform === 'composite' && !/gemini|imagen|^grok-/i.test(model)) {
+    return ['auto', '3:2', '1:1', '2:3']
+  }
+  return fullAspectRatios
 }
 
 export function isLikelyImageModel(model: string): boolean {
@@ -174,7 +184,7 @@ async function generateGeminiImages(options: GenerateImageOptions): Promise<Gene
         generationConfig: {
           responseModalities: ['TEXT', 'IMAGE'],
           imageConfig: {
-            aspectRatio: options.aspectRatio,
+            ...(options.aspectRatio === 'auto' ? {} : { aspectRatio: options.aspectRatio }),
             imageSize: options.quality === 'high' ? '2K' : '1K',
           },
         },
@@ -185,7 +195,8 @@ async function generateGeminiImages(options: GenerateImageOptions): Promise<Gene
   return images
 }
 
-function openAIImageSize(aspectRatio: GenerateImageOptions['aspectRatio']): string {
+function openAIImageSize(aspectRatio: ImageAspectRatio): string {
+  if (aspectRatio === 'auto') return 'auto'
   if (aspectRatio === '3:2') return '1536x1024'
   if (aspectRatio === '2:3') return '1024x1536'
   return '1024x1024'
@@ -199,7 +210,7 @@ async function generateOpenAIImages(options: GenerateImageOptions): Promise<Gene
     n: options.count,
   }
   if (grok) {
-    values.aspect_ratio = options.aspectRatio
+    if (options.aspectRatio !== 'auto') values.aspect_ratio = options.aspectRatio
     values.resolution = options.quality === 'high' ? '2k' : '1k'
   } else {
     values.size = openAIImageSize(options.aspectRatio)

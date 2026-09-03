@@ -53,3 +53,22 @@ describe('AppSidebar header styles', () => {
     expect(sidebarBrandBlockMatch?.[0]).not.toContain('overflow: hidden;')
   })
 })
+
+describe('AppSidebar support ticket navigation', () => {
+  it('keeps My Tickets feature-gated but available in simple mode', () => {
+    const userItem = componentSource.match(/\{ path: '\/tickets'[^\n]+\}/)?.[0]
+
+    expect(userItem).toContain('featureFlag: flagSupportTicket')
+    expect(userItem).toContain('badge: () => supportTicketStore.userUnreadCount')
+    expect(userItem).not.toContain('hideInSimpleMode')
+    expect(componentSource).toContain("personalNavItems.value.filter((item) => item.path === '/tickets')")
+  })
+
+  it('always exposes separate admin ticket management and unread state', () => {
+    const adminItem = componentSource.match(/\{ path: '\/admin\/tickets'[^\n]+\}/)?.[0]
+
+    expect(adminItem).toContain('supportTickets.management')
+    expect(adminItem).toContain('badge: () => supportTicketStore.adminUnreadCount')
+    expect(adminItem).not.toContain('featureFlag')
+  })
+})

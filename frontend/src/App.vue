@@ -6,7 +6,7 @@ import NavigationProgress from '@/components/common/NavigationProgress.vue'
 import AdminComplianceDialog from '@/components/admin/AdminComplianceDialog.vue'
 import { resolveRouteDocumentTitle } from '@/router/title'
 import AnnouncementPopup from '@/components/common/AnnouncementPopup.vue'
-import { useAppStore, useAuthStore, useSubscriptionStore, useAnnouncementStore, useAdminComplianceStore, useAdminSettingsStore } from '@/stores'
+import { useAppStore, useAuthStore, useSubscriptionStore, useAnnouncementStore, useAdminComplianceStore, useAdminSettingsStore, useSupportTicketStore } from '@/stores'
 import { getSetupStatus } from '@/api/setup'
 import { updateFavicon } from '@/utils/branding'
 
@@ -18,6 +18,7 @@ const subscriptionStore = useSubscriptionStore()
 const announcementStore = useAnnouncementStore()
 const adminComplianceStore = useAdminComplianceStore()
 const adminSettingsStore = useAdminSettingsStore()
+const supportTicketStore = useSupportTicketStore()
 
 function updateDocumentTitle() {
   const customMenuItems = [
@@ -100,6 +101,27 @@ watch(
     }
   },
   { immediate: true }
+)
+
+watch(
+  [
+    () => authStore.isAuthenticated,
+    () => authStore.isAdmin,
+    () => appStore.cachedPublicSettings?.support_ticket_enabled === true,
+  ],
+  ([isAuthenticated, isAdmin, supportTicketsEnabled]) => {
+    if (!isAuthenticated) {
+      supportTicketStore.reset()
+      return
+    }
+    if (supportTicketsEnabled && !supportTicketStore.userUnreadLoaded) {
+      supportTicketStore.refreshUserUnread().catch(() => undefined)
+    }
+    if (isAdmin && !supportTicketStore.adminUnreadLoaded) {
+      supportTicketStore.refreshAdminUnread().catch(() => undefined)
+    }
+  },
+  { immediate: true },
 )
 
 // Route change trigger (throttled by store)

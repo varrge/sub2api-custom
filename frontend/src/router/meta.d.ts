@@ -55,6 +55,9 @@ declare module 'vue-router' {
      */
     requiresRiskControl?: boolean
 
+    /** Whether the opt-in user support-ticket feature must be enabled. */
+    requiresSupportTicket?: boolean
+
     /**
      * i18n key for the page title
      */

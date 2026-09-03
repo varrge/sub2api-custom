@@ -11,6 +11,7 @@ import { useAdminComplianceStore } from '@/stores/adminCompliance'
 import { useNavigationLoadingState } from '@/composables/useNavigationLoading'
 import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
 import { getSetupStatus } from '@/api/setup'
+import { i18n } from '@/i18n'
 import { resolveCompletedSetupRedirectPath } from './setupRedirect'
 import { resolveRouteDocumentTitle } from './title'
 
@@ -314,6 +315,42 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/tickets',
+    name: 'SupportTickets',
+    component: () => import('@/features/support-tickets/SupportTicketListView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      requiresSupportTicket: true,
+      title: 'My Tickets',
+      titleKey: 'supportTickets.myTickets'
+    }
+  },
+  {
+    path: '/tickets/new',
+    name: 'SupportTicketCreate',
+    component: () => import('@/features/support-tickets/SupportTicketCreateView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      requiresSupportTicket: true,
+      title: 'New Support Ticket',
+      titleKey: 'supportTickets.newTitle'
+    }
+  },
+  {
+    path: '/tickets/:id',
+    name: 'SupportTicketDetail',
+    component: () => import('@/features/support-tickets/SupportTicketDetailView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      requiresSupportTicket: true,
+      title: 'Support Ticket',
+      titleKey: 'supportTickets.myTickets'
+    }
+  },
+  {
     path: '/purchase',
     name: 'PurchaseSubscription',
     component: () => import('@/views/user/PaymentView.vue'),
@@ -607,6 +644,30 @@ const routes: RouteRecordRaw[] = [
       title: 'System Settings',
       titleKey: 'admin.settings.title',
       descriptionKey: 'admin.settings.description'
+    }
+  },
+  {
+    path: '/admin/tickets',
+    name: 'AdminSupportTickets',
+    component: () => import('@/features/support-tickets/SupportTicketListView.vue'),
+    props: { admin: true },
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Ticket Management',
+      titleKey: 'supportTickets.management'
+    }
+  },
+  {
+    path: '/admin/tickets/:id',
+    name: 'AdminSupportTicketDetail',
+    component: () => import('@/features/support-tickets/SupportTicketDetailView.vue'),
+    props: { admin: true },
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Ticket Management',
+      titleKey: 'supportTickets.management'
     }
   },
   {
@@ -920,7 +981,7 @@ router.beforeEach(async (to, _from, next) => {
   // 公共设置可能尚未加载（App.vue 的 onMounted 异步拉取晚于首次导航，且纯静态部署
   // 无 __APP_CONFIG__ 注入）。此时 cachedPublicSettings 为空会把 payment/risk_control
   // 误判为“未启用”而错误拦截，故这里先确保设置加载完成。
-  if ((to.meta.requiresPayment || to.meta.requiresRiskControl) && !appStore.publicSettingsLoaded) {
+  if ((to.meta.requiresPayment || to.meta.requiresRiskControl || to.meta.requiresSupportTicket) && !appStore.publicSettingsLoaded) {
     try {
       await appStore.fetchPublicSettings()
     } catch (error) {
@@ -945,6 +1006,15 @@ router.beforeEach(async (to, _from, next) => {
     appStore.cachedPublicSettings?.risk_control_enabled === false
   ) {
     next(authStore.isAdmin ? '/admin/settings' : '/dashboard')
+    return
+  }
+
+  if (
+    to.meta.requiresSupportTicket &&
+    appStore.cachedPublicSettings?.support_ticket_enabled !== true
+  ) {
+    appStore.showWarning(i18n.global.t('supportTickets.featureDisabled'))
+    next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
     return
   }
 

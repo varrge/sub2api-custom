@@ -25,9 +25,11 @@ const appStore = vi.hoisted(() => ({
   cachedPublicSettings: null as null | {
     payment_enabled?: boolean
     risk_control_enabled?: boolean
+    support_ticket_enabled?: boolean
     custom_menu_items?: []
   },
   fetchPublicSettings: vi.fn(),
+  showWarning: vi.fn(),
 }))
 
 vi.mock('vue-router', () => ({
@@ -59,6 +61,10 @@ vi.mock('@/stores/adminCompliance', () => ({
     fetchStatus: vi.fn(),
     requireAcknowledgement: vi.fn(),
   }),
+}))
+
+vi.mock('@/i18n', () => ({
+  i18n: { global: { t: () => 'Support tickets are not enabled.' } },
 }))
 
 vi.mock('@/composables/useNavigationLoading', () => ({
@@ -117,6 +123,7 @@ describe('feature route guard', () => {
     appStore.publicSettingsLoaded = false
     appStore.cachedPublicSettings = null
     appStore.fetchPublicSettings.mockReset()
+    appStore.showWarning.mockReset()
   })
 
   it('waits for the first public-settings request before deciding payment access', async () => {
@@ -173,5 +180,32 @@ describe('feature route guard', () => {
     expect(appStore.fetchPublicSettings).not.toHaveBeenCalled()
     expect(next).toHaveBeenCalledOnce()
     expect(next).toHaveBeenCalledWith(target)
+  })
+
+  it('fails closed with a localized notice when support-ticket settings cannot load', async () => {
+    appStore.fetchPublicSettings.mockRejectedValue(new Error('offline'))
+
+    const { navigation, next } = runGuard({ requiresSupportTicket: true }, '/tickets/42')
+    await navigation
+
+    expect(appStore.fetchPublicSettings).toHaveBeenCalledOnce()
+    expect(appStore.showWarning).toHaveBeenCalledWith('Support tickets are not enabled.')
+    expect(next).toHaveBeenCalledWith('/dashboard')
+  })
+
+  it('allows enabled user ticket routes and keeps admin ticket routes independent of the flag', async () => {
+    appStore.publicSettingsLoaded = true
+    appStore.cachedPublicSettings = { support_ticket_enabled: true }
+
+    const enabled = runGuard({ requiresSupportTicket: true }, '/tickets/new')
+    await enabled.navigation
+    expect(enabled.next).toHaveBeenCalledWith()
+
+    authStore.isAdmin = true
+    appStore.cachedPublicSettings = { support_ticket_enabled: false }
+    const admin = runGuard({ requiresAdmin: true }, '/admin/tickets')
+    await admin.navigation
+    expect(admin.next).toHaveBeenCalledWith()
+    expect(appStore.showWarning).not.toHaveBeenCalled()
   })
 })

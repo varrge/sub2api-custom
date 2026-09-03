@@ -9,6 +9,7 @@ import type {
   CustomMenuItem,
   LoginAgreementDocument,
   NotifyEmailEntry,
+  TopQuickMenuItemId,
 } from "@/types";
 
 export interface DefaultSubscriptionSetting {
@@ -483,6 +484,7 @@ export interface SystemSettings {
   hide_ccs_import_button: boolean;
   table_default_page_size: number;
   table_page_size_options: number[];
+  top_quick_menu_items: TopQuickMenuItemId[];
   backend_mode_enabled: boolean;
   custom_menu_items: CustomMenuItem[];
   custom_endpoints: CustomEndpoint[];
@@ -826,6 +828,7 @@ export interface UpdateSettingsRequest {
   hide_ccs_import_button?: boolean;
   table_default_page_size?: number;
   table_page_size_options?: number[];
+  top_quick_menu_items?: TopQuickMenuItemId[];
   backend_mode_enabled?: boolean;
   custom_menu_items?: CustomMenuItem[];
   custom_endpoints?: CustomEndpoint[];

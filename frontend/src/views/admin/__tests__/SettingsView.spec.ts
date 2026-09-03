@@ -392,6 +392,7 @@ const baseSettingsResponse = {
   hide_ccs_import_button: false,
   table_default_page_size: 20,
   table_page_size_options: [10, 20, 50, 100],
+  top_quick_menu_items: [],
   backend_mode_enabled: false,
   custom_menu_items: [],
   custom_endpoints: [],
@@ -760,6 +761,60 @@ describe("admin SettingsView payment visible method controls", () => {
 
     expect(updateSettings).toHaveBeenCalledWith(
       expect.objectContaining({ support_ticket_enabled: true }),
+    );
+    expect(fetchPublicSettings).toHaveBeenCalledWith(true);
+  });
+
+  it("selects at most three top quick items, reorders them, and saves their order", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      top_quick_menu_items: ["api_keys", "usage"],
+    });
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+
+    const quickMenuSettings = wrapper.get('[data-testid="top-quick-menu-settings"]');
+    expect(quickMenuSettings.get('input[disabled]').attributes('aria-label')).toBe(
+      'topQuickMenu.dashboard',
+    );
+    const apiKeysRow = wrapper.get('[data-testid="top-quick-menu-selected-api_keys"]');
+    expect(apiKeysRow.get('input[type="checkbox"]').attributes('aria-label')).toBe('nav.apiKeys');
+    expect(apiKeysRow.findAll('button')[0].attributes('aria-label')).toBe(
+      'admin.settings.features.topQuickMenu.moveUp',
+    );
+
+    const imageRow = wrapper.get(
+      '[data-testid="top-quick-menu-unselected-image_generation"]',
+    );
+    await imageRow.get('input[type="checkbox"]').setValue(true);
+
+    expect(
+      wrapper
+        .findAll('[data-testid^="top-quick-menu-selected-"]')
+        .map((row) => row.attributes("data-testid")),
+    ).toEqual([
+      "top-quick-menu-selected-api_keys",
+      "top-quick-menu-selected-usage",
+      "top-quick-menu-selected-image_generation",
+    ]);
+    expect(
+      (wrapper
+        .get('[data-testid="top-quick-menu-unselected-model_plaza"]')
+        .get('input[type="checkbox"]').element as HTMLInputElement).disabled,
+    ).toBe(true);
+
+    await wrapper
+      .get('[data-testid="top-quick-menu-selected-image_generation"]')
+      .findAll("button")[0]
+      .trigger("click");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        top_quick_menu_items: ["api_keys", "image_generation", "usage"],
+      }),
     );
     expect(fetchPublicSettings).toHaveBeenCalledWith(true);
   });

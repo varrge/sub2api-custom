@@ -103,6 +103,27 @@ func TestSettingHandler_GetPublicSettings_ExposesSupportTicketFlag(t *testing.T)
 	require.True(t, resp.Data.SupportTicketEnabled)
 }
 
+func TestSettingHandler_GetPublicSettings_ExposesTopQuickMenuItems(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := NewSettingHandler(service.NewSettingService(&settingHandlerPublicRepoStub{values: map[string]string{
+		service.SettingKeyTopQuickMenuItems: `["usage","api_keys"]`,
+	}}, &config.Config{}), "test-version")
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/settings/public", nil)
+
+	h.GetPublicSettings(c)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var resp struct {
+		Data struct {
+			TopQuickMenuItems []string `json:"top_quick_menu_items"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
+	require.Equal(t, []string{"usage", "api_keys"}, resp.Data.TopQuickMenuItems)
+}
+
 func TestSettingHandler_GetPublicSettings_ExposesTencentCaptchaConfiguration(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

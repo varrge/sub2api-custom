@@ -195,6 +195,14 @@ export interface CustomMenuItem {
   sort_order: number
 }
 
+export type TopQuickMenuItemId =
+  | 'image_generation'
+  | 'batch_image'
+  | 'model_plaza'
+  | 'support_tickets'
+  | 'api_keys'
+  | 'usage'
+
 export interface CustomEndpoint {
   name: string
   endpoint: string
@@ -244,6 +252,7 @@ export interface PublicSettings {
   risk_control_enabled: boolean
   table_default_page_size: number
   table_page_size_options: number[]
+  top_quick_menu_items: TopQuickMenuItemId[]
   custom_menu_items: CustomMenuItem[]
   custom_endpoints: CustomEndpoint[]
   linuxdo_oauth_enabled: boolean

@@ -14,6 +14,15 @@ export default {
         payment: 'Payment',
       },
       features: {
+        topQuickMenu: {
+          title: 'Top Quick Menu',
+          description: 'Choose and order up to 3 built-in features. Dashboard is always first. Changes apply to every user after saving.',
+          fixed: 'Fixed',
+          featureDisabled: 'Feature currently disabled',
+          moveUp: 'Move {item} up',
+          moveDown: 'Move {item} down',
+          selectionHint: '{count}/3 optional features selected. Remove one before choosing another when the limit is reached.',
+        },
         channelMonitor: {
           title: 'Channel Monitor',
           description: 'Choose either V1 active probes or V2 passive usage monitoring. When disabled, both background jobs stop and the user entry is hidden.',

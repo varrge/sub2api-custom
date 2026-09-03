@@ -155,6 +155,12 @@ export default {
     }
   },
 
+  topQuickMenu: {
+    label: '顶部快捷菜单',
+    dashboard: '控制台',
+    supportTickets: '工单'
+  },
+
   // Navigation
   nav: {
     dashboard: '仪表盘',

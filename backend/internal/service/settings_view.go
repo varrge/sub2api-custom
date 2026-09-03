@@ -162,6 +162,7 @@ type SystemSettings struct {
 	PurchaseSubscriptionURL     string
 	TableDefaultPageSize        int
 	TablePageSizeOptions        []int
+	TopQuickMenuItems           string // ordered JSON array of built-in feature IDs
 	CustomMenuItems             string // JSON array of custom menu items
 	CustomEndpoints             string // JSON array of custom endpoints
 
@@ -355,6 +356,7 @@ type PublicSettings struct {
 	PurchaseSubscriptionURL     string
 	TableDefaultPageSize        int
 	TablePageSizeOptions        []int
+	TopQuickMenuItems           string // ordered JSON array of built-in feature IDs
 	CustomMenuItems             string // JSON array of custom menu items
 	CustomEndpoints             string // JSON array of custom endpoints
 

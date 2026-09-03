@@ -155,6 +155,12 @@ export default {
     }
   },
 
+  topQuickMenu: {
+    label: 'Top quick menu',
+    dashboard: 'Dashboard',
+    supportTickets: 'Tickets'
+  },
+
   // Navigation
   nav: {
     dashboard: 'Dashboard',

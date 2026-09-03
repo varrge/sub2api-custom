@@ -178,6 +178,19 @@ func TestSettingService_GetPublicSettingsAndInjectionExposeSupportTicketFlag(t *
 	require.True(t, payload.(*PublicSettingsInjectionPayload).SupportTicketEnabled)
 }
 
+func TestSettingService_GetPublicSettingsAndInjectionExposeTopQuickMenuItems(t *testing.T) {
+	svc := NewSettingService(&settingPublicRepoStub{values: map[string]string{
+		SettingKeyTopQuickMenuItems: `["usage","support_tickets"]`,
+	}}, &config.Config{})
+	settings, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.JSONEq(t, `["usage","support_tickets"]`, settings.TopQuickMenuItems)
+
+	payload, err := svc.GetPublicSettingsForInjection(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, []string{"usage", "support_tickets"}, payload.(*PublicSettingsInjectionPayload).TopQuickMenuItems)
+}
+
 func TestSettingService_GetPublicSettings_ExposesWeChatOAuthModeCapabilities(t *testing.T) {
 	svc := NewSettingService(&settingPublicRepoStub{
 		values: map[string]string{

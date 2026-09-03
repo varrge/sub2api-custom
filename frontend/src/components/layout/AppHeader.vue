@@ -1,8 +1,8 @@
 <template>
-  <header class="glass sticky top-0 z-30 border-b border-gray-200/50 dark:border-dark-700/50">
+  <header class="app-header glass sticky top-0 z-30 border-b border-gray-200/50 dark:border-dark-700/50">
     <div class="flex h-16 items-center justify-between gap-2 px-2 sm:px-4 md:px-6">
       <!-- Left: Mobile Menu Toggle + Page Title -->
-      <div class="flex shrink-0 items-center gap-2 sm:gap-4">
+      <div class="flex min-w-0 shrink-0 items-center gap-2 sm:gap-4">
         <button
           @click="toggleMobileSidebar"
           class="btn-ghost btn-icon lg:hidden"
@@ -11,15 +11,57 @@
           <Icon name="menu" size="md" />
         </button>
 
-        <div class="hidden lg:block">
-          <h1 class="text-lg font-semibold text-gray-900 dark:text-white">
+        <div class="hidden min-w-0 max-w-[30vw] lg:block">
+          <h1 class="truncate text-lg font-semibold text-gray-900 dark:text-white">
             {{ pageTitle }}
           </h1>
-          <p v-if="pageDescription" class="text-xs text-gray-500 dark:text-dark-400">
+          <p v-if="pageDescription" class="truncate text-xs text-gray-500 dark:text-dark-400">
             {{ pageDescription }}
           </p>
         </div>
       </div>
+
+      <nav
+        v-if="user"
+        class="quick-menu-slot min-w-10 flex-1"
+        :aria-label="t('topQuickMenu.label')"
+        data-testid="top-quick-menu"
+      >
+        <div class="quick-menu-pill inline-flex max-w-full items-center overflow-hidden rounded-full border border-gray-200/80 bg-gray-50/90 p-1 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
+          <router-link
+            :to="dashboardPath"
+            class="quick-menu-link shrink-0"
+            :class="isQuickMenuPathActive(dashboardPath) ? 'quick-menu-link-active' : 'quick-menu-link-idle'"
+            :aria-current="isQuickMenuPathActive(dashboardPath) ? 'page' : undefined"
+            :title="t('topQuickMenu.dashboard')"
+            data-testid="top-quick-menu-dashboard"
+          >
+            <Icon name="home" size="sm" />
+            <span class="quick-menu-dashboard-label">{{ t('topQuickMenu.dashboard') }}</span>
+          </router-link>
+          <router-link
+            v-for="(item, index) in visibleTopQuickMenuItems"
+            :key="item.id"
+            :to="quickMenuTarget(item)"
+            class="quick-menu-link quick-menu-optional shrink-0"
+            :class="[
+              `quick-menu-optional-${index + 1}`,
+              isQuickMenuItemActive(item) ? 'quick-menu-link-active' : 'quick-menu-link-idle',
+            ]"
+            :aria-current="isQuickMenuItemActive(item) ? 'page' : undefined"
+            :data-testid="`top-quick-menu-${item.id}`"
+          >
+            <Icon :name="item.icon" size="sm" />
+            <span>{{ t(item.labelKey) }}</span>
+            <span
+              v-if="item.id === 'support_tickets' && supportTicketUnreadCount > 0"
+              class="min-w-4 rounded-full bg-red-500 px-1 text-center text-[10px] font-semibold leading-4 text-white"
+            >
+              {{ supportTicketUnreadCount > 99 ? '99+' : supportTicketUnreadCount }}
+            </span>
+          </router-link>
+        </div>
+      </nav>
 
       <!-- Right: Announcements + Docs + Language + Subscriptions + Balance + User Dropdown -->
       <div class="flex min-w-0 items-center gap-1 sm:gap-3">
@@ -32,7 +74,7 @@
           :href="docUrl"
           target="_blank"
           rel="noopener noreferrer"
-          class="hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white sm:flex"
+          class="header-docs hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white sm:flex"
         >
           <Icon name="book" size="sm" />
           <span class="hidden sm:inline">{{ t('nav.docs') }}</span>
@@ -40,9 +82,10 @@
 
         <!-- Model Plaza Entry -->
         <router-link
-          v-if="user && modelPlazaEnabled"
+          v-if="user && modelPlazaEnabled && !modelPlazaInQuickMenu"
           :to="{ path: '/model-plaza', query: { embedded: '1' } }"
-          class="hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white sm:flex"
+          data-testid="model-plaza-legacy-entry"
+          class="header-model-plaza hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white sm:flex"
         >
           <Icon name="grid" size="sm" />
           <span class="hidden sm:inline">{{ t('nav.modelPlaza') }}</span>
@@ -52,12 +95,12 @@
         <LocaleSwitcher />
 
         <!-- Subscription Progress (for users with active subscriptions) -->
-        <SubscriptionProgressMini v-if="user" />
+        <SubscriptionProgressMini v-if="user" class="header-subscription" />
 
         <!-- Balance Display -->
         <div
           v-if="user"
-          class="group relative hidden items-center gap-2 rounded-xl bg-primary-50 px-3 py-1.5 dark:bg-primary-900/20 sm:flex"
+          class="header-balance group relative hidden items-center gap-2 rounded-xl bg-primary-50 px-3 py-1.5 dark:bg-primary-900/20 sm:flex"
         >
           <svg
             class="h-4 w-4 text-primary-600 dark:text-primary-400"
@@ -117,7 +160,7 @@
               >
               <span v-else>{{ userInitials }}</span>
             </div>
-            <div class="hidden text-left md:block">
+            <div class="header-user-details hidden text-left md:block">
               <div class="text-sm font-medium text-gray-900 dark:text-white">
                 {{ displayName }}
               </div>
@@ -255,12 +298,14 @@ import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
 import { useAdminSettingsStore } from '@/stores/adminSettings'
+import { useSupportTicketStore } from '@/stores/supportTickets'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMini.vue'
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeUrl } from '@/utils/url'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
+import { TOP_QUICK_MENU_OPTIONS, normalizeTopQuickMenuItems } from '@/utils/topQuickMenu'
 
 const router = useRouter()
 const route = useRoute()
@@ -268,6 +313,7 @@ const { t } = useI18n()
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const adminSettingsStore = useAdminSettingsStore()
+const supportTicketStore = useSupportTicketStore()
 const onboardingStore = useOnboardingStore()
 
 const user = computed(() => authStore.user)
@@ -276,6 +322,25 @@ const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
 const docUrl = computed(() => sanitizeUrl(appStore.docUrl))
 const modelPlazaEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.modelPlaza))
+const supportTicketsEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.supportTicket))
+const configuredTopQuickMenuItems = computed(() =>
+  normalizeTopQuickMenuItems(appStore.cachedPublicSettings?.top_quick_menu_items),
+)
+const modelPlazaInQuickMenu = computed(() => configuredTopQuickMenuItems.value.includes('model_plaza'))
+const dashboardPath = computed(() => authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+const visibleTopQuickMenuItems = computed(() =>
+  configuredTopQuickMenuItems.value
+    .map((id) => TOP_QUICK_MENU_OPTIONS.find((item) => item.id === id))
+    .filter((item): item is (typeof TOP_QUICK_MENU_OPTIONS)[number] => {
+      if (!item) return false
+      if (item.id === 'model_plaza') return modelPlazaEnabled.value
+      if (item.id === 'support_tickets') return supportTicketsEnabled.value
+      return true
+    }),
+)
+const supportTicketUnreadCount = computed(() =>
+  authStore.isAdmin ? supportTicketStore.adminUnreadCount : supportTicketStore.userUnreadCount,
+)
 const avatarUrl = computed(() => user.value?.avatar_url?.trim() || '')
 const availableBalance = computed(() => Number(user.value?.balance || 0))
 const frozenBalance = computed(() => Number(user.value?.frozen_balance || 0))
@@ -337,6 +402,24 @@ function toggleMobileSidebar() {
   appStore.toggleMobileSidebar()
 }
 
+function quickMenuPath(item: (typeof TOP_QUICK_MENU_OPTIONS)[number]): string {
+  return authStore.isAdmin && 'adminPath' in item ? item.adminPath : item.path
+}
+
+function quickMenuTarget(item: (typeof TOP_QUICK_MENU_OPTIONS)[number]) {
+  const path = quickMenuPath(item)
+  return item.id === 'model_plaza' ? { path, query: { embedded: '1' } } : path
+}
+
+function isQuickMenuPathActive(path: string): boolean {
+  return route.path === path || route.path.startsWith(`${path}/`)
+}
+
+function isQuickMenuItemActive(item: (typeof TOP_QUICK_MENU_OPTIONS)[number]): boolean {
+  return ('routeName' in item && route.name === item.routeName)
+    || isQuickMenuPathActive(quickMenuPath(item))
+}
+
 function toggleDropdown() {
   dropdownOpen.value = !dropdownOpen.value
 }
@@ -382,6 +465,122 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.app-header {
+  container: app-header / inline-size;
+}
+
+.header-model-plaza,
+.header-docs,
+.header-subscription,
+.header-balance,
+.header-user-details {
+  display: none;
+}
+
+@container app-header (min-width: 48rem) {
+  .header-model-plaza {
+    display: flex;
+  }
+}
+
+@container app-header (min-width: 56rem) {
+  .header-docs {
+    display: flex;
+  }
+}
+
+@container app-header (min-width: 62rem) {
+  .header-subscription {
+    display: block;
+  }
+}
+
+@container app-header (min-width: 80rem) {
+  .header-balance {
+    display: flex;
+  }
+}
+
+@container app-header (min-width: 90rem) {
+  .header-user-details {
+    display: block;
+  }
+}
+
+.quick-menu-slot {
+  container-type: inline-size;
+}
+
+.quick-menu-link {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 9999px;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1rem;
+  transition: color 150ms, background-color 150ms;
+}
+
+.quick-menu-link-active {
+  background: rgb(37 99 235);
+  color: white;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+}
+
+.quick-menu-link-idle {
+  color: rgb(75 85 99);
+}
+
+.quick-menu-link-idle:hover {
+  background: rgb(229 231 235 / 0.75);
+  color: rgb(17 24 39);
+}
+
+:global(.dark) .quick-menu-link-idle {
+  color: rgb(156 163 175);
+}
+
+:global(.dark) .quick-menu-link-idle:hover {
+  background: rgb(55 65 81 / 0.8);
+  color: white;
+}
+
+.quick-menu-dashboard-label,
+.quick-menu-optional {
+  display: none;
+}
+
+@container (min-width: 8rem) {
+  .quick-menu-dashboard-label {
+    display: inline;
+  }
+}
+
+@container (min-width: 15rem) {
+  .quick-menu-optional-1 {
+    display: flex;
+  }
+}
+
+@container (min-width: 25rem) {
+  .quick-menu-optional-2 {
+    display: flex;
+  }
+}
+
+@container (min-width: 35rem) {
+  .quick-menu-optional-3 {
+    display: flex;
+  }
+}
+
+@media (max-width: 639px) {
+  .quick-menu-dashboard-label,
+  .quick-menu-optional { display: none; }
+}
+
 .dropdown-enter-active,
 .dropdown-leave-active {
   transition: all 0.2s ease;

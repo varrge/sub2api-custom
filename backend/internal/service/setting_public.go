@@ -193,6 +193,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyPurchaseSubscriptionURL,
 		SettingKeyTableDefaultPageSize,
 		SettingKeyTablePageSizeOptions,
+		SettingKeyTopQuickMenuItems,
 		SettingKeyCustomMenuItems,
 		SettingKeyCustomEndpoints,
 		SettingKeyLinuxDoConnectEnabled,
@@ -335,6 +336,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		PurchaseSubscriptionURL:             strings.TrimSpace(settings[SettingKeyPurchaseSubscriptionURL]),
 		TableDefaultPageSize:                tableDefaultPageSize,
 		TablePageSizeOptions:                tablePageSizeOptions,
+		TopQuickMenuItems:                   settings[SettingKeyTopQuickMenuItems],
 		CustomMenuItems:                     settings[SettingKeyCustomMenuItems],
 		CustomEndpoints:                     settings[SettingKeyCustomEndpoints],
 		LinuxDoOAuthEnabled:                 linuxDoEnabled,
@@ -586,6 +588,7 @@ type PublicSettingsInjectionPayload struct {
 	PurchaseSubscriptionURL             string                   `json:"purchase_subscription_url"`
 	TableDefaultPageSize                int                      `json:"table_default_page_size"`
 	TablePageSizeOptions                []int                    `json:"table_page_size_options"`
+	TopQuickMenuItems                   []string                 `json:"top_quick_menu_items"`
 	CustomMenuItems                     json.RawMessage          `json:"custom_menu_items"`
 	CustomEndpoints                     json.RawMessage          `json:"custom_endpoints"`
 	LinuxDoOAuthEnabled                 bool                     `json:"linuxdo_oauth_enabled"`
@@ -676,6 +679,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		PurchaseSubscriptionURL:             settings.PurchaseSubscriptionURL,
 		TableDefaultPageSize:                settings.TableDefaultPageSize,
 		TablePageSizeOptions:                settings.TablePageSizeOptions,
+		TopQuickMenuItems:                   ParseTopQuickMenuItems(settings.TopQuickMenuItems),
 		CustomMenuItems:                     filterUserVisibleMenuItems(settings.CustomMenuItems),
 		CustomEndpoints:                     safeRawJSONArray(settings.CustomEndpoints),
 		LinuxDoOAuthEnabled:                 settings.LinuxDoOAuthEnabled,

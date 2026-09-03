@@ -14,6 +14,15 @@ export default {
         payment: '支付设置',
       },
       features: {
+        topQuickMenu: {
+          title: '顶部快捷菜单',
+          description: '选择并排列最多 3 个内置功能；控制台固定显示在第一项。保存后立即对所有用户生效。',
+          fixed: '固定',
+          featureDisabled: '当前功能未开启',
+          moveUp: '将{item}上移',
+          moveDown: '将{item}下移',
+          selectionHint: '已选择 {count}/3 个可选功能。选满后需先取消一项才能选择其他功能。',
+        },
         channelMonitor: {
           title: '渠道监控',
           description: '启用后在 V1 主动探测与 V2 被动用量监控中二选一。关闭后两种模式的后台任务均停止，用户端入口隐藏。',

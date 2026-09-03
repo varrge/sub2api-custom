@@ -7010,8 +7010,113 @@
         </div>
         <!-- /Tab: Login Agreement -->
 
-	        <!-- Tab: Features (功能开关) -->
+        <!-- Tab: Features (功能开关) -->
         <div v-show="activeTab === 'features'" class="space-y-6">
+
+        <div class="card" data-testid="top-quick-menu-settings">
+          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.settings.features.topQuickMenu.title') }}
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('admin.settings.features.topQuickMenu.description') }}
+            </p>
+          </div>
+          <div class="space-y-2 p-6">
+            <div class="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 dark:border-dark-700 dark:bg-dark-800/60">
+              <input
+                type="checkbox"
+                checked
+                disabled
+                :aria-label="t('topQuickMenu.dashboard')"
+                class="h-4 w-4 rounded border-gray-300 text-primary-600"
+              />
+              <Icon name="home" size="sm" class="text-gray-500 dark:text-dark-300" />
+              <span class="min-w-0 flex-1 text-sm font-medium text-gray-900 dark:text-white">
+                {{ t('topQuickMenu.dashboard') }}
+              </span>
+              <span class="rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-600 dark:bg-dark-700 dark:text-dark-300">
+                {{ t('admin.settings.features.topQuickMenu.fixed') }}
+              </span>
+            </div>
+
+            <div
+              v-for="(item, index) in selectedTopQuickMenuOptions"
+              :key="item.id"
+              class="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2.5 dark:border-dark-700"
+              :data-testid="`top-quick-menu-selected-${item.id}`"
+            >
+              <input
+                type="checkbox"
+                checked
+                :aria-label="t(item.labelKey)"
+                class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                @change="setTopQuickMenuItem(item.id, false)"
+              />
+              <Icon :name="item.icon" size="sm" class="text-gray-500 dark:text-dark-300" />
+              <span class="min-w-0 flex-1 text-sm font-medium text-gray-900 dark:text-white">
+                {{ t(item.labelKey) }}
+              </span>
+              <span
+                v-if="isTopQuickMenuFeatureDisabled(item)"
+                class="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500 dark:bg-dark-800 dark:text-dark-400"
+              >
+                {{ t('admin.settings.features.topQuickMenu.featureDisabled') }}
+              </span>
+              <button
+                type="button"
+                class="rounded-md p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-dark-700 dark:hover:text-white"
+                :disabled="index === 0"
+                :aria-label="t('admin.settings.features.topQuickMenu.moveUp', { item: t(item.labelKey) })"
+                :title="t('admin.settings.features.topQuickMenu.moveUp', { item: t(item.labelKey) })"
+                @click="moveTopQuickMenuItem(index, -1)"
+              >
+                <Icon name="arrowUp" size="xs" />
+              </button>
+              <button
+                type="button"
+                class="rounded-md p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-dark-700 dark:hover:text-white"
+                :disabled="index === selectedTopQuickMenuOptions.length - 1"
+                :aria-label="t('admin.settings.features.topQuickMenu.moveDown', { item: t(item.labelKey) })"
+                :title="t('admin.settings.features.topQuickMenu.moveDown', { item: t(item.labelKey) })"
+                @click="moveTopQuickMenuItem(index, 1)"
+              >
+                <Icon name="arrowDown" size="xs" />
+              </button>
+            </div>
+
+            <div v-if="unselectedTopQuickMenuOptions.length" class="border-t border-gray-100 pt-2 dark:border-dark-700">
+              <div
+                v-for="item in unselectedTopQuickMenuOptions"
+                :key="item.id"
+                class="flex items-center gap-3 rounded-lg px-3 py-2.5"
+                :class="topQuickMenuSelectionFull ? 'opacity-50' : 'hover:bg-gray-50 dark:hover:bg-dark-800/40'"
+                :data-testid="`top-quick-menu-unselected-${item.id}`"
+              >
+                <input
+                  type="checkbox"
+                  :disabled="topQuickMenuSelectionFull"
+                  :aria-label="t(item.labelKey)"
+                  class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 disabled:cursor-not-allowed"
+                  @change="setTopQuickMenuItem(item.id, true)"
+                />
+                <Icon :name="item.icon" size="sm" class="text-gray-400" />
+                <span class="min-w-0 flex-1 text-sm text-gray-700 dark:text-gray-300">
+                  {{ t(item.labelKey) }}
+                </span>
+                <span
+                  v-if="isTopQuickMenuFeatureDisabled(item)"
+                  class="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500 dark:bg-dark-800 dark:text-dark-400"
+                >
+                  {{ t('admin.settings.features.topQuickMenu.featureDisabled') }}
+                </span>
+              </div>
+            </div>
+            <p class="pt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.settings.features.topQuickMenu.selectionHint', { count: form.top_quick_menu_items.length }) }}
+            </p>
+          </div>
+        </div>
 
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
@@ -8821,6 +8926,7 @@ import type {
   LoginAgreementDocument,
   NotifyEmailEntry,
   Proxy,
+  TopQuickMenuItemId,
 } from "@/types";
 import type { ProviderInstance } from "@/types/payment";
 import AppLayout from "@/components/layout/AppLayout.vue";
@@ -8862,6 +8968,11 @@ import {
   defaultFingerprintSignalRows,
   type FingerprintSignalRow,
 } from "./codexFingerprintSignals";
+import {
+  MAX_TOP_QUICK_MENU_ITEMS,
+  TOP_QUICK_MENU_OPTIONS,
+  normalizeTopQuickMenuItems,
+} from "@/utils/topQuickMenu";
 
 const { t, locale } = useI18n();
 const appStore = useAppStore();
@@ -9620,6 +9731,7 @@ const form = reactive<SettingsForm>({
   payment_alipay_mobile_precreate_deep_link: false,
   table_default_page_size: tablePageSizeDefault,
   table_page_size_options: [10, 20, 50, 100],
+  top_quick_menu_items: [],
   custom_menu_items: [] as Array<{
     id: string;
     label: string;
@@ -9836,6 +9948,44 @@ const form = reactive<SettingsForm>({
   // Allow user view error requests
   allow_user_view_error_requests: false,
 });
+
+type TopQuickMenuOption = (typeof TOP_QUICK_MENU_OPTIONS)[number];
+
+const selectedTopQuickMenuOptions = computed(() =>
+  form.top_quick_menu_items
+    .map((id) => TOP_QUICK_MENU_OPTIONS.find((item) => item.id === id))
+    .filter((item): item is TopQuickMenuOption => Boolean(item)),
+);
+const unselectedTopQuickMenuOptions = computed(() =>
+  TOP_QUICK_MENU_OPTIONS.filter(
+    (item) => !form.top_quick_menu_items.includes(item.id),
+  ),
+);
+const topQuickMenuSelectionFull = computed(
+  () => form.top_quick_menu_items.length >= MAX_TOP_QUICK_MENU_ITEMS,
+);
+
+function setTopQuickMenuItem(id: TopQuickMenuItemId, selected: boolean): void {
+  const index = form.top_quick_menu_items.indexOf(id);
+  if (!selected) {
+    if (index >= 0) form.top_quick_menu_items.splice(index, 1);
+    return;
+  }
+  if (index < 0 && !topQuickMenuSelectionFull.value) {
+    form.top_quick_menu_items.push(id);
+  }
+}
+
+function moveTopQuickMenuItem(index: number, direction: -1 | 1): void {
+  const target = index + direction;
+  if (target < 0 || target >= form.top_quick_menu_items.length) return;
+  const [item] = form.top_quick_menu_items.splice(index, 1);
+  form.top_quick_menu_items.splice(target, 0, item);
+}
+
+function isTopQuickMenuFeatureDisabled(item: TopQuickMenuOption): boolean {
+  return 'featureSetting' in item && !form[item.featureSetting];
+}
 
 // 人机验证 UI 状态：单卡片「总开关 + 服务商单选」，落库仍是三个独立
 // enabled 键（与上游一致），由下面的映射保证同一时间至多一家启用。
@@ -10829,6 +10979,9 @@ async function loadSettings() {
     form.channel_monitor_show_quota = Boolean(
       settings.channel_monitor_show_quota
     );
+    form.top_quick_menu_items = normalizeTopQuickMenuItems(
+      settings.top_quick_menu_items,
+    );
     form.login_agreement_updated_at =
       settings.login_agreement_updated_at || "2026-03-31";
     form.login_agreement_documents =
@@ -11228,6 +11381,7 @@ async function saveSettings() {
       hide_ccs_import_button: form.hide_ccs_import_button,
       table_default_page_size: form.table_default_page_size,
       table_page_size_options: form.table_page_size_options,
+      top_quick_menu_items: normalizeTopQuickMenuItems(form.top_quick_menu_items),
       custom_menu_items: form.custom_menu_items,
       custom_endpoints: form.custom_endpoints,
       frontend_url: form.frontend_url,
@@ -11544,6 +11698,9 @@ async function saveSettings() {
         (form as Record<string, unknown>)[key] = value;
       }
     }
+    form.top_quick_menu_items = normalizeTopQuickMenuItems(
+      updated.top_quick_menu_items,
+    );
     Object.assign(authSourceDefaults, buildAuthSourceDefaultsState(updated));
     form.default_platform_quotas = normalizePlatformQuotasMap(updated.default_platform_quotas);
     form.account_scheduling_thresholds = normalizeAccountSchedulingThresholdsMap(

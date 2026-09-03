@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   routePath: '/dashboard',
   routeName: 'Dashboard',
   isAdmin: false,
+  imageGenerationEnabled: true,
   modelPlazaEnabled: true,
   supportTicketsEnabled: true,
   userUnread: 7,
@@ -62,11 +63,16 @@ vi.mock('@/stores/supportTickets', () => ({
 
 vi.mock('@/utils/featureFlags', () => ({
   FeatureFlags: {
+    imageGeneration: 'imageGeneration',
     modelPlaza: 'modelPlaza',
     supportTicket: 'supportTicket',
   },
   isFeatureFlagEnabled: (flag: string) =>
-    flag === 'modelPlaza' ? state.modelPlazaEnabled : state.supportTicketsEnabled,
+    flag === 'imageGeneration'
+      ? state.imageGenerationEnabled
+      : flag === 'modelPlaza'
+        ? state.modelPlazaEnabled
+        : state.supportTicketsEnabled,
 }))
 
 const RouterLinkStub = defineComponent({
@@ -98,6 +104,7 @@ describe('AppHeader top quick menu', () => {
     state.routePath = '/dashboard'
     state.routeName = 'Dashboard'
     state.isAdmin = false
+    state.imageGenerationEnabled = true
     state.modelPlazaEnabled = true
     state.supportTicketsEnabled = true
     state.settings.top_quick_menu_items = []
@@ -145,6 +152,15 @@ describe('AppHeader top quick menu', () => {
     expect(view.find('[data-testid="top-quick-menu-support_tickets"]').exists()).toBe(false)
     expect(view.find('[data-testid="top-quick-menu-api_keys"]').exists()).toBe(true)
     expect(view.find('[data-testid="model-plaza-legacy-entry"]').exists()).toBe(true)
+  })
+
+  it('hides image generation from the quick menu when the feature is disabled', () => {
+    state.imageGenerationEnabled = false
+    state.settings.top_quick_menu_items = ['image_generation', 'api_keys']
+    const view = mountHeader()
+
+    expect(view.find('[data-testid="top-quick-menu-image_generation"]').exists()).toBe(false)
+    expect(view.find('[data-testid="top-quick-menu-api_keys"]').exists()).toBe(true)
   })
 
   it.each([

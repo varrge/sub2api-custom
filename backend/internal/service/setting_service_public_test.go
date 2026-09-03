@@ -178,6 +178,26 @@ func TestSettingService_GetPublicSettingsAndInjectionExposeSupportTicketFlag(t *
 	require.True(t, payload.(*PublicSettingsInjectionPayload).SupportTicketEnabled)
 }
 
+func TestSettingService_GetPublicSettingsAndInjectionExposeImageGenerationFlag(t *testing.T) {
+	svc := NewSettingService(&settingPublicRepoStub{values: map[string]string{
+		SettingKeyImageGenerationEnabled: "false",
+	}}, &config.Config{})
+	settings, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.False(t, settings.ImageGenerationEnabled)
+
+	payload, err := svc.GetPublicSettingsForInjection(context.Background())
+	require.NoError(t, err)
+	require.False(t, payload.(*PublicSettingsInjectionPayload).ImageGenerationEnabled)
+
+	defaultSettings, err := NewSettingService(
+		&settingPublicRepoStub{values: map[string]string{}},
+		&config.Config{},
+	).GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.True(t, defaultSettings.ImageGenerationEnabled)
+}
+
 func TestSettingService_GetPublicSettingsAndInjectionExposeTopQuickMenuItems(t *testing.T) {
 	svc := NewSettingService(&settingPublicRepoStub{values: map[string]string{
 		SettingKeyTopQuickMenuItems: `["usage","support_tickets"]`,

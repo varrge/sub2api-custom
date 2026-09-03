@@ -726,6 +726,9 @@ export interface SystemSettings {
   // Available Channels feature switch
   available_channels_enabled: boolean;
 
+  // Hosted image-generation page visibility
+  image_generation_enabled: boolean;
+
   // Support Tickets feature switch
   support_ticket_enabled: boolean;
 
@@ -1030,6 +1033,9 @@ export interface UpdateSettingsRequest {
 
   // Available Channels feature switch
   available_channels_enabled?: boolean;
+
+  // Hosted image-generation page visibility
+  image_generation_enabled?: boolean;
 
   // Support Tickets feature switch
   support_ticket_enabled?: boolean;

@@ -7121,6 +7121,34 @@
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('imageGeneration.settingsFeature.title') }}
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('imageGeneration.settingsFeature.description') }}
+            </p>
+          </div>
+          <div class="space-y-5 p-6">
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('imageGeneration.settingsFeature.enabled') }}
+                </label>
+                <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('imageGeneration.settingsFeature.enabledHint') }}
+                </p>
+              </div>
+              <Toggle
+                v-model="form.image_generation_enabled"
+                :aria-label="t('imageGeneration.settingsFeature.enabled')"
+                data-testid="image-generation-enabled"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.features.channelMonitor.title') }}
             </h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -9935,6 +9963,8 @@ const form = reactive<SettingsForm>({
   channel_monitor_show_quota: false,
   // Available Channels feature switch
   available_channels_enabled: false,
+  // Hosted image-generation page visibility
+  image_generation_enabled: true,
   // Support Tickets feature switch
   support_ticket_enabled: false,
   // Model Plaza feature switches + description
@@ -11639,6 +11669,8 @@ async function saveSettings() {
       channel_monitor_show_quota: Boolean(form.channel_monitor_show_quota),
       // Available Channels feature switch
       available_channels_enabled: form.available_channels_enabled,
+      // Hosted image-generation page visibility
+      image_generation_enabled: form.image_generation_enabled,
       // Support Tickets feature switch
       support_ticket_enabled: form.support_ticket_enabled,
       // Model Plaza feature switches + description

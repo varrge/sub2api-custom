@@ -504,6 +504,10 @@ const (
 	// sidebar entry is hidden. Defaults to false (opt-in feature).
 	SettingKeyAvailableChannelsEnabled = "available_channels_enabled"
 
+	// SettingKeyImageGenerationEnabled controls the hosted image-generation page
+	// and its navigation entries. Missing values remain enabled for compatibility.
+	SettingKeyImageGenerationEnabled = "image_generation_enabled"
+
 	// SettingKeySupportTicketEnabled gates every user-facing support-ticket API.
 	// It is fail-closed: only the literal "true" enables the feature.
 	SettingKeySupportTicketEnabled = "support_ticket_enabled"

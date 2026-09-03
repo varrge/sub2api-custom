@@ -9,6 +9,7 @@ export const TOP_QUICK_MENU_OPTIONS = [
     icon: 'sparkles',
     path: '/image-generation',
     routeName: 'ImageGeneration',
+    featureSetting: 'image_generation_enabled',
   },
   {
     id: 'batch_image',
@@ -41,7 +42,7 @@ export const TOP_QUICK_MENU_OPTIONS = [
   path: string
   adminPath?: string
   routeName?: string
-  featureSetting?: 'model_plaza_enabled' | 'support_ticket_enabled'
+  featureSetting?: 'image_generation_enabled' | 'model_plaza_enabled' | 'support_ticket_enabled'
 }>
 
 const validIDs = new Set<TopQuickMenuItemId>(TOP_QUICK_MENU_OPTIONS.map((item) => item.id))

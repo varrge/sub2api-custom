@@ -71,6 +71,13 @@ export default {
     promptRequired: 'Enter a prompt',
     noImageReturned: 'No image was returned. Check the model and prompt, then try again.',
     generated: 'Generated {count} images',
-    generateFailed: 'Image generation failed'
+    generateFailed: 'Image generation failed',
+    featureDisabled: 'Image generation is not enabled.',
+    settingsFeature: {
+      title: 'Image Generation',
+      description: 'Control whether the hosted image-generation studio is visible to users.',
+      enabled: 'Enable image generation',
+      enabledHint: 'When disabled, sidebar and quick-menu entries are hidden and the page cannot be opened.'
+    }
   }
 }

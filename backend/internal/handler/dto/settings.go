@@ -316,6 +316,7 @@ type SystemSettings struct {
 
 	// Available Channels feature switch (user-facing aggregate view)
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
+	ImageGenerationEnabled   bool `json:"image_generation_enabled"`
 	SupportTicketEnabled     bool `json:"support_ticket_enabled"`
 
 	// Model Plaza feature (public group/model pricing showcase)
@@ -422,6 +423,7 @@ type PublicSettings struct {
 	ChannelMonitorShowQuota              bool   `json:"channel_monitor_show_quota"`
 
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
+	ImageGenerationEnabled   bool `json:"image_generation_enabled"`
 	SupportTicketEnabled     bool `json:"support_ticket_enabled"`
 
 	ModelPlazaEnabled       bool `json:"model_plaza_enabled"`

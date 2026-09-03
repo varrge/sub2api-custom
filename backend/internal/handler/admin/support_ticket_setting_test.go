@@ -23,3 +23,19 @@ func TestSupportTicketSettingUpdateAndAuditContract(t *testing.T) {
 	)
 	require.Contains(t, changed, service.SettingKeySupportTicketEnabled)
 }
+
+func TestImageGenerationSettingUpdateAndAuditContract(t *testing.T) {
+	var req UpdateSettingsRequest
+	require.NoError(t, json.Unmarshal([]byte(`{"image_generation_enabled":false}`), &req))
+	require.NotNil(t, req.ImageGenerationEnabled)
+	require.False(t, *req.ImageGenerationEnabled)
+
+	changed := diffSettings(
+		&service.SystemSettings{ImageGenerationEnabled: true},
+		&service.SystemSettings{ImageGenerationEnabled: false},
+		&service.AuthSourceDefaultSettings{},
+		&service.AuthSourceDefaultSettings{},
+		req,
+	)
+	require.Contains(t, changed, service.SettingKeyImageGenerationEnabled)
+}

@@ -343,6 +343,7 @@ type UpdateSettingsRequest struct {
 
 	// Available Channels feature switch (user-facing)
 	AvailableChannelsEnabled *bool `json:"available_channels_enabled"`
+	ImageGenerationEnabled   *bool `json:"image_generation_enabled"`
 	SupportTicketEnabled     *bool `json:"support_ticket_enabled"`
 
 	// Model Plaza feature switches + description
@@ -1949,6 +1950,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.AvailableChannelsEnabled
 		}(),
+		ImageGenerationEnabled: func() bool {
+			if req.ImageGenerationEnabled != nil {
+				return *req.ImageGenerationEnabled
+			}
+			return previousSettings.ImageGenerationEnabled
+		}(),
 		SupportTicketEnabled: func() bool {
 			if req.SupportTicketEnabled != nil {
 				return *req.SupportTicketEnabled
@@ -2398,6 +2405,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		GrokDefaultBaseURLMode:         updatedSettings.GrokDefaultBaseURLMode,
 
 		AvailableChannelsEnabled: updatedSettings.AvailableChannelsEnabled,
+		ImageGenerationEnabled:   updatedSettings.ImageGenerationEnabled,
 		SupportTicketEnabled:     updatedSettings.SupportTicketEnabled,
 
 		ModelPlazaEnabled:       updatedSettings.ModelPlazaEnabled,

@@ -25,6 +25,7 @@ const appStore = vi.hoisted(() => ({
   cachedPublicSettings: null as null | {
     payment_enabled?: boolean
     risk_control_enabled?: boolean
+    image_generation_enabled?: boolean
     support_ticket_enabled?: boolean
     custom_menu_items?: []
   },
@@ -180,6 +181,20 @@ describe('feature route guard', () => {
     expect(appStore.fetchPublicSettings).not.toHaveBeenCalled()
     expect(next).toHaveBeenCalledOnce()
     expect(next).toHaveBeenCalledWith(target)
+  })
+
+  it('redirects when loaded settings explicitly disable image generation', async () => {
+    appStore.cachedPublicSettings = { image_generation_enabled: false }
+    appStore.publicSettingsLoaded = true
+
+    const { navigation, next } = runGuard(
+      { requiresImageGeneration: true },
+      '/image-generation',
+    )
+    await navigation
+
+    expect(next).toHaveBeenCalledOnce()
+    expect(next).toHaveBeenCalledWith('/dashboard')
   })
 
   it('fails closed with a localized notice when support-ticket settings cannot load', async () => {

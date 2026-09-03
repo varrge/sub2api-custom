@@ -957,6 +957,7 @@ func TestAPIContracts(t *testing.T) {
 						"rules": []
 					},
 					"top_quick_menu_items": [],
+					"image_generation_enabled": true,
 					"custom_menu_items": [],
 					"custom_endpoints": [],
 					"payment_enabled": false,
@@ -1191,6 +1192,7 @@ func TestAPIContracts(t *testing.T) {
 					"auth_source_default_wechat_platform_quotas": null,
 					"auth_source_default_dingtalk_platform_quotas": null,
 					"top_quick_menu_items": [],
+					"image_generation_enabled": true,
 					"custom_menu_items": [],
 					"custom_endpoints": [],
 					"default_concurrency": 0,

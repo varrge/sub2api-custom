@@ -200,6 +200,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 
 		// Available channels feature (default disabled; opt-in)
 		SettingKeyAvailableChannelsEnabled: "false",
+		SettingKeyImageGenerationEnabled:   "true",
 		SettingKeySupportTicketEnabled:     "false",
 
 		// Model plaza feature (default disabled; opt-in, public unless require_auth)
@@ -819,6 +820,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 
 	// Available channels feature (default: disabled; strict true)
 	result.AvailableChannelsEnabled = settings[SettingKeyAvailableChannelsEnabled] == "true"
+	result.ImageGenerationEnabled = !isFalseSettingValue(settings[SettingKeyImageGenerationEnabled])
 	result.SupportTicketEnabled = settings[SettingKeySupportTicketEnabled] == "true"
 
 	// Model plaza feature (default: disabled; strict true)

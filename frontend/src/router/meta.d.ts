@@ -55,6 +55,9 @@ declare module 'vue-router' {
      */
     requiresRiskControl?: boolean
 
+    /** Whether the hosted image-generation page is enabled. */
+    requiresImageGeneration?: boolean
+
     /** Whether the opt-in user support-ticket feature must be enabled. */
     requiresSupportTicket?: boolean
 

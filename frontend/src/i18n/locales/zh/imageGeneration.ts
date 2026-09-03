@@ -71,6 +71,13 @@ export default {
     promptRequired: '请输入画面描述',
     noImageReturned: '接口未返回图片，请检查模型和提示词后重试',
     generated: '已生成 {count} 张图片',
-    generateFailed: '图片生成失败'
+    generateFailed: '图片生成失败',
+    featureDisabled: '生图功能未开启。',
+    settingsFeature: {
+      title: '生图功能',
+      description: '控制用户端生图工作台是否显示。',
+      enabled: '启用生图功能',
+      enabledHint: '关闭后隐藏侧栏和顶部快捷入口，并禁止访问生图页面。'
+    }
   }
 }

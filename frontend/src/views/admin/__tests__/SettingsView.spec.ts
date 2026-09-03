@@ -388,6 +388,7 @@ const baseSettingsResponse = {
   doc_url: "",
   home_content: "",
   compact_home_enabled: false,
+  image_generation_enabled: true,
   support_ticket_enabled: false,
   hide_ccs_import_button: false,
   table_default_page_size: 20,
@@ -761,6 +762,23 @@ describe("admin SettingsView payment visible method controls", () => {
 
     expect(updateSettings).toHaveBeenCalledWith(
       expect.objectContaining({ support_ticket_enabled: true }),
+    );
+    expect(fetchPublicSettings).toHaveBeenCalledWith(true);
+  });
+
+  it("saves the image generation switch and immediately refreshes public settings", async () => {
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+
+    const toggle = wrapper.get('[data-testid="image-generation-enabled"]');
+    expect((toggle.element as HTMLInputElement).checked).toBe(true);
+    await toggle.setValue(false);
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ image_generation_enabled: false }),
     );
     expect(fetchPublicSettings).toHaveBeenCalledWith(true);
   });

@@ -321,6 +321,7 @@ const dropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
 const docUrl = computed(() => sanitizeUrl(appStore.docUrl))
+const imageGenerationEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.imageGeneration))
 const modelPlazaEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.modelPlaza))
 const supportTicketsEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.supportTicket))
 const configuredTopQuickMenuItems = computed(() =>
@@ -333,6 +334,7 @@ const visibleTopQuickMenuItems = computed(() =>
     .map((id) => TOP_QUICK_MENU_OPTIONS.find((item) => item.id === id))
     .filter((item): item is (typeof TOP_QUICK_MENU_OPTIONS)[number] => {
       if (!item) return false
+      if (item.id === 'image_generation') return imageGenerationEnabled.value
       if (item.id === 'model_plaza') return modelPlazaEnabled.value
       if (item.id === 'support_tickets') return supportTicketsEnabled.value
       return true

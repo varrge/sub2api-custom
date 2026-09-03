@@ -80,6 +80,7 @@ func TestSupportTicketRepositoryLifecycleOwnershipAndUnread(t *testing.T) {
 	adminDetail, err := repo.OpenForAdmin(ctx, admin.ID, detail.Ticket.ID)
 	require.NoError(t, err)
 	require.Len(t, adminDetail.Messages, 1)
+	require.NoError(t, repo.MarkReadForAdmin(ctx, admin.ID, detail.Ticket.ID))
 	adminUnread, err = repo.CountUnreadForAdmin(ctx, admin.ID)
 	require.NoError(t, err)
 	require.Zero(t, adminUnread)
@@ -100,6 +101,7 @@ func TestSupportTicketRepositoryLifecycleOwnershipAndUnread(t *testing.T) {
 	require.Equal(t, service.SupportTicketStatusInProgress, userDetail.Ticket.Status)
 	require.Len(t, userDetail.Messages, 2)
 	require.Less(t, userDetail.Messages[0].ID, userDetail.Messages[1].ID)
+	require.NoError(t, repo.MarkReadForUser(ctx, owner.ID, detail.Ticket.ID))
 	userUnread, err = repo.CountUnreadForUser(ctx, owner.ID)
 	require.NoError(t, err)
 	require.Zero(t, userUnread)
@@ -323,8 +325,10 @@ func TestSupportTicketRepositorySeparatesUserAndAdminReadPositions(t *testing.T)
 
 	_, err = repo.OpenForAdmin(ctx, adminOwner.ID, detail.Ticket.ID)
 	require.NoError(t, err)
+	require.NoError(t, repo.MarkReadForAdmin(ctx, adminOwner.ID, detail.Ticket.ID))
 	_, err = repo.OpenForUser(ctx, adminOwner.ID, detail.Ticket.ID)
 	require.NoError(t, err)
+	require.NoError(t, repo.MarkReadForUser(ctx, adminOwner.ID, detail.Ticket.ID))
 
 	var roles int
 	rows, err := client.QueryContext(ctx, `
@@ -336,4 +340,28 @@ WHERE ticket_id = $1 AND reader_user_id = $2`, detail.Ticket.ID, adminOwner.ID)
 	require.True(t, rows.Next())
 	require.NoError(t, rows.Scan(&roles))
 	require.Equal(t, 2, roles)
+}
+
+func TestSupportTicketRepositoryDetailReadIsExplicit(t *testing.T) {
+	ctx := context.Background()
+	repo := NewSupportTicketRepository(testEntClient(t))
+	owner := supportTicketTestUser(t, service.RoleUser)
+	other := supportTicketTestUser(t, service.RoleUser)
+	admin := supportTicketTestUser(t, service.RoleAdmin)
+	detail, err := repo.Create(ctx, supportTicketCreateParams(owner.ID, "explicit read", service.SupportTicketPriorityNormal))
+	require.NoError(t, err)
+
+	_, err = repo.OpenForAdmin(ctx, admin.ID, detail.Ticket.ID)
+	require.NoError(t, err)
+	unread, err := repo.CountUnreadForAdmin(ctx, admin.ID)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, unread, "detail fetch must not mark the ticket read")
+	require.NoError(t, repo.MarkReadForAdmin(ctx, admin.ID, detail.Ticket.ID))
+	unread, err = repo.CountUnreadForAdmin(ctx, admin.ID)
+	require.NoError(t, err)
+	require.Zero(t, unread)
+
+	_, err = repo.OpenForUser(ctx, other.ID, detail.Ticket.ID)
+	require.ErrorIs(t, err, service.ErrSupportTicketNotFound)
+	require.ErrorIs(t, repo.MarkReadForUser(ctx, other.ID, detail.Ticket.ID), service.ErrSupportTicketNotFound)
 }

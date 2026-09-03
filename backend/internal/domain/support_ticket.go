@@ -45,7 +45,17 @@ var (
 	ErrSupportTicketOpenLimit         = infraerrors.Conflict("SUPPORT_TICKET_OPEN_LIMIT", "support ticket open limit reached")
 	ErrSupportTicketInvalidTransition = infraerrors.Conflict("SUPPORT_TICKET_INVALID_TRANSITION", "support ticket status transition is invalid")
 	ErrSupportTicketClosed            = infraerrors.Conflict("SUPPORT_TICKET_CLOSED", "support ticket is closed")
+	ErrSupportTicketFeatureDisabled   = infraerrors.Forbidden("FEATURE_DISABLED", "support tickets are disabled")
+	ErrSupportTicketTooManyImages     = infraerrors.BadRequest("SUPPORT_TICKET_TOO_MANY_IMAGES", "support ticket messages allow at most 3 images")
+	ErrSupportTicketImageTooLarge     = infraerrors.BadRequest("SUPPORT_TICKET_IMAGE_TOO_LARGE", "support ticket image is too large")
+	ErrSupportTicketImageInvalid      = infraerrors.BadRequest("SUPPORT_TICKET_IMAGE_INVALID", "support ticket image must be a valid JPEG, PNG, or WebP")
 )
+
+type SupportTicketIdentity struct {
+	ID       int64
+	Username string
+	Email    string
+}
 
 type SupportTicket struct {
 	ID        int64
@@ -55,6 +65,7 @@ type SupportTicket struct {
 	Priority  string
 	Status    string
 	Unread    bool
+	User      *SupportTicketIdentity
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -64,6 +75,7 @@ type SupportTicketMessage struct {
 	TicketID     int64
 	AuthorUserID int64
 	AuthorRole   string
+	Author       *SupportTicketIdentity
 	Body         string
 	Attachments  []SupportTicketAttachment
 	CreatedAt    time.Time

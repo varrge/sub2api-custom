@@ -3,6 +3,7 @@ package middleware
 import (
 	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -150,6 +151,45 @@ func TestPasskeyLoginAuditUsesCanonicalLoginActionAndOmitsCredentialBody(t *test
 	route := "POST /api/v1/auth/passkey/login/finish"
 	require.Equal(t, service.AuditActionLogin, auditActionOverrides[route])
 	require.Contains(t, auditBodyOmittedRoutes, route)
+}
+
+func TestSupportTicketMultipartRoutesOmitBodiesEvenWhenHandlersRejectThem(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, route := range []string{
+		"POST /api/v1/tickets",
+		"POST /api/v1/tickets/:id/replies",
+		"POST /api/v1/admin/tickets/:id/replies",
+	} {
+		require.Contains(t, auditBodyOmittedRoutes, route)
+	}
+
+	repository := &auditCaptureRepository{}
+	auditService := service.NewAuditLogService(repository, nil)
+	auditService.Start()
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set(string(ContextKeyUser), AuthSubject{UserID: 77})
+		c.Next()
+	})
+	router.Use(gin.HandlerFunc(NewAuditLogMiddleware(auditService)))
+	router.POST("/api/v1/tickets/:id/replies", func(c *gin.Context) {
+		_, _ = io.ReadAll(c.Request.Body)
+		c.JSON(http.StatusBadRequest, gin.H{"ok": false})
+	})
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/tickets/9/replies", bytes.NewBufferString("ticket-private-canary"))
+	request.Header.Set("Content-Type", "multipart/form-data; boundary=invalid")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+	auditService.Stop()
+
+	repository.mu.Lock()
+	logs := append([]*service.AuditLog(nil), repository.logs...)
+	repository.mu.Unlock()
+	require.Len(t, logs, 1)
+	require.Equal(t, "<credential-bearing body omitted>", logs[0].RequestBody)
+	require.NotContains(t, logs[0].RequestBody, "ticket-private-canary")
 }
 
 // Ollama 会话保存的请求体整体就是浏览器 Cookie 明文，键级脱敏清单曾漏掉裸键

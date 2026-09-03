@@ -52,7 +52,8 @@ func (r *supportTicketRepository) Create(ctx context.Context, params service.Cre
 
 	var detail *service.SupportTicketDetail
 	err = r.withTx(ctx, func(txCtx context.Context, client *dbent.Client) error {
-		if _, err := client.User.Query().Where(user.IDEQ(params.UserID)).ForUpdate().Only(txCtx); err != nil {
+		userEntity, err := client.User.Query().Where(user.IDEQ(params.UserID)).ForUpdate().Only(txCtx)
+		if err != nil {
 			return translatePersistenceError(err, service.ErrUserNotFound, nil)
 		}
 		openCount, err := client.SupportTicket.Query().Where(
@@ -83,6 +84,8 @@ func (r *supportTicketRepository) Create(ctx context.Context, params service.Cre
 		if err != nil {
 			return err
 		}
+		ticketEntity.Edges.User = userEntity
+		messageEntity.Edges.Author = userEntity
 		detail = &service.SupportTicketDetail{
 			Ticket:   *supportTicketEntityToService(ticketEntity),
 			Messages: []service.SupportTicketMessage{*supportTicketMessageEntityToService(messageEntity)},
@@ -120,12 +123,17 @@ func (r *supportTicketRepository) reply(ctx context.Context, ownerID int64, para
 		if ticketEntity.Status == service.SupportTicketStatusClosed {
 			return service.ErrSupportTicketClosed
 		}
+		authorEntity, err := client.User.Query().Where(user.IDEQ(params.AuthorID)).Only(txCtx)
+		if err != nil {
+			return translatePersistenceError(err, service.ErrUserNotFound, nil)
+		}
 
 		now := time.Now()
 		messageEntity, err := createSupportTicketMessage(txCtx, client, ticketEntity.ID, params.AuthorID, authorRole, body, params.Attachments, now)
 		if err != nil {
 			return err
 		}
+		messageEntity.Edges.Author = authorEntity
 		update := client.SupportTicket.UpdateOneID(ticketEntity.ID).SetUpdatedAt(now)
 		if authorRole == service.SupportTicketAuthorRoleAdmin && ticketEntity.Status == service.SupportTicketStatusPending {
 			update.SetStatus(service.SupportTicketStatusInProgress)
@@ -155,7 +163,7 @@ func (r *supportTicketRepository) list(ctx context.Context, q *dbent.SupportTick
 	if err != nil {
 		return nil, nil, err
 	}
-	itemsQuery := q.Offset(params.Offset()).Limit(params.Limit())
+	itemsQuery := q.Offset(params.Offset()).Limit(params.Limit()).WithUser()
 	if admin {
 		itemsQuery.Order(supportTicketAdminOrder())
 	} else {
@@ -182,50 +190,74 @@ func (r *supportTicketRepository) list(ctx context.Context, q *dbent.SupportTick
 }
 
 func (r *supportTicketRepository) OpenForUser(ctx context.Context, userID, ticketID int64) (*service.SupportTicketDetail, error) {
-	return r.open(ctx, userID, ticketID, service.SupportTicketAuthorRoleUser, true)
+	return r.get(ctx, userID, ticketID, service.SupportTicketAuthorRoleUser, true)
 }
 
 func (r *supportTicketRepository) OpenForAdmin(ctx context.Context, readerAdminID, ticketID int64) (*service.SupportTicketDetail, error) {
-	return r.open(ctx, readerAdminID, ticketID, service.SupportTicketAuthorRoleAdmin, false)
+	return r.get(mixins.SkipSoftDelete(ctx), readerAdminID, ticketID, service.SupportTicketAuthorRoleAdmin, false)
 }
 
-func (r *supportTicketRepository) open(ctx context.Context, readerID, ticketID int64, readerRole string, scoped bool) (*service.SupportTicketDetail, error) {
-	var detail *service.SupportTicketDetail
-	err := r.withTx(ctx, func(txCtx context.Context, client *dbent.Client) error {
-		predicates := []predicate.SupportTicket{supportticket.IDEQ(ticketID)}
-		if scoped {
-			predicates = append(predicates, supportticket.UserIDEQ(readerID))
-		}
-		ticketEntity, err := client.SupportTicket.Query().Where(predicates...).ForUpdate().Only(txCtx)
-		if err != nil {
-			return translatePersistenceError(err, service.ErrSupportTicketNotFound, nil)
-		}
-		messages, err := client.SupportTicketMessage.Query().
-			Where(supportticketmessage.TicketIDEQ(ticketID)).
-			Order(dbent.Asc(supportticketmessage.FieldID)).
-			WithAttachments(func(q *dbent.SupportTicketAttachmentQuery) {
-				q.Order(dbent.Asc(supportticketattachment.FieldID))
-			}).
-			All(txCtx)
-		if err != nil {
-			return err
-		}
-		opposingRole := oppositeSupportTicketRole(readerRole)
-		var lastReadMessageID int64
-		for _, message := range messages {
-			if message.AuthorRole == opposingRole && message.ID > lastReadMessageID {
-				lastReadMessageID = message.ID
-			}
-		}
-		if err := upsertSupportTicketRead(txCtx, client, ticketID, readerID, readerRole, lastReadMessageID); err != nil {
-			return err
-		}
-		ticket := supportTicketEntityToService(ticketEntity)
-		ticket.Unread = false
-		detail = &service.SupportTicketDetail{Ticket: *ticket, Messages: supportTicketMessageEntitiesToService(messages)}
-		return nil
-	})
-	return detail, err
+func (r *supportTicketRepository) get(ctx context.Context, readerID, ticketID int64, readerRole string, scoped bool) (*service.SupportTicketDetail, error) {
+	predicates := []predicate.SupportTicket{supportticket.IDEQ(ticketID)}
+	if scoped {
+		predicates = append(predicates, supportticket.UserIDEQ(readerID))
+	}
+	ticketEntity, err := r.client.SupportTicket.Query().Where(predicates...).WithUser().Only(ctx)
+	if err != nil {
+		return nil, translatePersistenceError(err, service.ErrSupportTicketNotFound, nil)
+	}
+	messages, err := r.client.SupportTicketMessage.Query().
+		Where(supportticketmessage.TicketIDEQ(ticketID)).
+		Order(dbent.Asc(supportticketmessage.FieldID)).
+		WithAuthor().
+		WithAttachments(func(q *dbent.SupportTicketAttachmentQuery) {
+			q.Order(dbent.Asc(supportticketattachment.FieldID))
+		}).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ticket := supportTicketEntityToService(ticketEntity)
+	unreadIDs, err := r.unreadTicketIDs(ctx, readerID, readerRole, []int64{ticketID})
+	if err != nil {
+		return nil, err
+	}
+	_, ticket.Unread = unreadIDs[ticketID]
+	return &service.SupportTicketDetail{Ticket: *ticket, Messages: supportTicketMessageEntitiesToService(messages)}, nil
+}
+
+func (r *supportTicketRepository) MarkReadForUser(ctx context.Context, userID, ticketID int64) error {
+	return r.markRead(ctx, userID, ticketID, service.SupportTicketAuthorRoleUser, true)
+}
+
+func (r *supportTicketRepository) MarkReadForAdmin(ctx context.Context, readerAdminID, ticketID int64) error {
+	return r.markRead(mixins.SkipSoftDelete(ctx), readerAdminID, ticketID, service.SupportTicketAuthorRoleAdmin, false)
+}
+
+func (r *supportTicketRepository) markRead(ctx context.Context, readerID, ticketID int64, readerRole string, scoped bool) error {
+	predicates := []predicate.SupportTicket{supportticket.IDEQ(ticketID)}
+	if scoped {
+		predicates = append(predicates, supportticket.UserIDEQ(readerID))
+	}
+	if exists, err := r.client.SupportTicket.Query().Where(predicates...).Exist(ctx); err != nil {
+		return err
+	} else if !exists {
+		return service.ErrSupportTicketNotFound
+	}
+	lastReadMessageID, err := r.client.SupportTicketMessage.Query().
+		Where(
+			supportticketmessage.TicketIDEQ(ticketID),
+			supportticketmessage.AuthorRoleEQ(oppositeSupportTicketRole(readerRole)),
+		).
+		Order(dbent.Desc(supportticketmessage.FieldID)).
+		FirstID(ctx)
+	if dbent.IsNotFound(err) {
+		lastReadMessageID, err = 0, nil
+	}
+	if err != nil {
+		return err
+	}
+	return upsertSupportTicketRead(ctx, r.client, ticketID, readerID, readerRole, lastReadMessageID)
 }
 
 func (r *supportTicketRepository) GetAttachmentForUser(ctx context.Context, userID, ticketID, attachmentID int64) (*service.SupportTicketAttachment, error) {
@@ -275,6 +307,11 @@ func (r *supportTicketRepository) UpdatePriority(ctx context.Context, ticketID i
 		if err != nil {
 			return err
 		}
+		userEntity, userErr := entity.QueryUser().Only(txCtx)
+		if userErr != nil && !dbent.IsNotFound(userErr) {
+			return userErr
+		}
+		entity.Edges.User = userEntity
 		result = supportTicketEntityToService(entity)
 		return nil
 	})
@@ -299,6 +336,11 @@ func (r *supportTicketRepository) UpdateStatus(ctx context.Context, ticketID int
 		if err != nil {
 			return err
 		}
+		userEntity, userErr := entity.QueryUser().Only(txCtx)
+		if userErr != nil && !dbent.IsNotFound(userErr) {
+			return userErr
+		}
+		entity.Edges.User = userEntity
 		result = supportTicketEntityToService(entity)
 		return nil
 	})
@@ -473,7 +515,7 @@ func supportTicketEntityToService(entity *dbent.SupportTicket) *service.SupportT
 	if entity == nil {
 		return nil
 	}
-	return &service.SupportTicket{
+	result := &service.SupportTicket{
 		ID:        entity.ID,
 		UserID:    entity.UserID,
 		Title:     entity.Title,
@@ -483,6 +525,10 @@ func supportTicketEntityToService(entity *dbent.SupportTicket) *service.SupportT
 		CreatedAt: entity.CreatedAt,
 		UpdatedAt: entity.UpdatedAt,
 	}
+	if entity.Edges.User != nil {
+		result.User = &service.SupportTicketIdentity{ID: entity.Edges.User.ID, Username: entity.Edges.User.Username, Email: entity.Edges.User.Email}
+	}
+	return result
 }
 
 func supportTicketMessageEntityToService(entity *dbent.SupportTicketMessage) *service.SupportTicketMessage {
@@ -493,7 +539,7 @@ func supportTicketMessageEntityToService(entity *dbent.SupportTicketMessage) *se
 	for _, attachment := range entity.Edges.Attachments {
 		attachments = append(attachments, *supportTicketAttachmentEntityToService(attachment))
 	}
-	return &service.SupportTicketMessage{
+	result := &service.SupportTicketMessage{
 		ID:           entity.ID,
 		TicketID:     entity.TicketID,
 		AuthorUserID: entity.AuthorUserID,
@@ -502,6 +548,10 @@ func supportTicketMessageEntityToService(entity *dbent.SupportTicketMessage) *se
 		Attachments:  attachments,
 		CreatedAt:    entity.CreatedAt,
 	}
+	if entity.Edges.Author != nil {
+		result.Author = &service.SupportTicketIdentity{ID: entity.Edges.Author.ID, Username: entity.Edges.Author.Username, Email: entity.Edges.Author.Email}
+	}
+	return result
 }
 
 func supportTicketMessageEntitiesToService(entities []*dbent.SupportTicketMessage) []service.SupportTicketMessage {

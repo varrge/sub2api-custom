@@ -503,6 +503,10 @@ const (
 	// sidebar entry is hidden. Defaults to false (opt-in feature).
 	SettingKeyAvailableChannelsEnabled = "available_channels_enabled"
 
+	// SettingKeySupportTicketEnabled gates every user-facing support-ticket API.
+	// It is fail-closed: only the literal "true" enables the feature.
+	SettingKeySupportTicketEnabled = "support_ticket_enabled"
+
 	// SettingKeyModelPlazaEnabled is a DB-backed soft switch for the Model Plaza page
 	// (public group/model pricing showcase). When false: the plaza endpoint returns 404
 	// and the header entry is hidden. Defaults to false (opt-in feature).

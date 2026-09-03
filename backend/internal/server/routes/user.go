@@ -2,6 +2,7 @@ package routes
 
 import (
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -119,6 +120,8 @@ func RegisterUserRoutes(
 			announcements.POST("/:id/read", h.Announcement.MarkRead)
 		}
 
+		registerSupportTicketUserRoutes(authenticated, h, settingService)
+
 		// 卡密兑换
 		redeem := authenticated.Group("/redeem")
 		{
@@ -154,5 +157,31 @@ func RegisterUserRoutes(
 			monitorV2.GET("/errors", h.ChannelMonitorV2.Errors)
 			monitorV2.GET("/users", h.ChannelMonitorV2.Users)
 		}
+	}
+}
+
+func registerSupportTicketUserRoutes(authenticated *gin.RouterGroup, h *handler.Handlers, settingService *service.SettingService) {
+	// Native support tickets are opt-in and fail closed on any setting error.
+	tickets := authenticated.Group("/tickets")
+	tickets.Use(supportTicketFeatureGuard(settingService))
+	{
+		tickets.GET("", h.SupportTicket.ListUser)
+		tickets.POST("", h.SupportTicket.CreateUser)
+		tickets.GET("/unread-count", h.SupportTicket.UnreadCountUser)
+		tickets.GET("/:id", h.SupportTicket.GetUser)
+		tickets.POST("/:id/replies", h.SupportTicket.ReplyUser)
+		tickets.POST("/:id/read", h.SupportTicket.MarkReadUser)
+		tickets.GET("/:id/attachments/:attachment_id", h.SupportTicket.AttachmentUser)
+	}
+}
+
+func supportTicketFeatureGuard(settingService *service.SettingService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if settingService != nil && settingService.IsSupportTicketEnabled(c.Request.Context()) {
+			c.Next()
+			return
+		}
+		response.ErrorFrom(c, service.ErrSupportTicketFeatureDisabled)
+		c.Abort()
 	}
 }

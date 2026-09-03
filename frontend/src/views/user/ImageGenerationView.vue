@@ -1,290 +1,428 @@
 <template>
   <AppLayout>
     <div class="studio-shell -m-4 md:-m-6 lg:-m-8">
-      <header class="border-b border-gray-200 bg-white px-5 pt-5 dark:border-dark-700 dark:bg-dark-900 sm:px-7">
-        <h1 class="text-xl font-semibold text-gray-900 dark:text-white">{{ t('imageGeneration.studioTitle') }}</h1>
-        <nav class="mt-4 flex gap-6" :aria-label="t('imageGeneration.studioTitle')">
-          <span class="border-b-2 border-primary-500 pb-3 text-sm font-medium text-primary-600 dark:text-primary-300">
+      <!-- Top Studio Header -->
+      <header class="flex h-14 shrink-0 items-center justify-between border-b border-gray-200/80 bg-white/90 px-4 backdrop-blur-md dark:border-dark-700/80 dark:bg-dark-900/90 sm:px-6">
+        <div class="flex items-center gap-3">
+          <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-50 text-primary-600 dark:bg-primary-950/60 dark:text-primary-400">
+            <Icon name="sparkles" size="sm" />
+          </div>
+          <h1 class="text-sm font-semibold tracking-tight text-gray-900 dark:text-white sm:text-base">
+            {{ t('imageGeneration.studioTitle') }}
+          </h1>
+          <span class="hidden rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-medium text-gray-600 dark:bg-dark-800 dark:text-dark-300 sm:inline-block">
             {{ t('imageGeneration.imageTab') }}
           </span>
-        </nav>
+        </div>
+
+        <!-- Mobile History Toggle -->
+        <button
+          v-if="imageKeys.length"
+          type="button"
+          class="flex items-center gap-1.5 rounded-lg border border-gray-200/80 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 dark:border-dark-700 dark:bg-dark-800 dark:text-dark-200 dark:hover:bg-dark-700 lg:hidden"
+          :aria-label="t('imageGeneration.historyTitle')"
+          :aria-expanded="showMobileHistory"
+          @click="showMobileHistory = !showMobileHistory"
+        >
+          <Icon name="clock" size="sm" />
+          <span>{{ t('imageGeneration.historyTitle') }}</span>
+          <span v-if="results.length" class="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary-100 px-1 text-[10px] font-semibold text-primary-700 dark:bg-primary-900/60 dark:text-primary-300">
+            {{ results.length }}
+          </span>
+        </button>
       </header>
 
-      <div v-if="loadingKeys" class="flex flex-1 items-center justify-center">
-        <div class="text-center">
-          <LoadingSpinner size="lg" />
-          <p class="mt-3 text-sm text-gray-500 dark:text-dark-300">{{ t('imageGeneration.loadingKeys') }}</p>
+      <!-- Loading Keys State -->
+      <div v-if="loadingKeys" class="flex flex-1 items-center justify-center p-8">
+        <div class="flex flex-col items-center justify-center text-center">
+          <LoadingSpinner size="lg" class="text-primary-500" />
+          <p class="mt-4 text-xs font-medium tracking-wide text-gray-500 dark:text-dark-400">{{ t('imageGeneration.loadingKeys') }}</p>
         </div>
       </div>
 
-      <div v-else-if="!imageKeys.length" class="flex flex-1 items-center justify-center p-8 text-center">
-        <div class="max-w-md">
-          <span class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100 text-gray-400 dark:bg-dark-700 dark:text-dark-300">
-            <Icon name="key" size="xl" />
-          </span>
-          <h2 class="mt-5 text-lg font-semibold text-gray-900 dark:text-white">{{ t('imageGeneration.noKeysTitle') }}</h2>
-          <p class="mt-2 text-sm leading-6 text-gray-500 dark:text-dark-300">{{ t('imageGeneration.noKeysDescription') }}</p>
-          <RouterLink to="/keys" class="btn btn-primary mt-5">
+      <!-- No Keys Available State -->
+      <div v-else-if="!imageKeys.length" class="flex flex-1 items-center justify-center p-6 text-center">
+        <div class="w-full max-w-sm rounded-2xl border border-gray-200/80 bg-white/80 p-8 shadow-sm backdrop-blur-md dark:border-dark-700/80 dark:bg-dark-900/80">
+          <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 text-gray-400 dark:bg-dark-800 dark:text-dark-400">
+            <Icon name="key" size="lg" />
+          </div>
+          <h2 class="mt-4 text-base font-semibold text-gray-900 dark:text-white">{{ t('imageGeneration.noKeysTitle') }}</h2>
+          <p class="mt-2 text-xs leading-relaxed text-gray-500 dark:text-dark-400">{{ t('imageGeneration.noKeysDescription') }}</p>
+          <RouterLink to="/keys" class="btn btn-primary mt-6 w-full justify-center shadow-sm">
             <Icon name="plus" size="sm" />
             {{ t('imageGeneration.manageKeys') }}
           </RouterLink>
         </div>
       </div>
 
+      <!-- Main Studio Workspace -->
       <div v-else class="studio-grid">
-        <section class="flex min-h-[680px] min-w-0 flex-col bg-gray-50/70 dark:bg-dark-950 lg:min-h-0">
-          <div class="flex h-12 shrink-0 items-center justify-between border-b border-gray-200/80 bg-white/80 px-5 dark:border-dark-700 dark:bg-dark-900/80">
-            <span class="text-sm font-medium text-gray-700 dark:text-dark-100">
-              {{ activeResult ? t('imageGeneration.imageNumber', { index: results.indexOf(activeResult) + 1 }) : t('imageGeneration.canvasTitle') }}
-            </span>
-            <button
-              v-if="activeResult"
-              type="button"
-              class="btn btn-ghost btn-sm"
-              @click="downloadResult(activeResult)"
-            >
-              <Icon name="download" size="sm" />
-              {{ t('imageGeneration.download') }}
-            </button>
+        <!-- Main Canvas & Composer Section -->
+        <section class="studio-canvas-section">
+          <!-- Canvas Top Status Bar -->
+          <div class="canvas-header">
+            <div class="flex min-w-0 items-center gap-2">
+              <span class="shrink-0 text-xs font-medium text-gray-600 dark:text-dark-200">
+                {{ activeResult ? t('imageGeneration.imageNumber', { index: results.indexOf(activeResult) + 1 }) : t('imageGeneration.canvasTitle') }}
+              </span>
+              <span v-if="activeResult" class="max-w-[32vw] truncate rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-dark-800 dark:text-dark-400 sm:max-w-48">
+                {{ activeResult.model }}
+              </span>
+            </div>
+
+            <div v-if="activeResult" class="flex shrink-0 items-center gap-1 sm:gap-2">
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm text-xs"
+                :title="t('imageGeneration.preview')"
+                @click="preview = activeResult"
+              >
+                <Icon name="search" size="sm" />
+                <span class="hidden sm:inline">{{ t('imageGeneration.previewTitle') }}</span>
+              </button>
+              <button
+                type="button"
+                class="btn btn-secondary btn-sm text-xs"
+                @click="downloadResult(activeResult)"
+              >
+                <Icon name="download" size="sm" />
+                <span class="hidden sm:inline">{{ t('imageGeneration.download') }}</span>
+              </button>
+            </div>
           </div>
 
+          <!-- Interactive Canvas Viewport -->
           <div
-            class="relative flex min-h-[360px] flex-1 items-center justify-center overflow-auto p-5 sm:p-8"
+            class="canvas-viewport"
             @dragenter.prevent="dragging = true"
             @dragover.prevent
             @dragleave.prevent="dragging = false"
             @drop.prevent="onDrop"
           >
-            <div v-if="generating" class="grid w-full max-w-4xl gap-4" :class="form.count > 1 ? 'sm:grid-cols-2' : ''">
+            <!-- Rendering / Generating State -->
+            <div
+              v-if="generating"
+              class="grid w-full max-w-4xl gap-4 p-4"
+              :class="form.count > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'"
+            >
               <div
                 v-for="index in form.count"
                 :key="index"
-                class="result-loading relative mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 dark:border-dark-700 dark:bg-dark-900"
+                class="result-skeleton-card"
                 :style="{ aspectRatio: selectedRatioCss }"
               >
                 <div class="absolute inset-0 flex flex-col items-center justify-center gap-3">
-                  <span class="flex h-12 w-12 animate-pulse items-center justify-center rounded-2xl bg-white/80 text-primary-500 shadow-sm dark:bg-dark-700/80">
-                    <Icon name="sparkles" size="lg" />
+                  <div class="flex h-11 w-11 animate-pulse items-center justify-center rounded-xl bg-white/90 text-primary-500 shadow-sm backdrop-blur dark:bg-dark-800/90 dark:text-primary-400">
+                    <Icon name="sparkles" size="md" />
+                  </div>
+                  <span class="text-xs font-medium tracking-tight text-gray-500 dark:text-dark-300">
+                    {{ t('imageGeneration.rendering', { index }) }}
                   </span>
-                  <span class="text-xs font-medium text-gray-500 dark:text-dark-300">{{ t('imageGeneration.rendering', { index }) }}</span>
                 </div>
               </div>
             </div>
 
-            <button
-              v-else-if="activeResult"
-              type="button"
-              class="group flex h-full w-full items-center justify-center focus:outline-none"
-              @click="preview = activeResult"
-            >
-              <img
-                :src="activeResult.src"
-                :alt="t('imageGeneration.resultAlt', { index: results.indexOf(activeResult) + 1 })"
-                class="max-h-full max-w-full rounded-2xl object-contain shadow-xl shadow-gray-900/10 transition group-hover:scale-[1.005] dark:shadow-black/30"
-              />
-            </button>
+            <!-- Active Result Display -->
+            <div v-else-if="activeResult" class="flex h-full w-full items-center justify-center p-4">
+              <button
+                type="button"
+                class="group relative flex max-h-full max-w-full items-center justify-center rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                @click="preview = activeResult"
+              >
+                <img
+                  :src="activeResult.src"
+                  :alt="t('imageGeneration.resultAlt', { index: results.indexOf(activeResult) + 1 })"
+                  class="max-h-full max-w-full rounded-2xl object-contain shadow-2xl shadow-gray-900/10 transition-transform duration-300 group-hover:scale-[1.01] dark:shadow-black/50"
+                />
+                <div class="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/0 opacity-0 transition-opacity duration-200 group-hover:bg-black/20 group-hover:opacity-100">
+                  <span class="flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-900 shadow-md backdrop-blur dark:bg-dark-900/90 dark:text-white">
+                    <Icon name="search" size="xs" />
+                    {{ t('imageGeneration.preview') }}
+                  </span>
+                </div>
+              </button>
+            </div>
 
-            <div v-else class="text-center text-gray-400 dark:text-dark-400">
-              <div class="empty-orbit mx-auto">
-                <span class="flex h-16 w-16 items-center justify-center rounded-2xl bg-white text-primary-500 shadow-xl shadow-primary-500/10 dark:bg-dark-700">
-                  <Icon name="sparkles" size="xl" />
-                </span>
+            <!-- Empty Canvas State -->
+            <div v-else class="flex flex-col items-center justify-center text-center">
+              <div class="empty-apple-icon">
+                <Icon name="sparkles" size="lg" />
               </div>
-              <p class="mt-5 text-sm">{{ t('imageGeneration.resultPlaceholder') }}</p>
+              <h3 class="mt-4 text-sm font-semibold text-gray-800 dark:text-dark-100">
+                {{ t('imageGeneration.emptyTitle') }}
+              </h3>
+              <p class="mt-1.5 max-w-sm text-xs leading-relaxed text-gray-400 dark:text-dark-400">
+                {{ t('imageGeneration.resultPlaceholder') }}
+              </p>
             </div>
 
-            <div
-              v-if="dragging"
-              class="pointer-events-none absolute inset-4 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary-500 bg-primary-50/90 text-sm font-medium text-primary-700 backdrop-blur dark:bg-primary-950/90 dark:text-primary-200"
-            >
-              {{ t('imageGeneration.dropReference') }}
-            </div>
+            <!-- Drag & Drop Overlay -->
+            <Transition name="fade-fast">
+              <div
+                v-if="dragging"
+                class="pointer-events-none absolute inset-4 z-30 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary-500/80 bg-primary-50/90 backdrop-blur-sm dark:bg-primary-950/90"
+              >
+                <div class="flex items-center gap-2 rounded-xl bg-white/90 px-4 py-2.5 text-sm font-medium text-primary-700 shadow-sm dark:bg-dark-900/90 dark:text-primary-300">
+                  <Icon name="plus" size="sm" />
+                  {{ t('imageGeneration.dropReference') }}
+                </div>
+              </div>
+            </Transition>
           </div>
 
-          <form
-            class="composer m-3 shrink-0 sm:m-5"
-            @submit.prevent="submitGeneration"
-            @dragenter.prevent="dragging = true"
-            @dragover.prevent
-            @dragleave.prevent="dragging = false"
-            @drop.prevent="onDrop"
-          >
-            <input
-              ref="fileInput"
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              multiple
-              class="sr-only"
-              @change="onFileChange"
-            />
+          <!-- Bottom Floating Composer -->
+          <div class="composer-container">
+            <form
+              class="composer-card"
+              @submit.prevent="submitGeneration"
+              @dragenter.prevent="dragging = true"
+              @dragover.prevent
+              @dragleave.prevent="dragging = false"
+              @drop.prevent="onDrop"
+            >
+              <input
+                ref="fileInput"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                multiple
+                class="sr-only"
+                @change="onFileChange"
+              />
 
-            <div v-if="referenceImages.length" class="flex gap-2 overflow-x-auto px-4 pt-3">
-              <div
-                v-for="(image, index) in referenceImages"
-                :key="image.url"
-                class="group relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-100 dark:border-dark-600 dark:bg-dark-800"
-              >
-                <img :src="image.url" :alt="t('imageGeneration.referenceAlt', { index: index + 1 })" class="h-full w-full object-cover" />
+              <!-- Reference Image Thumbnail Bar -->
+              <div v-if="referenceImages.length" class="flex gap-2 overflow-x-auto border-b border-gray-100/80 px-4 py-2.5 dark:border-dark-700/80">
+                <div
+                  v-for="(image, index) in referenceImages"
+                  :key="image.url"
+                  class="group relative h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-gray-200/80 bg-gray-100 dark:border-dark-600 dark:bg-dark-800"
+                >
+                  <img :src="image.url" :alt="t('imageGeneration.referenceAlt', { index: index + 1 })" class="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    class="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-gray-950/80 text-white opacity-0 transition-opacity hover:bg-red-500 group-hover:opacity-100 focus:opacity-100"
+                    :aria-label="t('imageGeneration.removeReference')"
+                    @click="removeReference(index)"
+                  >
+                    <Icon name="x" size="xs" />
+                  </button>
+                </div>
+                <button
+                  v-if="referenceImages.length < 4"
+                  type="button"
+                  class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50/60 text-gray-400 transition hover:border-primary-400 hover:text-primary-500 dark:border-dark-600 dark:bg-dark-800/60 dark:hover:border-primary-500"
+                  :aria-label="t('imageGeneration.uploadReference')"
+                  @click="fileInput?.click()"
+                >
+                  <Icon name="plus" size="sm" />
+                </button>
+              </div>
+
+              <!-- Prompt Input Area -->
+              <div class="relative px-4 pt-3 pb-2">
+                <textarea
+                  id="image-prompt"
+                  v-model="form.prompt"
+                  maxlength="4000"
+                  rows="3"
+                  class="w-full resize-none bg-transparent text-sm leading-relaxed text-gray-900 outline-none placeholder:text-gray-400 focus:outline-none dark:text-gray-100 dark:placeholder:text-dark-400"
+                  :placeholder="t('imageGeneration.promptPlaceholder')"
+                  @paste="onPaste"
+                ></textarea>
+              </div>
+
+              <!-- Bottom Controls Toolbar -->
+              <div class="composer-toolbar">
+                <div class="flex flex-wrap items-center gap-2">
+                  <!-- Mode Segmented Switch -->
+                  <div class="segmented-control">
+                    <button
+                      type="button"
+                      class="segmented-btn"
+                      :class="!referenceImages.length && 'segmented-btn-active'"
+                      @click="chooseMode('text')"
+                    >
+                      {{ t('imageGeneration.textToImage') }}
+                    </button>
+                    <button
+                      type="button"
+                      class="segmented-btn"
+                      :class="referenceImages.length && 'segmented-btn-active'"
+                      @click="chooseMode('image')"
+                    >
+                      <Icon name="upload" size="xs" class="mr-1 inline-block opacity-70" />
+                      {{ t('imageGeneration.imageToImage') }}
+                    </button>
+                  </div>
+
+                  <!-- Key Selector -->
+                  <Select
+                    id="image-api-key"
+                    v-model="form.apiKeyId"
+                    :options="keyOptions"
+                    :aria-label="t('imageGeneration.apiKey')"
+                    class="composer-select w-36 sm:w-44"
+                  />
+
+                  <!-- Model Selector -->
+                  <Select
+                    id="image-model"
+                    v-model="form.model"
+                    :options="modelOptions"
+                    :placeholder="t('imageGeneration.modelPlaceholder')"
+                    :empty-text="modelError || t('imageGeneration.noModels')"
+                    :disabled="loadingModels"
+                    :loading="loadingModels"
+                    :creatable="true"
+                    searchable
+                    :aria-label="t('imageGeneration.model')"
+                    class="composer-select min-w-[130px] flex-1 sm:max-w-[210px]"
+                  />
+
+                  <!-- Aspect Ratio & Resolution Popover -->
+                  <details ref="ratioDetails" class="group relative">
+                    <summary class="apple-pill-btn list-none">
+                      <span class="ratio-indicator" :style="{ aspectRatio: selectedRatioCss }"></span>
+                      <span>{{ ratioLabel }}</span>
+                      <Icon name="chevronDown" size="xs" class="transition-transform duration-200 group-open:rotate-180" />
+                    </summary>
+
+                    <!-- Ratio Dropdown Panel -->
+                    <div class="ratio-popover-panel">
+                        <!-- Ratio Section -->
+                        <div class="mb-4">
+                          <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-gray-900 dark:text-white">{{ t('imageGeneration.aspectRatio') }}</span>
+                            <span class="text-[10px] text-gray-400 dark:text-dark-400">{{ ratioOptions.length }} {{ t('imageGeneration.aspectRatio') }}</span>
+                          </div>
+                          <div class="mt-2.5 grid grid-cols-3 gap-1.5">
+                            <button
+                              v-for="ratio in ratioOptions"
+                              :key="ratio.value"
+                              type="button"
+                              class="ratio-card"
+                              :class="form.aspectRatio === ratio.value && 'ratio-card-active'"
+                              :aria-pressed="form.aspectRatio === ratio.value"
+                              @click="selectRatio(ratio.value)"
+                            >
+                              <span class="ratio-box" :style="{ aspectRatio: ratio.cssRatio }"></span>
+                              <span class="text-[11px] font-medium">{{ ratio.value === 'auto' ? t('imageGeneration.auto') : ratio.value }}</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <!-- Quality / Resolution Section -->
+                        <div class="mb-4 border-t border-gray-100 pt-3 dark:border-dark-700">
+                          <span class="text-xs font-semibold text-gray-900 dark:text-white">{{ t('imageGeneration.resolution') }}</span>
+                          <div class="mt-2 grid grid-cols-2 gap-2">
+                            <button
+                              v-for="quality in qualities"
+                              :key="quality.value"
+                              type="button"
+                              class="quality-card"
+                              :class="form.quality === quality.value && 'quality-card-active'"
+                              :aria-pressed="form.quality === quality.value"
+                              @click="form.quality = quality.value"
+                            >
+                              <span class="font-medium text-xs">{{ quality.label }}</span>
+                              <span class="text-[10px] text-gray-400 dark:text-dark-400">
+                                {{ quality.value === 'high' ? t('imageGeneration.qualityHigh') : t('imageGeneration.qualityStandard') }}
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <!-- Pixel Dimensions Preview -->
+                        <div class="border-t border-gray-100 pt-3 dark:border-dark-700">
+                          <div class="flex items-center justify-between text-xs">
+                            <span class="font-medium text-gray-500 dark:text-dark-300">{{ t('imageGeneration.size') }}</span>
+                            <div class="flex items-center gap-1.5 font-mono text-[11px] text-gray-700 dark:text-dark-200">
+                              <span class="rounded bg-gray-100 px-1.5 py-0.5 dark:bg-dark-700">{{ displaySize.width }}</span>
+                              <span class="text-gray-400">×</span>
+                              <span class="rounded bg-gray-100 px-1.5 py-0.5 dark:bg-dark-700">{{ displaySize.height }}</span>
+                              <span class="text-[10px] text-gray-400">px</span>
+                            </div>
+                          </div>
+                        </div>
+                    </div>
+                  </details>
+
+                  <!-- Count Selector -->
+                  <Select
+                    v-model="form.count"
+                    :options="countOptions"
+                    :aria-label="t('imageGeneration.count')"
+                    class="composer-select w-20"
+                  />
+                </div>
+
+                <!-- Submit Generation Button -->
+                <button
+                  type="submit"
+                  class="btn btn-primary generate-button ml-auto"
+                  :disabled="generating || !form.model || !form.prompt.trim()"
+                >
+                  <LoadingSpinner v-if="generating" size="sm" class="text-white" />
+                  <Icon v-else name="sparkles" size="sm" />
+                  <span>{{ generating ? t('imageGeneration.generating') : t('imageGeneration.generate') }}</span>
+                </button>
+              </div>
+
+              <!-- Privacy / Route Footer Note -->
+              <div class="border-t border-gray-100/60 px-4 py-1.5 text-[11px] text-gray-400 dark:border-dark-700/60 dark:text-dark-400">
+                {{ t('imageGeneration.requestHint') }}
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <!-- Right History Column (desktop) / inline disclosure (mobile) -->
+        <aside
+          class="history-sidebar"
+          :class="[showMobileHistory ? 'history-sidebar-mobile-open' : 'history-sidebar-mobile-closed']"
+        >
+          <!-- History Header -->
+          <div class="border-b border-gray-100/80 px-4 py-3.5 dark:border-dark-700/80">
+            <div class="flex items-center justify-between">
+              <div>
+                <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-dark-300">
+                  {{ t('imageGeneration.historyTitle') }}
+                </h2>
+                <p class="mt-0.5 text-[11px] text-gray-400 dark:text-dark-400">
+                  {{ t('imageGeneration.historySession') }}
+                </p>
+              </div>
+              <div class="flex items-center gap-1">
+                <button
+                  v-if="results.length"
+                  type="button"
+                  class="btn btn-ghost h-8 w-8 p-0 text-gray-400 hover:text-red-500 dark:text-dark-400 dark:hover:text-red-400"
+                  :aria-label="t('imageGeneration.clear')"
+                  :title="t('imageGeneration.clear')"
+                  @click="clearResults"
+                >
+                  <Icon name="trash" size="xs" />
+                </button>
                 <button
                   type="button"
-                  class="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-md bg-gray-950/70 text-white opacity-0 transition hover:bg-red-500 group-hover:opacity-100 focus:opacity-100"
-                  :aria-label="t('imageGeneration.removeReference')"
-                  @click="removeReference(index)"
+                  class="btn btn-ghost h-8 w-8 p-0 text-gray-400 lg:hidden"
+                  :aria-label="t('common.close')"
+                  @click="showMobileHistory = false"
                 >
                   <Icon name="x" size="xs" />
                 </button>
               </div>
             </div>
 
-            <textarea
-              id="image-prompt"
-              v-model="form.prompt"
-              maxlength="4000"
-              rows="3"
-              class="min-h-[92px] w-full resize-none bg-transparent px-4 py-3 text-sm leading-6 text-gray-900 outline-none placeholder:text-gray-400 dark:text-white dark:placeholder:text-dark-400"
-              :placeholder="t('imageGeneration.promptPlaceholder')"
-              @paste="onPaste"
-            ></textarea>
-
-            <div class="flex flex-wrap items-center gap-2 border-t border-gray-100 px-3 py-2.5 dark:border-dark-700">
-              <div class="flex rounded-lg bg-gray-100 p-0.5 dark:bg-dark-800">
-                <button
-                  type="button"
-                  class="mode-button"
-                  :class="!referenceImages.length && 'mode-button-active'"
-                  @click="chooseMode('text')"
-                >
-                  {{ t('imageGeneration.textToImage') }}
-                </button>
-                <button
-                  type="button"
-                  class="mode-button"
-                  :class="referenceImages.length && 'mode-button-active'"
-                  @click="chooseMode('image')"
-                >
-                  {{ t('imageGeneration.imageToImage') }}
-                </button>
-              </div>
-
-              <Select
-                id="image-api-key"
-                v-model="form.apiKeyId"
-                :options="keyOptions"
-                :aria-label="t('imageGeneration.apiKey')"
-                class="compact-select w-40"
-              />
-
-              <Select
-                id="image-model"
-                v-model="form.model"
-                :options="modelOptions"
-                :placeholder="t('imageGeneration.modelPlaceholder')"
-                :empty-text="modelError || t('imageGeneration.noModels')"
-                :disabled="loadingModels"
-                :loading="loadingModels"
-                :creatable="true"
-                searchable
-                :aria-label="t('imageGeneration.model')"
-                class="compact-select min-w-40 flex-1 sm:max-w-52"
-              />
-
-              <details ref="ratioDetails" class="relative">
-                <summary class="control-button list-none">
-                  <span>{{ ratioLabel }}</span>
-                  <Icon name="chevronDown" size="sm" />
-                </summary>
-                <div class="ratio-panel absolute bottom-[calc(100%+10px)] left-0 z-20 w-[min(430px,calc(100vw-3rem))] rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl shadow-gray-900/15 dark:border-dark-600 dark:bg-dark-800 dark:shadow-black/40 sm:p-5">
-                  <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('imageGeneration.aspectRatio') }}</h3>
-                  <div class="mt-3 grid grid-cols-3 gap-2">
-                    <button
-                      v-for="ratio in ratioOptions"
-                      :key="ratio.value"
-                      type="button"
-                      class="ratio-option"
-                      :class="form.aspectRatio === ratio.value && 'ratio-option-active'"
-                      :aria-pressed="form.aspectRatio === ratio.value"
-                      @click="selectRatio(ratio.value)"
-                    >
-                      <span class="ratio-icon" :style="{ aspectRatio: ratio.cssRatio }"></span>
-                      <span>{{ ratio.value === 'auto' ? t('imageGeneration.auto') : ratio.value }}</span>
-                    </button>
-                  </div>
-
-                  <h3 class="mt-5 text-sm font-semibold text-gray-900 dark:text-white">{{ t('imageGeneration.resolution') }}</h3>
-                  <div class="mt-3 grid grid-cols-2 gap-2">
-                    <button
-                      v-for="quality in qualities"
-                      :key="quality.value"
-                      type="button"
-                      class="ratio-option h-10"
-                      :class="form.quality === quality.value && 'ratio-option-active'"
-                      :aria-pressed="form.quality === quality.value"
-                      @click="form.quality = quality.value"
-                    >
-                      {{ quality.label }}
-                    </button>
-                  </div>
-
-                  <h3 class="mt-5 text-sm font-semibold text-gray-900 dark:text-white">{{ t('imageGeneration.size') }}</h3>
-                  <div class="mt-3 flex items-center gap-2 text-sm">
-                    <span class="text-gray-400">W</span>
-                    <span class="size-value">{{ displaySize.width }}</span>
-                    <span class="text-gray-300 dark:text-dark-500">×</span>
-                    <span class="text-gray-400">H</span>
-                    <span class="size-value">{{ displaySize.height }}</span>
-                    <span class="ml-auto text-xs text-gray-400 dark:text-dark-400">{{ t('imageGeneration.pixels') }}</span>
-                  </div>
-                </div>
-              </details>
-
-              <Select
-                v-model="form.count"
-                :options="countOptions"
-                :aria-label="t('imageGeneration.count')"
-                class="compact-select w-20"
-              />
-
-              <button
-                type="submit"
-                class="btn btn-primary ml-auto min-w-24"
-                :disabled="generating || !form.model || !form.prompt.trim()"
-              >
-                <LoadingSpinner v-if="generating" size="sm" class="text-white" />
-                <Icon v-else name="sparkles" size="sm" />
-                {{ generating ? t('imageGeneration.generating') : t('imageGeneration.generate') }}
-              </button>
-            </div>
-
-            <p class="border-t border-gray-100 px-4 py-2 text-[11px] text-gray-400 dark:border-dark-700 dark:text-dark-400">
-              {{ t('imageGeneration.requestHint') }}
-            </p>
-          </form>
-        </section>
-
-        <aside class="flex min-h-[520px] flex-col border-t border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-900 lg:min-h-0 lg:border-l lg:border-t-0">
-          <div class="border-b border-gray-100 px-5 py-5 dark:border-dark-700">
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <h2 class="font-semibold text-gray-900 dark:text-white">{{ t('imageGeneration.historyTitle') }}</h2>
-                <p class="mt-1 text-xs text-gray-400 dark:text-dark-400">{{ t('imageGeneration.historySession') }}</p>
-              </div>
-              <button
-                v-if="results.length"
-                type="button"
-                class="btn btn-ghost btn-icon btn-sm"
-                :aria-label="t('imageGeneration.clear')"
-                @click="clearResults"
-              >
-                <Icon name="trash" size="sm" />
-              </button>
-            </div>
-            <div class="mt-4 grid grid-cols-3 gap-1 rounded-xl bg-gray-100 p-1 dark:bg-dark-800">
+            <!-- Filter Segmented Control -->
+            <div class="mt-3 grid grid-cols-3 gap-1 rounded-lg bg-gray-100 p-0.5 dark:bg-dark-800">
               <button
                 v-for="filter in historyFilters"
                 :key="filter.value"
                 type="button"
-                class="history-filter"
-                :class="historyFilter === filter.value && 'history-filter-active'"
+                class="rounded-md py-1 text-[11px] font-medium transition"
+                :class="historyFilter === filter.value
+                  ? 'bg-white text-gray-900 shadow-sm dark:bg-dark-700 dark:text-white'
+                  : 'text-gray-500 hover:text-gray-700 dark:text-dark-400 dark:hover:text-dark-200'"
                 @click="historyFilter = filter.value"
               >
                 {{ filter.label }}
@@ -292,38 +430,57 @@
             </div>
           </div>
 
-          <div class="min-h-0 flex-1 overflow-y-auto p-3">
-            <div v-if="!filteredResults.length" class="flex min-h-72 items-center justify-center text-sm text-gray-400 dark:text-dark-400">
-              {{ t('imageGeneration.noHistory') }}
+          <!-- History Item List -->
+          <div class="min-h-0 flex-1 overflow-y-auto p-3 space-y-2">
+            <div v-if="!filteredResults.length" class="flex min-h-[200px] flex-col items-center justify-center text-center">
+              <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-400 dark:bg-dark-800 dark:text-dark-400">
+                <Icon name="clock" size="sm" />
+              </div>
+              <p class="mt-2 text-xs text-gray-400 dark:text-dark-400">{{ t('imageGeneration.noHistory') }}</p>
             </div>
-            <div v-else class="space-y-2">
-              <article
-                v-for="(result, index) in filteredResults"
-                :key="result.id"
-                class="flex gap-3 rounded-xl border p-2 transition"
-                :class="activeResult?.id === result.id
-                  ? 'border-primary-400 bg-primary-50/70 dark:border-primary-700 dark:bg-primary-900/15'
-                  : 'border-transparent hover:border-gray-200 hover:bg-gray-50 dark:hover:border-dark-600 dark:hover:bg-dark-800'"
+
+            <article
+              v-for="(result, index) in filteredResults"
+              :key="result.id"
+              class="history-item-card"
+              :class="activeResult?.id === result.id ? 'history-item-card-active' : 'history-item-card-idle'"
+            >
+              <button
+                type="button"
+                class="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+                :aria-pressed="activeResult?.id === result.id"
+                @click="activeResult = result; showMobileHistory = false"
               >
-                <button type="button" class="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-dark-800" @click="activeResult = result">
+                <div class="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-dark-800">
                   <img :src="result.src" :alt="t('imageGeneration.resultAlt', { index: index + 1 })" class="h-full w-full object-cover" />
-                </button>
-                <button type="button" class="min-w-0 flex-1 text-left" @click="activeResult = result">
-                  <p class="truncate text-xs font-medium text-gray-700 dark:text-dark-100">{{ result.model }}</p>
-                  <p class="mt-1 text-[11px] text-gray-400 dark:text-dark-400">
-                    {{ result.mode === 'image' ? t('imageGeneration.imageToImage') : t('imageGeneration.textToImage') }}
-                  </p>
-                  <p class="mt-1 truncate text-[11px] text-gray-400 dark:text-dark-400">{{ result.createdAt }}</p>
-                </button>
-                <button type="button" class="self-center rounded-lg p-1.5 text-gray-400 hover:bg-white hover:text-primary-500 dark:hover:bg-dark-700" :aria-label="t('imageGeneration.download')" @click="downloadResult(result)">
-                  <Icon name="download" size="sm" />
-                </button>
-              </article>
-            </div>
+                </div>
+
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-xs font-semibold text-gray-800 dark:text-dark-100">{{ result.model }}</p>
+                  <div class="mt-1 flex items-center gap-1.5 text-[10px] text-gray-400 dark:text-dark-400">
+                    <span class="rounded bg-gray-100 px-1 py-0.5 dark:bg-dark-700">
+                      {{ result.mode === 'image' ? t('imageGeneration.imageToImage') : t('imageGeneration.textToImage') }}
+                    </span>
+                    <span>{{ result.createdAt.split(' ')[1] || result.createdAt }}</span>
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                class="self-center rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:text-dark-400 dark:hover:bg-dark-700 dark:hover:text-dark-200"
+                :aria-label="t('imageGeneration.download')"
+                @click.stop="downloadResult(result)"
+              >
+                <Icon name="download" size="xs" />
+              </button>
+            </article>
           </div>
         </aside>
+
       </div>
 
+      <!-- Preview Lightbox Dialog -->
       <BaseDialog
         :show="Boolean(preview)"
         :title="t('imageGeneration.previewTitle')"
@@ -332,18 +489,24 @@
         @close="preview = null"
       >
         <div v-if="preview" class="space-y-4">
-          <div class="flex max-h-[72vh] items-center justify-center overflow-hidden rounded-2xl bg-checker">
-            <img :src="preview.src" :alt="t('imageGeneration.previewTitle')" class="max-h-[72vh] max-w-full object-contain" />
+          <div class="flex max-h-[70vh] items-center justify-center overflow-hidden rounded-2xl bg-checker p-2">
+            <img :src="preview.src" :alt="t('imageGeneration.previewTitle')" class="max-h-[68vh] max-w-full rounded-xl object-contain shadow-sm" />
           </div>
-          <div v-if="preview.revisedPrompt" class="rounded-xl bg-gray-50 p-3 text-sm leading-6 text-gray-600 dark:bg-dark-800 dark:text-dark-200">
+          <div v-if="preview.revisedPrompt" class="rounded-xl bg-gray-50/80 p-3 text-xs leading-relaxed text-gray-600 dark:bg-dark-800/80 dark:text-dark-200">
+            <p class="font-semibold text-gray-700 dark:text-dark-100 mb-1">{{ t('imageGeneration.prompt') }}:</p>
             {{ preview.revisedPrompt }}
           </div>
         </div>
         <template #footer>
-          <button type="button" class="btn btn-primary" @click="preview && downloadResult(preview)">
-            <Icon name="download" size="sm" />
-            {{ t('imageGeneration.download') }}
-          </button>
+          <div class="flex w-full justify-between items-center">
+            <button type="button" class="btn btn-ghost btn-sm" @click="preview = null">
+              {{ t('common.close') }}
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" @click="preview && downloadResult(preview)">
+              <Icon name="download" size="sm" />
+              {{ t('imageGeneration.download') }}
+            </button>
+          </div>
         </template>
       </BaseDialog>
     </div>
@@ -397,6 +560,7 @@ const availableModels = ref<string[]>([])
 const referenceImages = ref<ReferenceImage[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
 const ratioDetails = ref<HTMLDetailsElement | null>(null)
+const showMobileHistory = ref(false)
 const dragging = ref(false)
 const generating = ref(false)
 const results = ref<ImageResult[]>([])
@@ -671,59 +835,75 @@ onBeforeUnmount(clearReferences)
 
 <style scoped>
 .studio-shell {
-  @apply flex min-h-[calc(100vh-4rem)] flex-col overflow-hidden bg-white dark:bg-dark-900;
+  @apply flex min-h-[calc(100vh-4rem)] flex-col overflow-hidden bg-slate-50 dark:bg-[#0b0d13];
 }
 
 .studio-grid {
-  @apply grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_320px] lg:overflow-hidden;
+  @apply grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px] lg:overflow-hidden;
 }
 
-.composer {
-  @apply rounded-2xl border border-gray-200 bg-white shadow-xl shadow-gray-900/10 dark:border-dark-600 dark:bg-dark-900 dark:shadow-black/30;
+/* Canvas Viewport */
+.studio-canvas-section {
+  @apply flex min-h-[640px] min-w-0 flex-col lg:min-h-0 relative;
 }
 
-.mode-button {
-  @apply rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-500 transition dark:text-dark-300;
+.canvas-header {
+  @apply flex h-11 shrink-0 items-center justify-between border-b border-gray-200/70 bg-white/70 px-5 backdrop-blur-sm dark:border-dark-700/70 dark:bg-dark-900/70;
 }
 
-.mode-button-active {
-  @apply bg-white text-gray-900 shadow-sm dark:bg-dark-700 dark:text-white;
+.canvas-viewport {
+  @apply relative flex min-h-[360px] flex-1 items-center justify-center overflow-auto p-4 sm:p-6;
+  background-image: radial-gradient(rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+  background-size: 20px 20px;
 }
 
-.control-button {
-  @apply flex h-9 cursor-pointer items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 transition hover:border-gray-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 dark:border-dark-600 dark:bg-dark-800 dark:text-dark-200;
+.dark .canvas-viewport {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
 }
 
-.ratio-option {
-  @apply flex h-14 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white text-xs font-medium text-gray-500 transition hover:border-primary-300 hover:text-primary-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 dark:border-dark-600 dark:bg-dark-900 dark:text-dark-300 dark:hover:border-primary-700 dark:hover:text-primary-300;
+.empty-apple-icon {
+  @apply flex h-16 w-16 items-center justify-center rounded-2xl border border-gray-200/80 bg-white text-gray-400 shadow-sm transition-transform duration-300 dark:border-dark-700 dark:bg-dark-800 dark:text-dark-400;
 }
 
-.ratio-option-active {
-  @apply border-primary-500 bg-primary-50 text-primary-700 ring-1 ring-primary-500/20 dark:border-primary-500 dark:bg-primary-900/20 dark:text-primary-300;
+/* Composer */
+.composer-container {
+  @apply px-3 pb-3 pointer-events-none sm:px-6 sm:pb-5;
 }
 
-.ratio-icon {
-  @apply block max-h-5 min-h-3 w-5 rounded-[3px] border-2 border-current;
+.composer-card {
+  @apply pointer-events-auto mx-auto w-full max-w-3xl rounded-2xl sm:rounded-3xl border border-gray-200/90 bg-white/90 shadow-2xl shadow-gray-900/10 backdrop-blur-xl transition dark:border-dark-700/90 dark:bg-dark-900/90 dark:shadow-black/50;
 }
 
-.size-value {
-  @apply min-w-16 rounded-lg bg-gray-100 px-3 py-2 text-center tabular-nums text-gray-700 dark:bg-dark-900 dark:text-dark-100;
+.composer-toolbar {
+  @apply flex flex-wrap items-center justify-between gap-2 border-t border-gray-100/80 px-3 py-2 dark:border-dark-700/80;
 }
 
-.history-filter {
-  @apply rounded-lg px-2 py-1.5 text-xs text-gray-500 transition dark:text-dark-300;
+/* Segmented Control */
+.segmented-control {
+  @apply flex rounded-lg bg-gray-100/90 p-0.5 dark:bg-dark-800;
 }
 
-.history-filter-active {
-  @apply bg-white font-medium text-gray-900 shadow-sm dark:bg-dark-700 dark:text-white;
+.segmented-btn {
+  @apply rounded-md px-2.5 py-1 text-xs font-medium text-gray-500 transition-all duration-150 dark:text-dark-400;
 }
 
-.compact-select :deep(.select-trigger) {
-  @apply h-9 rounded-lg px-3 py-1.5 text-xs;
+.segmented-btn-active {
+  @apply bg-white font-semibold text-gray-900 shadow-sm dark:bg-dark-700 dark:text-white;
 }
 
-.ratio-panel {
-  max-height: min(620px, calc(100vh - 12rem));
+/* Apple Pill Control Button */
+.apple-pill-btn {
+  @apply flex h-9 cursor-pointer items-center gap-1.5 rounded-xl border border-gray-200/90 bg-white px-3 text-xs font-medium text-gray-700 shadow-sm transition hover:border-gray-300 hover:bg-gray-50/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 dark:border-dark-700 dark:bg-dark-800 dark:text-dark-200 dark:hover:border-dark-600 dark:hover:bg-dark-700;
+}
+
+.ratio-indicator {
+  @apply block max-h-3.5 min-h-2 w-3.5 rounded-[2px] border-[1.5px] border-current opacity-80;
+}
+
+/* Ratio Popover Panel */
+.ratio-popover-panel {
+  @apply absolute bottom-[calc(100%+10px)] left-0 z-50 w-[min(380px,calc(100vw-2rem))] rounded-2xl border border-gray-200/90 bg-white/95 p-4 shadow-2xl shadow-gray-900/15 backdrop-blur-xl dark:border-dark-700 dark:bg-dark-900/95 dark:shadow-black/60;
+  max-height: min(540px, calc(100vh - 14rem));
   overflow-y: auto;
 }
 
@@ -731,31 +911,105 @@ details > summary::-webkit-details-marker {
   display: none;
 }
 
-.result-loading {
-  aspect-ratio: 1 / 1;
+.ratio-card {
+  @apply flex flex-col items-center justify-center gap-1.5 rounded-xl border border-gray-200/70 bg-gray-50/50 p-2 text-center text-gray-600 transition hover:border-gray-300 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 dark:border-dark-700 dark:bg-dark-800/50 dark:text-dark-300 dark:hover:border-dark-600 dark:hover:bg-dark-800;
 }
 
-.result-loading::before {
+.ratio-card-active {
+  @apply border-primary-500 bg-primary-50/70 text-primary-700 ring-1 ring-primary-500/30 dark:border-primary-500 dark:bg-primary-950/40 dark:text-primary-300;
+}
+
+.ratio-box {
+  @apply block max-h-5 min-h-2.5 w-5 rounded-[2px] border-[1.5px] border-current opacity-80;
+}
+
+.quality-card {
+  @apply flex flex-col items-center justify-center rounded-xl border border-gray-200/70 bg-gray-50/50 py-2 text-center transition hover:border-gray-300 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 dark:border-dark-700 dark:bg-dark-800/50 dark:hover:border-dark-600 dark:hover:bg-dark-800;
+}
+
+.quality-card-active {
+  @apply border-primary-500 bg-primary-50/70 text-primary-700 ring-1 ring-primary-500/30 dark:border-primary-500 dark:bg-primary-950/40 dark:text-primary-300;
+}
+
+/* History Sidebar */
+.history-sidebar {
+  @apply flex flex-col border-t border-gray-200/80 bg-white/70 backdrop-blur-md dark:border-dark-700/80 dark:bg-dark-900/70 lg:border-l lg:border-t-0;
+}
+
+@media (max-width: 1023px) {
+  .history-sidebar-mobile-closed {
+    @apply hidden;
+  }
+  .history-sidebar-mobile-open {
+    @apply flex max-h-[32rem];
+  }
+}
+
+.history-item-card {
+  @apply flex gap-2.5 rounded-xl border p-2 transition-all duration-150;
+}
+
+.history-item-card-idle {
+  @apply border-transparent hover:border-gray-200 hover:bg-gray-50/80 dark:hover:border-dark-700 dark:hover:bg-dark-800/60;
+}
+
+.history-item-card-active {
+  @apply border-primary-500/60 bg-primary-50/80 shadow-sm dark:border-primary-500/60 dark:bg-primary-950/40;
+}
+
+/* Drag overlay transition */
+.fade-fast-enter-active,
+.fade-fast-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.fade-fast-enter-from,
+.fade-fast-leave-to {
+  opacity: 0;
+}
+
+/* Custom Select styling inside composer */
+.composer-select :deep(.select-trigger) {
+  @apply h-9 rounded-xl border-gray-200/90 px-3 py-1.5 text-xs shadow-sm hover:border-gray-300 dark:border-dark-700 dark:bg-dark-800 dark:hover:border-dark-600;
+}
+
+.generate-button {
+  @apply h-9 px-4 text-xs font-semibold shadow-sm transition active:scale-95;
+}
+
+/* Skeleton loader */
+.result-skeleton-card {
+  @apply relative mx-auto w-full max-w-xl overflow-hidden rounded-2xl border border-gray-200/90 bg-gray-100 shadow-sm dark:border-dark-700 dark:bg-dark-800;
+}
+
+.result-skeleton-card::before {
   content: '';
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(100deg, transparent 20%, rgb(255 255 255 / 55%) 50%, transparent 80%);
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
   animation: shimmer 1.8s infinite;
 }
 
-.dark .result-loading::before {
-  background: linear-gradient(100deg, transparent 20%, rgb(255 255 255 / 6%) 50%, transparent 80%);
+.dark .result-skeleton-card::before {
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.07) 50%, transparent 100%);
 }
 
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Transparency Checkerboard */
 .bg-checker {
   background-color: rgb(249 250 251);
   background-image: linear-gradient(45deg, rgb(229 231 235 / 45%) 25%, transparent 25%),
     linear-gradient(-45deg, rgb(229 231 235 / 45%) 25%, transparent 25%),
     linear-gradient(45deg, transparent 75%, rgb(229 231 235 / 45%) 75%),
     linear-gradient(-45deg, transparent 75%, rgb(229 231 235 / 45%) 75%);
-  background-size: 24px 24px;
-  background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
 }
 
 .dark .bg-checker {
@@ -766,19 +1020,13 @@ details > summary::-webkit-details-marker {
     linear-gradient(-45deg, transparent 75%, rgb(55 65 81 / 35%) 75%);
 }
 
-.empty-orbit {
-  @apply relative flex h-28 w-28 items-center justify-center rounded-full border border-dashed border-primary-200 bg-primary-50/50 dark:border-primary-800/60 dark:bg-primary-900/10;
-}
-
-.empty-orbit::after {
-  content: '';
-  @apply absolute h-2.5 w-2.5 rounded-full bg-primary-400;
-  top: 8px;
-  right: 17px;
-  box-shadow: 0 0 0 5px rgb(99 102 241 / 10%);
-}
-
-@keyframes shimmer {
-  100% { transform: translateX(100%); }
+@media (prefers-reduced-motion: reduce) {
+  .result-skeleton-card::before {
+    animation: none;
+  }
+  .fade-fast-enter-active,
+  .fade-fast-leave-active {
+    transition: none;
+  }
 }
 </style>

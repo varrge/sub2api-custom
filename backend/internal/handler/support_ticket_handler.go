@@ -218,11 +218,18 @@ func (h *SupportTicketHandler) markRead(c *gin.Context, admin bool) {
 	if !ok {
 		return
 	}
+	var req struct {
+		LastReadMessageID int64 `json:"last_read_message_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.LastReadMessageID <= 0 {
+		response.ErrorFrom(c, service.ErrSupportTicketInvalidRead)
+		return
+	}
 	var err error
 	if admin {
-		err = h.service.MarkReadForAdmin(c.Request.Context(), actorID, ticketID)
+		err = h.service.MarkReadForAdmin(c.Request.Context(), actorID, ticketID, req.LastReadMessageID)
 	} else {
-		err = h.service.MarkReadForUser(c.Request.Context(), actorID, ticketID)
+		err = h.service.MarkReadForUser(c.Request.Context(), actorID, ticketID, req.LastReadMessageID)
 	}
 	if err != nil {
 		response.ErrorFrom(c, err)

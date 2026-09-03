@@ -211,6 +211,14 @@ func (r *supportTicketRepository) get(ctx context.Context, readerID, ticketID in
 		Order(dbent.Asc(supportticketmessage.FieldID)).
 		WithAuthor().
 		WithAttachments(func(q *dbent.SupportTicketAttachmentQuery) {
+			q.Select(
+				supportticketattachment.FieldID,
+				supportticketattachment.FieldContentType,
+				supportticketattachment.FieldSizeBytes,
+				supportticketattachment.FieldWidth,
+				supportticketattachment.FieldHeight,
+				supportticketattachment.FieldCreatedAt,
+			)
 			q.Order(dbent.Asc(supportticketattachment.FieldID))
 		}).
 		All(ctx)
@@ -223,41 +231,52 @@ func (r *supportTicketRepository) get(ctx context.Context, readerID, ticketID in
 		return nil, err
 	}
 	_, ticket.Unread = unreadIDs[ticketID]
-	return &service.SupportTicketDetail{Ticket: *ticket, Messages: supportTicketMessageEntitiesToService(messages)}, nil
-}
-
-func (r *supportTicketRepository) MarkReadForUser(ctx context.Context, userID, ticketID int64) error {
-	return r.markRead(ctx, userID, ticketID, service.SupportTicketAuthorRoleUser, true)
-}
-
-func (r *supportTicketRepository) MarkReadForAdmin(ctx context.Context, readerAdminID, ticketID int64) error {
-	return r.markRead(mixins.SkipSoftDelete(ctx), readerAdminID, ticketID, service.SupportTicketAuthorRoleAdmin, false)
-}
-
-func (r *supportTicketRepository) markRead(ctx context.Context, readerID, ticketID int64, readerRole string, scoped bool) error {
-	predicates := []predicate.SupportTicket{supportticket.IDEQ(ticketID)}
-	if scoped {
-		predicates = append(predicates, supportticket.UserIDEQ(readerID))
+	lastOpposingMessageID := int64(0)
+	for _, message := range messages {
+		if message.AuthorRole == oppositeSupportTicketRole(readerRole) {
+			lastOpposingMessageID = message.ID
+		}
 	}
-	if exists, err := r.client.SupportTicket.Query().Where(predicates...).Exist(ctx); err != nil {
-		return err
-	} else if !exists {
-		return service.ErrSupportTicketNotFound
+	return &service.SupportTicketDetail{
+		Ticket: *ticket, Messages: supportTicketMessageEntitiesToService(messages), LastOpposingMessageID: lastOpposingMessageID,
+	}, nil
+}
+
+func (r *supportTicketRepository) MarkReadForUser(ctx context.Context, userID, ticketID, lastReadMessageID int64) error {
+	return r.markRead(ctx, userID, ticketID, lastReadMessageID, service.SupportTicketAuthorRoleUser, true)
+}
+
+func (r *supportTicketRepository) MarkReadForAdmin(ctx context.Context, readerAdminID, ticketID, lastReadMessageID int64) error {
+	return r.markRead(mixins.SkipSoftDelete(ctx), readerAdminID, ticketID, lastReadMessageID, service.SupportTicketAuthorRoleAdmin, false)
+}
+
+func (r *supportTicketRepository) markRead(ctx context.Context, readerID, ticketID, lastReadMessageID int64, readerRole string, scoped bool) error {
+	if lastReadMessageID <= 0 {
+		return service.ErrSupportTicketInvalidRead
 	}
-	lastReadMessageID, err := r.client.SupportTicketMessage.Query().
-		Where(
+	return r.withTx(ctx, func(txCtx context.Context, client *dbent.Client) error {
+		predicates := []predicate.SupportTicket{supportticket.IDEQ(ticketID)}
+		if scoped {
+			predicates = append(predicates, supportticket.UserIDEQ(readerID))
+		}
+		if exists, err := client.SupportTicket.Query().Where(predicates...).Exist(txCtx); err != nil {
+			return err
+		} else if !exists {
+			return service.ErrSupportTicketNotFound
+		}
+		exists, err := client.SupportTicketMessage.Query().Where(
+			supportticketmessage.IDEQ(lastReadMessageID),
 			supportticketmessage.TicketIDEQ(ticketID),
 			supportticketmessage.AuthorRoleEQ(oppositeSupportTicketRole(readerRole)),
-		).
-		Order(dbent.Desc(supportticketmessage.FieldID)).
-		FirstID(ctx)
-	if dbent.IsNotFound(err) {
-		lastReadMessageID, err = 0, nil
-	}
-	if err != nil {
-		return err
-	}
-	return upsertSupportTicketRead(ctx, r.client, ticketID, readerID, readerRole, lastReadMessageID)
+		).Exist(txCtx)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return service.ErrSupportTicketInvalidRead
+		}
+		return upsertSupportTicketRead(txCtx, client, ticketID, readerID, readerRole, lastReadMessageID)
+	})
 }
 
 func (r *supportTicketRepository) GetAttachmentForUser(ctx context.Context, userID, ticketID, attachmentID int64) (*service.SupportTicketAttachment, error) {
@@ -331,6 +350,21 @@ func (r *supportTicketRepository) UpdateStatus(ctx context.Context, ticketID int
 		}
 		if !domain.CanTransitionSupportTicket(current.Status, status) {
 			return service.ErrSupportTicketInvalidTransition
+		}
+		if current.Status == service.SupportTicketStatusClosed && status == service.SupportTicketStatusInProgress {
+			if _, err = client.User.Query().Where(user.IDEQ(current.UserID)).ForUpdate().Only(txCtx); err != nil {
+				return translatePersistenceError(err, service.ErrUserNotFound, nil)
+			}
+			openCount, countErr := client.SupportTicket.Query().Where(
+				supportticket.UserIDEQ(current.UserID),
+				supportticket.StatusNEQ(service.SupportTicketStatusClosed),
+			).Count(txCtx)
+			if countErr != nil {
+				return countErr
+			}
+			if openCount >= service.SupportTicketOpenLimitPerUser {
+				return service.ErrSupportTicketOpenLimit
+			}
 		}
 		entity, err := client.SupportTicket.UpdateOneID(ticketID).SetStatus(status).SetUpdatedAt(time.Now()).Save(txCtx)
 		if err != nil {

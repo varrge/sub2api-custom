@@ -40,10 +40,10 @@ func (s *supportTicketServiceRepoStub) OpenForUser(context.Context, int64, int64
 func (s *supportTicketServiceRepoStub) OpenForAdmin(context.Context, int64, int64) (*SupportTicketDetail, error) {
 	panic("unexpected")
 }
-func (s *supportTicketServiceRepoStub) MarkReadForUser(context.Context, int64, int64) error {
+func (s *supportTicketServiceRepoStub) MarkReadForUser(context.Context, int64, int64, int64) error {
 	panic("unexpected")
 }
-func (s *supportTicketServiceRepoStub) MarkReadForAdmin(context.Context, int64, int64) error {
+func (s *supportTicketServiceRepoStub) MarkReadForAdmin(context.Context, int64, int64, int64) error {
 	panic("unexpected")
 }
 func (s *supportTicketServiceRepoStub) GetAttachmentForUser(context.Context, int64, int64, int64) (*SupportTicketAttachment, error) {

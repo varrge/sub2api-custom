@@ -114,7 +114,9 @@ watch(
       supportTicketStore.reset()
       return
     }
-    if (supportTicketsEnabled && !supportTicketStore.userUnreadLoaded) {
+    if (!supportTicketsEnabled) {
+      supportTicketStore.resetUserUnread()
+    } else if (!supportTicketStore.userUnreadLoaded) {
       supportTicketStore.initializeUserUnread().catch(() => undefined)
     }
     if (isAdmin && !supportTicketStore.adminUnreadLoaded) {

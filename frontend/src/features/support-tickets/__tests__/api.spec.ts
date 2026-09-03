@@ -90,14 +90,14 @@ describe('support ticket API contract', () => {
 
     await expect(supportTicketsUserAPI.unreadCount()).resolves.toBe(4)
     await supportTicketsAdminAPI.get(3)
-    await supportTicketsUserAPI.markRead(3)
+    await supportTicketsUserAPI.markRead(3, 11)
     await supportTicketsAdminAPI.attachment(3, 8)
     await supportTicketsAdminAPI.updateStatus(3, 'closed')
     await supportTicketsAdminAPI.updatePriority(3, 'urgent')
 
     expect(http.get).toHaveBeenCalledWith('/tickets/unread-count')
     expect(http.get).toHaveBeenCalledWith('/admin/tickets/3')
-    expect(http.post).toHaveBeenCalledWith('/tickets/3/read')
+    expect(http.post).toHaveBeenCalledWith('/tickets/3/read', { last_read_message_id: 11 })
     expect(http.get).toHaveBeenCalledWith('/admin/tickets/3/attachments/8', {
       responseType: 'blob',
     })

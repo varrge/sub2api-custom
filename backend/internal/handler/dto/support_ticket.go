@@ -30,17 +30,18 @@ type SupportTicketMessage struct {
 }
 
 type SupportTicket struct {
-	ID        int64                  `json:"id"`
-	UserID    int64                  `json:"user_id"`
-	User      *SupportTicketIdentity `json:"user,omitempty"`
-	Title     string                 `json:"title"`
-	Category  string                 `json:"category"`
-	Priority  string                 `json:"priority"`
-	Status    string                 `json:"status"`
-	Unread    bool                   `json:"unread"`
-	CreatedAt time.Time              `json:"created_at"`
-	UpdatedAt time.Time              `json:"updated_at"`
-	Messages  []SupportTicketMessage `json:"messages,omitempty"`
+	ID                    int64                  `json:"id"`
+	UserID                int64                  `json:"user_id"`
+	User                  *SupportTicketIdentity `json:"user,omitempty"`
+	Title                 string                 `json:"title"`
+	Category              string                 `json:"category"`
+	Priority              string                 `json:"priority"`
+	Status                string                 `json:"status"`
+	Unread                bool                   `json:"unread"`
+	CreatedAt             time.Time              `json:"created_at"`
+	UpdatedAt             time.Time              `json:"updated_at"`
+	Messages              []SupportTicketMessage `json:"messages,omitempty"`
+	LastOpposingMessageID int64                  `json:"last_opposing_message_id"`
 }
 
 func SupportTicketFromService(ticket *service.SupportTicket, includeEmail bool) *SupportTicket {
@@ -59,6 +60,7 @@ func SupportTicketDetailFromService(detail *service.SupportTicketDetail, include
 		return nil
 	}
 	result := SupportTicketFromService(&detail.Ticket, includeEmail)
+	result.LastOpposingMessageID = detail.LastOpposingMessageID
 	result.Messages = make([]SupportTicketMessage, 0, len(detail.Messages))
 	for i := range detail.Messages {
 		result.Messages = append(result.Messages, *SupportTicketMessageFromService(&detail.Messages[i], includeEmail))

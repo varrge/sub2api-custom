@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   showSuccess: vi.fn(),
   createObjectURL: vi.fn(() => 'blob:private-image'),
   revokeObjectURL: vi.fn(),
+  isAdmin: false,
 }))
 
 vi.mock('../api', () => ({
@@ -47,7 +48,7 @@ vi.mock('@/stores', () => ({
     showSuccess: mocks.showSuccess,
     fetchPublicSettings: vi.fn(),
   }),
-  useAuthStore: () => ({ isAdmin: false }),
+  useAuthStore: () => ({ isAdmin: mocks.isAdmin }),
   useSupportTicketStore: () => ({
     refreshUserUnread: mocks.refreshUserUnread,
     refreshAdminUnread: mocks.refreshAdminUnread,
@@ -108,6 +109,7 @@ function detail(status: 'pending' | 'in_progress' | 'closed' = 'pending') {
     unread: true,
     created_at: '2026-09-01T00:00:00Z',
     updated_at: '2026-09-02T00:00:00Z',
+    last_opposing_message_id: 5,
     messages: [{
       id: 5,
       author_role: 'user',
@@ -164,6 +166,7 @@ describe('support ticket detail', () => {
     mocks.updatePriority.mockImplementation(async (_id, priority) => ({ priority }))
     mocks.refreshUserUnread.mockResolvedValue(0)
     mocks.refreshAdminUnread.mockResolvedValue(0)
+    mocks.isAdmin = false
   })
 
   it('fetches, marks read, refreshes user unread, and renders message text safely', async () => {
@@ -172,7 +175,7 @@ describe('support ticket detail', () => {
 
     expect(mocks.userGet).toHaveBeenCalledWith(12)
     expect(mocks.userGet.mock.invocationCallOrder[0]).toBeLessThan(mocks.userRead.mock.invocationCallOrder[0])
-    expect(mocks.userRead).toHaveBeenCalledWith(12)
+    expect(mocks.userRead).toHaveBeenCalledWith(12, 5)
     expect(mocks.refreshUserUnread).toHaveBeenCalledOnce()
     expect(mocks.userAttachment).toHaveBeenCalledWith(12, 8)
     expect(wrapper.get('[data-test="ticket-conversation"] p').text()).toBe('<script>alert(1)</script>\nsecond line')
@@ -251,5 +254,101 @@ describe('support ticket detail', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('User detail')
     expect(wrapper.text()).not.toContain('Stale admin detail')
+  })
+
+  it('limits attachment downloads to three concurrent requests', async () => {
+    const attachmentDetail = detail()
+    attachmentDetail.messages[0].attachments = Array.from({ length: 7 }, (_, index) => ({
+      id: index + 1,
+      content_type: 'image/png',
+      size: 3,
+      width: 1,
+      height: 1,
+    }))
+    mocks.userGet.mockResolvedValue(attachmentDetail)
+    const pending: Array<() => void> = []
+    let active = 0
+    let maximum = 0
+    mocks.userAttachment.mockImplementation(() => new Promise<Blob>((resolve) => {
+      active++
+      maximum = Math.max(maximum, active)
+      pending.push(() => {
+        active--
+        resolve(new Blob(['img'], { type: 'image/png' }))
+      })
+    }))
+
+    const wrapper = mountDetail()
+    await flushPromises()
+    expect(mocks.userAttachment).toHaveBeenCalledTimes(3)
+
+    for (let index = 0; index < 7; index++) {
+      expect(pending.length).toBeGreaterThan(0)
+      pending.shift()?.()
+      await flushPromises()
+    }
+
+    expect(mocks.userAttachment).toHaveBeenCalledTimes(7)
+    expect(maximum).toBe(3)
+    wrapper.unmount()
+  })
+
+  it('ignores a detail GET that finishes after a successful status PATCH', async () => {
+    const staleGet = deferred<ReturnType<typeof detail>>()
+    mocks.adminGet
+      .mockResolvedValueOnce(detail('pending'))
+      .mockReturnValueOnce(staleGet.promise)
+    mocks.updateStatus.mockResolvedValue({ status: 'closed' })
+    const wrapper = mountDetail(true)
+    await flushPromises()
+
+    await wrapper.get('[data-test="refresh-ticket-detail"]').trigger('click')
+    await wrapper.get('[data-test="ticket-status-closed"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="submit-ticket-reply"]').attributes('disabled')).toBeDefined()
+
+    staleGet.resolve(detail('pending'))
+    await flushPromises()
+    expect(wrapper.get('[data-test="submit-ticket-reply"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-test="ticket-status-in_progress"]').exists()).toBe(true)
+  })
+
+  it('ignores a detail GET that finishes before its overlapping status PATCH', async () => {
+    const staleGet = deferred<ReturnType<typeof detail>>()
+    const patch = deferred<{ status: 'closed' }>()
+    mocks.adminGet
+      .mockResolvedValueOnce(detail('pending'))
+      .mockReturnValueOnce(staleGet.promise)
+    mocks.updateStatus.mockReturnValueOnce(patch.promise)
+    const wrapper = mountDetail(true)
+    await flushPromises()
+
+    await wrapper.get('[data-test="refresh-ticket-detail"]').trigger('click')
+    await wrapper.get('[data-test="ticket-status-closed"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="refresh-ticket-detail"]').attributes('disabled')).toBeDefined()
+
+    staleGet.resolve(detail('pending'))
+    await flushPromises()
+    patch.resolve({ status: 'closed' })
+    await flushPromises()
+    expect(wrapper.get('[data-test="submit-ticket-reply"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('#ticket-reply-content').attributes('disabled')).toBeDefined()
+  })
+
+  it('refreshes both read roles when an admin replies from the user-side UI', async () => {
+    mocks.isAdmin = true
+    const wrapper = mountDetail()
+    await flushPromises()
+    mocks.refreshUserUnread.mockClear()
+    mocks.refreshAdminUnread.mockClear()
+
+    await wrapper.get('#ticket-reply-content').setValue('user-side admin reply')
+    await wrapper.get('[data-test="ticket-reply-form"]').trigger('submit')
+    await flushPromises()
+
+    expect(mocks.userReply).toHaveBeenCalledOnce()
+    expect(mocks.refreshUserUnread).toHaveBeenCalled()
+    expect(mocks.refreshAdminUnread).toHaveBeenCalledOnce()
   })
 })

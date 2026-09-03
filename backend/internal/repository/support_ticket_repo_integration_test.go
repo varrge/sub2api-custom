@@ -80,7 +80,9 @@ func TestSupportTicketRepositoryLifecycleOwnershipAndUnread(t *testing.T) {
 	adminDetail, err := repo.OpenForAdmin(ctx, admin.ID, detail.Ticket.ID)
 	require.NoError(t, err)
 	require.Len(t, adminDetail.Messages, 1)
-	require.NoError(t, repo.MarkReadForAdmin(ctx, admin.ID, detail.Ticket.ID))
+	require.Equal(t, detail.Messages[0].ID, adminDetail.LastOpposingMessageID)
+	require.Empty(t, adminDetail.Messages[0].Attachments[0].Data, "detail must load attachment metadata without bytes")
+	require.NoError(t, repo.MarkReadForAdmin(ctx, admin.ID, detail.Ticket.ID, adminDetail.LastOpposingMessageID))
 	adminUnread, err = repo.CountUnreadForAdmin(ctx, admin.ID)
 	require.NoError(t, err)
 	require.Zero(t, adminUnread)
@@ -101,7 +103,8 @@ func TestSupportTicketRepositoryLifecycleOwnershipAndUnread(t *testing.T) {
 	require.Equal(t, service.SupportTicketStatusInProgress, userDetail.Ticket.Status)
 	require.Len(t, userDetail.Messages, 2)
 	require.Less(t, userDetail.Messages[0].ID, userDetail.Messages[1].ID)
-	require.NoError(t, repo.MarkReadForUser(ctx, owner.ID, detail.Ticket.ID))
+	require.Equal(t, adminReply.ID, userDetail.LastOpposingMessageID)
+	require.NoError(t, repo.MarkReadForUser(ctx, owner.ID, detail.Ticket.ID, userDetail.LastOpposingMessageID))
 	userUnread, err = repo.CountUnreadForUser(ctx, owner.ID)
 	require.NoError(t, err)
 	require.Zero(t, userUnread)
@@ -274,6 +277,105 @@ func TestSupportTicketRepositoryCreateIsAtomicAndRaceSafeAtOpenLimit(t *testing.
 	require.Equal(t, service.SupportTicketOpenLimitPerUser, openCount)
 }
 
+func TestSupportTicketRepositoryReopenPreservesOpenLimit(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewSupportTicketRepository(client)
+
+	createClosed := func(t *testing.T, ownerID int64, title string) int64 {
+		t.Helper()
+		detail, err := repo.Create(ctx, supportTicketCreateParams(ownerID, title, service.SupportTicketPriorityNormal))
+		require.NoError(t, err)
+		_, err = repo.UpdateStatus(ctx, detail.Ticket.ID, service.SupportTicketStatusClosed)
+		require.NoError(t, err)
+		return detail.Ticket.ID
+	}
+	fillOpen := func(t *testing.T, ownerID int64, count int) {
+		t.Helper()
+		for i := 0; i < count; i++ {
+			_, err := repo.Create(ctx, supportTicketCreateParams(ownerID, fmt.Sprintf("open-%d", i), service.SupportTicketPriorityNormal))
+			require.NoError(t, err)
+		}
+	}
+	assertConcurrentResult := func(t *testing.T, ownerID int64, operations ...func() error) {
+		t.Helper()
+		start := make(chan struct{})
+		errs := make(chan error, len(operations))
+		var wg sync.WaitGroup
+		for _, operation := range operations {
+			wg.Add(1)
+			go func(operation func() error) {
+				defer wg.Done()
+				<-start
+				errs <- operation()
+			}(operation)
+		}
+		close(start)
+		wg.Wait()
+		close(errs)
+		var success, limited int
+		for err := range errs {
+			switch {
+			case err == nil:
+				success++
+			case errors.Is(err, service.ErrSupportTicketOpenLimit):
+				limited++
+			default:
+				t.Fatalf("unexpected concurrent operation error: %v", err)
+			}
+		}
+		require.Equal(t, 1, success)
+		require.Equal(t, len(operations)-1, limited)
+		openCount, err := client.SupportTicket.Query().Where(
+			supportticket.UserIDEQ(ownerID),
+			supportticket.StatusNEQ(service.SupportTicketStatusClosed),
+		).Count(ctx)
+		require.NoError(t, err)
+		require.Equal(t, service.SupportTicketOpenLimitPerUser, openCount)
+	}
+
+	t.Run("rejects reopen at cap", func(t *testing.T) {
+		owner := supportTicketTestUser(t, service.RoleUser)
+		closedID := createClosed(t, owner.ID, "closed-at-cap")
+		fillOpen(t, owner.ID, service.SupportTicketOpenLimitPerUser)
+		_, err := repo.UpdateStatus(ctx, closedID, service.SupportTicketStatusInProgress)
+		require.ErrorIs(t, err, service.ErrSupportTicketOpenLimit)
+	})
+
+	t.Run("serializes create and reopen", func(t *testing.T) {
+		owner := supportTicketTestUser(t, service.RoleUser)
+		closedID := createClosed(t, owner.ID, "closed-create-race")
+		fillOpen(t, owner.ID, service.SupportTicketOpenLimitPerUser-1)
+		assertConcurrentResult(t, owner.ID,
+			func() error {
+				_, err := repo.Create(ctx, supportTicketCreateParams(owner.ID, "concurrent-create", service.SupportTicketPriorityNormal))
+				return err
+			},
+			func() error {
+				_, err := repo.UpdateStatus(ctx, closedID, service.SupportTicketStatusInProgress)
+				return err
+			},
+		)
+	})
+
+	t.Run("serializes two reopens", func(t *testing.T) {
+		owner := supportTicketTestUser(t, service.RoleUser)
+		firstClosedID := createClosed(t, owner.ID, "closed-reopen-race-1")
+		secondClosedID := createClosed(t, owner.ID, "closed-reopen-race-2")
+		fillOpen(t, owner.ID, service.SupportTicketOpenLimitPerUser-1)
+		assertConcurrentResult(t, owner.ID,
+			func() error {
+				_, err := repo.UpdateStatus(ctx, firstClosedID, service.SupportTicketStatusInProgress)
+				return err
+			},
+			func() error {
+				_, err := repo.UpdateStatus(ctx, secondClosedID, service.SupportTicketStatusInProgress)
+				return err
+			},
+		)
+	})
+}
+
 func TestSupportTicketRepositoryReplyWaitsForConcurrentClose(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)
@@ -325,10 +427,14 @@ func TestSupportTicketRepositorySeparatesUserAndAdminReadPositions(t *testing.T)
 
 	_, err = repo.OpenForAdmin(ctx, adminOwner.ID, detail.Ticket.ID)
 	require.NoError(t, err)
-	require.NoError(t, repo.MarkReadForAdmin(ctx, adminOwner.ID, detail.Ticket.ID))
+	require.NoError(t, repo.MarkReadForAdmin(ctx, adminOwner.ID, detail.Ticket.ID, detail.Messages[0].ID))
 	_, err = repo.OpenForUser(ctx, adminOwner.ID, detail.Ticket.ID)
 	require.NoError(t, err)
-	require.NoError(t, repo.MarkReadForUser(ctx, adminOwner.ID, detail.Ticket.ID))
+	adminReply, err := repo.ReplyByAdmin(ctx, service.ReplySupportTicketParams{
+		TicketID: detail.Ticket.ID, AuthorID: adminOwner.ID, Message: "admin response",
+	})
+	require.NoError(t, err)
+	require.NoError(t, repo.MarkReadForUser(ctx, adminOwner.ID, detail.Ticket.ID, adminReply.ID))
 
 	var roles int
 	rows, err := client.QueryContext(ctx, `
@@ -351,17 +457,68 @@ func TestSupportTicketRepositoryDetailReadIsExplicit(t *testing.T) {
 	detail, err := repo.Create(ctx, supportTicketCreateParams(owner.ID, "explicit read", service.SupportTicketPriorityNormal))
 	require.NoError(t, err)
 
-	_, err = repo.OpenForAdmin(ctx, admin.ID, detail.Ticket.ID)
+	adminDetail, err := repo.OpenForAdmin(ctx, admin.ID, detail.Ticket.ID)
 	require.NoError(t, err)
 	unread, err := repo.CountUnreadForAdmin(ctx, admin.ID)
 	require.NoError(t, err)
 	require.EqualValues(t, 1, unread, "detail fetch must not mark the ticket read")
-	require.NoError(t, repo.MarkReadForAdmin(ctx, admin.ID, detail.Ticket.ID))
+	require.NoError(t, repo.MarkReadForAdmin(ctx, admin.ID, detail.Ticket.ID, adminDetail.LastOpposingMessageID))
 	unread, err = repo.CountUnreadForAdmin(ctx, admin.ID)
 	require.NoError(t, err)
 	require.Zero(t, unread)
 
 	_, err = repo.OpenForUser(ctx, other.ID, detail.Ticket.ID)
 	require.ErrorIs(t, err, service.ErrSupportTicketNotFound)
-	require.ErrorIs(t, repo.MarkReadForUser(ctx, other.ID, detail.Ticket.ID), service.ErrSupportTicketNotFound)
+	require.ErrorIs(t, repo.MarkReadForUser(ctx, other.ID, detail.Ticket.ID, detail.Messages[0].ID), service.ErrSupportTicketNotFound)
+}
+
+func TestSupportTicketRepositoryMarksOnlyTheDetailSnapshotRead(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewSupportTicketRepository(client)
+	owner := supportTicketTestUser(t, service.RoleUser)
+	admin := supportTicketTestUser(t, service.RoleAdmin)
+	otherAdmin := supportTicketTestUser(t, service.RoleAdmin)
+	detail, err := repo.Create(ctx, supportTicketCreateParams(owner.ID, "snapshot read", service.SupportTicketPriorityNormal))
+	require.NoError(t, err)
+
+	snapshot, err := repo.OpenForAdmin(ctx, admin.ID, detail.Ticket.ID)
+	require.NoError(t, err)
+	require.Equal(t, detail.Messages[0].ID, snapshot.LastOpposingMessageID)
+	laterReply, err := repo.ReplyByUser(ctx, owner.ID, service.ReplySupportTicketParams{
+		TicketID: detail.Ticket.ID, Message: "arrived after snapshot",
+	})
+	require.NoError(t, err)
+	require.Greater(t, laterReply.ID, snapshot.LastOpposingMessageID)
+
+	require.NoError(t, repo.MarkReadForAdmin(ctx, admin.ID, detail.Ticket.ID, snapshot.LastOpposingMessageID))
+	unread, err := repo.CountUnreadForAdmin(ctx, admin.ID)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, unread, "the post-snapshot reply must remain unread")
+
+	adminReply, err := repo.ReplyByAdmin(ctx, service.ReplySupportTicketParams{
+		TicketID: detail.Ticket.ID, AuthorID: admin.ID, Message: "admin-authored message",
+	})
+	require.NoError(t, err)
+	require.ErrorIs(t, repo.MarkReadForAdmin(ctx, otherAdmin.ID, detail.Ticket.ID, adminReply.ID), service.ErrSupportTicketInvalidRead)
+	otherTicket, err := repo.Create(ctx, supportTicketCreateParams(owner.ID, "other ticket", service.SupportTicketPriorityNormal))
+	require.NoError(t, err)
+	require.ErrorIs(t, repo.MarkReadForAdmin(ctx, otherAdmin.ID, detail.Ticket.ID, otherTicket.Messages[0].ID), service.ErrSupportTicketInvalidRead)
+	var invalidReadRows int
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+SELECT COUNT(*) FROM support_ticket_reads
+WHERE ticket_id = $1 AND reader_user_id = $2 AND reader_role = $3`,
+		detail.Ticket.ID, otherAdmin.ID, service.SupportTicketAuthorRoleAdmin,
+	).Scan(&invalidReadRows))
+	require.Zero(t, invalidReadRows, "failed validation must not leave a read row")
+
+	require.NoError(t, repo.MarkReadForAdmin(ctx, admin.ID, detail.Ticket.ID, laterReply.ID))
+	require.NoError(t, repo.MarkReadForAdmin(ctx, admin.ID, detail.Ticket.ID, snapshot.LastOpposingMessageID))
+	var lastReadMessageID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+SELECT last_read_message_id FROM support_ticket_reads
+WHERE ticket_id = $1 AND reader_user_id = $2 AND reader_role = $3`,
+		detail.Ticket.ID, admin.ID, service.SupportTicketAuthorRoleAdmin,
+	).Scan(&lastReadMessageID))
+	require.Equal(t, laterReply.ID, lastReadMessageID, "read position must never move backward")
 }

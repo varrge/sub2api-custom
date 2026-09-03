@@ -26,6 +26,7 @@ type supportTicketRepoStub struct {
 	markUserCalls int
 	ownerID       int64
 	attachment    *service.SupportTicketAttachment
+	lastReadID    int64
 }
 
 func (s *supportTicketRepoStub) Create(_ context.Context, params service.CreateSupportTicketParams) (*service.SupportTicketDetail, error) {
@@ -49,19 +50,20 @@ func (s *supportTicketRepoStub) OpenForUser(_ context.Context, userID, ticketID 
 	if userID != s.ownerID {
 		return nil, service.ErrSupportTicketNotFound
 	}
-	return &service.SupportTicketDetail{Ticket: service.SupportTicket{ID: ticketID, UserID: userID}}, nil
+	return &service.SupportTicketDetail{Ticket: service.SupportTicket{ID: ticketID, UserID: userID}, LastOpposingMessageID: 17}, nil
 }
 func (s *supportTicketRepoStub) OpenForAdmin(context.Context, int64, int64) (*service.SupportTicketDetail, error) {
 	panic("unexpected")
 }
-func (s *supportTicketRepoStub) MarkReadForUser(_ context.Context, userID, _ int64) error {
+func (s *supportTicketRepoStub) MarkReadForUser(_ context.Context, userID, _, lastReadMessageID int64) error {
 	if userID != s.ownerID {
 		return service.ErrSupportTicketNotFound
 	}
 	s.markUserCalls++
+	s.lastReadID = lastReadMessageID
 	return nil
 }
-func (s *supportTicketRepoStub) MarkReadForAdmin(context.Context, int64, int64) error {
+func (s *supportTicketRepoStub) MarkReadForAdmin(context.Context, int64, int64, int64) error {
 	panic("unexpected")
 }
 func (s *supportTicketRepoStub) GetAttachmentForUser(_ context.Context, userID, _, _ int64) (*service.SupportTicketAttachment, error) {
@@ -94,10 +96,16 @@ func TestSupportTicketDetailAndReadAreExplicitAndOwnerScoped(t *testing.T) {
 	require.Equal(t, http.StatusOK, res.Code)
 	require.Equal(t, 1, repo.getUserCalls)
 	require.Zero(t, repo.markUserCalls, "detail fetch must not mutate read state")
+	require.Contains(t, res.Body.String(), `"last_opposing_message_id":17`)
 
-	res = performTicketRequest(router, httptest.NewRequest(http.MethodPost, "/tickets/11/read", nil))
+	res = performTicketRequest(router, httptest.NewRequest(http.MethodPost, "/tickets/11/read", strings.NewReader(`{"last_read_message_id":17}`)))
 	require.Equal(t, http.StatusOK, res.Code)
 	require.Equal(t, 1, repo.markUserCalls)
+	require.EqualValues(t, 17, repo.lastReadID)
+
+	res = performTicketRequest(router, httptest.NewRequest(http.MethodPost, "/tickets/11/read", strings.NewReader(`{"last_read_message_id":0}`)))
+	require.Equal(t, http.StatusBadRequest, res.Code)
+	require.Contains(t, res.Body.String(), "SUPPORT_TICKET_READ_INVALID")
 
 	otherRouter := supportTicketTestRouter(repo, 8)
 	res = performTicketRequest(otherRouter, httptest.NewRequest(http.MethodGet, "/tickets/11", nil))

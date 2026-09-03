@@ -160,6 +160,7 @@ async function submit(): Promise<void> {
     form.images = []
     appStore.showSuccess(t('supportTickets.success.created'))
     await unreadStore.refreshUserUnread().catch(() => undefined)
+    if (authStore.isAdmin) await unreadStore.refreshAdminUnread().catch(() => undefined)
     await router.push(`/tickets/${ticket.id}`)
   } catch (error) {
     if (await redirectDisabled(error)) return

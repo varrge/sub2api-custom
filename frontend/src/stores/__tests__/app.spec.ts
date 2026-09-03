@@ -325,10 +325,14 @@ describe('useAppStore', () => {
   // --- 公开设置 ---
 
   describe('公开设置加载', () => {
-    it('并发调用复用并等待同一个请求，包括 force 调用', async () => {
-      const deferred = createDeferred<PublicSettings>()
-      vi.mocked(getPublicSettings).mockReturnValue(deferred.promise)
-      const settings = createPublicSettings({ payment_enabled: true })
+    it('force waits for an active pre-save request and then applies a fresh saved value', async () => {
+      const oldResponse = createDeferred<PublicSettings>()
+      const savedResponse = createDeferred<PublicSettings>()
+      vi.mocked(getPublicSettings)
+        .mockReturnValueOnce(oldResponse.promise)
+        .mockReturnValueOnce(savedResponse.promise)
+      const oldSettings = createPublicSettings({ support_ticket_enabled: false })
+      const savedSettings = createPublicSettings({ support_ticket_enabled: true })
       const store = useAppStore()
 
       const first = store.fetchPublicSettings()
@@ -344,14 +348,16 @@ describe('useAppStore', () => {
       await Promise.resolve()
       expect(settled).not.toHaveBeenCalled()
 
-      deferred.resolve(settings)
-      await expect(Promise.all([first, second, forced])).resolves.toEqual([
-        settings,
-        settings,
-        settings,
-      ])
+      oldResponse.resolve(oldSettings)
+      await expect(Promise.all([first, second])).resolves.toEqual([oldSettings, oldSettings])
+      expect(getPublicSettings).toHaveBeenCalledTimes(2)
+      expect(store.cachedPublicSettings?.support_ticket_enabled).toBe(false)
+
+      savedResponse.resolve(savedSettings)
+      await expect(forced).resolves.toEqual(savedSettings)
       expect(store.publicSettingsLoaded).toBe(true)
-      expect(store.cachedPublicSettings?.payment_enabled).toBe(true)
+      expect(store.cachedPublicSettings?.support_ticket_enabled).toBe(true)
+      expect((window as any).__APP_CONFIG__.support_ticket_enabled).toBe(true)
     })
 
     it('force 在无活动请求时绕过缓存，刷新期间的普通调用等待刷新结果', async () => {

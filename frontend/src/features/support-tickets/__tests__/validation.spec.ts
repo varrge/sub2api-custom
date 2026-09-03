@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import SupportTicketImagePicker from '../SupportTicketImagePicker.vue'
+import zhSupportTickets from '@/i18n/locales/zh/supportTickets'
 import {
   SUPPORT_TICKET_CONTENT_MAX,
   SUPPORT_TICKET_IMAGE_MAX,
@@ -28,6 +29,15 @@ describe('support ticket form validation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL })
+  })
+
+  it('uses the required exact Chinese category labels', () => {
+    expect(zhSupportTickets.supportTickets.category).toEqual({
+      account: '账户问题',
+      billing: '充值与账单',
+      feature: '功能问题',
+      other: '其他',
+    })
   })
 
   it('counts trimmed Unicode code points and enforces title/content bounds', () => {

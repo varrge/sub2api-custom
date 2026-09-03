@@ -81,6 +81,25 @@ describe('support ticket unread state', () => {
     expect(store.userUnreadLoaded).toBe(true)
   })
 
+  it('invalidates only user unread state when disabled and reloads it on re-enable', async () => {
+    api.userUnread.mockResolvedValueOnce(4).mockResolvedValueOnce(1)
+    const store = useSupportTicketStore()
+    await store.initializeUserUnread()
+    store.adminUnreadCount = 7
+    store.adminUnreadLoaded = true
+
+    store.resetUserUnread()
+    expect(store.userUnreadCount).toBe(0)
+    expect(store.userUnreadLoaded).toBe(false)
+    expect(store.adminUnreadCount).toBe(7)
+    expect(store.adminUnreadLoaded).toBe(true)
+
+    await store.initializeUserUnread()
+    expect(api.userUnread).toHaveBeenCalledTimes(2)
+    expect(store.userUnreadCount).toBe(1)
+    expect(store.userUnreadLoaded).toBe(true)
+  })
+
   it('coalesces concurrent initialization requests', async () => {
     const response = deferred<number>()
     api.adminUnread.mockReturnValueOnce(response.promise)

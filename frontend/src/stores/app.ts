@@ -311,10 +311,9 @@ export const useAppStore = defineStore('app', () => {
    * @param force - Force refresh from API
    */
   function fetchPublicSettings(force = false): Promise<PublicSettings | null> {
-    // An active request always wins over cache/force semantics so every caller observes
-    // the same refresh result and no older request can overwrite a newer one.
     if (publicSettingsRequest) {
-      return publicSettingsRequest
+      if (!force) return publicSettingsRequest
+      return publicSettingsRequest.then(() => fetchPublicSettings(true))
     }
 
     // Check for injected config from server (eliminates flash)

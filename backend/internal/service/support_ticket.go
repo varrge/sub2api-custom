@@ -43,6 +43,7 @@ var (
 	ErrSupportTicketInvalidMessage    = domain.ErrSupportTicketInvalidMessage
 	ErrSupportTicketOpenLimit         = domain.ErrSupportTicketOpenLimit
 	ErrSupportTicketInvalidTransition = domain.ErrSupportTicketInvalidTransition
+	ErrSupportTicketInvalidRead       = domain.ErrSupportTicketInvalidRead
 	ErrSupportTicketClosed            = domain.ErrSupportTicketClosed
 	ErrSupportTicketFeatureDisabled   = domain.ErrSupportTicketFeatureDisabled
 	ErrSupportTicketTooManyImages     = domain.ErrSupportTicketTooManyImages
@@ -93,8 +94,8 @@ type SupportTicketRepository interface {
 	ListForAdmin(ctx context.Context, readerAdminID int64, params pagination.PaginationParams, filters SupportTicketListFilters) ([]SupportTicket, *pagination.PaginationResult, error)
 	OpenForUser(ctx context.Context, userID, ticketID int64) (*SupportTicketDetail, error)
 	OpenForAdmin(ctx context.Context, readerAdminID, ticketID int64) (*SupportTicketDetail, error)
-	MarkReadForUser(ctx context.Context, userID, ticketID int64) error
-	MarkReadForAdmin(ctx context.Context, readerAdminID, ticketID int64) error
+	MarkReadForUser(ctx context.Context, userID, ticketID, lastReadMessageID int64) error
+	MarkReadForAdmin(ctx context.Context, readerAdminID, ticketID, lastReadMessageID int64) error
 	GetAttachmentForUser(ctx context.Context, userID, ticketID, attachmentID int64) (*SupportTicketAttachment, error)
 	GetAttachmentForAdmin(ctx context.Context, ticketID, attachmentID int64) (*SupportTicketAttachment, error)
 
@@ -175,12 +176,12 @@ func (s *SupportTicketService) GetForAdmin(ctx context.Context, adminID, ticketI
 	return s.repo.OpenForAdmin(ctx, adminID, ticketID)
 }
 
-func (s *SupportTicketService) MarkReadForUser(ctx context.Context, userID, ticketID int64) error {
-	return s.repo.MarkReadForUser(ctx, userID, ticketID)
+func (s *SupportTicketService) MarkReadForUser(ctx context.Context, userID, ticketID, lastReadMessageID int64) error {
+	return s.repo.MarkReadForUser(ctx, userID, ticketID, lastReadMessageID)
 }
 
-func (s *SupportTicketService) MarkReadForAdmin(ctx context.Context, adminID, ticketID int64) error {
-	return s.repo.MarkReadForAdmin(ctx, adminID, ticketID)
+func (s *SupportTicketService) MarkReadForAdmin(ctx context.Context, adminID, ticketID, lastReadMessageID int64) error {
+	return s.repo.MarkReadForAdmin(ctx, adminID, ticketID, lastReadMessageID)
 }
 
 func (s *SupportTicketService) CountUnreadForUser(ctx context.Context, userID int64) (int64, error) {

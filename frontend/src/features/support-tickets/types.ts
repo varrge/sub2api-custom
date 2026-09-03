@@ -42,6 +42,7 @@ export interface SupportTicket {
   created_at: string
   updated_at: string
   messages?: SupportTicketMessage[]
+  last_opposing_message_id: number
 }
 
 export interface SupportTicketPage {

@@ -66,8 +66,8 @@ function client(base: '/tickets' | '/admin/tickets') {
       )
       return data
     },
-    async markRead(id: number): Promise<void> {
-      await apiClient.post(`${base}/${id}/read`)
+    async markRead(id: number, lastReadMessageID: number): Promise<void> {
+      await apiClient.post(`${base}/${id}/read`, { last_read_message_id: lastReadMessageID })
     },
     async attachment(id: number, attachmentID: number): Promise<Blob> {
       const { data } = await apiClient.get<Blob>(`${base}/${id}/attachments/${attachmentID}`, {

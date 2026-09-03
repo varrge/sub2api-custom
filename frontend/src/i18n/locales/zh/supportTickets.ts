@@ -39,9 +39,9 @@ export default {
       actions: '操作',
     },
     category: {
-      account: '账号问题',
-      billing: '账单问题',
-      feature: '功能建议',
+      account: '账户问题',
+      billing: '充值与账单',
+      feature: '功能问题',
       other: '其他',
     },
     priority: {

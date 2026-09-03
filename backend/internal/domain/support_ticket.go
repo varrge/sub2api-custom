@@ -44,6 +44,7 @@ var (
 	ErrSupportTicketInvalidMessage    = infraerrors.BadRequest("SUPPORT_TICKET_MESSAGE_INVALID", "support ticket message must contain 1 to 10000 characters")
 	ErrSupportTicketOpenLimit         = infraerrors.Conflict("SUPPORT_TICKET_OPEN_LIMIT", "support ticket open limit reached")
 	ErrSupportTicketInvalidTransition = infraerrors.Conflict("SUPPORT_TICKET_INVALID_TRANSITION", "support ticket status transition is invalid")
+	ErrSupportTicketInvalidRead       = infraerrors.BadRequest("SUPPORT_TICKET_READ_INVALID", "support ticket read position is invalid")
 	ErrSupportTicketClosed            = infraerrors.Conflict("SUPPORT_TICKET_CLOSED", "support ticket is closed")
 	ErrSupportTicketFeatureDisabled   = infraerrors.Forbidden("FEATURE_DISABLED", "support tickets are disabled")
 	ErrSupportTicketTooManyImages     = infraerrors.BadRequest("SUPPORT_TICKET_TOO_MANY_IMAGES", "support ticket messages allow at most 3 images")
@@ -100,8 +101,9 @@ type SupportTicketAttachmentInput struct {
 }
 
 type SupportTicketDetail struct {
-	Ticket   SupportTicket
-	Messages []SupportTicketMessage
+	Ticket                SupportTicket
+	Messages              []SupportTicketMessage
+	LastOpposingMessageID int64
 }
 
 func NormalizeSupportTicketTitle(value string) (string, error) {

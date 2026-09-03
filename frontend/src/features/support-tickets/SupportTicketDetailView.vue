@@ -41,7 +41,7 @@
                 :model-value="ticket.priority"
                 :aria-label="t('supportTickets.detail.priorityLabel')"
                 :options="priorityOptions"
-                :disabled="updating"
+                :disabled="updating || replying"
                 data-test="ticket-priority"
                 @change="changePriority"
               />
@@ -51,7 +51,7 @@
               :key="status"
               type="button"
               class="btn btn-secondary"
-              :disabled="updating"
+              :disabled="updating || replying"
               :data-test="`ticket-status-${status}`"
               @click="changeStatus(status)"
             >
@@ -66,7 +66,7 @@
             <button
               type="button"
               class="btn btn-secondary btn-sm"
-              :disabled="loading"
+              :disabled="loading || updating || replying"
               data-test="refresh-ticket-detail"
               @click="loadDetail"
             >
@@ -129,7 +129,7 @@
                 v-model="replyForm.content"
                 :placeholder="t('supportTickets.form.contentPlaceholder')"
                 :error="contentError"
-                :disabled="ticket.status === 'closed' || replying"
+                :disabled="ticket.status === 'closed' || loading || updating || replying"
                 rows="6"
               />
               <p v-if="!contentError" class="mt-1 text-right text-xs text-gray-500 dark:text-gray-400">
@@ -138,13 +138,13 @@
             </div>
             <SupportTicketImagePicker
               v-model="replyForm.images"
-              :disabled="ticket.status === 'closed' || replying"
+              :disabled="ticket.status === 'closed' || loading || updating || replying"
             />
             <div class="flex justify-end">
               <button
                 type="submit"
                 class="btn btn-primary"
-                :disabled="ticket.status === 'closed' || replying"
+                :disabled="ticket.status === 'closed' || loading || updating || replying"
                 data-test="submit-ticket-reply"
               >
                 {{ t('supportTickets.actions.reply') }}
@@ -195,6 +195,7 @@ const contentError = ref('')
 const attachmentURLs = reactive<Record<number, string>>({})
 const replyForm = reactive({ content: '', images: [] as File[] })
 let loadSequence = 0
+const attachmentConcurrency = 3
 
 const listPath = computed(() => props.admin ? '/admin/tickets' : '/tickets')
 const contentCount = computed(() => supportTicketCharacterCount(replyForm.content))
@@ -247,12 +248,18 @@ async function refreshUnread(): Promise<void> {
 async function loadAttachments(detail: SupportTicket, sequence: number): Promise<void> {
   const api = props.admin ? supportTicketsAdminAPI : supportTicketsUserAPI
   const attachments = (detail.messages || []).flatMap((message) => message.attachments)
-  const loaded = await Promise.all(attachments.map(async (attachment) => {
-    try {
-      const blob = await api.attachment(detail.id, attachment.id)
-      return [attachment.id, URL.createObjectURL(blob)] as const
-    } catch {
-      return null
+  const loaded: Array<readonly [number, string] | null> = Array(attachments.length).fill(null)
+  let next = 0
+  await Promise.all(Array.from({ length: Math.min(attachmentConcurrency, attachments.length) }, async () => {
+    while (next < attachments.length) {
+      const index = next++
+      const attachment = attachments[index]
+      try {
+        const blob = await api.attachment(detail.id, attachment.id)
+        loaded[index] = [attachment.id, URL.createObjectURL(blob)] as const
+      } catch {
+        loaded[index] = null
+      }
     }
   }))
   if (sequence !== loadSequence) {
@@ -278,10 +285,12 @@ async function loadDetail(): Promise<void> {
     ticket.value = detail
 
     try {
-      await api.markRead(id)
-      if (sequence !== loadSequence) return
-      ticket.value.unread = false
-      await refreshUnread()
+      if (detail.last_opposing_message_id > 0) {
+        await api.markRead(id, detail.last_opposing_message_id)
+        if (sequence !== loadSequence) return
+        ticket.value.unread = false
+        await refreshUnread()
+      }
     } catch (error) {
       if (sequence !== loadSequence) return
       if (await redirectDisabled(error)) return
@@ -302,7 +311,7 @@ async function loadDetail(): Promise<void> {
 }
 
 async function reply(): Promise<void> {
-  if (!ticket.value || ticket.value.status === 'closed') return
+  if (!ticket.value || ticket.value.status === 'closed' || loading.value || updating.value || replying.value) return
   contentError.value = supportTicketTextIsValid(replyForm.content, SUPPORT_TICKET_CONTENT_MAX)
     ? ''
     : t('supportTickets.errors.content')
@@ -322,6 +331,12 @@ async function reply(): Promise<void> {
     contentError.value = ''
     appStore.showSuccess(t('supportTickets.success.replied'))
     await loadDetail()
+    if (!props.admin && authStore.isAdmin) {
+      await Promise.all([
+        unreadStore.refreshUserUnread().catch(() => undefined),
+        unreadStore.refreshAdminUnread().catch(() => undefined),
+      ])
+    }
   } catch (error) {
     if (sequence !== loadSequence) return
     if (await redirectDisabled(error)) return
@@ -332,9 +347,10 @@ async function reply(): Promise<void> {
 }
 
 async function changeStatus(status: SupportTicketStatus): Promise<void> {
-  if (!props.admin || !ticket.value || !statusTransitions.value.includes(status)) return
+  if (!props.admin || !ticket.value || updating.value || replying.value || !statusTransitions.value.includes(status)) return
   updating.value = true
-  const sequence = loadSequence
+  const sequence = ++loadSequence
+  loading.value = false
   try {
     const updated = await supportTicketsAdminAPI.updateStatus(ticket.value.id, status)
     if (sequence !== loadSequence || !ticket.value) return
@@ -350,11 +366,12 @@ async function changeStatus(status: SupportTicketStatus): Promise<void> {
 }
 
 async function changePriority(value: string | number | boolean | null, _option: SelectOption | null): Promise<void> {
-  if (!props.admin || !ticket.value || !supportTicketPriorities.includes(value as SupportTicketPriority)) return
+  if (!props.admin || !ticket.value || updating.value || replying.value || !supportTicketPriorities.includes(value as SupportTicketPriority)) return
   const priority = value as SupportTicketPriority
   if (priority === ticket.value.priority) return
   updating.value = true
-  const sequence = loadSequence
+  const sequence = ++loadSequence
+  loading.value = false
   try {
     const updated = await supportTicketsAdminAPI.updatePriority(ticket.value.id, priority)
     if (sequence !== loadSequence || !ticket.value) return

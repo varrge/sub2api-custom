@@ -61,15 +61,19 @@ export const useSupportTicketStore = defineStore('supportTickets', () => {
     return pending
   }
 
+  function resetUserUnread(): void {
+    userRequestGeneration++
+    userInitialization = null
+    userUnreadCount.value = 0
+    userUnreadLoaded.value = false
+  }
+
   function reset(): void {
     sessionGeneration++
-    userRequestGeneration++
+    resetUserUnread()
     adminRequestGeneration++
-    userInitialization = null
     adminInitialization = null
-    userUnreadCount.value = 0
     adminUnreadCount.value = 0
-    userUnreadLoaded.value = false
     adminUnreadLoaded.value = false
   }
 
@@ -82,6 +86,7 @@ export const useSupportTicketStore = defineStore('supportTickets', () => {
     refreshAdminUnread,
     initializeUserUnread,
     initializeAdminUnread,
+    resetUserUnread,
     reset,
   }
 })

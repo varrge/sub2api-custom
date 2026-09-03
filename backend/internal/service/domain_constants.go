@@ -498,6 +498,10 @@ const (
 	// Grok accounts without an explicit credentials.base_url.
 	SettingKeyGrokDefaultBaseURLMode = "grok_default_base_url_mode"
 
+	// SettingKeyTopQuickBarEnabled controls the desktop AppHeader. Mobile uses a
+	// standalone menu button instead of rendering the bar. Defaults to true.
+	SettingKeyTopQuickBarEnabled = "top_quick_bar_enabled"
+
 	// SettingKeyAvailableChannelsEnabled is a DB-backed soft switch for the "Available Channels"
 	// user-facing aggregate view. When false: user endpoint returns an empty list and the
 	// sidebar entry is hidden. Defaults to false (opt-in feature).

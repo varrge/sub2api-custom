@@ -340,6 +340,9 @@ type UpdateSettingsRequest struct {
 	GrokCrossClientModelMapEnabled *bool   `json:"grok_cross_client_model_map_enabled"`
 	GrokDefaultBaseURLMode         *string `json:"grok_default_base_url_mode"`
 
+	// Top quick bar feature switch (desktop AppHeader)
+	TopQuickBarEnabled *bool `json:"top_quick_bar_enabled"`
+
 	// Available Channels feature switch (user-facing)
 	AvailableChannelsEnabled *bool `json:"available_channels_enabled"`
 
@@ -1924,6 +1927,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.GrokDefaultBaseURLMode
 		}(),
+		TopQuickBarEnabled: func() bool {
+			if req.TopQuickBarEnabled != nil {
+				return *req.TopQuickBarEnabled
+			}
+			return previousSettings.TopQuickBarEnabled
+		}(),
 		AvailableChannelsEnabled: func() bool {
 			if req.AvailableChannelsEnabled != nil {
 				return *req.AvailableChannelsEnabled
@@ -2370,6 +2379,8 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		GrokDefaultTextModel:           updatedSettings.GrokDefaultTextModel,
 		GrokCrossClientModelMapEnabled: updatedSettings.GrokCrossClientModelMapEnabled,
 		GrokDefaultBaseURLMode:         updatedSettings.GrokDefaultBaseURLMode,
+
+		TopQuickBarEnabled: updatedSettings.TopQuickBarEnabled,
 
 		AvailableChannelsEnabled: updatedSettings.AvailableChannelsEnabled,
 

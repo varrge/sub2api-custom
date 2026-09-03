@@ -94,6 +94,11 @@ function defineFlag<K extends keyof PublicSettings>(
  * public-settings-driven switch; see the "Adding a new flag" checklist above.
  */
 export const FeatureFlags = {
+  topQuickBar: defineFlag({
+    key: 'top_quick_bar_enabled',
+    mode: 'opt-out',
+    label: 'Top Quick Bar',
+  }),
   channelMonitor: defineFlag({
     key: 'channel_monitor_enabled',
     mode: 'opt-out',

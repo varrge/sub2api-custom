@@ -721,6 +721,9 @@ export interface SystemSettings {
   channel_monitor_hide_throughput?: boolean;
   channel_monitor_show_quota?: boolean;
 
+  // Top quick bar feature switch
+  top_quick_bar_enabled: boolean;
+
   // Available Channels feature switch
   available_channels_enabled: boolean;
 
@@ -1021,6 +1024,9 @@ export interface UpdateSettingsRequest {
   channel_monitor_default_interval_seconds?: number;
   channel_monitor_hide_throughput?: boolean;
   channel_monitor_show_quota?: boolean;
+
+  // Top quick bar feature switch
+  top_quick_bar_enabled?: boolean;
 
   // Available Channels feature switch
   available_channels_enabled?: boolean;

@@ -14,6 +14,12 @@ export default {
         payment: '支付设置',
       },
       features: {
+        topQuickBar: {
+          title: '顶部快捷栏',
+          description: '控制桌面端页面顶部的标题、公告、文档、语言、余额和用户菜单区域。',
+          enabled: '显示顶部快捷栏',
+          enabledHint: '默认开启。关闭后桌面端隐藏整条快捷栏；移动端始终不显示，并保留独立的导航菜单按钮。',
+        },
         channelMonitor: {
           title: '渠道监控',
           description: '启用后在 V1 主动探测与 V2 被动用量监控中二选一。关闭后两种模式的后台任务均停止，用户端入口隐藏。',

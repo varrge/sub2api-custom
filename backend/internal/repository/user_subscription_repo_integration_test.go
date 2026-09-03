@@ -23,6 +23,8 @@ type UserSubscriptionRepoSuite struct {
 
 func (s *UserSubscriptionRepoSuite) SetupTest() {
 	s.ctx = context.Background()
+	_, err := integrationDB.ExecContext(s.ctx, "TRUNCATE users CASCADE")
+	s.Require().NoError(err, "truncate users")
 	tx := testEntTx(s.T())
 	s.client = tx.Client()
 	s.repo = NewUserSubscriptionRepository(s.client).(*userSubscriptionRepository)

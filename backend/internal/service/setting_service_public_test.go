@@ -52,29 +52,6 @@ func (s *settingPublicRepoStub) Delete(ctx context.Context, key string) error {
 	panic("unexpected Delete call")
 }
 
-func TestSettingService_GetPublicSettings_TopQuickBarDefaultsEnabled(t *testing.T) {
-	for _, tc := range []struct {
-		name    string
-		value   string
-		enabled bool
-	}{
-		{name: "missing", enabled: true},
-		{name: "enabled", value: "true", enabled: true},
-		{name: "disabled", value: "false", enabled: false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			values := map[string]string{}
-			if tc.value != "" {
-				values[SettingKeyTopQuickBarEnabled] = tc.value
-			}
-			settings, err := NewSettingService(&settingPublicRepoStub{values: values}, &config.Config{}).
-				GetPublicSettings(context.Background())
-			require.NoError(t, err)
-			require.Equal(t, tc.enabled, settings.TopQuickBarEnabled)
-		})
-	}
-}
-
 func TestSettingService_GetPublicSettings_ExposesRegistrationEmailSuffixWhitelist(t *testing.T) {
 	repo := &settingPublicRepoStub{
 		values: map[string]string{

@@ -232,7 +232,6 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyChannelMonitorDefaultIntervalSeconds,
 		SettingKeyChannelMonitorHideThroughput,
 		SettingKeyChannelMonitorShowQuota,
-		SettingKeyTopQuickBarEnabled,
 		SettingKeyAvailableChannelsEnabled,
 		SettingKeyModelPlazaEnabled,
 		SettingKeyModelPlazaRequireAuth,
@@ -359,8 +358,6 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		ChannelMonitorDefaultIntervalSeconds: parseChannelMonitorInterval(settings[SettingKeyChannelMonitorDefaultIntervalSeconds]),
 		ChannelMonitorHideThroughput:         !isFalseSettingValue(settings[SettingKeyChannelMonitorHideThroughput]),
 		ChannelMonitorShowQuota:              settings[SettingKeyChannelMonitorShowQuota] == "true",
-
-		TopQuickBarEnabled: !isFalseSettingValue(settings[SettingKeyTopQuickBarEnabled]),
 
 		AvailableChannelsEnabled: settings[SettingKeyAvailableChannelsEnabled] == "true",
 
@@ -622,7 +619,6 @@ type PublicSettingsInjectionPayload struct {
 	// ChannelMonitorShowQuota gates the user-facing quota/balance display on
 	// monitors; fail-closed (absent/false = hidden). Admin UI always shows it.
 	ChannelMonitorShowQuota    bool `json:"channel_monitor_show_quota"`
-	TopQuickBarEnabled         bool `json:"top_quick_bar_enabled"`
 	AvailableChannelsEnabled   bool `json:"available_channels_enabled"`
 	ModelPlazaEnabled          bool `json:"model_plaza_enabled"`
 	ModelPlazaRequireAuth      bool `json:"model_plaza_require_auth"`
@@ -704,7 +700,6 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		ChannelMonitorDefaultIntervalSeconds: settings.ChannelMonitorDefaultIntervalSeconds,
 		ChannelMonitorHideThroughput:         settings.ChannelMonitorHideThroughput,
 		ChannelMonitorShowQuota:              settings.ChannelMonitorShowQuota,
-		TopQuickBarEnabled:                   settings.TopQuickBarEnabled,
 		AvailableChannelsEnabled:             settings.AvailableChannelsEnabled,
 		ModelPlazaEnabled:                    settings.ModelPlazaEnabled,
 		ModelPlazaRequireAuth:                settings.ModelPlazaRequireAuth,

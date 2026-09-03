@@ -14,12 +14,6 @@ export default {
         payment: 'Payment',
       },
       features: {
-        topQuickBar: {
-          title: 'Top Quick Bar',
-          description: 'Controls the desktop header containing the page title, announcements, docs, language, balance, and user menu.',
-          enabled: 'Show Top Quick Bar',
-          enabledHint: 'Enabled by default. Turning it off hides the full desktop bar. Mobile never shows the bar and keeps a standalone navigation button.',
-        },
         channelMonitor: {
           title: 'Channel Monitor',
           description: 'Choose either V1 active probes or V2 passive usage monitoring. When disabled, both background jobs stop and the user entry is hidden.',

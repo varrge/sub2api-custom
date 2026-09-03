@@ -208,9 +208,6 @@ type SystemSettings struct {
 	GrokCrossClientModelMapEnabled bool   `json:"grok_cross_client_model_map_enabled"`
 	GrokDefaultBaseURLMode         string `json:"grok_default_base_url_mode"`
 
-	// Top quick bar (desktop AppHeader)
-	TopQuickBarEnabled bool `json:"top_quick_bar_enabled"`
-
 	// Available Channels feature (user-facing aggregate view)
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
 
@@ -390,9 +387,6 @@ type PublicSettings struct {
 	GrokDefaultTextModel           string `json:"grok_default_text_model"`
 	GrokCrossClientModelMapEnabled bool   `json:"grok_cross_client_model_map_enabled"`
 	GrokDefaultBaseURLMode         string `json:"grok_default_base_url_mode"`
-
-	// Top quick bar (desktop AppHeader)
-	TopQuickBarEnabled bool `json:"top_quick_bar_enabled"`
 
 	// Available Channels feature (user-facing aggregate view)
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`

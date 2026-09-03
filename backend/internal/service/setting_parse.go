@@ -197,9 +197,6 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyGrokCrossClientModelMapEnabled: "true",
 		SettingKeyGrokDefaultBaseURLMode:         GrokDefaultBaseURLModeCLI,
 
-		// Top quick bar (default enabled on desktop)
-		SettingKeyTopQuickBarEnabled: "true",
-
 		// Available channels feature (default disabled; opt-in)
 		SettingKeyAvailableChannelsEnabled: "false",
 
@@ -816,9 +813,6 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	// Operators can set false to disable silent cross-client rewrite.
 	result.GrokCrossClientModelMapEnabled = !isFalseSettingValue(settings[SettingKeyGrokCrossClientModelMapEnabled])
 	result.GrokDefaultBaseURLMode = normalizeGrokDefaultBaseURLMode(settings[SettingKeyGrokDefaultBaseURLMode])
-
-	// Top quick bar (default: enabled; missing/invalid values stay enabled)
-	result.TopQuickBarEnabled = !isFalseSettingValue(settings[SettingKeyTopQuickBarEnabled])
 
 	// Available channels feature (default: disabled; strict true)
 	result.AvailableChannelsEnabled = settings[SettingKeyAvailableChannelsEnabled] == "true"

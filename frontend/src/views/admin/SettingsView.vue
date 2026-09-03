@@ -7016,30 +7016,6 @@
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-              {{ t('admin.settings.features.topQuickBar.title') }}
-            </h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {{ t('admin.settings.features.topQuickBar.description') }}
-            </p>
-          </div>
-          <div class="p-6">
-            <div class="flex items-center justify-between gap-4">
-              <div>
-                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {{ t('admin.settings.features.topQuickBar.enabled') }}
-                </label>
-                <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('admin.settings.features.topQuickBar.enabledHint') }}
-                </p>
-              </div>
-              <Toggle v-model="form.top_quick_bar_enabled" />
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.features.channelMonitor.title') }}
             </h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -9821,8 +9797,6 @@ const form = reactive<SettingsForm>({
   channel_monitor_default_interval_seconds: 60,
   channel_monitor_hide_throughput: false,
   channel_monitor_show_quota: false,
-  // Top quick bar feature switch
-  top_quick_bar_enabled: true,
   // Available Channels feature switch
   available_channels_enabled: false,
   // Model Plaza feature switches + description
@@ -11483,8 +11457,6 @@ async function saveSettings() {
         Number(form.channel_monitor_default_interval_seconds) || 60,
       channel_monitor_hide_throughput: Boolean(form.channel_monitor_hide_throughput),
       channel_monitor_show_quota: Boolean(form.channel_monitor_show_quota),
-      // Top quick bar feature switch
-      top_quick_bar_enabled: form.top_quick_bar_enabled,
       // Available Channels feature switch
       available_channels_enabled: form.available_channels_enabled,
       // Model Plaza feature switches + description

@@ -313,9 +313,6 @@ type SystemSettings struct {
 	GrokCrossClientModelMapEnabled bool   `json:"grok_cross_client_model_map_enabled"`
 	GrokDefaultBaseURLMode         string `json:"grok_default_base_url_mode"`
 
-	// Top quick bar feature switch (desktop AppHeader)
-	TopQuickBarEnabled bool `json:"top_quick_bar_enabled"`
-
 	// Available Channels feature switch (user-facing aggregate view)
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
 
@@ -420,7 +417,6 @@ type PublicSettings struct {
 	ChannelMonitorDefaultIntervalSeconds int    `json:"channel_monitor_default_interval_seconds"`
 	ChannelMonitorHideThroughput         bool   `json:"channel_monitor_hide_throughput"`
 	ChannelMonitorShowQuota              bool   `json:"channel_monitor_show_quota"`
-	TopQuickBarEnabled                   bool   `json:"top_quick_bar_enabled"`
 
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
 

@@ -146,6 +146,7 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 		return translatePersistenceError(err, nil, service.ErrGroupExists)
 	}
 	groupIn.ID = created.ID
+	groupIn.TemporaryRateMultiplier = temporaryRateMultiplier
 	groupIn.CreatedAt = created.CreatedAt
 	groupIn.UpdatedAt = created.UpdatedAt
 	return nil

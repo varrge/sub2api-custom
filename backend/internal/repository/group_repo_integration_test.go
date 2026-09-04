@@ -189,6 +189,7 @@ func (s *GroupRepoSuite) TestUpdate() {
 		SubscriptionType: service.SubscriptionTypeStandard,
 	}
 	s.Require().NoError(s.repo.Create(s.ctx, group))
+	s.Require().Equal(1.0, group.TemporaryRateMultiplier)
 
 	group.Name = "updated"
 	err := s.repo.Update(s.ctx, group)

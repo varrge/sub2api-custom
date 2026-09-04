@@ -776,3 +776,8 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
 }
+
+/* Chrome compositor workaround: keep this unlayered and important so filtered auroras cannot hide the app shell. */
+html {
+  filter: blur(0) !important;
+}

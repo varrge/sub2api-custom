@@ -2,17 +2,14 @@
   <AppLayout>
     <div class="studio-shell -m-4 md:-m-6 lg:-m-8">
       <!-- Top Studio Header -->
-      <header class="flex h-14 shrink-0 items-center justify-between border-b border-gray-200/80 bg-white/90 px-4 backdrop-blur-md dark:border-dark-700/80 dark:bg-dark-900/90 sm:px-6">
+      <header class="flex h-12 shrink-0 items-center justify-between border-b border-gray-200/70 bg-white/80 px-4 backdrop-blur-md dark:border-dark-700/70 dark:bg-dark-900/80 sm:px-6">
         <div class="flex items-center gap-3">
-          <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-50 text-primary-600 dark:bg-primary-950/60 dark:text-primary-400">
+          <div class="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200/70 bg-white text-gray-700 shadow-sm dark:border-dark-700 dark:bg-dark-800 dark:text-dark-100">
             <Icon name="sparkles" size="sm" />
           </div>
           <h1 class="text-sm font-semibold tracking-tight text-gray-900 dark:text-white sm:text-base">
             {{ t('imageGeneration.studioTitle') }}
           </h1>
-          <span class="hidden rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-medium text-gray-600 dark:bg-dark-800 dark:text-dark-300 sm:inline-block">
-            {{ t('imageGeneration.imageTab') }}
-          </span>
         </div>
 
         <!-- Mobile History Toggle -->
@@ -60,7 +57,7 @@
         <!-- Main Canvas & Composer Section -->
         <section class="studio-canvas-section">
           <!-- Canvas Top Status Bar -->
-          <div class="canvas-header">
+          <div v-if="activeResult" class="canvas-header">
             <div class="flex min-w-0 items-center gap-2">
               <span class="shrink-0 text-xs font-medium text-gray-600 dark:text-dark-200">
                 {{ activeResult ? t('imageGeneration.imageNumber', { index: results.indexOf(activeResult) + 1 }) : t('imageGeneration.canvasTitle') }}
@@ -190,16 +187,19 @@
               />
 
               <!-- Reference Image Thumbnail Bar -->
-              <div v-if="referenceImages.length" class="flex gap-2 overflow-x-auto border-b border-gray-100/80 px-4 py-2.5 dark:border-dark-700/80">
+              <div v-if="referenceImages.length" class="reference-strip">
+                <span class="reference-mode-label">
+                  {{ t('imageGeneration.imageToImage') }} · {{ referenceImages.length }}
+                </span>
                 <div
                   v-for="(image, index) in referenceImages"
                   :key="image.url"
-                  class="group relative h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-gray-200/80 bg-gray-100 dark:border-dark-600 dark:bg-dark-800"
+                  class="group relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-gray-200/80 bg-gray-100 dark:border-dark-600 dark:bg-dark-800"
                 >
                   <img :src="image.url" :alt="t('imageGeneration.referenceAlt', { index: index + 1 })" class="h-full w-full object-cover" />
                   <button
                     type="button"
-                    class="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-gray-950/80 text-white opacity-0 transition-opacity hover:bg-red-500 group-hover:opacity-100 focus:opacity-100"
+                    class="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-gray-950/80 text-white shadow-sm transition hover:bg-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
                     :aria-label="t('imageGeneration.removeReference')"
                     @click="removeReference(index)"
                   >
@@ -209,7 +209,7 @@
                 <button
                   v-if="referenceImages.length < 4"
                   type="button"
-                  class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50/60 text-gray-400 transition hover:border-primary-400 hover:text-primary-500 dark:border-dark-600 dark:bg-dark-800/60 dark:hover:border-primary-500"
+                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-dashed border-gray-300 text-gray-400 transition hover:border-gray-500 hover:bg-gray-50 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/20 dark:border-dark-600 dark:hover:border-dark-400 dark:hover:bg-dark-800 dark:hover:text-dark-100 dark:focus-visible:ring-white/30"
                   :aria-label="t('imageGeneration.uploadReference')"
                   @click="fileInput?.click()"
                 >
@@ -218,13 +218,13 @@
               </div>
 
               <!-- Prompt Input Area -->
-              <div class="relative px-4 pt-3 pb-2">
+              <div class="relative px-4 pb-2 pt-3.5 sm:px-5 sm:pb-3 sm:pt-4">
                 <textarea
                   id="image-prompt"
                   v-model="form.prompt"
                   maxlength="4000"
                   rows="3"
-                  class="w-full resize-none bg-transparent text-sm leading-relaxed text-gray-900 outline-none placeholder:text-gray-400 focus:outline-none dark:text-gray-100 dark:placeholder:text-dark-400"
+                  class="w-full resize-none bg-transparent text-[15px] leading-6 text-gray-900 outline-none placeholder:text-gray-400 focus:outline-none dark:text-gray-100 dark:placeholder:text-dark-400"
                   :placeholder="t('imageGeneration.promptPlaceholder')"
                   @paste="onPaste"
                 ></textarea>
@@ -232,27 +232,19 @@
 
               <!-- Bottom Controls Toolbar -->
               <div class="composer-toolbar">
-                <div class="flex flex-wrap items-center gap-2">
-                  <!-- Mode Segmented Switch -->
-                  <div class="segmented-control">
-                    <button
-                      type="button"
-                      class="segmented-btn"
-                      :class="!referenceImages.length && 'segmented-btn-active'"
-                      @click="chooseMode('text')"
-                    >
-                      {{ t('imageGeneration.textToImage') }}
-                    </button>
-                    <button
-                      type="button"
-                      class="segmented-btn"
-                      :class="referenceImages.length && 'segmented-btn-active'"
-                      @click="chooseMode('image')"
-                    >
-                      <Icon name="upload" size="xs" class="mr-1 inline-block opacity-70" />
-                      {{ t('imageGeneration.imageToImage') }}
-                    </button>
-                  </div>
+                <div class="composer-settings">
+                  <!-- Adding a reference image automatically switches to image-to-image mode. -->
+                  <button
+                    type="button"
+                    class="composer-icon-button"
+                    :class="referenceImages.length >= 4 && 'invisible'"
+                    :disabled="referenceImages.length >= 4"
+                    :aria-label="t('imageGeneration.uploadReference')"
+                    :title="t('imageGeneration.uploadReference')"
+                    @click="fileInput?.click()"
+                  >
+                    <Icon name="upload" size="sm" />
+                  </button>
 
                   <!-- Key Selector -->
                   <Select
@@ -260,7 +252,7 @@
                     v-model="form.apiKeyId"
                     :options="keyOptions"
                     :aria-label="t('imageGeneration.apiKey')"
-                    class="composer-select w-36 sm:w-44"
+                    class="composer-select composer-key-select"
                   />
 
                   <!-- Model Selector -->
@@ -275,7 +267,7 @@
                     :creatable="true"
                     searchable
                     :aria-label="t('imageGeneration.model')"
-                    class="composer-select min-w-[130px] flex-1 sm:max-w-[210px]"
+                    class="composer-select composer-model-select"
                   />
 
                   <!-- Aspect Ratio & Resolution Popover -->
@@ -351,27 +343,24 @@
                     v-model="form.count"
                     :options="countOptions"
                     :aria-label="t('imageGeneration.count')"
-                    class="composer-select w-20"
+                    class="composer-select composer-count-select"
                   />
+
+                  <!-- Submit Generation Button -->
+                  <button
+                    type="submit"
+                    class="generate-button"
+                    :disabled="generating || !form.model || !form.prompt.trim()"
+                  >
+                    <LoadingSpinner v-if="generating" size="sm" class="text-current" />
+                    <Icon v-else name="sparkles" size="sm" />
+                    <span>{{ generating ? t('imageGeneration.generating') : t('imageGeneration.generate') }}</span>
+                  </button>
                 </div>
-
-                <!-- Submit Generation Button -->
-                <button
-                  type="submit"
-                  class="btn btn-primary generate-button ml-auto"
-                  :disabled="generating || !form.model || !form.prompt.trim()"
-                >
-                  <LoadingSpinner v-if="generating" size="sm" class="text-white" />
-                  <Icon v-else name="sparkles" size="sm" />
-                  <span>{{ generating ? t('imageGeneration.generating') : t('imageGeneration.generate') }}</span>
-                </button>
               </div>
 
-              <!-- Privacy / Route Footer Note -->
-              <div class="border-t border-gray-100/60 px-4 py-1.5 text-[11px] text-gray-400 dark:border-dark-700/60 dark:text-dark-400">
-                {{ t('imageGeneration.requestHint') }}
-              </div>
             </form>
+            <p class="composer-note">{{ t('imageGeneration.requestHint') }}</p>
           </div>
         </section>
 
@@ -705,11 +694,6 @@ function clearReferences() {
   referenceImages.value = []
 }
 
-function chooseMode(mode: GenerationMode) {
-  if (mode === 'text') clearReferences()
-  else fileInput.value?.click()
-}
-
 function onFileChange(event: Event) {
   const input = event.target as HTMLInputElement
   addReferenceImages(Array.from(input.files || []))
@@ -835,11 +819,11 @@ onBeforeUnmount(clearReferences)
 
 <style scoped>
 .studio-shell {
-  @apply flex min-h-[calc(100vh-4rem)] flex-col overflow-hidden bg-slate-50 dark:bg-[#0b0d13];
+  @apply flex min-h-[calc(100vh-4rem)] flex-col overflow-hidden bg-[#f7f7f6] dark:bg-[#0b0d13];
 }
 
 .studio-grid {
-  @apply grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px] lg:overflow-hidden;
+  @apply grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] lg:overflow-hidden;
 }
 
 /* Canvas Viewport */
@@ -848,52 +832,65 @@ onBeforeUnmount(clearReferences)
 }
 
 .canvas-header {
-  @apply flex h-11 shrink-0 items-center justify-between border-b border-gray-200/70 bg-white/70 px-5 backdrop-blur-sm dark:border-dark-700/70 dark:bg-dark-900/70;
+  @apply flex h-10 shrink-0 items-center justify-between border-b border-gray-200/60 bg-white/50 px-5 backdrop-blur-sm dark:border-dark-700/60 dark:bg-dark-900/50;
 }
 
 .canvas-viewport {
   @apply relative flex min-h-[360px] flex-1 items-center justify-center overflow-auto p-4 sm:p-6;
-  background-image: radial-gradient(rgba(0, 0, 0, 0.04) 1px, transparent 1px);
-  background-size: 20px 20px;
+  background-image: radial-gradient(rgba(0, 0, 0, 0.025) 1px, transparent 1px);
+  background-size: 24px 24px;
 }
 
 .dark .canvas-viewport {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
 }
 
 .empty-apple-icon {
-  @apply flex h-16 w-16 items-center justify-center rounded-2xl border border-gray-200/80 bg-white text-gray-400 shadow-sm transition-transform duration-300 dark:border-dark-700 dark:bg-dark-800 dark:text-dark-400;
+  @apply flex h-14 w-14 items-center justify-center rounded-2xl border border-gray-200/70 bg-white/70 text-gray-400 shadow-sm transition-transform duration-300 dark:border-dark-700 dark:bg-dark-800/70 dark:text-dark-400;
 }
 
 /* Composer */
 .composer-container {
-  @apply px-3 pb-3 pointer-events-none sm:px-6 sm:pb-5;
+  @apply pointer-events-none px-3 pb-3 sm:px-6 sm:pb-5;
 }
 
 .composer-card {
-  @apply pointer-events-auto mx-auto w-full max-w-3xl rounded-2xl sm:rounded-3xl border border-gray-200/90 bg-white/90 shadow-2xl shadow-gray-900/10 backdrop-blur-xl transition dark:border-dark-700/90 dark:bg-dark-900/90 dark:shadow-black/50;
+  @apply pointer-events-auto mx-auto w-full max-w-3xl overflow-visible rounded-2xl border border-gray-200/80 bg-white/90 shadow-lg shadow-gray-900/[0.06] backdrop-blur-xl transition dark:border-dark-700/80 dark:bg-dark-900/90 dark:shadow-black/30;
 }
 
 .composer-toolbar {
-  @apply flex flex-wrap items-center justify-between gap-2 border-t border-gray-100/80 px-3 py-2 dark:border-dark-700/80;
+  @apply flex items-center gap-2 border-t border-gray-100/80 px-2.5 py-2 dark:border-dark-700/80 sm:px-3;
 }
 
-/* Segmented Control */
-.segmented-control {
-  @apply flex rounded-lg bg-gray-100/90 p-0.5 dark:bg-dark-800;
+.composer-settings {
+  @apply grid min-w-0 flex-1 items-center gap-1.5;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
 }
 
-.segmented-btn {
-  @apply rounded-md px-2.5 py-1 text-xs font-medium text-gray-500 transition-all duration-150 dark:text-dark-400;
+.composer-icon-button {
+  @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100/80 text-gray-500 transition hover:bg-gray-200/70 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/20 dark:bg-dark-800 dark:text-dark-300 dark:hover:bg-dark-700 dark:hover:text-white dark:focus-visible:ring-white/30;
 }
 
-.segmented-btn-active {
-  @apply bg-white font-semibold text-gray-900 shadow-sm dark:bg-dark-700 dark:text-white;
+.reference-strip {
+  @apply flex items-center gap-1.5 overflow-x-auto border-b border-gray-100/80 px-4 py-2 dark:border-dark-700/80 sm:px-5;
+  scrollbar-width: none;
+}
+
+.reference-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.reference-mode-label {
+  @apply mr-1 shrink-0 text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-dark-400;
+}
+
+.composer-note {
+  @apply pointer-events-auto mx-auto mt-1.5 max-w-3xl px-2 text-center text-[11px] text-gray-500 dark:text-dark-400;
 }
 
 /* Apple Pill Control Button */
 .apple-pill-btn {
-  @apply flex h-9 cursor-pointer items-center gap-1.5 rounded-xl border border-gray-200/90 bg-white px-3 text-xs font-medium text-gray-700 shadow-sm transition hover:border-gray-300 hover:bg-gray-50/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 dark:border-dark-700 dark:bg-dark-800 dark:text-dark-200 dark:hover:border-dark-600 dark:hover:bg-dark-700;
+  @apply flex h-8 cursor-pointer items-center gap-1.5 rounded-lg bg-gray-100/80 px-2.5 text-xs font-medium text-gray-600 transition hover:bg-gray-200/70 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/20 dark:bg-dark-800 dark:text-dark-300 dark:hover:bg-dark-700 dark:hover:text-white dark:focus-visible:ring-white/30;
 }
 
 .ratio-indicator {
@@ -902,9 +899,15 @@ onBeforeUnmount(clearReferences)
 
 /* Ratio Popover Panel */
 .ratio-popover-panel {
-  @apply absolute bottom-[calc(100%+10px)] left-0 z-50 w-[min(380px,calc(100vw-2rem))] rounded-2xl border border-gray-200/90 bg-white/95 p-4 shadow-2xl shadow-gray-900/15 backdrop-blur-xl dark:border-dark-700 dark:bg-dark-900/95 dark:shadow-black/60;
+  @apply absolute bottom-[calc(100%+10px)] left-0 z-50 w-[min(380px,calc(100vw-2rem))] rounded-2xl border border-gray-200/80 bg-white/95 p-4 shadow-xl shadow-gray-900/10 backdrop-blur-xl dark:border-dark-700 dark:bg-dark-900/95 dark:shadow-black/50;
   max-height: min(540px, calc(100vh - 14rem));
   overflow-y: auto;
+}
+
+@media (min-width: 768px) {
+  .ratio-popover-panel {
+    @apply left-auto right-0;
+  }
 }
 
 details > summary::-webkit-details-marker {
@@ -933,7 +936,7 @@ details > summary::-webkit-details-marker {
 
 /* History Sidebar */
 .history-sidebar {
-  @apply flex flex-col border-t border-gray-200/80 bg-white/70 backdrop-blur-md dark:border-dark-700/80 dark:bg-dark-900/70 lg:border-l lg:border-t-0;
+  @apply flex flex-col border-t border-gray-200/70 bg-white/55 backdrop-blur-md dark:border-dark-700/70 dark:bg-dark-900/55 lg:border-l lg:border-t-0;
 }
 
 @media (max-width: 1023px) {
@@ -970,11 +973,25 @@ details > summary::-webkit-details-marker {
 
 /* Custom Select styling inside composer */
 .composer-select :deep(.select-trigger) {
-  @apply h-9 rounded-xl border-gray-200/90 px-3 py-1.5 text-xs shadow-sm hover:border-gray-300 dark:border-dark-700 dark:bg-dark-800 dark:hover:border-dark-600;
+  @apply h-8 rounded-lg border-transparent bg-gray-100/80 px-2.5 py-1 text-xs shadow-none hover:border-gray-200 hover:bg-gray-100 dark:border-transparent dark:bg-dark-800 dark:hover:border-dark-700 dark:hover:bg-dark-700;
 }
 
 .generate-button {
-  @apply h-9 px-4 text-xs font-semibold shadow-sm transition active:scale-95;
+  @apply flex h-8 shrink-0 items-center justify-center gap-1.5 justify-self-end whitespace-nowrap rounded-lg bg-gray-900 px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-black focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/30 focus-visible:ring-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500 disabled:shadow-none disabled:active:scale-100 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-100 dark:focus-visible:ring-white/40 dark:focus-visible:ring-offset-dark-900 dark:disabled:bg-dark-700 dark:disabled:text-dark-400;
+}
+
+@media (max-width: 767px) {
+  .composer-key-select,
+  .composer-model-select,
+  .composer-count-select {
+    @apply w-full min-w-0;
+  }
+}
+
+@media (min-width: 768px) {
+  .composer-settings {
+    grid-template-columns: 2rem 10rem minmax(8rem, 1fr) auto 4.25rem auto;
+  }
 }
 
 /* Skeleton loader */

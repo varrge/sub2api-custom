@@ -88,72 +88,74 @@
           <span class="hidden sm:inline">{{ t('nav.modelPlaza') }}</span>
         </router-link>
 
-        <!-- Language Switcher -->
-        <LocaleSwitcher />
+        <div class="flex min-w-0 items-center gap-1 rounded-2xl border border-gray-200/70 bg-white/70 p-0.5 shadow-sm shadow-slate-900/5 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.06] dark:shadow-black/20 sm:gap-1.5">
+          <!-- Language Switcher -->
+          <LocaleSwitcher />
 
-        <!-- Subscription Progress (for users with active subscriptions) -->
-        <SubscriptionProgressMini v-if="user" class="header-subscription" />
+          <!-- Subscription Progress (for users with active subscriptions) -->
+          <SubscriptionProgressMini v-if="user" class="header-subscription" />
 
-        <!-- Announcement Bell -->
-        <AnnouncementBell v-if="user" data-testid="header-announcement" />
+          <!-- Announcement Bell -->
+          <AnnouncementBell v-if="user" data-testid="header-announcement" />
 
-        <!-- Theme Toggle -->
-        <button
-          v-if="user"
-          type="button"
-          class="btn-ghost btn-icon shrink-0"
-          :title="themeToggleLabel"
-          :aria-label="themeToggleLabel"
-          data-testid="header-theme-toggle"
-          @click="toggleTheme"
-        >
-          <Icon :name="isDark ? 'sun' : 'moon'" size="md" :class="isDark ? 'text-amber-500' : ''" />
-        </button>
-
-        <!-- Balance Display -->
-        <div
-          v-if="user"
-          class="header-balance group relative min-w-0 shrink-0"
-        >
+          <!-- Theme Toggle -->
           <button
+            v-if="user"
             type="button"
-            class="flex min-w-0 items-center gap-1.5 rounded-xl px-2 py-1.5 text-gray-700 transition-colors dark:text-dark-300 sm:px-3"
-            :class="paymentEnabled
-              ? 'hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-800 dark:hover:text-primary-400'
-              : 'cursor-default'"
-            :aria-disabled="!paymentEnabled"
-            :aria-label="balanceAriaLabel"
-            :title="balanceLoading ? undefined : balanceDisplay"
-            data-testid="header-balance"
-            @click="openPurchase"
+            class="btn-ghost btn-icon shrink-0"
+            :title="themeToggleLabel"
+            :aria-label="themeToggleLabel"
+            data-testid="header-theme-toggle"
+            @click="toggleTheme"
           >
-            <Icon name="dollar" size="sm" class="shrink-0" />
-            <span
-              v-if="balanceLoading"
-              class="h-4 w-14 animate-pulse rounded bg-gray-200 dark:bg-dark-700"
-              aria-hidden="true"
-            ></span>
-            <span v-else class="max-w-28 truncate text-sm font-semibold tabular-nums">
-              {{ balanceDisplay }}
-            </span>
+            <Icon :name="isDark ? 'sun' : 'moon'" size="md" :class="isDark ? 'text-amber-500' : ''" />
           </button>
+
+          <!-- Balance Display -->
           <div
-            v-if="!balanceLoading"
-            class="pointer-events-none absolute right-0 top-full z-50 mt-2 hidden w-56 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-700 shadow-lg dark:border-dark-700 dark:bg-dark-800 dark:text-dark-300 lg:group-hover:block lg:group-focus-within:block"
-            data-testid="header-balance-details"
+            v-if="user"
+            class="header-balance group relative min-w-0 shrink-0"
           >
-            <div class="flex items-center justify-between">
-              <span class="text-gray-500 dark:text-dark-400">{{ balanceAvailableText }}</span>
-              <span class="font-medium tabular-nums text-gray-900 dark:text-white">{{ balanceDisplay }}</span>
-            </div>
-            <div class="mt-2 flex items-center justify-between">
-              <span class="text-gray-500 dark:text-dark-400">{{ balanceFrozenText }}</span>
-              <span class="font-medium tabular-nums text-amber-700 dark:text-amber-200">{{ frozenBalanceDisplay }}</span>
-            </div>
-            <div class="mt-2 border-t border-gray-100 pt-2 dark:border-dark-700">
+            <button
+              type="button"
+              class="flex min-w-0 items-center gap-1.5 rounded-xl px-2 py-1.5 text-gray-700 transition-colors dark:text-dark-300 sm:px-3"
+              :class="paymentEnabled
+                ? 'hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-800 dark:hover:text-primary-400'
+                : 'cursor-default'"
+              :aria-disabled="!paymentEnabled"
+              :aria-label="balanceAriaLabel"
+              :title="balanceLoading ? undefined : balanceDisplay"
+              data-testid="header-balance"
+              @click="openPurchase"
+            >
+              <Icon name="dollar" size="sm" class="shrink-0" />
+              <span
+                v-if="balanceLoading"
+                class="h-4 w-14 animate-pulse rounded bg-gray-200 dark:bg-dark-700"
+                aria-hidden="true"
+              ></span>
+              <span v-else class="max-w-28 truncate text-sm font-semibold tabular-nums">
+                {{ balanceDisplay }}
+              </span>
+            </button>
+            <div
+              v-if="!balanceLoading"
+              class="pointer-events-none absolute right-0 top-full z-50 mt-2 hidden w-56 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-700 shadow-lg dark:border-dark-700 dark:bg-dark-800 dark:text-dark-300 lg:group-hover:block lg:group-focus-within:block"
+              data-testid="header-balance-details"
+            >
               <div class="flex items-center justify-between">
-                <span class="text-gray-500 dark:text-dark-400">{{ balanceTotalText }}</span>
-                <span class="font-semibold tabular-nums text-gray-900 dark:text-white">{{ totalBalanceDisplay }}</span>
+                <span class="text-gray-500 dark:text-dark-400">{{ balanceAvailableText }}</span>
+                <span class="font-medium tabular-nums text-gray-900 dark:text-white">{{ balanceDisplay }}</span>
+              </div>
+              <div class="mt-2 flex items-center justify-between">
+                <span class="text-gray-500 dark:text-dark-400">{{ balanceFrozenText }}</span>
+                <span class="font-medium tabular-nums text-amber-700 dark:text-amber-200">{{ frozenBalanceDisplay }}</span>
+              </div>
+              <div class="mt-2 border-t border-gray-100 pt-2 dark:border-dark-700">
+                <div class="flex items-center justify-between">
+                  <span class="text-gray-500 dark:text-dark-400">{{ balanceTotalText }}</span>
+                  <span class="font-semibold tabular-nums text-gray-900 dark:text-white">{{ totalBalanceDisplay }}</span>
+                </div>
               </div>
             </div>
           </div>

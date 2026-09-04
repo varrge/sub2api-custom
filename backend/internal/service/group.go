@@ -21,6 +21,12 @@ type Group struct {
 	Description    string
 	Platform       string
 	RateMultiplier float64
+	// 一次性限时倍率在 [TemporaryRateStartsAt, TemporaryRateEndsAt) 内临时
+	// 替换分组默认倍率；用户专属倍率仍优先，详见 BaseRateMultiplierAt。
+	TemporaryRateEnabled    bool
+	TemporaryRateMultiplier float64
+	TemporaryRateStartsAt   *time.Time
+	TemporaryRateEndsAt     *time.Time
 	// 高峰时段倍率：peak_rate_enabled 为 true 且当前时刻处于 [PeakStart, PeakEnd) 时，
 	// token 计费倍率额外乘以 PeakRateMultiplier。详见 PeakMultiplierAt。
 	PeakRateEnabled    bool
@@ -156,6 +162,41 @@ func (g *Group) HasWeeklyLimit() bool {
 
 func (g *Group) HasMonthlyLimit() bool {
 	return g.MonthlyLimitUSD != nil && *g.MonthlyLimitUSD > 0
+}
+
+// BaseRateMultiplierAt 返回请求时刻应使用的分组默认倍率。限时倍率只替换
+// 分组默认值，不覆盖用户专属倍率；结束边界为不含，过期后自然回落。
+func (g *Group) BaseRateMultiplierAt(now time.Time) float64 {
+	if g == nil {
+		return 1
+	}
+	if g.TemporaryRateEnabled && g.TemporaryRateMultiplier > 0 &&
+		g.TemporaryRateStartsAt != nil && g.TemporaryRateEndsAt != nil &&
+		!now.Before(*g.TemporaryRateStartsAt) && now.Before(*g.TemporaryRateEndsAt) {
+		return g.TemporaryRateMultiplier
+	}
+	return g.RateMultiplier
+}
+
+// ValidateTemporaryRateConfig validates the persisted absolute-time window.
+// Disabled configurations may retain their fields so cancellation is reversible.
+func ValidateTemporaryRateConfig(enabled bool, multiplier float64, startsAt, endsAt *time.Time) error {
+	if multiplier <= 0 || math.IsNaN(multiplier) || math.IsInf(multiplier, 0) {
+		return errors.New("temporary_rate_multiplier must be > 0")
+	}
+	if startsAt == nil && endsAt == nil {
+		if enabled {
+			return errors.New("temporary rate dates are required when enabled")
+		}
+		return nil
+	}
+	if startsAt == nil || endsAt == nil {
+		return errors.New("temporary rate start and end dates must both be set")
+	}
+	if !startsAt.Before(*endsAt) {
+		return errors.New("temporary rate end date must not be before start date")
+	}
+	return nil
 }
 
 // GetImagePrice 根据 image_size 返回对应的图片生成价格

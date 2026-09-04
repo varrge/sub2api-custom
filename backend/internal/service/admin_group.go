@@ -16,6 +16,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 )
 
@@ -312,6 +313,16 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	if input.RateMultiplier <= 0 {
 		return nil, errors.New("rate_multiplier must be > 0")
 	}
+	temporaryRateMultiplier := 1.0
+	if input.TemporaryRateMultiplier != nil {
+		temporaryRateMultiplier = *input.TemporaryRateMultiplier
+	}
+	if err := ValidateTemporaryRateConfig(input.TemporaryRateEnabled, temporaryRateMultiplier, input.TemporaryRateStartsAt, input.TemporaryRateEndsAt); err != nil {
+		return nil, err
+	}
+	if input.TemporaryRateEnabled && input.TemporaryRateEndsAt != nil && !input.TemporaryRateEndsAt.After(timezone.Now()) {
+		return nil, errors.New("temporary rate end date must not be in the past")
+	}
 
 	platform := NormalizeGroupPlatform(input.Platform)
 	modelPricing, err := normalizeGroupModelPricing(platform, input.ModelPricing)
@@ -474,6 +485,10 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		Description:                     input.Description,
 		Platform:                        platform,
 		RateMultiplier:                  input.RateMultiplier,
+		TemporaryRateEnabled:            input.TemporaryRateEnabled,
+		TemporaryRateMultiplier:         temporaryRateMultiplier,
+		TemporaryRateStartsAt:           input.TemporaryRateStartsAt,
+		TemporaryRateEndsAt:             input.TemporaryRateEndsAt,
 		IsExclusive:                     input.IsExclusive,
 		Status:                          StatusActive,
 		SubscriptionType:                subscriptionType,
@@ -679,6 +694,31 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 			return nil, errors.New("rate_multiplier must be > 0")
 		}
 		group.RateMultiplier = *input.RateMultiplier
+	}
+	temporaryRateTouched := input.TemporaryRateEnabled != nil || input.TemporaryRateMultiplier != nil ||
+		input.TemporaryRateStartsAt != nil || input.TemporaryRateEndsAt != nil
+	if input.TemporaryRateEnabled != nil {
+		group.TemporaryRateEnabled = *input.TemporaryRateEnabled
+	}
+	if input.TemporaryRateMultiplier != nil {
+		group.TemporaryRateMultiplier = *input.TemporaryRateMultiplier
+	}
+	if input.TemporaryRateStartsAt != nil {
+		group.TemporaryRateStartsAt = input.TemporaryRateStartsAt
+	}
+	if input.TemporaryRateEndsAt != nil {
+		group.TemporaryRateEndsAt = input.TemporaryRateEndsAt
+	}
+	if temporaryRateTouched {
+		if err := ValidateTemporaryRateConfig(group.TemporaryRateEnabled, group.TemporaryRateMultiplier, group.TemporaryRateStartsAt, group.TemporaryRateEndsAt); err != nil {
+			return nil, err
+		}
+		validateTemporaryRateEnd := input.TemporaryRateEndsAt != nil ||
+			(input.TemporaryRateEnabled != nil && *input.TemporaryRateEnabled)
+		if validateTemporaryRateEnd &&
+			(group.TemporaryRateEndsAt == nil || !group.TemporaryRateEndsAt.After(timezone.Now())) {
+			return nil, errors.New("temporary rate end date must not be in the past")
+		}
 	}
 	if input.IsExclusive != nil {
 		group.IsExclusive = *input.IsExclusive

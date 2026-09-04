@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -15,6 +16,56 @@ import (
 func ptrString[T ~string](v T) *string {
 	s := string(v)
 	return &s
+}
+
+func TestAdminService_UpdateGroup_TemporaryRateLifecycle(t *testing.T) {
+	now := time.Now()
+	pastStart := now.Add(-48 * time.Hour)
+	pastEnd := now.Add(-24 * time.Hour)
+
+	newService := func(enabled bool) (*adminServiceImpl, *groupRepoStubForAdmin) {
+		repo := &groupRepoStubForAdmin{getByID: &Group{
+			ID: 1, Name: "timed", Platform: PlatformOpenAI, Status: StatusActive, RateMultiplier: 1,
+			TemporaryRateEnabled: enabled, TemporaryRateMultiplier: 0.5,
+			TemporaryRateStartsAt: &pastStart, TemporaryRateEndsAt: &pastEnd,
+		}}
+		return &adminServiceImpl{groupRepo: repo}, repo
+	}
+
+	t.Run("rejects re-enabling an expired activity", func(t *testing.T) {
+		svc, repo := newService(false)
+		enabled := true
+		_, err := svc.UpdateGroup(context.Background(), 1, &UpdateGroupInput{TemporaryRateEnabled: &enabled})
+		require.ErrorContains(t, err, "end date must not be in the past")
+		require.Nil(t, repo.updated)
+	})
+
+	t.Run("does not block unrelated edits after expiry", func(t *testing.T) {
+		svc, repo := newService(true)
+		description := "changed"
+		_, err := svc.UpdateGroup(context.Background(), 1, &UpdateGroupInput{Description: &description})
+		require.NoError(t, err)
+		require.Equal(t, description, repo.updated.Description)
+	})
+
+	t.Run("rejects an explicitly replaced past end", func(t *testing.T) {
+		svc, repo := newService(false)
+		newPastEnd := now.Add(-time.Hour)
+		_, err := svc.UpdateGroup(context.Background(), 1, &UpdateGroupInput{TemporaryRateEndsAt: &newPastEnd})
+		require.ErrorContains(t, err, "end date must not be in the past")
+		require.Nil(t, repo.updated)
+	})
+
+	t.Run("cancel keeps the configured rate and dates", func(t *testing.T) {
+		svc, repo := newService(true)
+		enabled := false
+		_, err := svc.UpdateGroup(context.Background(), 1, &UpdateGroupInput{TemporaryRateEnabled: &enabled})
+		require.NoError(t, err)
+		require.False(t, repo.updated.TemporaryRateEnabled)
+		require.Equal(t, 0.5, repo.updated.TemporaryRateMultiplier)
+		require.Equal(t, pastStart, *repo.updated.TemporaryRateStartsAt)
+		require.Equal(t, pastEnd, *repo.updated.TemporaryRateEndsAt)
+	})
 }
 
 // groupRepoStubForAdmin 用于测试 AdminService 的 GroupRepository Stub

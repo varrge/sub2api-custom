@@ -12,6 +12,10 @@
           :subscription-type="(group.subscription_type || 'standard') as SubscriptionType"
           :rate-multiplier="group.rate_multiplier"
           :user-rate-multiplier="group.user_rate_multiplier ?? null"
+          :temporary-rate-enabled="group.temporary_rate_enabled"
+          :temporary-rate-multiplier="group.temporary_rate_multiplier"
+          :temporary-rate-starts-at="group.temporary_rate_starts_at"
+          :temporary-rate-ends-at="group.temporary_rate_ends_at"
           :peak-rate-enabled="group.peak_rate_enabled"
           :peak-start="group.peak_start"
           :peak-end="group.peak_end"
@@ -57,7 +61,7 @@
         v-if="group.models.length > 0"
         :models="group.models"
         :platform="group.platform"
-        :rate-multiplier="group.rate_multiplier"
+        :rate-multiplier="currentGroupRate"
         :user-rate-multiplier="group.user_rate_multiplier ?? null"
         :image-rate-independent="group.image_rate_independent"
         :image-rate-multiplier="group.image_rate_multiplier"
@@ -81,6 +85,7 @@ import type { ModelPlazaGroup } from '@/api/modelPlaza'
 import type { GroupPlatform, SubscriptionType } from '@/types'
 import { platformBorderStrongClass } from '@/utils/platformColors'
 import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
+import { effectiveGroupRate, useTemporaryRateNow } from '@/utils/temporary-rate'
 import { useAppStore } from '@/stores/app'
 
 const props = defineProps<{
@@ -89,6 +94,8 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const temporaryRateNow = useTemporaryRateNow()
+const currentGroupRate = computed(() => effectiveGroupRate(props.group, null, temporaryRateNow.value))
 
 /** 高峰窗口描述(含倍率与服务器时区标注);分组未启用高峰为空串。 */
 const peakWindow = computed(() => {

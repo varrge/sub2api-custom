@@ -101,6 +101,10 @@
                     :subscription-type="(g.subscription_type || 'standard') as SubscriptionType"
                     :rate-multiplier="g.rate_multiplier"
                     :user-rate-multiplier="userGroupRates[g.id] ?? null"
+                    :temporary-rate-enabled="g.temporary_rate_enabled"
+                    :temporary-rate-multiplier="g.temporary_rate_multiplier"
+                    :temporary-rate-starts-at="g.temporary_rate_starts_at"
+                    :temporary-rate-ends-at="g.temporary_rate_ends_at"
                     always-show-rate
                   />
                   <span
@@ -135,6 +139,10 @@
                     :subscription-type="(g.subscription_type || 'standard') as SubscriptionType"
                     :rate-multiplier="g.rate_multiplier"
                     :user-rate-multiplier="userGroupRates[g.id] ?? null"
+                    :temporary-rate-enabled="g.temporary_rate_enabled"
+                    :temporary-rate-multiplier="g.temporary_rate_multiplier"
+                    :temporary-rate-starts-at="g.temporary_rate_starts_at"
+                    :temporary-rate-ends-at="g.temporary_rate_ends_at"
                     always-show-rate
                   />
                   <span
@@ -240,6 +248,10 @@
                         :subscription-type="(g.subscription_type || 'standard') as SubscriptionType"
                         :rate-multiplier="g.rate_multiplier"
                         :user-rate-multiplier="userGroupRates[g.id] ?? null"
+                        :temporary-rate-enabled="g.temporary_rate_enabled"
+                        :temporary-rate-multiplier="g.temporary_rate_multiplier"
+                        :temporary-rate-starts-at="g.temporary_rate_starts_at"
+                        :temporary-rate-ends-at="g.temporary_rate_ends_at"
                         always-show-rate
                       />
                       <span
@@ -275,6 +287,10 @@
                         :subscription-type="(g.subscription_type || 'standard') as SubscriptionType"
                         :rate-multiplier="g.rate_multiplier"
                         :user-rate-multiplier="userGroupRates[g.id] ?? null"
+                        :temporary-rate-enabled="g.temporary_rate_enabled"
+                        :temporary-rate-multiplier="g.temporary_rate_multiplier"
+                        :temporary-rate-starts-at="g.temporary_rate_starts_at"
+                        :temporary-rate-ends-at="g.temporary_rate_ends_at"
                         always-show-rate
                       />
                       <span

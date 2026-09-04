@@ -255,10 +255,16 @@
             </div>
           </template>
 
-          <template #cell-rate_multiplier="{ value }">
-            <span class="text-sm text-gray-700 dark:text-gray-300"
-              >{{ value }}x</span
-            >
+          <template #cell-rate_multiplier="{ row, value }">
+            <div class="space-y-1 text-sm text-gray-700 dark:text-gray-300">
+              <div>{{ value }}x</div>
+              <div v-if="temporaryRateStatusLabel(row)" class="text-xs">
+                <span class="font-medium text-sky-700 dark:text-sky-300">
+                  {{ temporaryRateStatusLabel(row) }} · {{ row.temporary_rate_multiplier }}x
+                </span>
+                <div class="text-gray-400 dark:text-gray-500">{{ temporaryRateRange(row) }}</div>
+              </div>
+            </div>
           </template>
 
           <template #cell-is_exclusive="{ value }">
@@ -612,6 +618,27 @@
             data-tour="group-form-multiplier"
           />
           <p class="input-hint">{{ t("admin.groups.rateMultiplierHint") }}</p>
+        </div>
+        <div class="rounded-lg border border-sky-200 bg-sky-50/50 p-4 dark:border-sky-900/50 dark:bg-sky-900/10">
+          <label class="flex items-center gap-2 text-sm font-medium text-gray-800 dark:text-gray-200">
+            <input v-model="createForm.temporary_rate_enabled" type="checkbox" class="rounded border-gray-300 text-sky-600 focus:ring-sky-500" />
+            {{ t("admin.groups.temporaryRate.enable") }}
+          </label>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.groups.temporaryRate.hint") }}</p>
+          <div v-if="createForm.temporary_rate_enabled" class="mt-3 grid gap-3 sm:grid-cols-3">
+            <div>
+              <label class="input-label">{{ t("admin.groups.temporaryRate.multiplier") }}</label>
+              <input v-model.number="createForm.temporary_rate_multiplier" type="number" min="0.001" step="0.001" required class="input" />
+            </div>
+            <div>
+              <label class="input-label">{{ t("admin.groups.temporaryRate.startDate") }}</label>
+              <input v-model="createForm.temporary_rate_start_date" type="date" required class="input" />
+            </div>
+            <div>
+              <label class="input-label">{{ t("admin.groups.temporaryRate.endDate") }}</label>
+              <input v-model="createForm.temporary_rate_end_date" type="date" required class="input" />
+            </div>
+          </div>
         </div>
         <div>
           <label class="input-label">{{ t("admin.groups.form.rpmLimit") }}</label>
@@ -2411,6 +2438,32 @@
             class="input"
             data-tour="group-form-multiplier"
           />
+        </div>
+        <div class="rounded-lg border border-sky-200 bg-sky-50/50 p-4 dark:border-sky-900/50 dark:bg-sky-900/10">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <label class="flex items-center gap-2 text-sm font-medium text-gray-800 dark:text-gray-200">
+              <input v-model="editForm.temporary_rate_enabled" type="checkbox" class="rounded border-gray-300 text-sky-600 focus:ring-sky-500" />
+              {{ t("admin.groups.temporaryRate.enable") }}
+            </label>
+            <span v-if="temporaryRateStatusText(editTemporaryRateStatus)" class="badge badge-gray">
+              {{ temporaryRateStatusText(editTemporaryRateStatus) }}
+            </span>
+          </div>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.groups.temporaryRate.hint") }}</p>
+          <div v-if="editForm.temporary_rate_enabled" class="mt-3 grid gap-3 sm:grid-cols-3">
+            <div>
+              <label class="input-label">{{ t("admin.groups.temporaryRate.multiplier") }}</label>
+              <input v-model.number="editForm.temporary_rate_multiplier" type="number" min="0.001" step="0.001" required class="input" />
+            </div>
+            <div>
+              <label class="input-label">{{ t("admin.groups.temporaryRate.startDate") }}</label>
+              <input v-model="editForm.temporary_rate_start_date" type="date" required class="input" />
+            </div>
+            <div>
+              <label class="input-label">{{ t("admin.groups.temporaryRate.endDate") }}</label>
+              <input v-model="editForm.temporary_rate_end_date" type="date" required class="input" />
+            </div>
+          </div>
         </div>
         <div>
           <label class="input-label">{{ t("admin.groups.form.rpmLimit") }}</label>
@@ -4604,6 +4657,14 @@ import type { ChannelModelPricing } from "@/api/admin/channels";
 import { VueDraggable } from "vue-draggable-plus";
 import { createStableObjectKeyResolver } from "@/utils/stableObjectKey";
 import { extractApiErrorMessage } from "@/utils/apiError";
+import {
+  temporaryRateDateRange,
+  temporaryRateInputDate,
+  temporaryRateStatus,
+  useTemporaryRateNow,
+  type TemporaryRateFields,
+  type TemporaryRateStatus,
+} from "@/utils/temporary-rate";
 import { useKeyedDebouncedSearch } from "@/composables/useKeyedDebouncedSearch";
 import { getPersistedPageSize } from "@/composables/usePersistedPageSize";
 import {
@@ -5109,6 +5170,7 @@ const sortState = reactive({
 let abortController: AbortController | null = null;
 
 const showCreateModal = ref(false);
+const temporaryRateNow = useTemporaryRateNow();
 const showEditModal = ref(false);
 const showDeleteDialog = ref(false);
 const pendingLiveForm = ref<"create" | "edit" | null>(null);
@@ -5188,6 +5250,10 @@ const createForm = reactive({
   description: "",
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
+  temporary_rate_enabled: false,
+  temporary_rate_multiplier: 0.5,
+  temporary_rate_start_date: "",
+  temporary_rate_end_date: "",
   is_exclusive: false,
   subscription_type: "standard" as SubscriptionType,
   daily_limit_usd: null as number | null,
@@ -5551,6 +5617,10 @@ const editForm = reactive({
   description: "",
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
+  temporary_rate_enabled: false,
+  temporary_rate_multiplier: 0.5,
+  temporary_rate_start_date: "",
+  temporary_rate_end_date: "",
   is_exclusive: false,
   status: "active" as "active" | "inactive",
   subscription_type: "standard" as SubscriptionType,
@@ -5621,6 +5691,20 @@ const editForm = reactive({
   max_reasoning_effort: "",
   max_reasoning_effort_over_limit: reasoningEffortOverLimitDowngrade,
   reasoning_effort_mappings: [] as ReasoningEffortMappingRow[],
+});
+
+type TemporaryRateSnapshot = {
+  enabled: boolean;
+  multiplier: number;
+  startDate: string;
+  endDate: string;
+};
+
+const editTemporaryRateOriginal = ref<TemporaryRateSnapshot>({
+  enabled: false,
+  multiplier: 0.5,
+  startDate: "",
+  endDate: "",
 });
 
 type ImagePricingFormState = {
@@ -6014,6 +6098,10 @@ const closeCreateModal = () => {
   createForm.description = "";
   createForm.platform = "anthropic";
   createForm.rate_multiplier = 1.0;
+  createForm.temporary_rate_enabled = false;
+  createForm.temporary_rate_multiplier = 0.5;
+  createForm.temporary_rate_start_date = "";
+  createForm.temporary_rate_end_date = "";
   createForm.is_exclusive = false;
   createForm.subscription_type = "standard";
   createForm.daily_limit_usd = null;
@@ -6098,6 +6186,49 @@ const normalizeRateMultiplier = (
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 1;
 };
 
+const validateTemporaryRateForm = (form: {
+  temporary_rate_enabled: boolean;
+  temporary_rate_multiplier: number | string;
+  temporary_rate_start_date: string;
+  temporary_rate_end_date: string;
+}): boolean => {
+  const multiplier = Number(form.temporary_rate_multiplier);
+  if (!Number.isFinite(multiplier) || multiplier <= 0) {
+    appStore.showError(t("admin.groups.temporaryRate.multiplierInvalid"));
+    return false;
+  }
+  if (!form.temporary_rate_enabled) return true;
+  if (!form.temporary_rate_start_date || !form.temporary_rate_end_date) {
+    appStore.showError(t("admin.groups.temporaryRate.datesRequired"));
+    return false;
+  }
+  if (form.temporary_rate_end_date < form.temporary_rate_start_date) {
+    appStore.showError(t("admin.groups.temporaryRate.rangeInvalid"));
+    return false;
+  }
+  return true;
+};
+
+const temporaryRateStatusText = (status: TemporaryRateStatus): string =>
+  status === "none" ? "" : t(`admin.groups.temporaryRate.status.${status}`);
+
+const temporaryRateStatusLabel = (fields: TemporaryRateFields): string =>
+  temporaryRateStatusText(temporaryRateStatus(fields, temporaryRateNow.value));
+
+const temporaryRateRange = (fields: TemporaryRateFields): string =>
+  temporaryRateDateRange(
+    fields,
+    appStore.cachedPublicSettings?.server_timezone,
+  );
+
+const editTemporaryRateStatus = computed<TemporaryRateStatus>(() => {
+  if (!editingGroup.value) return "none";
+  return temporaryRateStatus({
+    ...editingGroup.value,
+    temporary_rate_enabled: editForm.temporary_rate_enabled,
+  }, temporaryRateNow.value);
+});
+
 // 利润控制表单辅助（换算与校验逻辑见 groupsProfitControl.ts，便于单测）。
 const percentToDecimal = profitPercentToDecimal;
 const decimalToPercent = profitDecimalToPercent;
@@ -6124,6 +6255,9 @@ const handleCreateGroup = async () => {
     return;
   }
   if (!validateProfitControlForm(createForm)) {
+    return;
+  }
+  if (!validateTemporaryRateForm(createForm)) {
     return;
   }
   submitting.value = true;
@@ -6266,6 +6400,23 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.description = group.description || "";
   editForm.platform = group.platform;
   editForm.rate_multiplier = group.rate_multiplier;
+  editForm.temporary_rate_enabled = group.temporary_rate_enabled ?? false;
+  editForm.temporary_rate_multiplier = group.temporary_rate_multiplier ?? 1;
+  editForm.temporary_rate_start_date = temporaryRateInputDate(
+    group.temporary_rate_starts_at,
+    appStore.cachedPublicSettings?.server_timezone,
+  );
+  editForm.temporary_rate_end_date = temporaryRateInputDate(
+    group.temporary_rate_ends_at,
+    appStore.cachedPublicSettings?.server_timezone,
+    true,
+  );
+  editTemporaryRateOriginal.value = {
+    enabled: editForm.temporary_rate_enabled,
+    multiplier: editForm.temporary_rate_multiplier,
+    startDate: editForm.temporary_rate_start_date,
+    endDate: editForm.temporary_rate_end_date,
+  };
   editForm.is_exclusive = group.is_exclusive;
   editForm.status = group.status;
   editForm.subscription_type = group.subscription_type || "standard";
@@ -6376,6 +6527,10 @@ const closeEditModal = () => {
   editForm.peak_start = "";
   editForm.peak_end = "";
   editForm.peak_rate_multiplier = 1.0;
+  editForm.temporary_rate_enabled = false;
+  editForm.temporary_rate_multiplier = 0.5;
+  editForm.temporary_rate_start_date = "";
+  editForm.temporary_rate_end_date = "";
   editForm.profit_control_enabled = false;
   editForm.profit_min_margin_percent = 0;
   editForm.profit_safety_buffer_percent = 0;
@@ -6413,6 +6568,9 @@ const handleUpdateGroup = async () => {
     return;
   }
   if (!validateProfitControlForm(editForm)) {
+    return;
+  }
+  if (!validateTemporaryRateForm(editForm)) {
     return;
   }
 
@@ -6483,6 +6641,24 @@ const handleUpdateGroup = async () => {
     };
     delete (payload as Record<string, unknown>).profit_min_margin_percent;
     delete (payload as Record<string, unknown>).profit_safety_buffer_percent;
+    const temporaryPatch = payload as Record<string, unknown>;
+    delete temporaryPatch.temporary_rate_enabled;
+    delete temporaryPatch.temporary_rate_multiplier;
+    delete temporaryPatch.temporary_rate_start_date;
+    delete temporaryPatch.temporary_rate_end_date;
+    const originalTemporaryRate = editTemporaryRateOriginal.value;
+    if (editForm.temporary_rate_enabled !== originalTemporaryRate.enabled) {
+      temporaryPatch.temporary_rate_enabled = editForm.temporary_rate_enabled;
+    }
+    if (editForm.temporary_rate_multiplier !== originalTemporaryRate.multiplier) {
+      temporaryPatch.temporary_rate_multiplier = editForm.temporary_rate_multiplier;
+    }
+    if (editForm.temporary_rate_start_date !== originalTemporaryRate.startDate) {
+      temporaryPatch.temporary_rate_start_date = editForm.temporary_rate_start_date;
+    }
+    if (editForm.temporary_rate_end_date !== originalTemporaryRate.endDate) {
+      temporaryPatch.temporary_rate_end_date = editForm.temporary_rate_end_date;
+    }
     // v-model.number 清空输入框时产生 ""，转为 null 让后端设为无限制
     const emptyToNull = (v: any) => (v === "" ? null : v);
     payload.daily_limit_usd = emptyToNull(payload.daily_limit_usd);

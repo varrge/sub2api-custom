@@ -68,6 +68,20 @@ describe("SubscriptionPlanCard", () => {
     expect(text).toContain("Imagen");
   });
 
+  it("keeps the user-specific rate above an active temporary rate", async () => {
+    const wrapper = mountPlanCard("openai", {
+      rate_multiplier: 1.2,
+      temporary_rate_enabled: true,
+      temporary_rate_multiplier: 0.5,
+      temporary_rate_starts_at: new Date(Date.now() - 60_000).toISOString(),
+      temporary_rate_ends_at: new Date(Date.now() + 60_000).toISOString(),
+    });
+    await wrapper.setProps({ userRateMultiplier: 0.7 });
+
+    expect(wrapper.text()).toContain("×0.7");
+    expect(wrapper.text()).toContain("common.temporaryRate.userOverride");
+  });
+
   // #4607：管理端保存的单位是复数（months/weeks），此前用户侧只匹配单数
   // 'month'，「1 个月」的套餐卡片被显示成「1天」。测试环境的 vue-i18n 为
   // runtime-only 构建，t() 原样返回 key，故按 key 断言单位分支。

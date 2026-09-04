@@ -357,7 +357,20 @@ describe('useAuthStore', () => {
 
       expect(result).toEqual(updatedUser)
       expect(store.user).toEqual(updatedUser)
+      expect(store.userRefreshStatus).toBe('success')
       expect(JSON.parse(localStorage.getItem('auth_user')!)).toEqual(updatedUser)
+    })
+
+    it('暴露刷新失败状态供余额 UI 降级展示', async () => {
+      mockLogin.mockResolvedValue(fakeAuthResponse)
+      const store = useAuthStore()
+      await store.login({ email: 'test@example.com', password: '123456' })
+      mockGetCurrentUser.mockRejectedValue(new Error('network error'))
+
+      await expect(store.refreshUser()).rejects.toThrow('network error')
+
+      expect(store.userRefreshStatus).toBe('error')
+      expect(store.user).toEqual(fakeUser)
     })
 
     it('未认证时抛出错误', async () => {

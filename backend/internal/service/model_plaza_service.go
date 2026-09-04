@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
 // PlazaOfficialPricing 模型广场展示用的官方参考价（USD per token），与计费同源：
@@ -37,17 +38,21 @@ type PlazaModel struct {
 // 支持模型（普通分组按分组平台隔离，Composite 分组展开关联渠道已配置的
 // 具体平台），与「可用渠道」页口径一致。
 type PlazaGroup struct {
-	ID                 int64
-	Name               string
-	Description        string
-	Platform           string
-	SubscriptionType   string
-	RateMultiplier     float64
-	PeakRateEnabled    bool
-	PeakStart          string
-	PeakEnd            string
-	PeakRateMultiplier float64
-	IsExclusive        bool
+	ID                      int64
+	Name                    string
+	Description             string
+	Platform                string
+	SubscriptionType        string
+	RateMultiplier          float64
+	TemporaryRateEnabled    bool
+	TemporaryRateMultiplier float64
+	TemporaryRateStartsAt   *time.Time
+	TemporaryRateEndsAt     *time.Time
+	PeakRateEnabled         bool
+	PeakStart               string
+	PeakEnd                 string
+	PeakRateMultiplier      float64
+	IsExclusive             bool
 	// 图片按次实付倍率：ImageRateIndependent 为 true 时，图片计费模型的实付
 	// = 档位价 × ImageRateMultiplier，不乘分组/用户专属倍率（与计费口径一致）。
 	ImageRateIndependent bool
@@ -125,6 +130,10 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 			Platform:                  g.Platform,
 			SubscriptionType:          g.SubscriptionType,
 			RateMultiplier:            g.RateMultiplier,
+			TemporaryRateEnabled:      g.TemporaryRateEnabled,
+			TemporaryRateMultiplier:   g.TemporaryRateMultiplier,
+			TemporaryRateStartsAt:     g.TemporaryRateStartsAt,
+			TemporaryRateEndsAt:       g.TemporaryRateEndsAt,
 			PeakRateEnabled:           g.PeakRateEnabled,
 			PeakStart:                 g.PeakStart,
 			PeakEnd:                   g.PeakEnd,

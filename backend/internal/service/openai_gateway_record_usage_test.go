@@ -507,6 +507,8 @@ func TestOpenAIGatewayServiceRecordUsage_PeakRateAffectsTokenModeImageOutputToke
 func TestOpenAIGatewayServiceRecordUsage_TimePricingUsesPricingAt(t *testing.T) {
 	groupID := int64(16)
 	requestStart := time.Date(2024, time.January, 2, 2, 0, 0, 0, time.UTC) // 上海 10:00
+	temporaryRateStart := requestStart.Add(-time.Hour)
+	temporaryRateEnd := requestStart.Add(time.Hour)
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, &openAIRecordUsageSubRepoStub{}, nil)
@@ -523,6 +525,8 @@ func TestOpenAIGatewayServiceRecordUsage_TimePricingUsesPricingAt(t *testing.T) 
 		},
 		APIKey: &APIKey{ID: 1006, GroupID: i64p(groupID), Group: &Group{
 			ID: groupID, RateMultiplier: 0.8, SubscriptionType: SubscriptionTypeSubscription,
+			TemporaryRateEnabled: true, TemporaryRateMultiplier: 0.5,
+			TemporaryRateStartsAt: &temporaryRateStart, TemporaryRateEndsAt: &temporaryRateEnd,
 		}},
 		User:      &User{ID: 2006},
 		Account:   &Account{ID: 3006},
@@ -533,8 +537,8 @@ func TestOpenAIGatewayServiceRecordUsage_TimePricingUsesPricingAt(t *testing.T) 
 	require.NotNil(t, usageRepo.lastLog)
 	baseCost := 1000*3e-6 + 500*15e-6
 	require.InDelta(t, baseCost*2, usageRepo.lastLog.TotalCost, 1e-12)
-	require.InDelta(t, baseCost*2*0.8, usageRepo.lastLog.ActualCost, 1e-12)
-	require.InDelta(t, 0.8, usageRepo.lastLog.RateMultiplier, 1e-12)
+	require.InDelta(t, baseCost*2*0.5, usageRepo.lastLog.ActualCost, 1e-12)
+	require.InDelta(t, 0.5, usageRepo.lastLog.RateMultiplier, 1e-12)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_TimePricingUsesExplicitPricingAt(t *testing.T) {
@@ -2320,6 +2324,59 @@ func TestGrokVideoBillingUsesSeparateVideoRateMultiplier(t *testing.T) {
 	require.Equal(t, VideoBillingResolution480P, *usageRepo.lastLog.VideoResolution)
 	require.NotNil(t, usageRepo.lastLog.VideoDurationSeconds)
 	require.Equal(t, 1, *usageRepo.lastLog.VideoDurationSeconds)
+}
+
+func TestGrokVideoBillingKeepsCreateTimeRateAfterGroupChanges(t *testing.T) {
+	videoPrice480P := 0.08
+	groupID := int64(1260)
+	createdAt := time.Now()
+	startsAt := createdAt.Add(-time.Hour)
+	endsAt := createdAt.Add(time.Hour)
+
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
+	apiKey := &APIKey{
+		ID:      101260,
+		GroupID: i64p(groupID),
+		Group: &Group{
+			ID:                      groupID,
+			Platform:                PlatformGrok,
+			RateMultiplier:          1.4,
+			TemporaryRateEnabled:    true,
+			TemporaryRateMultiplier: 0.5,
+			TemporaryRateStartsAt:   &startsAt,
+			TemporaryRateEndsAt:     &endsAt,
+			VideoPrice480P:          &videoPrice480P,
+		},
+	}
+	capturedRate := svc.ResolveVideoRateMultiplierAt(context.Background(), apiKey, 201260, createdAt)
+	require.InDelta(t, 0.5, capturedRate, 1e-12)
+
+	// Simulate an admin canceling the temporary rate before status polling sees completion.
+	apiKey.Group.TemporaryRateEnabled = false
+	apiKey.Group.RateMultiplier = 1.9
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID:            "video-create-time-rate",
+			ResponseID:           "video-create-time-rate",
+			Model:                "grok-imagine-video-1.5",
+			BillingModel:         "grok-imagine-video-1.5",
+			VideoCount:           1,
+			VideoResolution:      VideoBillingResolution480P,
+			VideoDurationSeconds: 1,
+			Duration:             time.Second,
+		},
+		APIKey:                      apiKey,
+		User:                        &User{ID: 201260},
+		Account:                     &Account{ID: 301260, Platform: PlatformGrok},
+		PricingAt:                   createdAt,
+		VideoRateMultiplierOverride: &capturedRate,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.InDelta(t, 0.5, usageRepo.lastLog.RateMultiplier, 1e-12)
+	require.InDelta(t, videoPrice480P*0.5, usageRepo.lastLog.ActualCost, 1e-12)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_GrokVideoUsesDefaultRateCard(t *testing.T) {

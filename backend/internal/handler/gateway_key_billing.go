@@ -51,18 +51,19 @@ func (h *GatewayHandler) KeyBillingInfo(c *gin.Context) {
 		return
 	}
 
-	resolvedRate, ok := h.resolveKeyBillingRate(c, apiKey)
+	now := timezone.Now()
+	resolvedRate, ok := h.resolveKeyBillingRate(c, apiKey, now)
 	if !ok {
 		h.errorResponse(c, http.StatusInternalServerError, "api_error", "Billing information is unavailable")
 		return
 	}
 
 	c.Header("Cache-Control", "no-store")
-	c.JSON(http.StatusOK, buildKeyBillingInfo(apiKey, resolvedRate, timezone.Now()))
+	c.JSON(http.StatusOK, buildKeyBillingInfo(apiKey, resolvedRate, now))
 }
 
-func (h *GatewayHandler) resolveKeyBillingRate(c *gin.Context, apiKey *service.APIKey) (float64, bool) {
-	groupRate := apiKey.Group.RateMultiplier
+func (h *GatewayHandler) resolveKeyBillingRate(c *gin.Context, apiKey *service.APIKey, now time.Time) (float64, bool) {
+	groupRate := apiKey.Group.BaseRateMultiplierAt(now)
 	switch apiKey.Group.Platform {
 	case service.PlatformOpenAI, service.PlatformGrok:
 		if h.openAIGatewayService == nil {
@@ -78,7 +79,7 @@ func (h *GatewayHandler) resolveKeyBillingRate(c *gin.Context, apiKey *service.A
 }
 
 func buildKeyBillingInfo(apiKey *service.APIKey, resolvedRate float64, now time.Time) keyBillingInfoResponse {
-	groupRate := apiKey.Group.RateMultiplier
+	groupRate := apiKey.Group.BaseRateMultiplierAt(now)
 	var userRate *float64
 	if resolvedRate != groupRate {
 		userRate = &resolvedRate

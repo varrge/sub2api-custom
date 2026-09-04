@@ -30,6 +30,15 @@ func TestGrokVideoPendingCreatedAtStampOnStoreShape(t *testing.T) {
 	require.LessOrEqual(t, d, 3*time.Second)
 }
 
+func TestGrokVideoPendingPricingAt(t *testing.T) {
+	t.Parallel()
+	created := time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC)
+	fallback := created.Add(24 * time.Hour)
+	require.Equal(t, created, GrokVideoPendingPricingAt(created.Format(time.RFC3339Nano), fallback))
+	require.Equal(t, fallback, GrokVideoPendingPricingAt("", fallback))
+	require.Equal(t, fallback, GrokVideoPendingPricingAt("not-a-time", fallback))
+}
+
 func TestIsGrokVideoStatusBillable(t *testing.T) {
 	t.Parallel()
 	// Official success: status=done + video.url

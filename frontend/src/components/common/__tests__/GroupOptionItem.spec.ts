@@ -41,4 +41,24 @@ describe('GroupOptionItem description layout', () => {
     expect(descriptionElement?.classes()).toContain('line-clamp-3')
     expect(wrapper.find('[title]').attributes('title')).toBe(description)
   })
+
+  it('keeps a user rate above an active temporary rate', () => {
+    const wrapper = mount(GroupOptionItem, {
+      props: {
+        name: 'VIP',
+        platform: 'openai',
+        rateMultiplier: 0.8,
+        userRateMultiplier: 0.7,
+        temporaryRateEnabled: true,
+        temporaryRateMultiplier: 0.5,
+        temporaryRateStartsAt: '2000-01-01T00:00:00Z',
+        temporaryRateEndsAt: '2099-01-01T00:00:00Z',
+      },
+      global: { stubs: { GroupBadge: true } },
+    })
+
+    expect(wrapper.text()).toContain('0.5x')
+    expect(wrapper.text()).toContain('0.7x')
+    expect(wrapper.text()).toContain('common.temporaryRate.userOverride')
+  })
 })

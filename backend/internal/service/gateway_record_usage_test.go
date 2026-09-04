@@ -348,6 +348,8 @@ func TestGatewayServiceRecordUsage_PeakRateAffectsTokenModeImageOutputTokens(t *
 func TestGatewayServiceRecordUsage_TimePricingUsesPricingAt(t *testing.T) {
 	groupID := int64(904)
 	requestStart := time.Date(2024, time.January, 2, 2, 0, 0, 0, time.UTC) // 上海 10:00
+	temporaryRateStart := requestStart.Add(-time.Hour)
+	temporaryRateEnd := requestStart.Add(time.Hour)
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	svc := newGatewayRecordUsageServiceForTest(usageRepo, userRepo, &openAIRecordUsageSubRepoStub{})
@@ -364,6 +366,8 @@ func TestGatewayServiceRecordUsage_TimePricingUsesPricingAt(t *testing.T) {
 		},
 		APIKey: &APIKey{ID: 804, GroupID: i64p(groupID), Group: &Group{
 			ID: groupID, RateMultiplier: 0.8, SubscriptionType: SubscriptionTypeSubscription,
+			TemporaryRateEnabled: true, TemporaryRateMultiplier: 0.5,
+			TemporaryRateStartsAt: &temporaryRateStart, TemporaryRateEndsAt: &temporaryRateEnd,
 		}},
 		User:      &User{ID: 604},
 		Account:   &Account{ID: 704},
@@ -374,8 +378,8 @@ func TestGatewayServiceRecordUsage_TimePricingUsesPricingAt(t *testing.T) {
 	require.NotNil(t, usageRepo.lastLog)
 	baseCost := 1000*3e-6 + 500*15e-6
 	require.InDelta(t, baseCost*2, usageRepo.lastLog.TotalCost, 1e-12)
-	require.InDelta(t, baseCost*2*0.8, usageRepo.lastLog.ActualCost, 1e-12)
-	require.InDelta(t, 0.8, usageRepo.lastLog.RateMultiplier, 1e-12)
+	require.InDelta(t, baseCost*2*0.5, usageRepo.lastLog.ActualCost, 1e-12)
+	require.InDelta(t, 0.5, usageRepo.lastLog.RateMultiplier, 1e-12)
 }
 func TestGatewayServiceRecordUsage_UsesExplicitPricingAtForPeakRate(t *testing.T) {
 	for _, platform := range []string{PlatformAnthropic, PlatformGemini, PlatformGrok, PlatformAntigravity} {

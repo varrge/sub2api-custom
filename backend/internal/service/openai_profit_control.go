@@ -253,9 +253,10 @@ func (s *OpenAIGatewayService) resolveOpenAIProfitControlGate(ctx context.Contex
 	if ctxGroup, ok := ctx.Value(ctxkey.Group).(*Group); ok && IsGroupContextValid(ctxGroup) {
 		billingGroup = ctxGroup
 	}
-	downstream := billingGroup.RateMultiplier
+	groupDefault := billingGroup.BaseRateMultiplierAt(pricingAt)
+	downstream := groupDefault
 	if userID, _ := ctx.Value(ctxkey.UserID).(int64); userID > 0 {
-		downstream = s.ResolveUserGroupRateMultiplier(ctx, userID, billingGroup.ID, billingGroup.RateMultiplier)
+		downstream = s.ResolveUserGroupRateMultiplier(ctx, userID, billingGroup.ID, groupDefault)
 	}
 	downstream *= billingGroup.PeakMultiplierAt(pricingAt)
 

@@ -47,6 +47,21 @@ func (Group) Fields() []ent.Field {
 		field.Float("rate_multiplier").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
 			Default(1.0),
+		field.Bool("temporary_rate_enabled").
+			Default(false).
+			Comment("是否启用一次性限时倍率"),
+		field.Float("temporary_rate_multiplier").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
+			Default(1.0).
+			Comment("限时活动期间临时替换分组默认倍率；用户专属倍率仍优先"),
+		field.Time("temporary_rate_starts_at").
+			Optional().
+			Nillable().
+			Comment("限时倍率开始绝对时间（含）"),
+		field.Time("temporary_rate_ends_at").
+			Optional().
+			Nillable().
+			Comment("限时倍率结束绝对时间（不含）"),
 		// 高峰时段倍率（added by migration 158）
 		field.Bool("peak_rate_enabled").
 			Default(false).

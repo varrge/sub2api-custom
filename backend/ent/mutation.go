@@ -22096,6 +22096,11 @@ type GroupMutation struct {
 	description                             *string
 	rate_multiplier                         *float64
 	addrate_multiplier                      *float64
+	temporary_rate_enabled                  *bool
+	temporary_rate_multiplier               *float64
+	addtemporary_rate_multiplier            *float64
+	temporary_rate_starts_at                *time.Time
+	temporary_rate_ends_at                  *time.Time
 	peak_rate_enabled                       *bool
 	peak_start                              *string
 	peak_end                                *string
@@ -22566,6 +22571,196 @@ func (m *GroupMutation) AddedRateMultiplier() (r float64, exists bool) {
 func (m *GroupMutation) ResetRateMultiplier() {
 	m.rate_multiplier = nil
 	m.addrate_multiplier = nil
+}
+
+// SetTemporaryRateEnabled sets the "temporary_rate_enabled" field.
+func (m *GroupMutation) SetTemporaryRateEnabled(b bool) {
+	m.temporary_rate_enabled = &b
+}
+
+// TemporaryRateEnabled returns the value of the "temporary_rate_enabled" field in the mutation.
+func (m *GroupMutation) TemporaryRateEnabled() (r bool, exists bool) {
+	v := m.temporary_rate_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTemporaryRateEnabled returns the old "temporary_rate_enabled" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldTemporaryRateEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTemporaryRateEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTemporaryRateEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTemporaryRateEnabled: %w", err)
+	}
+	return oldValue.TemporaryRateEnabled, nil
+}
+
+// ResetTemporaryRateEnabled resets all changes to the "temporary_rate_enabled" field.
+func (m *GroupMutation) ResetTemporaryRateEnabled() {
+	m.temporary_rate_enabled = nil
+}
+
+// SetTemporaryRateMultiplier sets the "temporary_rate_multiplier" field.
+func (m *GroupMutation) SetTemporaryRateMultiplier(f float64) {
+	m.temporary_rate_multiplier = &f
+	m.addtemporary_rate_multiplier = nil
+}
+
+// TemporaryRateMultiplier returns the value of the "temporary_rate_multiplier" field in the mutation.
+func (m *GroupMutation) TemporaryRateMultiplier() (r float64, exists bool) {
+	v := m.temporary_rate_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTemporaryRateMultiplier returns the old "temporary_rate_multiplier" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldTemporaryRateMultiplier(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTemporaryRateMultiplier is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTemporaryRateMultiplier requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTemporaryRateMultiplier: %w", err)
+	}
+	return oldValue.TemporaryRateMultiplier, nil
+}
+
+// AddTemporaryRateMultiplier adds f to the "temporary_rate_multiplier" field.
+func (m *GroupMutation) AddTemporaryRateMultiplier(f float64) {
+	if m.addtemporary_rate_multiplier != nil {
+		*m.addtemporary_rate_multiplier += f
+	} else {
+		m.addtemporary_rate_multiplier = &f
+	}
+}
+
+// AddedTemporaryRateMultiplier returns the value that was added to the "temporary_rate_multiplier" field in this mutation.
+func (m *GroupMutation) AddedTemporaryRateMultiplier() (r float64, exists bool) {
+	v := m.addtemporary_rate_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTemporaryRateMultiplier resets all changes to the "temporary_rate_multiplier" field.
+func (m *GroupMutation) ResetTemporaryRateMultiplier() {
+	m.temporary_rate_multiplier = nil
+	m.addtemporary_rate_multiplier = nil
+}
+
+// SetTemporaryRateStartsAt sets the "temporary_rate_starts_at" field.
+func (m *GroupMutation) SetTemporaryRateStartsAt(t time.Time) {
+	m.temporary_rate_starts_at = &t
+}
+
+// TemporaryRateStartsAt returns the value of the "temporary_rate_starts_at" field in the mutation.
+func (m *GroupMutation) TemporaryRateStartsAt() (r time.Time, exists bool) {
+	v := m.temporary_rate_starts_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTemporaryRateStartsAt returns the old "temporary_rate_starts_at" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldTemporaryRateStartsAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTemporaryRateStartsAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTemporaryRateStartsAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTemporaryRateStartsAt: %w", err)
+	}
+	return oldValue.TemporaryRateStartsAt, nil
+}
+
+// ClearTemporaryRateStartsAt clears the value of the "temporary_rate_starts_at" field.
+func (m *GroupMutation) ClearTemporaryRateStartsAt() {
+	m.temporary_rate_starts_at = nil
+	m.clearedFields[group.FieldTemporaryRateStartsAt] = struct{}{}
+}
+
+// TemporaryRateStartsAtCleared returns if the "temporary_rate_starts_at" field was cleared in this mutation.
+func (m *GroupMutation) TemporaryRateStartsAtCleared() bool {
+	_, ok := m.clearedFields[group.FieldTemporaryRateStartsAt]
+	return ok
+}
+
+// ResetTemporaryRateStartsAt resets all changes to the "temporary_rate_starts_at" field.
+func (m *GroupMutation) ResetTemporaryRateStartsAt() {
+	m.temporary_rate_starts_at = nil
+	delete(m.clearedFields, group.FieldTemporaryRateStartsAt)
+}
+
+// SetTemporaryRateEndsAt sets the "temporary_rate_ends_at" field.
+func (m *GroupMutation) SetTemporaryRateEndsAt(t time.Time) {
+	m.temporary_rate_ends_at = &t
+}
+
+// TemporaryRateEndsAt returns the value of the "temporary_rate_ends_at" field in the mutation.
+func (m *GroupMutation) TemporaryRateEndsAt() (r time.Time, exists bool) {
+	v := m.temporary_rate_ends_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTemporaryRateEndsAt returns the old "temporary_rate_ends_at" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldTemporaryRateEndsAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTemporaryRateEndsAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTemporaryRateEndsAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTemporaryRateEndsAt: %w", err)
+	}
+	return oldValue.TemporaryRateEndsAt, nil
+}
+
+// ClearTemporaryRateEndsAt clears the value of the "temporary_rate_ends_at" field.
+func (m *GroupMutation) ClearTemporaryRateEndsAt() {
+	m.temporary_rate_ends_at = nil
+	m.clearedFields[group.FieldTemporaryRateEndsAt] = struct{}{}
+}
+
+// TemporaryRateEndsAtCleared returns if the "temporary_rate_ends_at" field was cleared in this mutation.
+func (m *GroupMutation) TemporaryRateEndsAtCleared() bool {
+	_, ok := m.clearedFields[group.FieldTemporaryRateEndsAt]
+	return ok
+}
+
+// ResetTemporaryRateEndsAt resets all changes to the "temporary_rate_ends_at" field.
+func (m *GroupMutation) ResetTemporaryRateEndsAt() {
+	m.temporary_rate_ends_at = nil
+	delete(m.clearedFields, group.FieldTemporaryRateEndsAt)
 }
 
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
@@ -25892,7 +26087,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 65)
+	fields := make([]string, 0, 69)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -25910,6 +26105,18 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.rate_multiplier != nil {
 		fields = append(fields, group.FieldRateMultiplier)
+	}
+	if m.temporary_rate_enabled != nil {
+		fields = append(fields, group.FieldTemporaryRateEnabled)
+	}
+	if m.temporary_rate_multiplier != nil {
+		fields = append(fields, group.FieldTemporaryRateMultiplier)
+	}
+	if m.temporary_rate_starts_at != nil {
+		fields = append(fields, group.FieldTemporaryRateStartsAt)
+	}
+	if m.temporary_rate_ends_at != nil {
+		fields = append(fields, group.FieldTemporaryRateEndsAt)
 	}
 	if m.peak_rate_enabled != nil {
 		fields = append(fields, group.FieldPeakRateEnabled)
@@ -26108,6 +26315,14 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.Description()
 	case group.FieldRateMultiplier:
 		return m.RateMultiplier()
+	case group.FieldTemporaryRateEnabled:
+		return m.TemporaryRateEnabled()
+	case group.FieldTemporaryRateMultiplier:
+		return m.TemporaryRateMultiplier()
+	case group.FieldTemporaryRateStartsAt:
+		return m.TemporaryRateStartsAt()
+	case group.FieldTemporaryRateEndsAt:
+		return m.TemporaryRateEndsAt()
 	case group.FieldPeakRateEnabled:
 		return m.PeakRateEnabled()
 	case group.FieldPeakStart:
@@ -26247,6 +26462,14 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldDescription(ctx)
 	case group.FieldRateMultiplier:
 		return m.OldRateMultiplier(ctx)
+	case group.FieldTemporaryRateEnabled:
+		return m.OldTemporaryRateEnabled(ctx)
+	case group.FieldTemporaryRateMultiplier:
+		return m.OldTemporaryRateMultiplier(ctx)
+	case group.FieldTemporaryRateStartsAt:
+		return m.OldTemporaryRateStartsAt(ctx)
+	case group.FieldTemporaryRateEndsAt:
+		return m.OldTemporaryRateEndsAt(ctx)
 	case group.FieldPeakRateEnabled:
 		return m.OldPeakRateEnabled(ctx)
 	case group.FieldPeakStart:
@@ -26415,6 +26638,34 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRateMultiplier(v)
+		return nil
+	case group.FieldTemporaryRateEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTemporaryRateEnabled(v)
+		return nil
+	case group.FieldTemporaryRateMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTemporaryRateMultiplier(v)
+		return nil
+	case group.FieldTemporaryRateStartsAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTemporaryRateStartsAt(v)
+		return nil
+	case group.FieldTemporaryRateEndsAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTemporaryRateEndsAt(v)
 		return nil
 	case group.FieldPeakRateEnabled:
 		v, ok := value.(bool)
@@ -26840,6 +27091,9 @@ func (m *GroupMutation) AddedFields() []string {
 	if m.addrate_multiplier != nil {
 		fields = append(fields, group.FieldRateMultiplier)
 	}
+	if m.addtemporary_rate_multiplier != nil {
+		fields = append(fields, group.FieldTemporaryRateMultiplier)
+	}
 	if m.addpeak_rate_multiplier != nil {
 		fields = append(fields, group.FieldPeakRateMultiplier)
 	}
@@ -26928,6 +27182,8 @@ func (m *GroupMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case group.FieldRateMultiplier:
 		return m.AddedRateMultiplier()
+	case group.FieldTemporaryRateMultiplier:
+		return m.AddedTemporaryRateMultiplier()
 	case group.FieldPeakRateMultiplier:
 		return m.AddedPeakRateMultiplier()
 	case group.FieldDailyLimitUsd:
@@ -26995,6 +27251,13 @@ func (m *GroupMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddRateMultiplier(v)
+		return nil
+	case group.FieldTemporaryRateMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTemporaryRateMultiplier(v)
 		return nil
 	case group.FieldPeakRateMultiplier:
 		v, ok := value.(float64)
@@ -27192,6 +27455,12 @@ func (m *GroupMutation) ClearedFields() []string {
 	if m.FieldCleared(group.FieldDescription) {
 		fields = append(fields, group.FieldDescription)
 	}
+	if m.FieldCleared(group.FieldTemporaryRateStartsAt) {
+		fields = append(fields, group.FieldTemporaryRateStartsAt)
+	}
+	if m.FieldCleared(group.FieldTemporaryRateEndsAt) {
+		fields = append(fields, group.FieldTemporaryRateEndsAt)
+	}
 	if m.FieldCleared(group.FieldDuplicateOperationID) {
 		fields = append(fields, group.FieldDuplicateOperationID)
 	}
@@ -27271,6 +27540,12 @@ func (m *GroupMutation) ClearField(name string) error {
 		return nil
 	case group.FieldDescription:
 		m.ClearDescription()
+		return nil
+	case group.FieldTemporaryRateStartsAt:
+		m.ClearTemporaryRateStartsAt()
+		return nil
+	case group.FieldTemporaryRateEndsAt:
+		m.ClearTemporaryRateEndsAt()
 		return nil
 	case group.FieldDuplicateOperationID:
 		m.ClearDuplicateOperationID()
@@ -27357,6 +27632,18 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldRateMultiplier:
 		m.ResetRateMultiplier()
+		return nil
+	case group.FieldTemporaryRateEnabled:
+		m.ResetTemporaryRateEnabled()
+		return nil
+	case group.FieldTemporaryRateMultiplier:
+		m.ResetTemporaryRateMultiplier()
+		return nil
+	case group.FieldTemporaryRateStartsAt:
+		m.ResetTemporaryRateStartsAt()
+		return nil
+	case group.FieldTemporaryRateEndsAt:
+		m.ResetTemporaryRateEndsAt()
 		return nil
 	case group.FieldPeakRateEnabled:
 		m.ResetPeakRateEnabled()

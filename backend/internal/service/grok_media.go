@@ -336,14 +336,15 @@ func (s *OpenAIGatewayService) ResolveGrokMediaVideoRequestAccount(
 // first observes a completed video URL. Status may omit model/duration; we fall
 // back to this snapshot, then defaults.
 type GrokVideoPendingBilling struct {
-	Model                string `json:"model"`
-	BillingModel         string `json:"billing_model,omitempty"`
-	UpstreamModel        string `json:"upstream_model,omitempty"`
-	VideoResolution      string `json:"video_resolution,omitempty"`
-	VideoDurationSeconds int    `json:"video_duration_seconds,omitempty"`
-	OriginalModel        string `json:"original_model,omitempty"`
-	// CreatedAt is when the gateway accepted the async create (RFC3339Nano UTC).
-	// duration_ms for deferred billing is measured from this instant until the
+	Model                       string   `json:"model"`
+	BillingModel                string   `json:"billing_model,omitempty"`
+	UpstreamModel               string   `json:"upstream_model,omitempty"`
+	VideoResolution             string   `json:"video_resolution,omitempty"`
+	VideoDurationSeconds        int      `json:"video_duration_seconds,omitempty"`
+	OriginalModel               string   `json:"original_model,omitempty"`
+	ResolvedVideoRateMultiplier *float64 `json:"resolved_video_rate_multiplier,omitempty"`
+	// CreatedAt is when the async create request entered the gateway (RFC3339Nano UTC).
+	// Deferred billing and duration_ms use this instant until the
 	// first official done+video.url observation (status poll or content download),
 	// not the latency of that single discovery request alone.
 	CreatedAt string `json:"created_at,omitempty"`
@@ -354,23 +355,27 @@ func GrokVideoPendingCreatedAtNow() string {
 	return time.Now().UTC().Format(time.RFC3339Nano)
 }
 
-// GrokVideoE2EDuration returns wall time from create accept to discovery of completion.
-// Returns 0 when CreatedAt is missing or unparseable (caller keeps poll-only Duration).
-func GrokVideoE2EDuration(createdAt string, discoveredAt time.Time) time.Duration {
+// GrokVideoPendingPricingAt returns the original create request time, or the
+// current request's pricing time when an older pending snapshot has no valid stamp.
+func GrokVideoPendingPricingAt(createdAt string, fallback time.Time) time.Time {
 	createdAt = strings.TrimSpace(createdAt)
 	if createdAt == "" {
-		return 0
+		return fallback
 	}
+	created, err := time.Parse(time.RFC3339Nano, createdAt)
+	if err != nil || created.IsZero() {
+		return fallback
+	}
+	return created
+}
+
+// GrokVideoE2EDuration returns wall time from create request start to discovery of completion.
+// Returns 0 when CreatedAt is missing or unparseable (caller keeps poll-only Duration).
+func GrokVideoE2EDuration(createdAt string, discoveredAt time.Time) time.Duration {
 	if discoveredAt.IsZero() {
 		discoveredAt = time.Now()
 	}
-	var created time.Time
-	var err error
-	if created, err = time.Parse(time.RFC3339Nano, createdAt); err != nil {
-		if created, err = time.Parse(time.RFC3339, createdAt); err != nil {
-			return 0
-		}
-	}
+	created := GrokVideoPendingPricingAt(createdAt, time.Time{})
 	if created.IsZero() {
 		return 0
 	}

@@ -157,32 +157,112 @@
     </nav>
 
     <!-- Bottom Section -->
-    <div class="mt-auto border-t border-gray-100 p-3 dark:border-dark-800">
-      <!-- Theme Toggle -->
-      <button
-        @click="toggleTheme"
-        class="sidebar-link mb-2 w-full"
-        :class="{ 'sidebar-link-collapsed': sidebarCollapsed }"
-        :title="sidebarCollapsed ? (isDark ? t('nav.lightMode') : t('nav.darkMode')) : undefined"
-      >
-        <SunIcon v-if="isDark" class="h-5 w-5 flex-shrink-0 text-amber-500" />
-        <MoonIcon v-else class="h-5 w-5 flex-shrink-0" />
-        <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{
-          isDark ? t('nav.lightMode') : t('nav.darkMode')
-        }}</span>
-      </button>
+    <div v-if="user" class="mt-auto border-t border-gray-100 p-3 dark:border-dark-800">
+      <div ref="accountMenuRef" class="relative">
+        <transition name="account-menu">
+          <div
+            v-if="accountMenuOpen"
+            id="sidebar-account-menu"
+            class="dropdown account-dropdown bottom-full left-0 mb-2 w-full lg:bottom-0 lg:left-full lg:mb-0 lg:ml-2 lg:w-56"
+            data-testid="sidebar-account-dropdown"
+          >
+            <div class="border-b border-gray-100 px-4 py-3 dark:border-dark-700">
+              <div class="truncate text-sm font-medium text-gray-900 dark:text-white">
+                {{ displayName }}
+              </div>
+              <div class="truncate text-xs text-gray-500 dark:text-dark-400">{{ user.email }}</div>
+            </div>
 
-      <!-- Collapse Button -->
-      <button
-        @click="toggleSidebar"
-        class="sidebar-link w-full"
-        :class="{ 'sidebar-link-collapsed': sidebarCollapsed }"
-        :title="sidebarCollapsed ? t('nav.expand') : t('nav.collapse')"
-      >
-        <ChevronDoubleLeftIcon v-if="!sidebarCollapsed" class="h-5 w-5 flex-shrink-0" />
-        <ChevronDoubleRightIcon v-else class="h-5 w-5 flex-shrink-0" />
-        <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{ t('nav.collapse') }}</span>
-      </button>
+            <div class="py-1">
+              <router-link to="/profile" class="dropdown-item" @click="handleAccountMenuNavigation('/profile')">
+                <Icon name="user" size="sm" />
+                {{ t('nav.profile') }}
+              </router-link>
+
+              <router-link to="/keys" class="dropdown-item" @click="handleAccountMenuNavigation('/keys')">
+                <Icon name="key" size="sm" />
+                {{ t('nav.apiKeys') }}
+              </router-link>
+
+              <a
+                v-if="authStore.isAdmin"
+                href="https://github.com/Wei-Shaw/sub2api"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="dropdown-item"
+                @click="handleAccountMenuNavigation()"
+              >
+                <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path
+                    fill-rule="evenodd"
+                    clip-rule="evenodd"
+                    d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z"
+                  />
+                </svg>
+                {{ t('nav.github') }}
+              </a>
+            </div>
+
+            <div
+              v-if="contactInfo"
+              class="border-t border-gray-100 px-4 py-2.5 dark:border-dark-700"
+            >
+              <div class="flex items-start gap-2 text-xs text-gray-500 dark:text-gray-400">
+                <Icon name="chat" size="sm" class="mt-0.5 shrink-0" />
+                <span>{{ t('common.contactSupport') }}:</span>
+                <span class="min-w-0 break-words font-medium text-gray-700 dark:text-gray-300">
+                  {{ contactInfo }}
+                </span>
+              </div>
+            </div>
+
+            <div v-if="showOnboardingButton" class="border-t border-gray-100 py-1 dark:border-dark-700">
+              <button type="button" class="dropdown-item w-full" @click="handleReplayGuide">
+                <Icon name="questionCircle" size="sm" />
+                {{ $t('onboarding.restartTour') }}
+              </button>
+            </div>
+
+            <div class="border-t border-gray-100 py-1 dark:border-dark-700">
+              <button
+                type="button"
+                class="dropdown-item w-full text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                @click="handleLogout"
+              >
+                <Icon name="login" size="sm" />
+                {{ t('nav.logout') }}
+              </button>
+            </div>
+          </div>
+        </transition>
+
+        <button
+          ref="accountTriggerRef"
+          type="button"
+          class="flex w-full items-center gap-3 rounded-xl p-2 text-left transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:hover:bg-dark-800"
+          :aria-expanded="accountMenuOpen"
+          aria-controls="sidebar-account-menu"
+          :aria-label="t('common.userMenu')"
+          data-testid="sidebar-account-trigger"
+          @click="toggleAccountMenu"
+        >
+          <div class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-sm font-medium text-white shadow-sm">
+            <img
+              v-if="avatarUrl"
+              :src="avatarUrl"
+              :alt="displayName"
+              class="h-full w-full object-cover"
+            >
+            <span v-else>{{ userInitials }}</span>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="truncate text-sm font-semibold text-gray-900 dark:text-white">{{ displayName }}</div>
+            <div class="truncate text-xs text-gray-500 dark:text-dark-400">
+              {{ t('admin.users.roles.' + user.role) }}
+            </div>
+          </div>
+        </button>
+      </div>
     </div>
   </aside>
 
@@ -260,10 +340,18 @@ const { canUseImageGeneration } = useImageGenerationAccess()
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
 const mobileOpen = computed(() => appStore.mobileOpen)
 const isAdmin = computed(() => authStore.isAdmin)
+const user = computed(() => authStore.user)
 const sidebarNavRef = ref<HTMLElement | null>(null)
-const isDark = ref(document.documentElement.classList.contains('dark'))
+const accountMenuRef = ref<HTMLElement | null>(null)
+const accountTriggerRef = ref<HTMLButtonElement | null>(null)
+const accountMenuOpen = ref(false)
 
 const homePath = computed(() => (isAdmin.value ? '/admin/dashboard' : '/dashboard'))
+const contactInfo = computed(() => appStore.contactInfo)
+const avatarUrl = computed(() => user.value?.avatar_url?.trim() || '')
+const displayName = computed(() => user.value?.username || user.value?.email?.split('@')[0] || '')
+const userInitials = computed(() => displayName.value.substring(0, 2).toUpperCase())
+const showOnboardingButton = computed(() => !authStore.isSimpleMode && user.value?.role === 'admin')
 
 // Track which parent nav groups are expanded
 const expandedGroups = ref<Set<string>>(new Set())
@@ -559,51 +647,6 @@ const CogIcon = {
     )
 }
 
-const SunIcon = {
-  render: () =>
-    h(
-      'svg',
-      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
-      [
-        h('path', {
-          'stroke-linecap': 'round',
-          'stroke-linejoin': 'round',
-          d: 'M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z'
-        })
-      ]
-    )
-}
-
-const MoonIcon = {
-  render: () =>
-    h(
-      'svg',
-      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
-      [
-        h('path', {
-          'stroke-linecap': 'round',
-          'stroke-linejoin': 'round',
-          d: 'M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z'
-        })
-      ]
-    )
-}
-
-const ChevronDoubleLeftIcon = {
-  render: () =>
-    h(
-      'svg',
-      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
-      [
-        h('path', {
-          'stroke-linecap': 'round',
-          'stroke-linejoin': 'round',
-          d: 'm18.75 4.5-7.5 7.5 7.5 7.5m-6-15L5.25 12l7.5 7.5'
-        })
-      ]
-    )
-}
-
 const OrderIcon = {
   render: () =>
     h(
@@ -629,21 +672,6 @@ const OrderListIcon = {
           'stroke-linecap': 'round',
           'stroke-linejoin': 'round',
           d: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z'
-        })
-      ]
-    )
-}
-
-const ChevronDoubleRightIcon = {
-  render: () =>
-    h(
-      'svg',
-      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
-      [
-        h('path', {
-          'stroke-linecap': 'round',
-          'stroke-linejoin': 'round',
-          d: 'm5.25 4.5 7.5 7.5-7.5 7.5m6-15 7.5 7.5-7.5 7.5'
         })
       ]
     )
@@ -885,14 +913,48 @@ const adminNavItems = computed((): NavItem[] => {
   return visible
 })
 
-function toggleSidebar() {
-  appStore.toggleSidebar()
+function toggleAccountMenu() {
+  accountMenuOpen.value = !accountMenuOpen.value
 }
 
-function toggleTheme() {
-  isDark.value = !isDark.value
-  document.documentElement.classList.toggle('dark', isDark.value)
-  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
+function closeAccountMenu() {
+  accountMenuOpen.value = false
+}
+
+function handleAccountMenuNavigation(itemPath?: string) {
+  closeAccountMenu()
+  if (itemPath) {
+    handleMenuItemClick(itemPath)
+  } else {
+    closeMobile()
+  }
+}
+
+async function handleLogout() {
+  handleAccountMenuNavigation()
+  try {
+    await authStore.logout()
+  } catch (error) {
+    console.error('Logout error:', error)
+  }
+  await router.push('/login')
+}
+
+function handleReplayGuide() {
+  handleAccountMenuNavigation()
+  onboardingStore.replay()
+}
+
+function handleAccountMenuClickOutside(event: MouseEvent) {
+  if (accountMenuRef.value && !accountMenuRef.value.contains(event.target as Node)) {
+    closeAccountMenu()
+  }
+}
+
+function handleAccountMenuKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Escape' || !accountMenuOpen.value) return
+  closeAccountMenu()
+  void nextTick(() => accountTriggerRef.value?.focus())
 }
 
 function closeMobile() {
@@ -962,16 +1024,6 @@ function handleGroupClick(item: NavItem) {
   }
 }
 
-// Initialize theme
-const savedTheme = localStorage.getItem('theme')
-if (
-  savedTheme === 'dark' ||
-  (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)
-) {
-  isDark.value = true
-  document.documentElement.classList.add('dark')
-}
-
 // Fetch admin settings (for feature-gated nav items like Ops).
 watch(
   isAdmin,
@@ -984,6 +1036,9 @@ watch(
 )
 
 onMounted(() => {
+  appStore.setSidebarCollapsed(false)
+  document.addEventListener('click', handleAccountMenuClickOutside)
+  document.addEventListener('keydown', handleAccountMenuKeydown)
   void refreshBatchImageAccess()
   if (isAdmin.value) {
     adminSettingsStore.fetch()
@@ -999,6 +1054,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('click', handleAccountMenuClickOutside)
+  document.removeEventListener('keydown', handleAccountMenuKeydown)
   if (sidebarNavRef.value) {
     appStore.sidebarScrollTop = sidebarNavRef.value.scrollTop
   }
@@ -1006,6 +1063,21 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.account-dropdown {
+  transform-origin: bottom left;
+}
+
+.account-menu-enter-active,
+.account-menu-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.account-menu-enter-from,
+.account-menu-leave-to {
+  opacity: 0;
+  transform: translateY(0.25rem) scale(0.98);
+}
+
 .sidebar-logo {
   flex: 0 0 2.25rem;
   min-width: 2.25rem;

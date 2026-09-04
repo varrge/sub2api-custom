@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 22 // v22: group free_openai_fast field
+const apiKeyAuthSnapshotVersion = 23 // v23: group temporary-rate fields and free_openai_fast
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -386,6 +386,10 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 			Status:                          apiKey.Group.Status,
 			SubscriptionType:                apiKey.Group.SubscriptionType,
 			RateMultiplier:                  apiKey.Group.RateMultiplier,
+			TemporaryRateEnabled:            apiKey.Group.TemporaryRateEnabled,
+			TemporaryRateMultiplier:         apiKey.Group.TemporaryRateMultiplier,
+			TemporaryRateStartsAt:           apiKey.Group.TemporaryRateStartsAt,
+			TemporaryRateEndsAt:             apiKey.Group.TemporaryRateEndsAt,
 			DailyLimitUSD:                   apiKey.Group.DailyLimitUSD,
 			WeeklyLimitUSD:                  apiKey.Group.WeeklyLimitUSD,
 			MonthlyLimitUSD:                 apiKey.Group.MonthlyLimitUSD,
@@ -487,6 +491,10 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			Hydrated:                        true,
 			SubscriptionType:                snapshot.Group.SubscriptionType,
 			RateMultiplier:                  snapshot.Group.RateMultiplier,
+			TemporaryRateEnabled:            snapshot.Group.TemporaryRateEnabled,
+			TemporaryRateMultiplier:         snapshot.Group.TemporaryRateMultiplier,
+			TemporaryRateStartsAt:           snapshot.Group.TemporaryRateStartsAt,
+			TemporaryRateEndsAt:             snapshot.Group.TemporaryRateEndsAt,
 			DailyLimitUSD:                   snapshot.Group.DailyLimitUSD,
 			WeeklyLimitUSD:                  snapshot.Group.WeeklyLimitUSD,
 			MonthlyLimitUSD:                 snapshot.Group.MonthlyLimitUSD,

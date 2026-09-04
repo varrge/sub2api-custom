@@ -106,6 +106,62 @@ func (_c *GroupCreate) SetNillableRateMultiplier(v *float64) *GroupCreate {
 	return _c
 }
 
+// SetTemporaryRateEnabled sets the "temporary_rate_enabled" field.
+func (_c *GroupCreate) SetTemporaryRateEnabled(v bool) *GroupCreate {
+	_c.mutation.SetTemporaryRateEnabled(v)
+	return _c
+}
+
+// SetNillableTemporaryRateEnabled sets the "temporary_rate_enabled" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableTemporaryRateEnabled(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetTemporaryRateEnabled(*v)
+	}
+	return _c
+}
+
+// SetTemporaryRateMultiplier sets the "temporary_rate_multiplier" field.
+func (_c *GroupCreate) SetTemporaryRateMultiplier(v float64) *GroupCreate {
+	_c.mutation.SetTemporaryRateMultiplier(v)
+	return _c
+}
+
+// SetNillableTemporaryRateMultiplier sets the "temporary_rate_multiplier" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableTemporaryRateMultiplier(v *float64) *GroupCreate {
+	if v != nil {
+		_c.SetTemporaryRateMultiplier(*v)
+	}
+	return _c
+}
+
+// SetTemporaryRateStartsAt sets the "temporary_rate_starts_at" field.
+func (_c *GroupCreate) SetTemporaryRateStartsAt(v time.Time) *GroupCreate {
+	_c.mutation.SetTemporaryRateStartsAt(v)
+	return _c
+}
+
+// SetNillableTemporaryRateStartsAt sets the "temporary_rate_starts_at" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableTemporaryRateStartsAt(v *time.Time) *GroupCreate {
+	if v != nil {
+		_c.SetTemporaryRateStartsAt(*v)
+	}
+	return _c
+}
+
+// SetTemporaryRateEndsAt sets the "temporary_rate_ends_at" field.
+func (_c *GroupCreate) SetTemporaryRateEndsAt(v time.Time) *GroupCreate {
+	_c.mutation.SetTemporaryRateEndsAt(v)
+	return _c
+}
+
+// SetNillableTemporaryRateEndsAt sets the "temporary_rate_ends_at" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableTemporaryRateEndsAt(v *time.Time) *GroupCreate {
+	if v != nil {
+		_c.SetTemporaryRateEndsAt(*v)
+	}
+	return _c
+}
+
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
 func (_c *GroupCreate) SetPeakRateEnabled(v bool) *GroupCreate {
 	_c.mutation.SetPeakRateEnabled(v)
@@ -1037,6 +1093,14 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultRateMultiplier
 		_c.mutation.SetRateMultiplier(v)
 	}
+	if _, ok := _c.mutation.TemporaryRateEnabled(); !ok {
+		v := group.DefaultTemporaryRateEnabled
+		_c.mutation.SetTemporaryRateEnabled(v)
+	}
+	if _, ok := _c.mutation.TemporaryRateMultiplier(); !ok {
+		v := group.DefaultTemporaryRateMultiplier
+		_c.mutation.SetTemporaryRateMultiplier(v)
+	}
 	if _, ok := _c.mutation.PeakRateEnabled(); !ok {
 		v := group.DefaultPeakRateEnabled
 		_c.mutation.SetPeakRateEnabled(v)
@@ -1214,6 +1278,12 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.RateMultiplier(); !ok {
 		return &ValidationError{Name: "rate_multiplier", err: errors.New(`ent: missing required field "Group.rate_multiplier"`)}
+	}
+	if _, ok := _c.mutation.TemporaryRateEnabled(); !ok {
+		return &ValidationError{Name: "temporary_rate_enabled", err: errors.New(`ent: missing required field "Group.temporary_rate_enabled"`)}
+	}
+	if _, ok := _c.mutation.TemporaryRateMultiplier(); !ok {
+		return &ValidationError{Name: "temporary_rate_multiplier", err: errors.New(`ent: missing required field "Group.temporary_rate_multiplier"`)}
 	}
 	if _, ok := _c.mutation.PeakRateEnabled(); !ok {
 		return &ValidationError{Name: "peak_rate_enabled", err: errors.New(`ent: missing required field "Group.peak_rate_enabled"`)}
@@ -1447,6 +1517,22 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.RateMultiplier(); ok {
 		_spec.SetField(group.FieldRateMultiplier, field.TypeFloat64, value)
 		_node.RateMultiplier = value
+	}
+	if value, ok := _c.mutation.TemporaryRateEnabled(); ok {
+		_spec.SetField(group.FieldTemporaryRateEnabled, field.TypeBool, value)
+		_node.TemporaryRateEnabled = value
+	}
+	if value, ok := _c.mutation.TemporaryRateMultiplier(); ok {
+		_spec.SetField(group.FieldTemporaryRateMultiplier, field.TypeFloat64, value)
+		_node.TemporaryRateMultiplier = value
+	}
+	if value, ok := _c.mutation.TemporaryRateStartsAt(); ok {
+		_spec.SetField(group.FieldTemporaryRateStartsAt, field.TypeTime, value)
+		_node.TemporaryRateStartsAt = &value
+	}
+	if value, ok := _c.mutation.TemporaryRateEndsAt(); ok {
+		_spec.SetField(group.FieldTemporaryRateEndsAt, field.TypeTime, value)
+		_node.TemporaryRateEndsAt = &value
 	}
 	if value, ok := _c.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)
@@ -1915,6 +2001,72 @@ func (u *GroupUpsert) UpdateRateMultiplier() *GroupUpsert {
 // AddRateMultiplier adds v to the "rate_multiplier" field.
 func (u *GroupUpsert) AddRateMultiplier(v float64) *GroupUpsert {
 	u.Add(group.FieldRateMultiplier, v)
+	return u
+}
+
+// SetTemporaryRateEnabled sets the "temporary_rate_enabled" field.
+func (u *GroupUpsert) SetTemporaryRateEnabled(v bool) *GroupUpsert {
+	u.Set(group.FieldTemporaryRateEnabled, v)
+	return u
+}
+
+// UpdateTemporaryRateEnabled sets the "temporary_rate_enabled" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateTemporaryRateEnabled() *GroupUpsert {
+	u.SetExcluded(group.FieldTemporaryRateEnabled)
+	return u
+}
+
+// SetTemporaryRateMultiplier sets the "temporary_rate_multiplier" field.
+func (u *GroupUpsert) SetTemporaryRateMultiplier(v float64) *GroupUpsert {
+	u.Set(group.FieldTemporaryRateMultiplier, v)
+	return u
+}
+
+// UpdateTemporaryRateMultiplier sets the "temporary_rate_multiplier" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateTemporaryRateMultiplier() *GroupUpsert {
+	u.SetExcluded(group.FieldTemporaryRateMultiplier)
+	return u
+}
+
+// AddTemporaryRateMultiplier adds v to the "temporary_rate_multiplier" field.
+func (u *GroupUpsert) AddTemporaryRateMultiplier(v float64) *GroupUpsert {
+	u.Add(group.FieldTemporaryRateMultiplier, v)
+	return u
+}
+
+// SetTemporaryRateStartsAt sets the "temporary_rate_starts_at" field.
+func (u *GroupUpsert) SetTemporaryRateStartsAt(v time.Time) *GroupUpsert {
+	u.Set(group.FieldTemporaryRateStartsAt, v)
+	return u
+}
+
+// UpdateTemporaryRateStartsAt sets the "temporary_rate_starts_at" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateTemporaryRateStartsAt() *GroupUpsert {
+	u.SetExcluded(group.FieldTemporaryRateStartsAt)
+	return u
+}
+
+// ClearTemporaryRateStartsAt clears the value of the "temporary_rate_starts_at" field.
+func (u *GroupUpsert) ClearTemporaryRateStartsAt() *GroupUpsert {
+	u.SetNull(group.FieldTemporaryRateStartsAt)
+	return u
+}
+
+// SetTemporaryRateEndsAt sets the "temporary_rate_ends_at" field.
+func (u *GroupUpsert) SetTemporaryRateEndsAt(v time.Time) *GroupUpsert {
+	u.Set(group.FieldTemporaryRateEndsAt, v)
+	return u
+}
+
+// UpdateTemporaryRateEndsAt sets the "temporary_rate_ends_at" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateTemporaryRateEndsAt() *GroupUpsert {
+	u.SetExcluded(group.FieldTemporaryRateEndsAt)
+	return u
+}
+
+// ClearTemporaryRateEndsAt clears the value of the "temporary_rate_ends_at" field.
+func (u *GroupUpsert) ClearTemporaryRateEndsAt() *GroupUpsert {
+	u.SetNull(group.FieldTemporaryRateEndsAt)
 	return u
 }
 
@@ -3020,6 +3172,83 @@ func (u *GroupUpsertOne) AddRateMultiplier(v float64) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateRateMultiplier() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateRateMultiplier()
+	})
+}
+
+// SetTemporaryRateEnabled sets the "temporary_rate_enabled" field.
+func (u *GroupUpsertOne) SetTemporaryRateEnabled(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetTemporaryRateEnabled(v)
+	})
+}
+
+// UpdateTemporaryRateEnabled sets the "temporary_rate_enabled" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateTemporaryRateEnabled() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateTemporaryRateEnabled()
+	})
+}
+
+// SetTemporaryRateMultiplier sets the "temporary_rate_multiplier" field.
+func (u *GroupUpsertOne) SetTemporaryRateMultiplier(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetTemporaryRateMultiplier(v)
+	})
+}
+
+// AddTemporaryRateMultiplier adds v to the "temporary_rate_multiplier" field.
+func (u *GroupUpsertOne) AddTemporaryRateMultiplier(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddTemporaryRateMultiplier(v)
+	})
+}
+
+// UpdateTemporaryRateMultiplier sets the "temporary_rate_multiplier" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateTemporaryRateMultiplier() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateTemporaryRateMultiplier()
+	})
+}
+
+// SetTemporaryRateStartsAt sets the "temporary_rate_starts_at" field.
+func (u *GroupUpsertOne) SetTemporaryRateStartsAt(v time.Time) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetTemporaryRateStartsAt(v)
+	})
+}
+
+// UpdateTemporaryRateStartsAt sets the "temporary_rate_starts_at" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateTemporaryRateStartsAt() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateTemporaryRateStartsAt()
+	})
+}
+
+// ClearTemporaryRateStartsAt clears the value of the "temporary_rate_starts_at" field.
+func (u *GroupUpsertOne) ClearTemporaryRateStartsAt() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearTemporaryRateStartsAt()
+	})
+}
+
+// SetTemporaryRateEndsAt sets the "temporary_rate_ends_at" field.
+func (u *GroupUpsertOne) SetTemporaryRateEndsAt(v time.Time) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetTemporaryRateEndsAt(v)
+	})
+}
+
+// UpdateTemporaryRateEndsAt sets the "temporary_rate_ends_at" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateTemporaryRateEndsAt() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateTemporaryRateEndsAt()
+	})
+}
+
+// ClearTemporaryRateEndsAt clears the value of the "temporary_rate_ends_at" field.
+func (u *GroupUpsertOne) ClearTemporaryRateEndsAt() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearTemporaryRateEndsAt()
 	})
 }
 
@@ -4452,6 +4681,83 @@ func (u *GroupUpsertBulk) AddRateMultiplier(v float64) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateRateMultiplier() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateRateMultiplier()
+	})
+}
+
+// SetTemporaryRateEnabled sets the "temporary_rate_enabled" field.
+func (u *GroupUpsertBulk) SetTemporaryRateEnabled(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetTemporaryRateEnabled(v)
+	})
+}
+
+// UpdateTemporaryRateEnabled sets the "temporary_rate_enabled" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateTemporaryRateEnabled() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateTemporaryRateEnabled()
+	})
+}
+
+// SetTemporaryRateMultiplier sets the "temporary_rate_multiplier" field.
+func (u *GroupUpsertBulk) SetTemporaryRateMultiplier(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetTemporaryRateMultiplier(v)
+	})
+}
+
+// AddTemporaryRateMultiplier adds v to the "temporary_rate_multiplier" field.
+func (u *GroupUpsertBulk) AddTemporaryRateMultiplier(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddTemporaryRateMultiplier(v)
+	})
+}
+
+// UpdateTemporaryRateMultiplier sets the "temporary_rate_multiplier" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateTemporaryRateMultiplier() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateTemporaryRateMultiplier()
+	})
+}
+
+// SetTemporaryRateStartsAt sets the "temporary_rate_starts_at" field.
+func (u *GroupUpsertBulk) SetTemporaryRateStartsAt(v time.Time) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetTemporaryRateStartsAt(v)
+	})
+}
+
+// UpdateTemporaryRateStartsAt sets the "temporary_rate_starts_at" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateTemporaryRateStartsAt() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateTemporaryRateStartsAt()
+	})
+}
+
+// ClearTemporaryRateStartsAt clears the value of the "temporary_rate_starts_at" field.
+func (u *GroupUpsertBulk) ClearTemporaryRateStartsAt() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearTemporaryRateStartsAt()
+	})
+}
+
+// SetTemporaryRateEndsAt sets the "temporary_rate_ends_at" field.
+func (u *GroupUpsertBulk) SetTemporaryRateEndsAt(v time.Time) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetTemporaryRateEndsAt(v)
+	})
+}
+
+// UpdateTemporaryRateEndsAt sets the "temporary_rate_ends_at" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateTemporaryRateEndsAt() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateTemporaryRateEndsAt()
+	})
+}
+
+// ClearTemporaryRateEndsAt clears the value of the "temporary_rate_ends_at" field.
+func (u *GroupUpsertBulk) ClearTemporaryRateEndsAt() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearTemporaryRateEndsAt()
 	})
 }
 

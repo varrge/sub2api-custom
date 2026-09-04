@@ -148,6 +148,10 @@
                   :subscription-type="row.group.subscription_type"
                   :rate-multiplier="row.group.rate_multiplier"
                   :user-rate-multiplier="userGroupRates[row.group.id]"
+                  :temporary-rate-enabled="row.group.temporary_rate_enabled"
+                  :temporary-rate-multiplier="row.group.temporary_rate_multiplier"
+                  :temporary-rate-starts-at="row.group.temporary_rate_starts_at"
+                  :temporary-rate-ends-at="row.group.temporary_rate_ends_at"
                   :peak-rate-enabled="row.group.peak_rate_enabled"
                   :peak-start="row.group.peak_start"
                   :peak-end="row.group.peak_end"
@@ -482,6 +486,10 @@
                 :subscription-type="(option as unknown as GroupOption).subscriptionType"
                 :rate-multiplier="(option as unknown as GroupOption).rate"
                 :user-rate-multiplier="(option as unknown as GroupOption).userRate"
+                :temporary-rate-enabled="(option as unknown as GroupOption).temporaryRateEnabled"
+                :temporary-rate-multiplier="(option as unknown as GroupOption).temporaryRateMultiplier"
+                :temporary-rate-starts-at="(option as unknown as GroupOption).temporaryRateStartsAt"
+                :temporary-rate-ends-at="(option as unknown as GroupOption).temporaryRateEndsAt"
                 :peak-rate-enabled="(option as unknown as GroupOption).peakRateEnabled"
                 :peak-start="(option as unknown as GroupOption).peakStart"
                 :peak-end="(option as unknown as GroupOption).peakEnd"
@@ -496,6 +504,10 @@
                 :subscription-type="(option as unknown as GroupOption).subscriptionType"
                 :rate-multiplier="(option as unknown as GroupOption).rate"
                 :user-rate-multiplier="(option as unknown as GroupOption).userRate"
+                :temporary-rate-enabled="(option as unknown as GroupOption).temporaryRateEnabled"
+                :temporary-rate-multiplier="(option as unknown as GroupOption).temporaryRateMultiplier"
+                :temporary-rate-starts-at="(option as unknown as GroupOption).temporaryRateStartsAt"
+                :temporary-rate-ends-at="(option as unknown as GroupOption).temporaryRateEndsAt"
                 :peak-rate-enabled="(option as unknown as GroupOption).peakRateEnabled"
                 :peak-start="(option as unknown as GroupOption).peakStart"
                 :peak-end="(option as unknown as GroupOption).peakEnd"
@@ -1095,6 +1107,10 @@
               :subscription-type="option.subscriptionType"
               :rate-multiplier="option.rate"
               :user-rate-multiplier="option.userRate"
+              :temporary-rate-enabled="option.temporaryRateEnabled"
+              :temporary-rate-multiplier="option.temporaryRateMultiplier"
+              :temporary-rate-starts-at="option.temporaryRateStartsAt"
+              :temporary-rate-ends-at="option.temporaryRateEndsAt"
               :peak-rate-enabled="option.peakRateEnabled"
               :peak-start="option.peakStart"
               :peak-end="option.peakEnd"
@@ -1163,6 +1179,10 @@ interface GroupOption {
   description: string | null
   rate: number
   userRate: number | null
+  temporaryRateEnabled: boolean
+  temporaryRateMultiplier: number
+  temporaryRateStartsAt: string | null
+  temporaryRateEndsAt: string | null
   peakRateEnabled: boolean
   peakStart: string
   peakEnd: string
@@ -1415,6 +1435,10 @@ const groupOptions = computed(() =>
     description: group.description,
     rate: group.rate_multiplier,
     userRate: userGroupRates.value[group.id] ?? null,
+    temporaryRateEnabled: group.temporary_rate_enabled,
+    temporaryRateMultiplier: group.temporary_rate_multiplier,
+    temporaryRateStartsAt: group.temporary_rate_starts_at,
+    temporaryRateEndsAt: group.temporary_rate_ends_at,
     peakRateEnabled: group.peak_rate_enabled,
     peakStart: group.peak_start,
     peakEnd: group.peak_end,

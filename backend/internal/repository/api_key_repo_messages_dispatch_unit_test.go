@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"testing"
+	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -42,6 +43,8 @@ func TestAPIKeyRepository_GetByKeyForAuth_PreservesMessagesDispatchModelConfig_S
 	repo, client := newAPIKeyRepoSQLite(t)
 	ctx := context.Background()
 	user := mustCreateAPIKeyRepoUser(t, ctx, client, "getbykey-auth-dispatch-unit@test.com")
+	temporaryRateStartsAt := time.Date(2026, time.September, 5, 0, 0, 0, 0, time.UTC)
+	temporaryRateEndsAt := time.Date(2026, time.September, 11, 0, 0, 0, 0, time.UTC)
 
 	group, err := client.Group.Create().
 		SetName("g-auth-dispatch-unit").
@@ -49,6 +52,10 @@ func TestAPIKeyRepository_GetByKeyForAuth_PreservesMessagesDispatchModelConfig_S
 		SetStatus(service.StatusActive).
 		SetSubscriptionType(service.SubscriptionTypeStandard).
 		SetRateMultiplier(1).
+		SetTemporaryRateEnabled(true).
+		SetTemporaryRateMultiplier(0.5).
+		SetTemporaryRateStartsAt(temporaryRateStartsAt).
+		SetTemporaryRateEndsAt(temporaryRateEndsAt).
 		SetAllowMessagesDispatch(true).
 		SetDefaultMappedModel("gpt-5.4").
 		SetMessagesDispatchModelConfig(service.OpenAIMessagesDispatchModelConfig{
@@ -76,4 +83,8 @@ func TestAPIKeyRepository_GetByKeyForAuth_PreservesMessagesDispatchModelConfig_S
 	require.Equal(t, key.Name, got.Name)
 	require.NotNil(t, got.Group)
 	require.Equal(t, group.MessagesDispatchModelConfig, got.Group.MessagesDispatchModelConfig)
+	require.True(t, got.Group.TemporaryRateEnabled)
+	require.InDelta(t, 0.5, got.Group.TemporaryRateMultiplier, 1e-12)
+	require.Equal(t, temporaryRateStartsAt, *got.Group.TemporaryRateStartsAt)
+	require.Equal(t, temporaryRateEndsAt, *got.Group.TemporaryRateEndsAt)
 }

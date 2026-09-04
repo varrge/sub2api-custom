@@ -49,6 +49,10 @@
           <span class="text-gray-400 dark:text-dark-500">{{ t('payment.planCard.rate') }}</span>
           <span class="font-medium text-gray-700 dark:text-gray-300">{{ rateDisplay }}</span>
         </div>
+        <div v-if="temporaryRateDisplay" class="col-span-2 flex items-center justify-between gap-2">
+          <span class="text-gray-400 dark:text-dark-500">{{ t('common.temporaryRate.title') }}</span>
+          <span class="text-right font-medium text-sky-700 dark:text-sky-300">{{ temporaryRateDisplay }}</span>
+        </div>
         <div v-if="hasPeakRate" class="col-span-2 flex items-center justify-between gap-2">
           <span class="text-gray-400 dark:text-dark-500">{{ t('payment.planCard.peakRate') }}</span>
           <span class="text-right font-medium text-amber-700 dark:text-amber-300">{{ peakRateDisplay }}</span>
@@ -111,6 +115,13 @@ import type { SubscriptionPlan } from '@/types/payment'
 import type { UserSubscription } from '@/types'
 import { useAppStore } from '@/stores/app'
 import { hasPeakRate as groupHasPeakRate, formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
+import {
+  effectiveGroupRate,
+  temporaryRateDateRange,
+  temporaryRateEndDate,
+  temporaryRateStatus,
+  useTemporaryRateNow
+} from '@/utils/temporary-rate'
 import { planValiditySuffix } from './validity'
 import { currencySymbol } from '@/components/payment/currency'
 import {
@@ -124,9 +135,14 @@ import {
   platformLabel,
 } from '@/utils/platformColors'
 
-const props = defineProps<{ plan: SubscriptionPlan; activeSubscriptions?: UserSubscription[] }>()
+const props = defineProps<{
+  plan: SubscriptionPlan
+  activeSubscriptions?: UserSubscription[]
+  userRateMultiplier?: number | null
+}>()
 const emit = defineEmits<{ select: [plan: SubscriptionPlan] }>()
 const { t } = useI18n()
+const temporaryRateNow = useTemporaryRateNow()
 
 const platform = computed(() => props.plan.group_platform || '')
 const isRenewal = computed(() =>
@@ -150,11 +166,31 @@ const discountText = computed(() => {
 })
 
 const rateDisplay = computed(() => {
-  const rate = props.plan.rate_multiplier ?? 1
+  const rate = effectiveGroupRate(props.plan, props.userRateMultiplier, temporaryRateNow.value)
   return `×${Number(rate.toPrecision(10))}`
 })
 
 const appStore = useAppStore()
+const temporaryRateDisplay = computed(() => {
+  const status = temporaryRateStatus(props.plan, temporaryRateNow.value)
+  if (['upcoming', 'active'].includes(status) && props.userRateMultiplier != null) {
+    return t('common.temporaryRate.userOverride', {
+      rate: props.plan.temporary_rate_multiplier ?? 1
+    })
+  }
+  if (status === 'upcoming') {
+    return t('common.temporaryRate.upcoming', {
+      rate: props.plan.temporary_rate_multiplier ?? 1,
+      range: temporaryRateDateRange(props.plan, appStore.cachedPublicSettings?.server_timezone)
+    })
+  }
+  if (status === 'active') {
+    return t('common.temporaryRate.active', {
+      end: temporaryRateEndDate(props.plan, appStore.cachedPublicSettings?.server_timezone)
+    })
+  }
+  return ''
+})
 const planCurrencySymbol = computed(() => currencySymbol(props.plan.currency || 'USD'))
 
 const hasPeakRate = computed(() => groupHasPeakRate(props.plan))

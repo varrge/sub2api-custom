@@ -103,8 +103,9 @@ func PreviewProfitAdmission(inputs []ProfitPreviewGroupInput, evalAt time.Time) 
 		}
 
 		peak := group.PeakMultiplierAt(evalAt)
-		defaultD := group.RateMultiplier * peak
-		minRate := group.RateMultiplier
+		groupDefault := group.BaseRateMultiplierAt(evalAt)
+		defaultD := groupDefault * peak
+		minRate := groupDefault
 		for _, override := range in.UserOverrides {
 			if math.IsNaN(override) || math.IsInf(override, 0) || override < 0 {
 				continue

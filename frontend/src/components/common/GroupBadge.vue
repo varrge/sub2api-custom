@@ -13,12 +13,15 @@
     <span v-if="showLabel" :class="labelClass">
       <template v-if="hasCustomRate">
         <!-- 原倍率删除线 + 专属倍率高亮 -->
-        <span class="line-through opacity-50 mr-0.5">{{ rateMultiplier }}x</span>
-        <span class="font-bold">{{ userRateMultiplier }}x</span>
+        <span class="line-through opacity-50 mr-0.5">{{ groupBaseRate }}x</span>
+        <span class="font-bold">{{ displayRate }}x</span>
       </template>
       <template v-else>
         {{ labelText }}
       </template>
+    </span>
+    <span v-if="temporaryRateText" :class="temporaryRateClass" :title="temporaryRateText">
+      {{ temporaryRateText }}
     </span>
     <span v-if="hasPeakRate" :class="peakRateClass" :title="peakRateTitle">
       {{ peakRateText }}
@@ -32,6 +35,13 @@ import { useI18n } from 'vue-i18n'
 import type { SubscriptionType, GroupPlatform } from '@/types'
 import { useAppStore } from '@/stores/app'
 import { formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
+import {
+  effectiveGroupRate,
+  temporaryRateDateRange,
+  temporaryRateEndDate,
+  temporaryRateStatus,
+  useTemporaryRateNow
+} from '@/utils/temporary-rate'
 import PlatformIcon from './PlatformIcon.vue'
 
 interface Props {
@@ -40,6 +50,10 @@ interface Props {
   subscriptionType?: SubscriptionType
   rateMultiplier?: number
   userRateMultiplier?: number | null // 用户专属倍率
+  temporaryRateEnabled?: boolean
+  temporaryRateMultiplier?: number
+  temporaryRateStartsAt?: string | null
+  temporaryRateEndsAt?: string | null
   peakRateEnabled?: boolean
   peakStart?: string
   peakEnd?: string
@@ -64,17 +78,25 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const { t } = useI18n()
+const temporaryRateNow = useTemporaryRateNow()
 
 const isSubscription = computed(() => props.subscriptionType === 'subscription')
 
-// 是否有专属倍率（且与默认倍率不同）
+const temporaryFields = computed(() => ({
+  rate_multiplier: props.rateMultiplier,
+  temporary_rate_enabled: props.temporaryRateEnabled,
+  temporary_rate_multiplier: props.temporaryRateMultiplier,
+  temporary_rate_starts_at: props.temporaryRateStartsAt,
+  temporary_rate_ends_at: props.temporaryRateEndsAt
+}))
+const temporaryStatus = computed(() => temporaryRateStatus(temporaryFields.value, temporaryRateNow.value))
+const groupBaseRate = computed(() => effectiveGroupRate(temporaryFields.value, null, temporaryRateNow.value))
+const displayRate = computed(() => effectiveGroupRate(temporaryFields.value, props.userRateMultiplier, temporaryRateNow.value))
+const hasUserRate = computed(() => props.userRateMultiplier !== null && props.userRateMultiplier !== undefined)
+
+// 专属倍率只要存在就保持最高优先级；与当前分组基础倍率不同时显示划线对比。
 const hasCustomRate = computed(() => {
-  return (
-    props.userRateMultiplier !== null &&
-    props.userRateMultiplier !== undefined &&
-    props.rateMultiplier !== undefined &&
-    props.userRateMultiplier !== props.rateMultiplier
-  )
+  return hasUserRate.value && displayRate.value !== groupBaseRate.value
 })
 
 const appStore = useAppStore()
@@ -99,6 +121,21 @@ const peakRateTitle = computed(() => {
   return t('common.peakRateTooltip', { window: peakRateText.value })
 })
 
+const temporaryRateText = computed(() => {
+  if (!props.showRate || !['upcoming', 'active'].includes(temporaryStatus.value)) return ''
+  const rate = props.temporaryRateMultiplier ?? 1
+  if (hasUserRate.value) return t('common.temporaryRate.userOverride', { rate })
+  if (temporaryStatus.value === 'upcoming') {
+    return t('common.temporaryRate.upcoming', {
+      rate,
+      range: temporaryRateDateRange(temporaryFields.value, appStore.cachedPublicSettings?.server_timezone)
+    })
+  }
+  return t('common.temporaryRate.active', {
+    end: temporaryRateEndDate(temporaryFields.value, appStore.cachedPublicSettings?.server_timezone)
+  })
+})
+
 // 是否显示右侧标签
 const showLabel = computed(() => {
   if (!props.showRate) return false
@@ -110,7 +147,7 @@ const showLabel = computed(() => {
 
 // Label text
 const labelText = computed(() => {
-  const rateLabel = props.rateMultiplier !== undefined ? `${props.rateMultiplier}x` : ''
+  const rateLabel = props.rateMultiplier !== undefined ? `${displayRate.value}x` : ''
   if (isSubscription.value && !props.alwaysShowRate) {
     // 如果有剩余天数，显示天数
     if (props.daysRemaining !== null && props.daysRemaining !== undefined) {
@@ -179,6 +216,10 @@ const labelClass = computed(() => {
 
 const peakRateClass = computed(() => {
   return 'px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+})
+
+const temporaryRateClass = computed(() => {
+  return 'px-1.5 py-0.5 rounded text-[10px] font-semibold bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
 })
 
 // Badge color based on platform and subscription type

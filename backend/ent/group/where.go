@@ -85,6 +85,26 @@ func RateMultiplier(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldRateMultiplier, v))
 }
 
+// TemporaryRateEnabled applies equality check predicate on the "temporary_rate_enabled" field. It's identical to TemporaryRateEnabledEQ.
+func TemporaryRateEnabled(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldTemporaryRateEnabled, v))
+}
+
+// TemporaryRateMultiplier applies equality check predicate on the "temporary_rate_multiplier" field. It's identical to TemporaryRateMultiplierEQ.
+func TemporaryRateMultiplier(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldTemporaryRateMultiplier, v))
+}
+
+// TemporaryRateStartsAt applies equality check predicate on the "temporary_rate_starts_at" field. It's identical to TemporaryRateStartsAtEQ.
+func TemporaryRateStartsAt(v time.Time) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldTemporaryRateStartsAt, v))
+}
+
+// TemporaryRateEndsAt applies equality check predicate on the "temporary_rate_ends_at" field. It's identical to TemporaryRateEndsAtEQ.
+func TemporaryRateEndsAt(v time.Time) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldTemporaryRateEndsAt, v))
+}
+
 // PeakRateEnabled applies equality check predicate on the "peak_rate_enabled" field. It's identical to PeakRateEnabledEQ.
 func PeakRateEnabled(v bool) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldPeakRateEnabled, v))
@@ -653,6 +673,156 @@ func RateMultiplierLT(v float64) predicate.Group {
 // RateMultiplierLTE applies the LTE predicate on the "rate_multiplier" field.
 func RateMultiplierLTE(v float64) predicate.Group {
 	return predicate.Group(sql.FieldLTE(FieldRateMultiplier, v))
+}
+
+// TemporaryRateEnabledEQ applies the EQ predicate on the "temporary_rate_enabled" field.
+func TemporaryRateEnabledEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldTemporaryRateEnabled, v))
+}
+
+// TemporaryRateEnabledNEQ applies the NEQ predicate on the "temporary_rate_enabled" field.
+func TemporaryRateEnabledNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldTemporaryRateEnabled, v))
+}
+
+// TemporaryRateMultiplierEQ applies the EQ predicate on the "temporary_rate_multiplier" field.
+func TemporaryRateMultiplierEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldTemporaryRateMultiplier, v))
+}
+
+// TemporaryRateMultiplierNEQ applies the NEQ predicate on the "temporary_rate_multiplier" field.
+func TemporaryRateMultiplierNEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldTemporaryRateMultiplier, v))
+}
+
+// TemporaryRateMultiplierIn applies the In predicate on the "temporary_rate_multiplier" field.
+func TemporaryRateMultiplierIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldTemporaryRateMultiplier, vs...))
+}
+
+// TemporaryRateMultiplierNotIn applies the NotIn predicate on the "temporary_rate_multiplier" field.
+func TemporaryRateMultiplierNotIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldTemporaryRateMultiplier, vs...))
+}
+
+// TemporaryRateMultiplierGT applies the GT predicate on the "temporary_rate_multiplier" field.
+func TemporaryRateMultiplierGT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldTemporaryRateMultiplier, v))
+}
+
+// TemporaryRateMultiplierGTE applies the GTE predicate on the "temporary_rate_multiplier" field.
+func TemporaryRateMultiplierGTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldTemporaryRateMultiplier, v))
+}
+
+// TemporaryRateMultiplierLT applies the LT predicate on the "temporary_rate_multiplier" field.
+func TemporaryRateMultiplierLT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldTemporaryRateMultiplier, v))
+}
+
+// TemporaryRateMultiplierLTE applies the LTE predicate on the "temporary_rate_multiplier" field.
+func TemporaryRateMultiplierLTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldTemporaryRateMultiplier, v))
+}
+
+// TemporaryRateStartsAtEQ applies the EQ predicate on the "temporary_rate_starts_at" field.
+func TemporaryRateStartsAtEQ(v time.Time) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldTemporaryRateStartsAt, v))
+}
+
+// TemporaryRateStartsAtNEQ applies the NEQ predicate on the "temporary_rate_starts_at" field.
+func TemporaryRateStartsAtNEQ(v time.Time) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldTemporaryRateStartsAt, v))
+}
+
+// TemporaryRateStartsAtIn applies the In predicate on the "temporary_rate_starts_at" field.
+func TemporaryRateStartsAtIn(vs ...time.Time) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldTemporaryRateStartsAt, vs...))
+}
+
+// TemporaryRateStartsAtNotIn applies the NotIn predicate on the "temporary_rate_starts_at" field.
+func TemporaryRateStartsAtNotIn(vs ...time.Time) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldTemporaryRateStartsAt, vs...))
+}
+
+// TemporaryRateStartsAtGT applies the GT predicate on the "temporary_rate_starts_at" field.
+func TemporaryRateStartsAtGT(v time.Time) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldTemporaryRateStartsAt, v))
+}
+
+// TemporaryRateStartsAtGTE applies the GTE predicate on the "temporary_rate_starts_at" field.
+func TemporaryRateStartsAtGTE(v time.Time) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldTemporaryRateStartsAt, v))
+}
+
+// TemporaryRateStartsAtLT applies the LT predicate on the "temporary_rate_starts_at" field.
+func TemporaryRateStartsAtLT(v time.Time) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldTemporaryRateStartsAt, v))
+}
+
+// TemporaryRateStartsAtLTE applies the LTE predicate on the "temporary_rate_starts_at" field.
+func TemporaryRateStartsAtLTE(v time.Time) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldTemporaryRateStartsAt, v))
+}
+
+// TemporaryRateStartsAtIsNil applies the IsNil predicate on the "temporary_rate_starts_at" field.
+func TemporaryRateStartsAtIsNil() predicate.Group {
+	return predicate.Group(sql.FieldIsNull(FieldTemporaryRateStartsAt))
+}
+
+// TemporaryRateStartsAtNotNil applies the NotNil predicate on the "temporary_rate_starts_at" field.
+func TemporaryRateStartsAtNotNil() predicate.Group {
+	return predicate.Group(sql.FieldNotNull(FieldTemporaryRateStartsAt))
+}
+
+// TemporaryRateEndsAtEQ applies the EQ predicate on the "temporary_rate_ends_at" field.
+func TemporaryRateEndsAtEQ(v time.Time) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldTemporaryRateEndsAt, v))
+}
+
+// TemporaryRateEndsAtNEQ applies the NEQ predicate on the "temporary_rate_ends_at" field.
+func TemporaryRateEndsAtNEQ(v time.Time) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldTemporaryRateEndsAt, v))
+}
+
+// TemporaryRateEndsAtIn applies the In predicate on the "temporary_rate_ends_at" field.
+func TemporaryRateEndsAtIn(vs ...time.Time) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldTemporaryRateEndsAt, vs...))
+}
+
+// TemporaryRateEndsAtNotIn applies the NotIn predicate on the "temporary_rate_ends_at" field.
+func TemporaryRateEndsAtNotIn(vs ...time.Time) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldTemporaryRateEndsAt, vs...))
+}
+
+// TemporaryRateEndsAtGT applies the GT predicate on the "temporary_rate_ends_at" field.
+func TemporaryRateEndsAtGT(v time.Time) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldTemporaryRateEndsAt, v))
+}
+
+// TemporaryRateEndsAtGTE applies the GTE predicate on the "temporary_rate_ends_at" field.
+func TemporaryRateEndsAtGTE(v time.Time) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldTemporaryRateEndsAt, v))
+}
+
+// TemporaryRateEndsAtLT applies the LT predicate on the "temporary_rate_ends_at" field.
+func TemporaryRateEndsAtLT(v time.Time) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldTemporaryRateEndsAt, v))
+}
+
+// TemporaryRateEndsAtLTE applies the LTE predicate on the "temporary_rate_ends_at" field.
+func TemporaryRateEndsAtLTE(v time.Time) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldTemporaryRateEndsAt, v))
+}
+
+// TemporaryRateEndsAtIsNil applies the IsNil predicate on the "temporary_rate_ends_at" field.
+func TemporaryRateEndsAtIsNil() predicate.Group {
+	return predicate.Group(sql.FieldIsNull(FieldTemporaryRateEndsAt))
+}
+
+// TemporaryRateEndsAtNotNil applies the NotNil predicate on the "temporary_rate_ends_at" field.
+func TemporaryRateEndsAtNotNil() predicate.Group {
+	return predicate.Group(sql.FieldNotNull(FieldTemporaryRateEndsAt))
 }
 
 // PeakRateEnabledEQ applies the EQ predicate on the "peak_rate_enabled" field.

@@ -28,12 +28,19 @@
         <!-- Rate pill (platform color) -->
         <span v-if="rateMultiplier !== undefined" :class="['inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold', ratePillClass]">
           <template v-if="hasCustomRate">
-            <span class="mr-1 line-through opacity-50">{{ rateMultiplier }}x</span>
-            <span class="font-bold">{{ userRateMultiplier }}x</span>
+            <span class="mr-1 line-through opacity-50">{{ groupBaseRate }}x</span>
+            <span class="font-bold">{{ displayRate }}x</span>
           </template>
           <template v-else>
-            {{ rateMultiplier }}x {{ t('admin.groups.rateLabel') }}
+            {{ displayRate }}x {{ t('admin.groups.rateLabel') }}
           </template>
+        </span>
+        <span
+          v-if="temporaryRateText"
+          class="inline-flex items-center whitespace-nowrap rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 dark:bg-sky-900/20 dark:text-sky-300"
+          :title="temporaryRateText"
+        >
+          {{ temporaryRateText }}
         </span>
         <span
           v-if="hasPeakRate"
@@ -65,8 +72,16 @@ import GroupBadge from './GroupBadge.vue'
 import type { SubscriptionType, GroupPlatform } from '@/types'
 import { useAppStore } from '@/stores/app'
 import { formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
+import {
+  effectiveGroupRate,
+  temporaryRateDateRange,
+  temporaryRateEndDate,
+  temporaryRateStatus,
+  useTemporaryRateNow
+} from '@/utils/temporary-rate'
 
 const { t } = useI18n()
+const temporaryRateNow = useTemporaryRateNow()
 
 interface Props {
   name: string
@@ -74,6 +89,10 @@ interface Props {
   subscriptionType?: SubscriptionType
   rateMultiplier?: number
   userRateMultiplier?: number | null
+  temporaryRateEnabled?: boolean
+  temporaryRateMultiplier?: number
+  temporaryRateStartsAt?: string | null
+  temporaryRateEndsAt?: string | null
   peakRateEnabled?: boolean
   peakStart?: string
   peakEnd?: string
@@ -91,14 +110,20 @@ const props = withDefaults(defineProps<Props>(), {
   peakRateEnabled: false
 })
 
-// Whether user has a custom rate different from default
+const temporaryFields = computed(() => ({
+  rate_multiplier: props.rateMultiplier,
+  temporary_rate_enabled: props.temporaryRateEnabled,
+  temporary_rate_multiplier: props.temporaryRateMultiplier,
+  temporary_rate_starts_at: props.temporaryRateStartsAt,
+  temporary_rate_ends_at: props.temporaryRateEndsAt
+}))
+const temporaryStatus = computed(() => temporaryRateStatus(temporaryFields.value, temporaryRateNow.value))
+const groupBaseRate = computed(() => effectiveGroupRate(temporaryFields.value, null, temporaryRateNow.value))
+const displayRate = computed(() => effectiveGroupRate(temporaryFields.value, props.userRateMultiplier, temporaryRateNow.value))
+const hasUserRate = computed(() => props.userRateMultiplier !== null && props.userRateMultiplier !== undefined)
+
 const hasCustomRate = computed(() => {
-  return (
-    props.userRateMultiplier !== null &&
-    props.userRateMultiplier !== undefined &&
-    props.rateMultiplier !== undefined &&
-    props.userRateMultiplier !== props.rateMultiplier
-  )
+  return hasUserRate.value && displayRate.value !== groupBaseRate.value
 })
 
 const appStore = useAppStore()
@@ -121,6 +146,21 @@ const peakRateText = computed(() => {
 
 const peakRateTitle = computed(() => {
   return t('common.peakRateTooltip', { window: peakRateText.value })
+})
+
+const temporaryRateText = computed(() => {
+  if (!['upcoming', 'active'].includes(temporaryStatus.value)) return ''
+  const rate = props.temporaryRateMultiplier ?? 1
+  if (hasUserRate.value) return t('common.temporaryRate.userOverride', { rate })
+  if (temporaryStatus.value === 'upcoming') {
+    return t('common.temporaryRate.upcoming', {
+      rate,
+      range: temporaryRateDateRange(temporaryFields.value, appStore.cachedPublicSettings?.server_timezone)
+    })
+  }
+  return t('common.temporaryRate.active', {
+    end: temporaryRateEndDate(temporaryFields.value, appStore.cachedPublicSettings?.server_timezone)
+  })
 })
 
 // Rate pill color matches platform badge color

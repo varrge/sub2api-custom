@@ -118,6 +118,81 @@ func (_u *GroupUpdate) AddRateMultiplier(v float64) *GroupUpdate {
 	return _u
 }
 
+// SetTemporaryRateEnabled sets the "temporary_rate_enabled" field.
+func (_u *GroupUpdate) SetTemporaryRateEnabled(v bool) *GroupUpdate {
+	_u.mutation.SetTemporaryRateEnabled(v)
+	return _u
+}
+
+// SetNillableTemporaryRateEnabled sets the "temporary_rate_enabled" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableTemporaryRateEnabled(v *bool) *GroupUpdate {
+	if v != nil {
+		_u.SetTemporaryRateEnabled(*v)
+	}
+	return _u
+}
+
+// SetTemporaryRateMultiplier sets the "temporary_rate_multiplier" field.
+func (_u *GroupUpdate) SetTemporaryRateMultiplier(v float64) *GroupUpdate {
+	_u.mutation.ResetTemporaryRateMultiplier()
+	_u.mutation.SetTemporaryRateMultiplier(v)
+	return _u
+}
+
+// SetNillableTemporaryRateMultiplier sets the "temporary_rate_multiplier" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableTemporaryRateMultiplier(v *float64) *GroupUpdate {
+	if v != nil {
+		_u.SetTemporaryRateMultiplier(*v)
+	}
+	return _u
+}
+
+// AddTemporaryRateMultiplier adds value to the "temporary_rate_multiplier" field.
+func (_u *GroupUpdate) AddTemporaryRateMultiplier(v float64) *GroupUpdate {
+	_u.mutation.AddTemporaryRateMultiplier(v)
+	return _u
+}
+
+// SetTemporaryRateStartsAt sets the "temporary_rate_starts_at" field.
+func (_u *GroupUpdate) SetTemporaryRateStartsAt(v time.Time) *GroupUpdate {
+	_u.mutation.SetTemporaryRateStartsAt(v)
+	return _u
+}
+
+// SetNillableTemporaryRateStartsAt sets the "temporary_rate_starts_at" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableTemporaryRateStartsAt(v *time.Time) *GroupUpdate {
+	if v != nil {
+		_u.SetTemporaryRateStartsAt(*v)
+	}
+	return _u
+}
+
+// ClearTemporaryRateStartsAt clears the value of the "temporary_rate_starts_at" field.
+func (_u *GroupUpdate) ClearTemporaryRateStartsAt() *GroupUpdate {
+	_u.mutation.ClearTemporaryRateStartsAt()
+	return _u
+}
+
+// SetTemporaryRateEndsAt sets the "temporary_rate_ends_at" field.
+func (_u *GroupUpdate) SetTemporaryRateEndsAt(v time.Time) *GroupUpdate {
+	_u.mutation.SetTemporaryRateEndsAt(v)
+	return _u
+}
+
+// SetNillableTemporaryRateEndsAt sets the "temporary_rate_ends_at" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableTemporaryRateEndsAt(v *time.Time) *GroupUpdate {
+	if v != nil {
+		_u.SetTemporaryRateEndsAt(*v)
+	}
+	return _u
+}
+
+// ClearTemporaryRateEndsAt clears the value of the "temporary_rate_ends_at" field.
+func (_u *GroupUpdate) ClearTemporaryRateEndsAt() *GroupUpdate {
+	_u.mutation.ClearTemporaryRateEndsAt()
+	return _u
+}
+
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
 func (_u *GroupUpdate) SetPeakRateEnabled(v bool) *GroupUpdate {
 	_u.mutation.SetPeakRateEnabled(v)
@@ -1573,6 +1648,27 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedRateMultiplier(); ok {
 		_spec.AddField(group.FieldRateMultiplier, field.TypeFloat64, value)
 	}
+	if value, ok := _u.mutation.TemporaryRateEnabled(); ok {
+		_spec.SetField(group.FieldTemporaryRateEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.TemporaryRateMultiplier(); ok {
+		_spec.SetField(group.FieldTemporaryRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedTemporaryRateMultiplier(); ok {
+		_spec.AddField(group.FieldTemporaryRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.TemporaryRateStartsAt(); ok {
+		_spec.SetField(group.FieldTemporaryRateStartsAt, field.TypeTime, value)
+	}
+	if _u.mutation.TemporaryRateStartsAtCleared() {
+		_spec.ClearField(group.FieldTemporaryRateStartsAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.TemporaryRateEndsAt(); ok {
+		_spec.SetField(group.FieldTemporaryRateEndsAt, field.TypeTime, value)
+	}
+	if _u.mutation.TemporaryRateEndsAtCleared() {
+		_spec.ClearField(group.FieldTemporaryRateEndsAt, field.TypeTime)
+	}
 	if value, ok := _u.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)
 	}
@@ -2292,6 +2388,81 @@ func (_u *GroupUpdateOne) SetNillableRateMultiplier(v *float64) *GroupUpdateOne 
 // AddRateMultiplier adds value to the "rate_multiplier" field.
 func (_u *GroupUpdateOne) AddRateMultiplier(v float64) *GroupUpdateOne {
 	_u.mutation.AddRateMultiplier(v)
+	return _u
+}
+
+// SetTemporaryRateEnabled sets the "temporary_rate_enabled" field.
+func (_u *GroupUpdateOne) SetTemporaryRateEnabled(v bool) *GroupUpdateOne {
+	_u.mutation.SetTemporaryRateEnabled(v)
+	return _u
+}
+
+// SetNillableTemporaryRateEnabled sets the "temporary_rate_enabled" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableTemporaryRateEnabled(v *bool) *GroupUpdateOne {
+	if v != nil {
+		_u.SetTemporaryRateEnabled(*v)
+	}
+	return _u
+}
+
+// SetTemporaryRateMultiplier sets the "temporary_rate_multiplier" field.
+func (_u *GroupUpdateOne) SetTemporaryRateMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.ResetTemporaryRateMultiplier()
+	_u.mutation.SetTemporaryRateMultiplier(v)
+	return _u
+}
+
+// SetNillableTemporaryRateMultiplier sets the "temporary_rate_multiplier" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableTemporaryRateMultiplier(v *float64) *GroupUpdateOne {
+	if v != nil {
+		_u.SetTemporaryRateMultiplier(*v)
+	}
+	return _u
+}
+
+// AddTemporaryRateMultiplier adds value to the "temporary_rate_multiplier" field.
+func (_u *GroupUpdateOne) AddTemporaryRateMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.AddTemporaryRateMultiplier(v)
+	return _u
+}
+
+// SetTemporaryRateStartsAt sets the "temporary_rate_starts_at" field.
+func (_u *GroupUpdateOne) SetTemporaryRateStartsAt(v time.Time) *GroupUpdateOne {
+	_u.mutation.SetTemporaryRateStartsAt(v)
+	return _u
+}
+
+// SetNillableTemporaryRateStartsAt sets the "temporary_rate_starts_at" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableTemporaryRateStartsAt(v *time.Time) *GroupUpdateOne {
+	if v != nil {
+		_u.SetTemporaryRateStartsAt(*v)
+	}
+	return _u
+}
+
+// ClearTemporaryRateStartsAt clears the value of the "temporary_rate_starts_at" field.
+func (_u *GroupUpdateOne) ClearTemporaryRateStartsAt() *GroupUpdateOne {
+	_u.mutation.ClearTemporaryRateStartsAt()
+	return _u
+}
+
+// SetTemporaryRateEndsAt sets the "temporary_rate_ends_at" field.
+func (_u *GroupUpdateOne) SetTemporaryRateEndsAt(v time.Time) *GroupUpdateOne {
+	_u.mutation.SetTemporaryRateEndsAt(v)
+	return _u
+}
+
+// SetNillableTemporaryRateEndsAt sets the "temporary_rate_ends_at" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableTemporaryRateEndsAt(v *time.Time) *GroupUpdateOne {
+	if v != nil {
+		_u.SetTemporaryRateEndsAt(*v)
+	}
+	return _u
+}
+
+// ClearTemporaryRateEndsAt clears the value of the "temporary_rate_ends_at" field.
+func (_u *GroupUpdateOne) ClearTemporaryRateEndsAt() *GroupUpdateOne {
+	_u.mutation.ClearTemporaryRateEndsAt()
 	return _u
 }
 
@@ -3779,6 +3950,27 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.AddedRateMultiplier(); ok {
 		_spec.AddField(group.FieldRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.TemporaryRateEnabled(); ok {
+		_spec.SetField(group.FieldTemporaryRateEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.TemporaryRateMultiplier(); ok {
+		_spec.SetField(group.FieldTemporaryRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedTemporaryRateMultiplier(); ok {
+		_spec.AddField(group.FieldTemporaryRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.TemporaryRateStartsAt(); ok {
+		_spec.SetField(group.FieldTemporaryRateStartsAt, field.TypeTime, value)
+	}
+	if _u.mutation.TemporaryRateStartsAtCleared() {
+		_spec.ClearField(group.FieldTemporaryRateStartsAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.TemporaryRateEndsAt(); ok {
+		_spec.SetField(group.FieldTemporaryRateEndsAt, field.TypeTime, value)
+	}
+	if _u.mutation.TemporaryRateEndsAtCleared() {
+		_spec.ClearField(group.FieldTemporaryRateEndsAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)

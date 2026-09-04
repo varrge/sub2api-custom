@@ -59,13 +59,22 @@ func TestUserGroupRateResolverResolve_InvalidCacheEntryLoadsRepoAndCaches(t *tes
 
 	cached, ok := cache.Get("101:202")
 	require.True(t, ok)
-	require.Equal(t, rate, cached)
+	require.Equal(t, cachedUserGroupRate{multiplier: rate, overridden: true}, cached)
 
 	hit, miss, load, _, fallback := GatewayUserGroupRateCacheStats()
 	require.Equal(t, int64(0), hit)
 	require.Equal(t, int64(1), miss)
 	require.Equal(t, int64(1), load)
 	require.Equal(t, int64(0), fallback)
+}
+
+func TestUserGroupRateResolverResolve_CachedMissingOverrideUsesLatestGroupDefault(t *testing.T) {
+	repo := &userGroupRateResolverRepoStub{}
+	resolver := newUserGroupRateResolver(repo, nil, time.Minute, nil, "service.test")
+
+	require.Equal(t, 0.8, resolver.Resolve(context.Background(), 101, 202, 0.8))
+	require.Equal(t, 0.5, resolver.Resolve(context.Background(), 101, 202, 0.5))
+	require.Equal(t, 1, repo.calls, "missing override is cached, but the time-dependent group default is not")
 }
 
 func TestGatewayServiceGetUserGroupRateMultiplier_FallbacksAndUsesExistingResolver(t *testing.T) {

@@ -122,7 +122,13 @@
                   <div>
                     <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.rate') }}</span>
                     <div class="flex items-baseline">
-                      <span :class="['text-lg font-bold', planTextClass]">×{{ selectedPlan.rate_multiplier ?? 1 }}</span>
+                      <span :class="['text-lg font-bold', planTextClass]">×{{ displayedGroupRate(selectedPlan) }}</span>
+                    </div>
+                  </div>
+                  <div v-if="temporaryRateLabel(selectedPlan)" class="col-span-2">
+                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('common.temporaryRate.title') }}</span>
+                    <div class="text-sm font-semibold text-sky-700 dark:text-sky-300">
+                      {{ temporaryRateLabel(selectedPlan) }}
                     </div>
                   </div>
                   <div v-if="planHasPeakRate(selectedPlan)">
@@ -188,7 +194,7 @@
                 <p class="text-gray-500 dark:text-gray-400">{{ t('payment.noPlans') }}</p>
               </div>
               <div v-else :class="planGridClass">
-                <SubscriptionPlanCard v-for="plan in checkout.plans" :key="plan.id" :plan="plan" :active-subscriptions="activeSubscriptions" @select="selectPlan" />
+                <SubscriptionPlanCard v-for="plan in checkout.plans" :key="plan.id" :plan="plan" :active-subscriptions="activeSubscriptions" :user-rate-multiplier="userGroupRates[plan.group_id] ?? null" @select="selectPlan" />
               </div>
               <!-- Active subscriptions (compact, below plan list) -->
               <div v-if="activeSubscriptions.length > 0">
@@ -203,7 +209,8 @@
                         <span :class="['shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium', platformBadgeLightClass(sub.group?.platform || '')]">{{ platformLabel(sub.group?.platform || '') }}</span>
                       </div>
                       <div class="flex flex-wrap gap-x-3 text-[11px] text-gray-400 dark:text-gray-500">
-                        <span>{{ t('payment.planCard.rate') }}: ×{{ sub.group?.rate_multiplier ?? 1 }}</span>
+                        <span>{{ t('payment.planCard.rate') }}: ×{{ displayedGroupRate(sub.group) }}</span>
+                        <span v-if="temporaryRateLabel(sub.group)" class="text-sky-600 dark:text-sky-400">{{ temporaryRateLabel(sub.group) }}</span>
                         <span v-if="subscriptionHasPeakRate(sub)">{{ t('payment.planCard.peakRate') }}: {{ subscriptionPeakRateLabel(sub) }}</span>
                         <span v-if="sub.group?.daily_limit_usd == null && sub.group?.weekly_limit_usd == null && sub.group?.monthly_limit_usd == null">{{ t('payment.planCard.quota') }}: {{ t('payment.planCard.unlimited') }}</span>
                         <span v-if="sub.expires_at">{{ t('userSubscriptions.daysRemaining', { days: getDaysRemaining(sub.expires_at) }) }}</span>
@@ -238,7 +245,7 @@
             </button>
             <h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">{{ t('payment.selectPlan') }}</h3>
             <div class="space-y-4">
-              <SubscriptionPlanCard v-for="plan in renewalPlans" :key="plan.id" :plan="plan" :active-subscriptions="activeSubscriptions" @select="selectPlanFromModal" />
+              <SubscriptionPlanCard v-for="plan in renewalPlans" :key="plan.id" :plan="plan" :active-subscriptions="activeSubscriptions" :user-rate-multiplier="userGroupRates[plan.group_id] ?? null" @select="selectPlanFromModal" />
             </div>
           </div>
         </div>
@@ -264,9 +271,18 @@ import { usePaymentStore } from '@/stores/payment'
 import { useSubscriptionStore } from '@/stores/subscriptions'
 import { useAppStore } from '@/stores'
 import { paymentAPI } from '@/api/payment'
+import { userGroupsAPI } from '@/api/groups'
 import { extractApiErrorMessage, extractI18nErrorMessage } from '@/utils/apiError'
 import { isMobileDevice } from '@/utils/device'
 import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel, type PeakRateFields } from '@/utils/peak-rate'
+import {
+  effectiveGroupRate,
+  temporaryRateDateRange,
+  temporaryRateEndDate,
+  temporaryRateStatus,
+  useTemporaryRateNow,
+  type TemporaryRateFields
+} from '@/utils/temporary-rate'
 import type { SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, OrderType } from '@/types/payment'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import AmountInput from '@/components/payment/AmountInput.vue'
@@ -301,6 +317,8 @@ const authStore = useAuthStore()
 const paymentStore = usePaymentStore()
 const subscriptionStore = useSubscriptionStore()
 const appStore = useAppStore()
+const temporaryRateNow = useTemporaryRateNow()
+const userGroupRates = ref<Record<number, number>>({})
 
 const user = computed(() => authStore.user)
 const activeSubscriptions = computed(() => subscriptionStore.activeSubscriptions)
@@ -316,6 +334,39 @@ function subscriptionHasPeakRate(sub: { group?: PeakRateFields | null }): boolea
 
 function subscriptionPeakRateLabel(sub: { group?: PeakRateFields | null }): string {
   return formatPeakRateWindow(sub.group, serverTimezoneLabel(appStore.cachedPublicSettings?.server_utc_offset))
+}
+
+type DisplayRateGroup = TemporaryRateFields & { id?: number; group_id?: number; rate_multiplier?: number }
+
+function userRateForGroup(group?: DisplayRateGroup | null): number | null {
+  const groupID = group?.group_id ?? group?.id
+  return groupID == null ? null : userGroupRates.value[groupID] ?? null
+}
+
+function displayedGroupRate(group?: DisplayRateGroup | null): number {
+  return group ? effectiveGroupRate(group, userRateForGroup(group), temporaryRateNow.value) : 1
+}
+
+function temporaryRateLabel(group?: DisplayRateGroup | null): string {
+  if (!group) return ''
+  const status = temporaryRateStatus(group, temporaryRateNow.value)
+  if (['upcoming', 'active'].includes(status) && userRateForGroup(group) != null) {
+    return t('common.temporaryRate.userOverride', {
+      rate: group.temporary_rate_multiplier ?? 1
+    })
+  }
+  if (status === 'upcoming') {
+    return t('common.temporaryRate.upcoming', {
+      rate: group.temporary_rate_multiplier ?? 1,
+      range: temporaryRateDateRange(group, appStore.cachedPublicSettings?.server_timezone)
+    })
+  }
+  if (status === 'active') {
+    return t('common.temporaryRate.active', {
+      end: temporaryRateEndDate(group, appStore.cachedPublicSettings?.server_timezone)
+    })
+  }
+  return ''
 }
 
 const loading = ref(true)
@@ -1098,8 +1149,12 @@ async function resumeWechatPaymentFromQuery() {
 
 onMounted(async () => {
   try {
-    const res = await paymentAPI.getCheckoutInfo()
+    const [res, rates] = await Promise.all([
+      paymentAPI.getCheckoutInfo(),
+      userGroupsAPI.getUserGroupRates().catch(() => ({}))
+    ])
     checkout.value = res.data
+    userGroupRates.value = rates
     if (enabledMethods.value.length) {
       const order: readonly string[] = METHOD_ORDER
       const sorted = [...enabledMethods.value].sort((a, b) => {

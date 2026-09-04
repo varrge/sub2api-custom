@@ -64,6 +64,10 @@ type APIKeyAuthGroupSnapshot struct {
 	Status                          string                        `json:"status"`
 	SubscriptionType                string                        `json:"subscription_type"`
 	RateMultiplier                  float64                       `json:"rate_multiplier"`
+	TemporaryRateEnabled            bool                          `json:"temporary_rate_enabled"`
+	TemporaryRateMultiplier         float64                       `json:"temporary_rate_multiplier"`
+	TemporaryRateStartsAt           *time.Time                    `json:"temporary_rate_starts_at,omitempty"`
+	TemporaryRateEndsAt             *time.Time                    `json:"temporary_rate_ends_at,omitempty"`
 	DailyLimitUSD                   *float64                      `json:"daily_limit_usd,omitempty"`
 	WeeklyLimitUSD                  *float64                      `json:"weekly_limit_usd,omitempty"`
 	MonthlyLimitUSD                 *float64                      `json:"monthly_limit_usd,omitempty"`

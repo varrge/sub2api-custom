@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -28,6 +29,7 @@ const (
 )
 
 func (h *GatewayHandler) WebSearch(c *gin.Context) {
+	pricingAt := time.Now()
 	isXSearch := c.GetBool("grok_x_search_endpoint")
 	var req grokStandaloneSearchRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -247,6 +249,7 @@ func (h *GatewayHandler) WebSearch(c *gin.Context) {
 			RequestPayloadHash: requestPayloadHash,
 			APIKeyService:      h.apiKeyService,
 			QuotaPlatform:      quotaPlatform,
+			PricingAt:          pricingAt,
 		}); err != nil {
 			logger.L().With(
 				zap.String("component", "handler.gateway.web_search"),

@@ -5,6 +5,12 @@ export default {
     justNow: '刚刚',
     peakRateTooltip: '高峰倍率：{window}',
     peakRateImageNote: '；token 计费的图片 token 同样适用，图片按次计费不受高峰影响',
+    temporaryRate: {
+      title: '限时倍率',
+      upcoming: '限时 ×{rate}（{range}，即将生效）',
+      active: '生效中 · 限时至 {end}',
+      userOverride: '限时 ×{rate}（专属倍率优先）'
+    },
     save: '保存',
     saved: '保存成功',
     deleted: '删除成功',

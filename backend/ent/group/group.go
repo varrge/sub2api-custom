@@ -28,6 +28,14 @@ const (
 	FieldDescription = "description"
 	// FieldRateMultiplier holds the string denoting the rate_multiplier field in the database.
 	FieldRateMultiplier = "rate_multiplier"
+	// FieldTemporaryRateEnabled holds the string denoting the temporary_rate_enabled field in the database.
+	FieldTemporaryRateEnabled = "temporary_rate_enabled"
+	// FieldTemporaryRateMultiplier holds the string denoting the temporary_rate_multiplier field in the database.
+	FieldTemporaryRateMultiplier = "temporary_rate_multiplier"
+	// FieldTemporaryRateStartsAt holds the string denoting the temporary_rate_starts_at field in the database.
+	FieldTemporaryRateStartsAt = "temporary_rate_starts_at"
+	// FieldTemporaryRateEndsAt holds the string denoting the temporary_rate_ends_at field in the database.
+	FieldTemporaryRateEndsAt = "temporary_rate_ends_at"
 	// FieldPeakRateEnabled holds the string denoting the peak_rate_enabled field in the database.
 	FieldPeakRateEnabled = "peak_rate_enabled"
 	// FieldPeakStart holds the string denoting the peak_start field in the database.
@@ -227,6 +235,10 @@ var Columns = []string{
 	FieldName,
 	FieldDescription,
 	FieldRateMultiplier,
+	FieldTemporaryRateEnabled,
+	FieldTemporaryRateMultiplier,
+	FieldTemporaryRateStartsAt,
+	FieldTemporaryRateEndsAt,
 	FieldPeakRateEnabled,
 	FieldPeakStart,
 	FieldPeakEnd,
@@ -325,6 +337,10 @@ var (
 	NameValidator func(string) error
 	// DefaultRateMultiplier holds the default value on creation for the "rate_multiplier" field.
 	DefaultRateMultiplier float64
+	// DefaultTemporaryRateEnabled holds the default value on creation for the "temporary_rate_enabled" field.
+	DefaultTemporaryRateEnabled bool
+	// DefaultTemporaryRateMultiplier holds the default value on creation for the "temporary_rate_multiplier" field.
+	DefaultTemporaryRateMultiplier float64
 	// DefaultPeakRateEnabled holds the default value on creation for the "peak_rate_enabled" field.
 	DefaultPeakRateEnabled bool
 	// DefaultPeakStart holds the default value on creation for the "peak_start" field.
@@ -467,6 +483,26 @@ func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 // ByRateMultiplier orders the results by the rate_multiplier field.
 func ByRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRateMultiplier, opts...).ToFunc()
+}
+
+// ByTemporaryRateEnabled orders the results by the temporary_rate_enabled field.
+func ByTemporaryRateEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTemporaryRateEnabled, opts...).ToFunc()
+}
+
+// ByTemporaryRateMultiplier orders the results by the temporary_rate_multiplier field.
+func ByTemporaryRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTemporaryRateMultiplier, opts...).ToFunc()
+}
+
+// ByTemporaryRateStartsAt orders the results by the temporary_rate_starts_at field.
+func ByTemporaryRateStartsAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTemporaryRateStartsAt, opts...).ToFunc()
+}
+
+// ByTemporaryRateEndsAt orders the results by the temporary_rate_ends_at field.
+func ByTemporaryRateEndsAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTemporaryRateEndsAt, opts...).ToFunc()
 }
 
 // ByPeakRateEnabled orders the results by the peak_rate_enabled field.

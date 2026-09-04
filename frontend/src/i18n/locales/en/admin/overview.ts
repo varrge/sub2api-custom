@@ -913,6 +913,23 @@ export default {
       groupUpdatedSuccess: 'Group updated successfully',
       groupDeletedSuccess: 'Group deleted successfully',
       rateMultiplierHint: 'Cost multiplier for this group (e.g., 1.5 = 150% of base cost)',
+      temporaryRate: {
+        title: 'Limited-time rate',
+        enable: 'Enable one-time limited rate',
+        multiplier: 'Limited rate',
+        startDate: 'Start date',
+        endDate: 'End date (inclusive)',
+        hint: 'Temporarily replaces the group default. User-specific rates take priority and peak rates still multiply it. Dates use the server timezone.',
+        multiplierInvalid: 'Limited-time rate must be greater than 0',
+        datesRequired: 'Start and end dates are required when the limited-time rate is enabled',
+        rangeInvalid: 'End date cannot be earlier than start date',
+        status: {
+          upcoming: 'Upcoming',
+          active: 'Active',
+          ended: 'Ended',
+          canceled: 'Canceled'
+        }
+      },
       exclusiveHint: 'Exclusive group, manually assign to specific users',
       exclusiveTooltip: {
         title: 'What is an exclusive group?',

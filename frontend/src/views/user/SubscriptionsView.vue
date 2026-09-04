@@ -50,7 +50,10 @@
                   {{ subscription.group.description }}
                 </p>
                 <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-400 dark:text-gray-500">
-                  <span>{{ t('payment.planCard.rate') }}: ×{{ subscription.group?.rate_multiplier ?? 1 }}</span>
+                  <span>{{ t('payment.planCard.rate') }}: ×{{ subscriptionGroupRate(subscription) }}</span>
+                  <span v-if="subscriptionTemporaryRateLabel(subscription)" class="text-sky-600 dark:text-sky-400">
+                    {{ subscriptionTemporaryRateLabel(subscription) }}
+                  </span>
                   <span v-if="subscriptionHasPeakRate(subscription)" class="text-amber-700 dark:text-amber-300">
                     {{ t('payment.planCard.peakRate') }}: {{ subscriptionPeakRateLabel(subscription) }}
                   </span>
@@ -253,11 +256,19 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import subscriptionsAPI from '@/api/subscriptions'
+import { userGroupsAPI } from '@/api/groups'
 import type { UserSubscription } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { formatDateTimeToMinute } from '@/utils/format'
 import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
+import {
+  effectiveGroupRate,
+  temporaryRateDateRange,
+  temporaryRateEndDate,
+  temporaryRateStatus,
+  useTemporaryRateNow
+} from '@/utils/temporary-rate'
 import { platformBorderClass, platformBadgeClass, platformButtonClass, platformLabel } from '@/utils/platformColors'
 import {
   getExpirationDateRelation,
@@ -279,8 +290,10 @@ function platformAccentDotClass(p: string): string {
 const { t } = useI18n()
 const router = useRouter()
 const appStore = useAppStore()
+const temporaryRateNow = useTemporaryRateNow()
 
 const subscriptions = ref<UserSubscription[]>([])
+const userGroupRates = ref<Record<number, number>>({})
 const loading = ref(true)
 
 function subscriptionHasPeakRate(subscription: UserSubscription): boolean {
@@ -291,10 +304,44 @@ function subscriptionPeakRateLabel(subscription: UserSubscription): string {
   return formatPeakRateWindow(subscription.group, serverTimezoneLabel(appStore.cachedPublicSettings?.server_utc_offset))
 }
 
+function subscriptionGroupRate(subscription: UserSubscription): number {
+  return subscription.group
+    ? effectiveGroupRate(subscription.group, userGroupRates.value[subscription.group_id] ?? null, temporaryRateNow.value)
+    : 1
+}
+
+function subscriptionTemporaryRateLabel(subscription: UserSubscription): string {
+  const group = subscription.group
+  if (!group) return ''
+  const status = temporaryRateStatus(group, temporaryRateNow.value)
+  if (['upcoming', 'active'].includes(status) && userGroupRates.value[subscription.group_id] != null) {
+    return t('common.temporaryRate.userOverride', {
+      rate: group.temporary_rate_multiplier ?? 1
+    })
+  }
+  if (status === 'upcoming') {
+    return t('common.temporaryRate.upcoming', {
+      rate: group.temporary_rate_multiplier,
+      range: temporaryRateDateRange(group, appStore.cachedPublicSettings?.server_timezone)
+    })
+  }
+  if (status === 'active') {
+    return t('common.temporaryRate.active', {
+      end: temporaryRateEndDate(group, appStore.cachedPublicSettings?.server_timezone)
+    })
+  }
+  return ''
+}
+
 async function loadSubscriptions() {
   try {
     loading.value = true
-    subscriptions.value = await subscriptionsAPI.getMySubscriptions()
+    const [items, rates] = await Promise.all([
+      subscriptionsAPI.getMySubscriptions(),
+      userGroupsAPI.getUserGroupRates().catch(() => ({}))
+    ])
+    subscriptions.value = items
+    userGroupRates.value = rates
   } catch (error) {
     console.error('Failed to load subscriptions:', error)
     appStore.showError(t('userSubscriptions.failedToLoad'))

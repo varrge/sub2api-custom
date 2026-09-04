@@ -5,6 +5,12 @@ export default {
     justNow: 'just now',
     peakRateTooltip: 'Peak rate: {window}',
     peakRateImageNote: '; image tokens billed as tokens are also affected, per-image billing is unaffected',
+    temporaryRate: {
+      title: 'Limited-time rate',
+      upcoming: 'Limited ×{rate} ({range}, upcoming)',
+      active: 'Active · limited until {end}',
+      userOverride: 'Limited ×{rate} (user rate takes priority)'
+    },
     save: 'Save',
     saved: 'Saved successfully',
     deleted: 'Deleted successfully',

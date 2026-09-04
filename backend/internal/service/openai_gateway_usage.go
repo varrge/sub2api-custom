@@ -37,6 +37,9 @@ type OpenAIRecordUsageInput struct {
 	// 按该时刻计算，保证同一请求从准入到扣费不中途变价。零值回退记录时刻
 	//（既有行为），供未装配的路径（图片/异步/cyber 等）沿用。
 	PricingAt time.Time
+	// VideoRateMultiplierOverride preserves the customer multiplier captured
+	// when an asynchronous video job was created. Nil keeps normal resolution.
+	VideoRateMultiplierOverride *float64
 	// CyberBlocked 为 true 时把该用量行标记为 cyber（request_type=cyber），计费逻辑不变。
 	CyberBlocked bool
 	// NativeCompactionV2 is an orthogonal semantic flag captured by the
@@ -67,6 +70,7 @@ type CyberPolicyUsageInput struct {
 	SessionID          string
 	RequestPayloadHash string
 	APIKeyService      APIKeyQuotaUpdater
+	PricingAt          time.Time
 	NativeCompactionV2 bool
 	ChannelUsageFields
 }
@@ -103,6 +107,7 @@ func (s *OpenAIGatewayService) RecordCyberPolicyUsageLog(ctx context.Context, in
 		SessionID:          in.SessionID,
 		RequestPayloadHash: in.RequestPayloadHash,
 		APIKeyService:      in.APIKeyService,
+		PricingAt:          in.PricingAt,
 		ChannelUsageFields: in.ChannelUsageFields,
 		CyberBlocked:       true,
 		NativeCompactionV2: in.NativeCompactionV2,
@@ -121,6 +126,24 @@ func (s *OpenAIGatewayService) ResolveUserGroupRateMultiplier(ctx context.Contex
 		resolver = newUserGroupRateResolver(nil, nil, resolveUserGroupRateCacheTTL(s.cfg), nil, "service.openai_gateway")
 	}
 	return resolver.Resolve(ctx, userID, groupID, groupDefaultMultiplier)
+}
+
+func (s *OpenAIGatewayService) resolveRateMultiplierAt(ctx context.Context, apiKey *APIKey, userID int64, pricingAt time.Time) float64 {
+	multiplier := 1.0
+	if s != nil && s.cfg != nil {
+		multiplier = s.cfg.Default.RateMultiplier
+	}
+	if apiKey != nil && apiKey.GroupID != nil && apiKey.Group != nil {
+		groupDefault := apiKey.Group.BaseRateMultiplierAt(pricingAt)
+		multiplier = s.ResolveUserGroupRateMultiplier(ctx, userID, *apiKey.GroupID, groupDefault)
+	}
+	return multiplier
+}
+
+// ResolveVideoRateMultiplierAt captures the final customer multiplier for an
+// asynchronous video job before group or user-rate settings can change.
+func (s *OpenAIGatewayService) ResolveVideoRateMultiplierAt(ctx context.Context, apiKey *APIKey, userID int64, pricingAt time.Time) float64 {
+	return resolveVideoRateMultiplier(apiKey, s.resolveRateMultiplierAt(ctx, apiKey, userID, pricingAt))
 }
 
 // openAIUsagePricingAt 返回本次用量记录使用的定价时刻：优先请求级 PricingAt
@@ -193,22 +216,19 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		ImageOutputTokens:   result.Usage.ImageOutputTokens,
 	}
 
+	pricingAt := openAIUsagePricingAt(input)
 	// Get rate multiplier
-	multiplier := 1.0
-	if s.cfg != nil {
-		multiplier = s.cfg.Default.RateMultiplier
-	}
-	if apiKey.GroupID != nil && apiKey.Group != nil {
-		multiplier = s.ResolveUserGroupRateMultiplier(ctx, user.ID, *apiKey.GroupID, apiKey.Group.RateMultiplier)
-	}
+	multiplier := s.resolveRateMultiplierAt(ctx, apiKey, user.ID, pricingAt)
 	// token 倍率叠加高峰因子（token 计费含图片 token，图片按次倍率不受影响）。
 	// 高峰因子按请求级 PricingAt 现算（与利润门 D 同源同刻，跨峰谷请求不中途
 	// 变价）；未装配 PricingAt 的路径回退记录时刻，保持既有行为。不并入上面的
 	// Resolve，以免污染 user:group 倍率缓存。
 	baseMultiplier := multiplier
-	pricingAt := openAIUsagePricingAt(input)
 	multiplier, imageMultiplier := computePeakAwareMultipliers(apiKey, baseMultiplier, pricingAt)
 	videoMultiplier := resolveVideoRateMultiplier(apiKey, baseMultiplier)
+	if input.VideoRateMultiplierOverride != nil {
+		videoMultiplier = *input.VideoRateMultiplierOverride
+	}
 
 	var cost *CostBreakdown
 	billingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)

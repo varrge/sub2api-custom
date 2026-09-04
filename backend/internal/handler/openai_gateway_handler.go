@@ -4002,6 +4002,7 @@ func (h *OpenAIGatewayHandler) recordCyberPolicyIfMarked(c *gin.Context, apiKey 
 		requestCtx = c.Request.Context()
 	}
 	platform := resolveOpsPlatform(requestCtx, apiKey, guessPlatformFromPath(requestPath))
+	pricingAt := service.OpenAIPricingAtFromContext(requestCtx)
 	var clientRequestID, userAgent, clientIPStr string
 	if c.Request != nil {
 		clientRequestID, _ = c.Request.Context().Value(ctxkey.ClientRequestID).(string)
@@ -4078,6 +4079,7 @@ func (h *OpenAIGatewayHandler) recordCyberPolicyIfMarked(c *gin.Context, apiKey 
 				SessionID:          sessionID,
 				RequestPayloadHash: requestPayloadHash,
 				APIKeyService:      apiKeySvc,
+				PricingAt:          pricingAt,
 				NativeCompactionV2: nativeCompactionV2,
 				ChannelUsageFields: channelFields,
 			})

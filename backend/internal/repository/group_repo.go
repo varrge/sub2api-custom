@@ -61,11 +61,19 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 	if err != nil {
 		return fmt.Errorf("marshal group model pricing: %w", err)
 	}
+	temporaryRateMultiplier := groupIn.TemporaryRateMultiplier
+	if temporaryRateMultiplier <= 0 {
+		temporaryRateMultiplier = 1
+	}
 	builder := client.Group.Create().
 		SetName(groupIn.Name).
 		SetDescription(groupIn.Description).
 		SetPlatform(groupIn.Platform).
 		SetRateMultiplier(groupIn.RateMultiplier).
+		SetTemporaryRateEnabled(groupIn.TemporaryRateEnabled).
+		SetTemporaryRateMultiplier(temporaryRateMultiplier).
+		SetNillableTemporaryRateStartsAt(groupIn.TemporaryRateStartsAt).
+		SetNillableTemporaryRateEndsAt(groupIn.TemporaryRateEndsAt).
 		SetSortOrder(groupIn.SortOrder).
 		SetIsExclusive(groupIn.IsExclusive).
 		SetStatus(groupIn.Status).
@@ -253,6 +261,10 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		SetDescription(groupIn.Description).
 		SetPlatform(groupIn.Platform).
 		SetRateMultiplier(groupIn.RateMultiplier).
+		SetTemporaryRateEnabled(groupIn.TemporaryRateEnabled).
+		SetTemporaryRateMultiplier(groupIn.TemporaryRateMultiplier).
+		SetNillableTemporaryRateStartsAt(groupIn.TemporaryRateStartsAt).
+		SetNillableTemporaryRateEndsAt(groupIn.TemporaryRateEndsAt).
 		SetIsExclusive(groupIn.IsExclusive).
 		SetStatus(groupIn.Status).
 		SetSubscriptionType(groupIn.SubscriptionType).

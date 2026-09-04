@@ -24,6 +24,7 @@ const showError = vi.hoisted(() => vi.fn())
 const showInfo = vi.hoisted(() => vi.fn())
 const showWarning = vi.hoisted(() => vi.fn())
 const getCheckoutInfo = vi.hoisted(() => vi.fn())
+const getUserGroupRates = vi.hoisted(() => vi.fn())
 const bridgeInvoke = vi.hoisted(() => vi.fn())
 const translate = vi.hoisted(() => vi.fn((key: string) => key))
 
@@ -87,9 +88,19 @@ vi.mock('@/api/payment', () => ({
   },
 }))
 
+vi.mock('@/api/groups', () => ({
+  userGroupsAPI: {
+    getUserGroupRates,
+  },
+}))
+
 vi.mock('@/utils/device', () => ({
   isMobileDevice: () => true,
 }))
+
+beforeEach(() => {
+  getUserGroupRates.mockReset().mockResolvedValue({})
+})
 
 function checkoutInfoFixture(overrides: Partial<CheckoutInfoResponse> = {}) {
   const wxpayMethod: MethodLimit = {
@@ -241,7 +252,7 @@ async function mountSubscriptionConfirm(options: Parameters<typeof checkoutInfoW
   return wrapper
 }
 
-async function mountSubscriptionPlanList(planCount: number) {
+async function mountSubscriptionPlanList(planCount: number, rates: Record<number, number> | Error = {}) {
   vi.useRealTimers()
   routeState.path = '/purchase'
   routeState.query = { tab: 'subscription' }
@@ -261,6 +272,11 @@ async function mountSubscriptionPlanList(planCount: number) {
     name: `Plan ${index + 1}`,
   }))
   getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture({ plans }))
+  if (rates instanceof Error) {
+    getUserGroupRates.mockRejectedValue(rates)
+  } else {
+    getUserGroupRates.mockResolvedValue(rates)
+  }
   bridgeInvoke.mockReset()
   window.localStorage.clear()
   ;(window as Window & { WeixinJSBridge?: { invoke: typeof bridgeInvoke } }).WeixinJSBridge = undefined
@@ -293,6 +309,18 @@ describe('PaymentView subscription plan grid', () => {
       'sm:grid-cols-2',
       'lg:grid-cols-3',
     ]))
+  })
+
+  it('passes the current user group rate to each plan card', async () => {
+    const wrapper = await mountSubscriptionPlanList(1, { 3: 0.7 })
+
+    expect(wrapper.getComponent(SubscriptionPlanCard).props('userRateMultiplier')).toBe(0.7)
+  })
+
+  it('still renders plans when the optional user-rate request fails', async () => {
+    const wrapper = await mountSubscriptionPlanList(1, new Error('temporary rates failure'))
+
+    expect(wrapper.findAllComponents(SubscriptionPlanCard)).toHaveLength(1)
   })
 })
 

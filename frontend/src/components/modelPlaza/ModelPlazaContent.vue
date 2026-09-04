@@ -72,6 +72,7 @@ import PlazaFilterBar from './PlazaFilterBar.vue'
 import PlazaGroupSection from './PlazaGroupSection.vue'
 import type { ModelPlazaGroup, ModelPlazaResponse } from '@/api/modelPlaza'
 import { useAuthStore } from '@/stores/auth'
+import { effectiveGroupRate, useTemporaryRateNow } from '@/utils/temporary-rate'
 
 const props = defineProps<{
   response: ModelPlazaResponse | null
@@ -83,6 +84,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const authStore = useAuthStore()
+const temporaryRateNow = useTemporaryRateNow()
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 
 const selectedPlatform = ref<string>('all')
@@ -100,7 +102,7 @@ const descriptionHtml = computed(() => {
 
 /** 生效倍率 = 用户专属倍率 ?? 分组默认倍率。 */
 function effectiveRate(g: ModelPlazaGroup): number {
-  return g.user_rate_multiplier ?? g.rate_multiplier
+  return effectiveGroupRate(g, g.user_rate_multiplier, temporaryRateNow.value)
 }
 
 const platforms = computed(() =>

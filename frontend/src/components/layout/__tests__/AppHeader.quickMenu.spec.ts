@@ -11,16 +11,22 @@ const state = vi.hoisted(() => ({
   imageGenerationEnabled: true,
   modelPlazaEnabled: true,
   supportTicketsEnabled: true,
+  paymentEnabled: true,
   userUnread: 7,
   adminUnread: 3,
+  balance: 42.5 as number | undefined,
+  frozenBalance: 7.5,
+  userRefreshStatus: 'success' as 'idle' | 'loading' | 'success' | 'error',
   settings: {
     top_quick_menu_items: [] as string[],
     custom_menu_items: [],
   },
 }))
 
+const routerPush = vi.hoisted(() => vi.fn())
+
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: routerPush }),
   useRoute: () => ({
     get path() { return state.routePath },
     get name() { return state.routeName },
@@ -42,7 +48,13 @@ vi.mock('@/stores', () => ({
     toggleMobileSidebar: vi.fn(),
   }),
   useAuthStore: () => ({
-    user: { email: 'user@example.com', role: state.isAdmin ? 'admin' : 'user', balance: 0 },
+    user: {
+      email: 'user@example.com',
+      role: state.isAdmin ? 'admin' : 'user',
+      balance: state.balance,
+      frozen_balance: state.frozenBalance,
+    },
+    get userRefreshStatus() { return state.userRefreshStatus },
     get isAdmin() { return state.isAdmin },
     isSimpleMode: false,
     logout: vi.fn(),
@@ -66,13 +78,16 @@ vi.mock('@/utils/featureFlags', () => ({
     imageGeneration: 'imageGeneration',
     modelPlaza: 'modelPlaza',
     supportTicket: 'supportTicket',
+    payment: 'payment',
   },
   isFeatureFlagEnabled: (flag: string) =>
     flag === 'imageGeneration'
       ? state.imageGenerationEnabled
       : flag === 'modelPlaza'
         ? state.modelPlazaEnabled
-        : state.supportTicketsEnabled,
+        : flag === 'payment'
+          ? state.paymentEnabled
+          : state.supportTicketsEnabled,
 }))
 
 const RouterLinkStub = defineComponent({
@@ -107,10 +122,20 @@ describe('AppHeader top quick menu', () => {
     state.imageGenerationEnabled = true
     state.modelPlazaEnabled = true
     state.supportTicketsEnabled = true
+    state.paymentEnabled = true
+    state.balance = 42.5
+    state.frozenBalance = 7.5
+    state.userRefreshStatus = 'success'
     state.settings.top_quick_menu_items = []
+    routerPush.mockReset()
+    localStorage.clear()
+    document.documentElement.classList.remove('dark')
   })
 
-  afterEach(() => wrapper?.unmount())
+  afterEach(() => {
+    wrapper?.unmount()
+    document.documentElement.classList.remove('dark')
+  })
 
   it('renders configured items in order and moves model plaza out of its legacy slot', () => {
     state.settings.top_quick_menu_items = ['model_plaza', 'support_tickets', 'api_keys']
@@ -173,5 +198,58 @@ describe('AppHeader top quick menu', () => {
     const view = mountHeader()
 
     expect(view.get(`[data-testid="top-quick-menu-${itemID}"]`).attributes('aria-current')).toBe('page')
+  })
+
+  it('ends the header actions with announcement, theme, and available balance', async () => {
+    const view = mountHeader()
+
+    expect(
+      view.findAll('[data-testid^="header-"]').slice(0, 3).map((node) => node.attributes('data-testid')),
+    ).toEqual(['header-announcement', 'header-theme-toggle', 'header-balance'])
+    expect(view.get('[data-testid="header-balance"]').classes()).not.toContain('hidden')
+    expect(view.get('[data-testid="header-balance"]').text()).toContain('$42.50')
+
+    await view.get('[data-testid="header-balance"]').trigger('click')
+    expect(routerPush).toHaveBeenCalledWith('/purchase')
+  })
+
+  it('keeps balance visible but inert when payment is disabled', async () => {
+    state.paymentEnabled = false
+    const view = mountHeader()
+    const balance = view.get('[data-testid="header-balance"]')
+
+    expect(balance.attributes('aria-disabled')).toBe('true')
+    expect(balance.text()).toContain('$42.50')
+    await balance.trigger('click')
+    expect(routerPush).not.toHaveBeenCalled()
+  })
+
+  it('formats a real zero balance as $0.00', () => {
+    state.balance = 0
+    const view = mountHeader()
+
+    expect(view.get('[data-testid="header-balance"]').text()).toContain('$0.00')
+  })
+
+  it('uses a skeleton during refresh even with cached balance and $-- after failure', () => {
+    state.userRefreshStatus = 'loading'
+    const loadingView = mountHeader()
+    expect(loadingView.get('[data-testid="header-balance"]').find('.animate-pulse').exists()).toBe(true)
+    expect(loadingView.find('[data-testid="header-balance-details"]').exists()).toBe(false)
+    loadingView.unmount()
+
+    state.balance = undefined
+    state.userRefreshStatus = 'error'
+    const errorView = mountHeader()
+    expect(errorView.get('[data-testid="header-balance"]').text()).toContain('$--')
+  })
+
+  it('toggles and persists the theme from the header', async () => {
+    const view = mountHeader()
+
+    await view.get('[data-testid="header-theme-toggle"]').trigger('click')
+
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
+    expect(localStorage.getItem('theme')).toBe('dark')
   })
 })

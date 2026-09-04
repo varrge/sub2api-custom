@@ -895,6 +895,23 @@ export default {
           '公开分组费率 0.8，您可以创建一个费率 0.7 的专属分组，手动分配给 VIP 用户，让他们享受更优惠的价格。'
       },
       rateMultiplierHint: '1.0 = 标准费率，0.5 = 半价，2.0 = 双倍',
+      temporaryRate: {
+        title: '限时倍率',
+        enable: '启用一次性限时倍率',
+        multiplier: '限时倍率',
+        startDate: '开始日期',
+        endDate: '结束日期（含当天）',
+        hint: '临时替换分组默认倍率；用户专属倍率优先，高峰倍率继续叠加。日期按服务器全局时区解释。',
+        multiplierInvalid: '限时倍率必须大于 0',
+        datesRequired: '启用限时倍率时必须填写开始和结束日期',
+        rangeInvalid: '结束日期不能早于开始日期',
+        status: {
+          upcoming: '即将开始',
+          active: '生效中',
+          ended: '已结束',
+          canceled: '已取消'
+        }
+      },
       platforms: {
         all: '全部平台',
         anthropic: 'Anthropic',

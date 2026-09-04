@@ -13,6 +13,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	"github.com/Wei-Shaw/sub2api/internal/platform/liveattestation"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -100,6 +101,10 @@ type CreateGroupRequest struct {
 	Description               string                        `json:"description"`
 	Platform                  string                        `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek composite"`
 	RateMultiplier            float64                       `json:"rate_multiplier"`
+	TemporaryRateEnabled      bool                          `json:"temporary_rate_enabled"`
+	TemporaryRateMultiplier   *float64                      `json:"temporary_rate_multiplier"`
+	TemporaryRateStartDate    string                        `json:"temporary_rate_start_date"`
+	TemporaryRateEndDate      string                        `json:"temporary_rate_end_date"`
 	IsExclusive               bool                          `json:"is_exclusive"`
 	SubscriptionType          string                        `json:"subscription_type" binding:"omitempty,oneof=standard subscription"`
 	DailyLimitUSD             optionalLimitField            `json:"daily_limit_usd"`
@@ -172,6 +177,10 @@ type UpdateGroupRequest struct {
 	Description               *string                        `json:"description"`
 	Platform                  string                         `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek composite"`
 	RateMultiplier            *float64                       `json:"rate_multiplier"`
+	TemporaryRateEnabled      *bool                          `json:"temporary_rate_enabled"`
+	TemporaryRateMultiplier   *float64                       `json:"temporary_rate_multiplier"`
+	TemporaryRateStartDate    *string                        `json:"temporary_rate_start_date"`
+	TemporaryRateEndDate      *string                        `json:"temporary_rate_end_date"`
 	IsExclusive               *bool                          `json:"is_exclusive"`
 	Status                    string                         `json:"status" binding:"omitempty,oneof=active inactive"`
 	SubscriptionType          string                         `json:"subscription_type" binding:"omitempty,oneof=standard subscription"`
@@ -237,6 +246,21 @@ type UpdateGroupRequest struct {
 	ReasoningEffortMappings *[]service.ReasoningEffortMapping `json:"reasoning_effort_mappings"`
 	// 从指定分组复制账号（同步操作：先清空当前分组的账号绑定，再绑定源分组的账号）
 	CopyAccountsFromGroupIDs []int64 `json:"copy_accounts_from_group_ids"`
+}
+
+func parseTemporaryRateDate(value string, endExclusive bool) (*time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, nil
+	}
+	parsed, err := time.ParseInLocation("2006-01-02", value, timezone.Location())
+	if err != nil {
+		return nil, fmt.Errorf("temporary rate date must use YYYY-MM-DD: %w", err)
+	}
+	if endExclusive {
+		parsed = parsed.AddDate(0, 0, 1)
+	}
+	return &parsed, nil
 }
 
 type CompositeRouteRequest struct {
@@ -497,6 +521,16 @@ func (h *GroupHandler) Create(c *gin.Context) {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
+	temporaryRateStartsAt, err := parseTemporaryRateDate(req.TemporaryRateStartDate, false)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	temporaryRateEndsAt, err := parseTemporaryRateDate(req.TemporaryRateEndDate, true)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 
 	if err := service.ValidatePeakRateConfig(req.SubscriptionType, req.PeakRateEnabled, req.PeakStart, req.PeakEnd, float64ValueOrDefault(req.PeakRateMultiplier, 1.0)); err != nil {
 		response.BadRequest(c, err.Error())
@@ -515,6 +549,10 @@ func (h *GroupHandler) Create(c *gin.Context) {
 		Description:                     req.Description,
 		Platform:                        req.Platform,
 		RateMultiplier:                  req.RateMultiplier,
+		TemporaryRateEnabled:            req.TemporaryRateEnabled,
+		TemporaryRateMultiplier:         req.TemporaryRateMultiplier,
+		TemporaryRateStartsAt:           temporaryRateStartsAt,
+		TemporaryRateEndsAt:             temporaryRateEndsAt,
 		IsExclusive:                     req.IsExclusive,
 		SubscriptionType:                req.SubscriptionType,
 		DailyLimitUSD:                   req.DailyLimitUSD.ToServiceInput(),
@@ -640,12 +678,31 @@ func (h *GroupHandler) Update(c *gin.Context) {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
+	var temporaryRateStartsAt, temporaryRateEndsAt *time.Time
+	if req.TemporaryRateStartDate != nil {
+		temporaryRateStartsAt, err = parseTemporaryRateDate(*req.TemporaryRateStartDate, false)
+		if err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+	}
+	if req.TemporaryRateEndDate != nil {
+		temporaryRateEndsAt, err = parseTemporaryRateDate(*req.TemporaryRateEndDate, true)
+		if err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+	}
 
 	group, err := h.adminService.UpdateGroup(c.Request.Context(), groupID, &service.UpdateGroupInput{
 		Name:                            req.Name,
 		Description:                     req.Description,
 		Platform:                        req.Platform,
 		RateMultiplier:                  req.RateMultiplier,
+		TemporaryRateEnabled:            req.TemporaryRateEnabled,
+		TemporaryRateMultiplier:         req.TemporaryRateMultiplier,
+		TemporaryRateStartsAt:           temporaryRateStartsAt,
+		TemporaryRateEndsAt:             temporaryRateEndsAt,
 		IsExclusive:                     req.IsExclusive,
 		Status:                          req.Status,
 		SubscriptionType:                req.SubscriptionType,

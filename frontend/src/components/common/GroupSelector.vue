@@ -42,6 +42,10 @@
           :platform="group.platform"
           :subscription-type="group.subscription_type"
           :rate-multiplier="group.rate_multiplier"
+          :temporary-rate-enabled="group.temporary_rate_enabled"
+          :temporary-rate-multiplier="group.temporary_rate_multiplier"
+          :temporary-rate-starts-at="group.temporary_rate_starts_at"
+          :temporary-rate-ends-at="group.temporary_rate_ends_at"
           class="min-w-0 flex-1"
         />
         <span class="shrink-0 text-xs text-gray-400">{{ group.account_count || 0 }}</span>

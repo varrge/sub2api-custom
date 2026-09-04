@@ -120,12 +120,18 @@ func groupDuplicateTestPointer[T any](value T) *T { return &value }
 
 func TestDuplicateGroupCopiesConfigurationDeeplyAndResetsRuntimeState(t *testing.T) {
 	createdAt := time.Date(2026, time.July, 1, 2, 3, 4, 0, time.UTC)
+	temporaryRateStartsAt := createdAt.AddDate(0, 0, 1)
+	temporaryRateEndsAt := createdAt.AddDate(0, 0, 7)
 	source := &Group{
 		ID:                           41,
 		Name:                         "高级订阅",
 		Description:                  "configuration",
 		Platform:                     PlatformOpenAI,
 		RateMultiplier:               1.75,
+		TemporaryRateEnabled:         true,
+		TemporaryRateMultiplier:      0.5,
+		TemporaryRateStartsAt:        &temporaryRateStartsAt,
+		TemporaryRateEndsAt:          &temporaryRateEndsAt,
 		PeakRateEnabled:              true,
 		PeakStart:                    "09:00",
 		PeakEnd:                      "18:00",
@@ -207,6 +213,10 @@ func TestDuplicateGroupCopiesConfigurationDeeplyAndResetsRuntimeState(t *testing
 	require.Equal(t, source.Description, duplicate.Description)
 	require.Equal(t, source.Platform, duplicate.Platform)
 	require.Equal(t, source.RateMultiplier, duplicate.RateMultiplier)
+	require.False(t, duplicate.TemporaryRateEnabled)
+	require.Equal(t, 1.0, duplicate.TemporaryRateMultiplier)
+	require.Nil(t, duplicate.TemporaryRateStartsAt)
+	require.Nil(t, duplicate.TemporaryRateEndsAt)
 	require.Equal(t, source.PeakRateMultiplier, duplicate.PeakRateMultiplier)
 	require.Equal(t, source.DefaultValidityDays, duplicate.DefaultValidityDays)
 	require.Equal(t, source.ImagePrice4K, duplicate.ImagePrice4K)

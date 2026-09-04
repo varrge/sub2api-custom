@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/group"
@@ -75,17 +76,21 @@ func validatePlanPatch(req UpdatePlanRequest) error {
 
 // PlanGroupInfo holds the group details needed for subscription plan display.
 type PlanGroupInfo struct {
-	Platform           string   `json:"platform"`
-	Name               string   `json:"name"`
-	RateMultiplier     float64  `json:"rate_multiplier"`
-	PeakRateEnabled    bool     `json:"peak_rate_enabled"`
-	PeakStart          string   `json:"peak_start"`
-	PeakEnd            string   `json:"peak_end"`
-	PeakRateMultiplier float64  `json:"peak_rate_multiplier"`
-	DailyLimitUSD      *float64 `json:"daily_limit_usd"`
-	WeeklyLimitUSD     *float64 `json:"weekly_limit_usd"`
-	MonthlyLimitUSD    *float64 `json:"monthly_limit_usd"`
-	ModelScopes        []string `json:"supported_model_scopes"`
+	Platform                string     `json:"platform"`
+	Name                    string     `json:"name"`
+	RateMultiplier          float64    `json:"rate_multiplier"`
+	TemporaryRateEnabled    bool       `json:"temporary_rate_enabled"`
+	TemporaryRateMultiplier float64    `json:"temporary_rate_multiplier"`
+	TemporaryRateStartsAt   *time.Time `json:"temporary_rate_starts_at"`
+	TemporaryRateEndsAt     *time.Time `json:"temporary_rate_ends_at"`
+	PeakRateEnabled         bool       `json:"peak_rate_enabled"`
+	PeakStart               string     `json:"peak_start"`
+	PeakEnd                 string     `json:"peak_end"`
+	PeakRateMultiplier      float64    `json:"peak_rate_multiplier"`
+	DailyLimitUSD           *float64   `json:"daily_limit_usd"`
+	WeeklyLimitUSD          *float64   `json:"weekly_limit_usd"`
+	MonthlyLimitUSD         *float64   `json:"monthly_limit_usd"`
+	ModelScopes             []string   `json:"supported_model_scopes"`
 }
 
 // GetGroupInfoMap returns a map of group_id → PlanGroupInfo for the given plans.
@@ -108,17 +113,21 @@ func (s *PaymentConfigService) GetGroupInfoMap(ctx context.Context, plans []*dbe
 	m := make(map[int64]PlanGroupInfo, len(groups))
 	for _, g := range groups {
 		m[int64(g.ID)] = PlanGroupInfo{
-			Platform:           g.Platform,
-			Name:               g.Name,
-			RateMultiplier:     g.RateMultiplier,
-			PeakRateEnabled:    g.PeakRateEnabled,
-			PeakStart:          g.PeakStart,
-			PeakEnd:            g.PeakEnd,
-			PeakRateMultiplier: g.PeakRateMultiplier,
-			DailyLimitUSD:      g.DailyLimitUsd,
-			WeeklyLimitUSD:     g.WeeklyLimitUsd,
-			MonthlyLimitUSD:    g.MonthlyLimitUsd,
-			ModelScopes:        g.SupportedModelScopes,
+			Platform:                g.Platform,
+			Name:                    g.Name,
+			RateMultiplier:          g.RateMultiplier,
+			TemporaryRateEnabled:    g.TemporaryRateEnabled,
+			TemporaryRateMultiplier: g.TemporaryRateMultiplier,
+			TemporaryRateStartsAt:   g.TemporaryRateStartsAt,
+			TemporaryRateEndsAt:     g.TemporaryRateEndsAt,
+			PeakRateEnabled:         g.PeakRateEnabled,
+			PeakStart:               g.PeakStart,
+			PeakEnd:                 g.PeakEnd,
+			PeakRateMultiplier:      g.PeakRateMultiplier,
+			DailyLimitUSD:           g.DailyLimitUsd,
+			WeeklyLimitUSD:          g.WeeklyLimitUsd,
+			MonthlyLimitUSD:         g.MonthlyLimitUsd,
+			ModelScopes:             g.SupportedModelScopes,
 		}
 	}
 	return m

@@ -53,7 +53,7 @@
       </div>
     </div>
 
-    <dialog ref="filterDrawer" class="catalog-drawer m-0 h-dvh max-h-none w-[min(88vw,340px)] max-w-none border-r border-gray-200 bg-white p-0 text-gray-900 shadow-2xl dark:border-dark-700 dark:bg-dark-900 dark:text-white" :aria-label="t('modelPlaza.catalog.filters')" @close="closeFilters" @click="onDrawerBackdrop">
+    <dialog ref="filterDrawer" class="catalog-drawer m-0 h-dvh max-h-none w-[min(88vw,340px)] max-w-none border-r border-gray-200 bg-white p-0 text-gray-900 shadow-2xl dark:border-dark-700 dark:bg-dark-900 dark:text-white" :aria-label="t('modelPlaza.catalog.filters')" @click="onDrawerBackdrop">
       <div class="flex h-full flex-col">
         <div class="flex justify-end border-b border-gray-100 px-4 py-3 dark:border-dark-700">
           <button type="button" class="btn-ghost btn-icon" :aria-label="t('common.close')" @click="closeFilters"><Icon name="x" size="md" /></button>
@@ -95,7 +95,6 @@ const modelType = ref<PlazaModelType | 'all'>('all')
 const searchQuery = ref('')
 const activeDetail = ref<GroupModelVariant | null>(null)
 const filterDrawer = ref<HTMLDialogElement | null>(null)
-let previousOverflow: string | null = null
 const selectionRevision = ref(0)
 
 const groups = computed(() => [...(props.response?.groups ?? [])].sort((a, b) => a.id - b.id))
@@ -150,14 +149,10 @@ const filterEvents = {
 }
 function openFilters() {
   if (!filterDrawer.value || filterDrawer.value.open) return
-  previousOverflow = document.body.style.overflow
-  document.body.style.overflow = 'hidden'
   filterDrawer.value.showModal()
 }
 function closeFilters() {
   if (filterDrawer.value?.open) filterDrawer.value.close()
-  if (previousOverflow !== null) document.body.style.overflow = previousOverflow
-  previousOverflow = null
 }
 function onDrawerBackdrop(event: MouseEvent) {
   if (event.target === filterDrawer.value) closeFilters()
@@ -170,6 +165,7 @@ onBeforeUnmount(closeFilters)
 .catalog-workspace { display: grid; grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 1280px) { .catalog-workspace { grid-template-columns: 230px minmax(0, 1fr); } }
 .catalog-drawer::backdrop { background: rgb(15 23 42 / 40%); backdrop-filter: blur(3px); }
+:global(body:has(.catalog-drawer[open])) { overflow: hidden; }
 .plaza-description { line-height: 1.7; overflow-wrap: anywhere; }
 .plaza-description :deep(h1), .plaza-description :deep(h2), .plaza-description :deep(h3) { @apply mb-2 mt-3 font-semibold text-gray-900 first:mt-0 dark:text-white; }
 .plaza-description :deep(p), .plaza-description :deep(li) { @apply mb-2 text-gray-700 last:mb-0 dark:text-dark-200; }

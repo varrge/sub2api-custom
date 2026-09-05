@@ -11,7 +11,7 @@
           </div>
           <div class="min-w-0 flex-1">
             <h3
-              class="truncate text-base font-bold text-gray-900 dark:text-white"
+              class="break-words text-base font-bold leading-snug text-gray-900 [overflow-wrap:anywhere] dark:text-white"
               :title="model.name"
             >
               {{ model.name }}

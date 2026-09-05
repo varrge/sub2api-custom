@@ -231,72 +231,34 @@ function handleOpenGroupDetail({ group, model }: GroupModelVariant) {
 .plaza-description :deep(h1),
 .plaza-description :deep(h2),
 .plaza-description :deep(h3) {
-  margin-top: 0.75rem;
-  margin-bottom: 0.5rem;
-  font-weight: 600;
-  color: rgb(17 24 39);
-}
-
-:global(.dark) .plaza-description :deep(h1),
-:global(.dark) .plaza-description :deep(h2),
-:global(.dark) .plaza-description :deep(h3) {
-  color: rgb(255 255 255);
+  @apply mb-2 mt-3 font-semibold text-gray-900 first:mt-0 dark:text-white;
 }
 
 .plaza-description :deep(p) {
-  margin-bottom: 0.5rem;
-  color: rgb(55 65 81);
-}
-
-:global(.dark) .plaza-description :deep(p) {
-  color: rgb(229 231 235);
+  @apply mb-2 text-gray-700 last:mb-0 dark:text-dark-200;
 }
 
 .plaza-description :deep(a) {
-  color: rgb(37 99 235);
-  text-decoration: underline;
-  text-underline-offset: 4px;
+  @apply text-primary-600 underline underline-offset-4 hover:text-primary-700 dark:text-primary-300;
 }
 
 .plaza-description :deep(ul) {
-  margin-bottom: 0.5rem;
-  list-style-type: disc;
-  padding-left: 1.25rem;
+  @apply mb-2 list-disc pl-5;
 }
 
 .plaza-description :deep(ol) {
-  margin-bottom: 0.5rem;
-  list-style-type: decimal;
-  padding-left: 1.25rem;
+  @apply mb-2 list-decimal pl-5;
 }
 
 .plaza-description :deep(li) {
-  margin-bottom: 0.125rem;
+  @apply mb-0.5 text-gray-700 dark:text-dark-200;
 }
 
 .plaza-description :deep(code) {
-  border-radius: 0.25rem;
-  background-color: rgb(243 244 246);
-  padding: 0.125rem 0.375rem;
-  font-family: monospace;
-  font-size: 0.75rem;
-}
-
-:global(.dark) .plaza-description :deep(code) {
-  background-color: rgb(31 41 55);
+  @apply rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs dark:bg-dark-800;
 }
 
 .plaza-description :deep(blockquote) {
-  margin-top: 0.5rem;
-  margin-bottom: 0.5rem;
-  border-left-width: 4px;
-  border-color: rgb(209 213 219);
-  padding-left: 0.75rem;
-  color: rgb(75 85 99);
-}
-
-:global(.dark) .plaza-description :deep(blockquote) {
-  border-color: rgb(75 85 99);
-  color: rgb(156 163 175);
+  @apply my-2 border-l-4 border-gray-300 pl-3 text-gray-600 dark:border-dark-600 dark:text-dark-300;
 }
 </style>

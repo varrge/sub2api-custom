@@ -400,6 +400,8 @@ function openPurchase() {
 }
 
 @media (max-width: 639px) {
+  .quick-menu-slot { display: none; }
+
   .quick-menu-dashboard-label,
   .quick-menu-optional { display: none; }
 }

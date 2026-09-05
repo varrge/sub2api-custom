@@ -280,7 +280,7 @@
               >{{ periodRate(period) }}x</span
             >
             <span
-              v-else-if="usesIndependentImageRate(m)"
+              v-else-if="usesIndependentImageRate(m) || (billingMode(m) === 'video' && videoRateIndependent)"
               class="font-bold text-gray-700 dark:text-gray-300"
               >{{ requestRate(m) }}x</span
             >
@@ -321,6 +321,8 @@ const props = defineProps<{
   /** 生图独立倍率:true 时图片计费模型的实付倍率取 imageRateMultiplier,不取分组/专属倍率。 */
   imageRateIndependent?: boolean
   imageRateMultiplier?: number | null
+  videoRateIndependent?: boolean
+  videoRateMultiplier?: number | null
   /**
    * 高峰窗口描述(含倍率与服务器时区标注),空串/缺省 = 分组未启用高峰。
    * 表格所有价格均为不含高峰因子的口径,该窗口仅用于分时时段行的 tooltip 披露:
@@ -414,6 +416,7 @@ function usesIndependentImageRate(m: PlazaModel): boolean {
 
 /** 按次/按图片行的生效倍率。 */
 function requestRate(m: PlazaModel): number {
+  if (billingMode(m) === 'video' && props.videoRateIndependent) return props.videoRateMultiplier ?? 1
   return usesIndependentImageRate(m) ? (props.imageRateMultiplier ?? 1) : effectiveRate.value
 }
 

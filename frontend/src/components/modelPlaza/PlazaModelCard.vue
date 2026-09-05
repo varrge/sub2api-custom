@@ -1,244 +1,107 @@
 <template>
-  <div
-    class="min-w-0 self-start rounded-2xl border border-gray-100 bg-white p-5 shadow-card transition hover:shadow-md dark:border-dark-700/60 dark:bg-dark-800/60"
-  >
-    <!-- 头部: 品牌图标 + 模型名 + 品牌文本 + 计费模式徽章 -->
-    <div>
-      <div class="flex items-start justify-between gap-3">
-        <div class="flex min-w-0 flex-1 items-center gap-3">
-          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-50 dark:bg-dark-700/50">
-            <PlatformIcon :platform="model.brand.platform" size="md" />
-          </div>
-          <div class="min-w-0 flex-1">
-            <h3
-              class="break-words text-base font-bold leading-snug text-gray-900 [overflow-wrap:anywhere] dark:text-white"
-              :title="model.name"
-            >
-              {{ model.name }}
-            </h3>
-            <p class="truncate text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-dark-400">
-              {{ model.brand.name }}
-            </p>
-          </div>
+  <article class="model-card flex min-w-0 flex-col overflow-hidden rounded-[22px] border border-gray-200 bg-white shadow-sm dark:border-dark-700 dark:bg-dark-800/60" :data-model="model.name">
+    <header class="min-h-32 px-5 pb-4 pt-5">
+      <div class="flex items-start gap-3">
+        <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-dark-600 dark:bg-dark-800">
+          <PlatformIcon :platform="model.brand.platform" size="lg" :class="model.brand.id === 'claude' ? 'text-orange-500' : 'text-gray-900 dark:text-white'" />
         </div>
-        <span
-          class="shrink-0 rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
-        >
-          {{ billingModeLabel }}
-        </span>
-      </div>
-
-      <!-- 参考价提示 -->
-      <div class="mt-3.5 flex items-center justify-between text-xs text-gray-400 dark:text-dark-400">
-        <span>{{ priceSourceLabel }}</span>
-        <span v-if="isTokenBilling" class="font-mono">USD / 1M tokens</span>
-      </div>
-
-      <!-- 价格行 -->
-      <div class="mt-4 space-y-3 text-sm">
-        <template v-if="isTokenBilling">
-          <div class="flex items-center justify-between">
-            <span class="text-gray-500 dark:text-dark-300">{{ t('modelPlaza.card.inputPrice') }}</span>
-            <span class="font-mono font-medium text-gray-900 dark:text-white">{{ inputPriceText }}</span>
+        <div class="min-w-0 flex-1">
+          <h3 class="break-words text-[17px] font-bold leading-snug tracking-tight text-gray-950 [overflow-wrap:anywhere] dark:text-white">{{ model.name }}</h3>
+          <div class="mt-2 flex flex-wrap items-center gap-1.5">
+            <span v-if="selected" class="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-600 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300">{{ t('modelPlaza.catalog.multiplier', { rate: selected.effectiveRate }) }}</span>
+            <span v-if="threshold" class="rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-600 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-300" :title="t('modelPlaza.catalog.tierHint')">&gt;{{ formatTokenLimit(threshold) }}</span>
           </div>
-          <div class="flex items-center justify-between">
-            <span class="text-gray-500 dark:text-dark-300">{{ t('modelPlaza.card.outputPrice') }}</span>
-            <span class="font-mono font-medium text-gray-900 dark:text-white">{{ outputPriceText }}</span>
-          </div>
-          <div class="flex items-center justify-between">
-            <span class="text-gray-500 dark:text-dark-300">{{ t('modelPlaza.card.cacheWritePrice') }}</span>
-            <span class="font-mono font-medium text-gray-900 dark:text-white">{{ cacheWritePriceText }}</span>
-          </div>
-          <div class="flex items-center justify-between">
-            <span class="text-gray-500 dark:text-dark-300">{{ t('modelPlaza.card.cacheReadPrice') }}</span>
-            <span class="font-mono font-medium text-gray-900 dark:text-white">{{ cacheReadPriceText }}</span>
-          </div>
-          <div v-if="hasCacheWrite1h" class="flex items-center justify-between gap-2">
-            <span class="text-gray-500 dark:text-dark-300">{{ t('modelPlaza.card.cacheWrite1hPrice') }}</span>
-            <span class="font-mono font-medium text-gray-900 dark:text-white">{{ cacheWrite1hPriceText }}</span>
-          </div>
-        </template>
-
-        <template v-else>
-          <div v-if="!hasAudioTiers" class="flex items-center justify-between gap-2">
-            <span class="text-gray-500 dark:text-dark-300">{{ t('modelPlaza.card.unitPrice') }}</span>
-            <span class="text-right font-mono font-medium text-gray-900 dark:text-white">{{ perRequestPriceText }} <span class="text-xs font-normal text-gray-400">{{ unitLabel }}</span></span>
-          </div>
-          <p class="text-xs text-gray-400">{{ t('modelPlaza.card.tierDetails') }}</p>
-        </template>
-      </div>
-    </div>
-
-    <!-- 底部: 可用分组展开与详情 -->
-    <div class="mt-4 border-t border-gray-100 pt-3 dark:border-dark-700/60">
-      <button
-        type="button"
-        class="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-dark-200 dark:hover:bg-dark-700/50"
-        :aria-expanded="isExpanded"
-        @click="isExpanded = !isExpanded"
-      >
-        <span class="flex items-center gap-1.5 text-primary-600 dark:text-primary-400">
-          <Icon
-            :name="isExpanded ? 'chevronDown' : 'chevronRight'"
-            size="xs"
-            class="h-3.5 w-3.5 transition-transform"
-          />
-          {{ t('modelPlaza.card.viewGroupMultipliers', { n: groupCount }) }}
-        </span>
-        <span class="text-gray-400 dark:text-dark-400">
-          {{ isExpanded ? t('modelPlaza.card.collapse') : t('modelPlaza.card.expand') }}
-        </span>
-      </button>
-
-      <!-- 展开的分组列表 -->
-      <div v-show="isExpanded" class="mt-2.5 space-y-2">
-        <div
-          v-for="variant in model.variants"
-          :key="`${variant.group.id}:${variant.model.platform}:${variant.model.name}`"
-          class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-100 bg-gray-50/50 p-2 text-xs dark:border-dark-700/50 dark:bg-dark-900/30"
-        >
-          <div class="flex min-w-0 flex-wrap items-center gap-1.5">
-            <span class="truncate font-medium text-gray-800 dark:text-dark-100" :title="variant.group.name">
-              {{ variant.group.name }}
+          <div v-if="selected" class="mt-2 flex flex-wrap items-center gap-1.5">
+            <span v-if="isText" class="capability" :title="t('modelPlaza.catalog.types.text')">T</span>
+            <span v-if="selected.model.metadata?.supports_vision === true" class="capability" :title="t('modelPlaza.catalog.vision')" :aria-label="t('modelPlaza.catalog.vision')">
+              <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="2.5" y="3" width="15" height="14" rx="2" /><path d="m4 14 4-4 3 3 2-2 3 3" /><circle cx="12.8" cy="7" r="1" /></svg>
             </span>
-            <span
-              v-if="variant.group.is_exclusive"
-              class="rounded bg-purple-50 px-1 py-0.5 text-[10px] font-medium text-purple-600 dark:bg-purple-900/20 dark:text-purple-400"
-            >
-              {{ t('modelPlaza.badges.exclusive') }}
-            </span>
-            <span
-              v-if="variant.group.subscription_type === 'subscription'"
-              class="rounded bg-violet-50 px-1 py-0.5 text-[10px] font-medium text-violet-600 dark:bg-violet-900/20 dark:text-violet-400"
-            >
-              {{ t('modelPlaza.badges.subscription') }}
-            </span>
-            <span v-if="variant.group.platform === 'composite'" class="text-[10px] text-gray-400">{{ variant.model.platform }}</span>
-          </div>
-
-          <div class="flex items-center gap-2">
-            <span class="font-mono font-semibold text-primary-600 dark:text-primary-400">
-              {{ variant.effectiveRate }}x
-            </span>
-            <button
-              type="button"
-              class="rounded bg-white px-2 py-1 text-[11px] font-medium text-gray-700 shadow-sm ring-1 ring-inset ring-gray-200 hover:bg-gray-50 dark:bg-dark-800 dark:text-dark-200 dark:ring-dark-600 dark:hover:bg-dark-700"
-              @click="emit('open-group-detail', variant)"
-            >
-              {{ t('modelPlaza.card.details') }}
-            </button>
+            <span v-if="!isText" class="text-xs text-gray-400">{{ t('modelPlaza.catalog.types.' + modelType) }}</span>
           </div>
         </div>
       </div>
+    </header>
+
+    <div v-if="metadata?.context_window || metadata?.max_output_tokens" class="flex flex-wrap gap-x-4 gap-y-1 border-t border-gray-100 px-5 py-3 text-xs text-gray-500 dark:border-dark-700 dark:text-dark-400">
+      <span v-if="metadata.context_window">{{ t('modelPlaza.catalog.contextWindow') }} <strong class="ml-1 font-semibold tabular-nums text-gray-700 dark:text-dark-100">{{ formatTokenLimit(metadata.context_window) }}</strong></span>
+      <span v-if="metadata.max_output_tokens">{{ t('modelPlaza.catalog.maxOutput') }} <strong class="ml-1 font-semibold tabular-nums text-gray-700 dark:text-dark-100">{{ formatTokenLimit(metadata.max_output_tokens) }}</strong></span>
     </div>
-  </div>
+
+    <div v-if="selected" class="grid grid-cols-2 border-t border-gray-100 dark:border-dark-700">
+      <div v-for="cell in cells" :key="cell.id" class="price-cell min-w-0 px-4 py-4">
+        <p class="flex items-start gap-1.5 text-xs font-medium text-gray-600 dark:text-dark-300"><span class="mt-0.5 h-3 w-0.5 shrink-0 rounded bg-gray-400 dark:bg-dark-400"></span>{{ priceLabel(cell) }}</p>
+        <p class="mt-2 flex flex-wrap items-baseline gap-x-1 leading-tight">
+          <span class="price-value whitespace-nowrap font-mono text-[22px] font-bold tracking-tight text-gray-950 dark:text-white" :data-price="cell.id">{{ formatUsdDirect(cell.price) ?? '—' }}</span>
+          <span v-if="cell.price !== null" class="text-[11px] text-gray-400">{{ t(cell.unitKey) }}</span>
+        </p>
+        <p v-if="cell.original !== null && cell.original !== cell.price" class="mt-2 text-[11px] text-gray-400">
+          {{ t('modelPlaza.catalog.original') }} <s v-if="cell.price !== null">{{ formatUsdDirect(cell.original) }}</s><span v-else>{{ formatUsdDirect(cell.original) }}</span> {{ t(cell.unitKey) }}
+        </p>
+      </div>
+      <p v-if="!cells.length" class="col-span-2 px-5 py-7 text-sm text-gray-400">{{ t('modelPlaza.detail.noPricing') }}</p>
+    </div>
+    <div v-else class="border-t border-gray-100 px-5 py-7 dark:border-dark-700">
+      <p class="font-mono text-2xl text-gray-400">—</p>
+      <p class="mt-3 text-sm leading-6 text-gray-500 dark:text-dark-400">{{ t('modelPlaza.catalog.unavailableInReference') }}</p>
+    </div>
+    <p v-if="hasSpecialPricing" class="px-5 py-2 text-[11px] text-amber-600 dark:text-amber-400">{{ t('modelPlaza.catalog.baseTierNote') }}</p>
+
+    <footer class="mt-auto border-t border-gray-100 bg-gray-50/40 p-4 dark:border-dark-700 dark:bg-dark-900/30">
+      <div class="mb-2 flex items-start justify-between gap-3 text-xs">
+        <p class="min-w-0 text-gray-400">{{ t('modelPlaza.catalog.groupPrices') }}<span v-if="selected" class="ml-1 break-words text-gray-600 dark:text-dark-300">{{ selected.group.name }}</span></p>
+        <button v-if="selected" type="button" class="shrink-0 rounded text-primary-600 underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:text-primary-300" @click="emit('open-group-detail', selected)">{{ t('modelPlaza.pricingDetail') }}</button>
+      </div>
+      <div class="flex flex-wrap gap-1.5">
+        <button v-for="variant in model.variants" :key="variantKey(variant)" type="button" class="group-chip" :class="{ 'group-chip-active': selected && variantKey(selected) === variantKey(variant) }" :aria-pressed="!!selected && variantKey(selected) === variantKey(variant)" @click="overrideKey = variantKey(variant)">
+          {{ variant.group.name }}<span v-if="hasDuplicateGroup(variant)" class="ml-1 opacity-70">({{ variant.model.platform }})</span>
+          ×{{ variant.effectiveRate }}
+          <span v-if="variant.group.subscription_type === 'subscription'" class="ml-1 text-[10px] opacity-70">{{ t('modelPlaza.badges.subscription') }}</span>
+        </button>
+      </div>
+    </footer>
+  </article>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import Icon from '@/components/icons/Icon.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import {
-  type AggregatedPlazaModel,
-  type GroupModelVariant,
-  formatUsdPerMillion,
-  formatUsdDirect,
-  nonTokenUnitKey
+  type AggregatedPlazaModel, type GroupModelVariant, type PlazaPriceCell,
+  formatUsdDirect, formatTokenLimit, modelPriceCells, plazaModelType, selectPriceVariant, variantKey
 } from './plaza-models'
 
-const props = defineProps<{
-  model: AggregatedPlazaModel
-}>()
-
-const emit = defineEmits<{
-  (e: 'open-group-detail', variant: GroupModelVariant): void
-}>()
-
+const props = defineProps<{ model: AggregatedPlazaModel; priceGroupId: number | null }>()
+const emit = defineEmits<{ 'open-group-detail': [GroupModelVariant] }>()
 const { t } = useI18n()
-const isExpanded = ref(false)
-
-const isTokenBilling = computed(() => props.model.billingMode === 'token')
-const groupCount = computed(() => new Set(props.model.variants.map(variant => variant.group.id)).size)
-const unitLabel = computed(() => t(nonTokenUnitKey(props.model.billingMode)))
-const hasAudioTiers = computed(() => props.model.billingMode === 'per_request' && props.model.variants.some(
-  variant => variant.model.pricing?.intervals.some(tier => ['realtime', 'tts', 'stt'].includes(tier.tier_label?.toLowerCase() ?? ''))
-))
-
-const billingModeLabel = computed(() => {
-  switch (props.model.billingMode) {
-    case 'token':
-      return t('modelPlaza.billingModes.token')
-    case 'image':
-      return t('modelPlaza.billingModes.image')
-    case 'per_request':
-      return t('modelPlaza.billingModes.perRequest')
-    case 'video':
-      return t('modelPlaza.billingModes.video')
-    default:
-      return props.model.billingMode
-  }
+const overrideKey = ref<string | null>(null)
+watch([() => props.priceGroupId, () => props.model.id], () => { overrideKey.value = null })
+const selected = computed(() => selectPriceVariant(props.model, props.priceGroupId, overrideKey.value))
+const cells = computed(() => selected.value ? modelPriceCells(selected.value) : [])
+const metadata = computed(() => selected.value?.model.metadata)
+const modelType = computed(() => selected.value ? plazaModelType(selected.value.model) : 'other')
+const isText = computed(() => modelType.value === 'text')
+const threshold = computed(() => {
+  if (selected.value?.model.pricing?.billing_mode !== 'token') return undefined
+  return selected.value.model.pricing.intervals.map(tier => tier.min_tokens).filter(value => value > 0).sort((a, b) => a - b)[0]
 })
-
-const priceSourceLabel = computed(() => {
-  if (isTokenBilling.value && props.model.officialPricing) {
-    return t('modelPlaza.card.referencePricing')
-  }
-  return props.model.hasPriceDifferences
-    ? t('modelPlaza.card.groupPriceRange')
-    : t('modelPlaza.card.basePricing')
-})
-
-function formatTokenPrice(officialVal: number | null | undefined, range?: [number, number]): string {
-  if (props.model.officialPricing) {
-    return formatUsdPerMillion(officialVal) ?? '-'
-  }
-  if (!range) return '-'
-  if (range[0] === range[1]) {
-    return formatUsdPerMillion(range[0]) ?? '-'
-  }
-  const minStr = formatUsdPerMillion(range[0]) ?? '-'
-  const maxStr = formatUsdPerMillion(range[1]) ?? '-'
-  return `${minStr} ~ ${maxStr}`
-}
-
-function formatDirectPrice(officialVal: number | null | undefined, range?: [number, number]): string {
-  if (officialVal !== null && officialVal !== undefined) {
-    return formatUsdDirect(officialVal) ?? '-'
-  }
-  if (!range) return '-'
-  if (range[0] === range[1]) {
-    return formatUsdDirect(range[0]) ?? '-'
-  }
-  const minStr = formatUsdDirect(range[0]) ?? '-'
-  const maxStr = formatUsdDirect(range[1]) ?? '-'
-  return `${minStr} ~ ${maxStr}`
-}
-
-const inputPriceText = computed(() =>
-  formatTokenPrice(props.model.officialPricing?.input_price, props.model.priceRanges.input)
-)
-
-const outputPriceText = computed(() =>
-  formatTokenPrice(props.model.officialPricing?.output_price, props.model.priceRanges.output)
-)
-
-const cacheWritePriceText = computed(() =>
-  formatTokenPrice(props.model.officialPricing?.cache_write_price, props.model.priceRanges.cacheWrite)
-)
-
-const cacheReadPriceText = computed(() =>
-  formatTokenPrice(props.model.officialPricing?.cache_read_price, props.model.priceRanges.cacheRead)
-)
-const hasCacheWrite1h = computed(() => props.model.officialPricing
-  ? props.model.officialPricing.cache_write_1h_price != null
-  : props.model.priceRanges.cacheWrite1h != null)
-const cacheWrite1hPriceText = computed(() => formatTokenPrice(
-  props.model.officialPricing?.cache_write_1h_price, props.model.priceRanges.cacheWrite1h
+const hasSpecialPricing = computed(() => !!selected.value && (
+  !!threshold.value || !!selected.value.model.time_pricing?.periods.length || selected.value.group.peak_rate_enabled
 ))
-
-const perRequestPriceText = computed(() =>
-  formatDirectPrice(null, props.model.priceRanges.perRequest)
-)
-
+function priceLabel(cell: PlazaPriceCell) {
+  if (cell.id === 'cache_write_price' && cells.value.some(entry => entry.id === 'cache_write_1h_price')) return t('modelPlaza.catalog.cacheWrite5m')
+  return cell.labelKey.startsWith('modelPlaza.') ? t(cell.labelKey) : cell.labelKey
+}
+function hasDuplicateGroup(variant: GroupModelVariant) {
+  return props.model.variants.filter(entry => entry.group.id === variant.group.id).length > 1
+}
 </script>
+
+<style scoped>
+.price-cell { @apply border-b border-gray-100 dark:border-dark-700; }
+.price-cell:nth-child(odd) { @apply border-r border-gray-100 dark:border-dark-700; }
+:deep(.price-value) { font-variant-numeric: tabular-nums; }
+.capability { @apply inline-flex h-6 min-w-8 items-center justify-center rounded-full border border-gray-200 bg-gray-50 px-2 font-serif text-sm text-gray-500 dark:border-dark-600 dark:bg-dark-800 dark:text-dark-300; }
+.group-chip { @apply max-w-full break-words rounded-full border border-gray-200 bg-white px-2.5 py-1 text-left text-xs font-medium text-gray-500 transition hover:border-primary-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 dark:border-dark-600 dark:bg-dark-800 dark:text-dark-300; }
+.group-chip-active { @apply border-primary-300 bg-primary-50 text-primary-700 dark:border-primary-700 dark:bg-primary-900/30 dark:text-primary-300; }
+</style>

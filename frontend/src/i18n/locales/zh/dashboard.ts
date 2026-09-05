@@ -604,6 +604,44 @@ export default {
 
   // Model Plaza (public group/model pricing showcase)
   modelPlaza: {
+    catalog: {
+      "filters": "筛选",
+      "filtersHint": "按分组和供应商查看模型价格。",
+      "type": "模型类型",
+      "types": {
+        "all": "全部",
+        "text": "文本",
+        "image": "图片",
+        "video": "视频",
+        "other": "其他"
+      },
+      "group": "分组",
+      "allGroups": "全部分组",
+      "referenceGroup": "价格参考分组",
+      "referenceHint": "仅决定全部分组时的展示价格，不改变模型范围。",
+      "noGroups": "暂无分组",
+      "suppliers": "供应商",
+      "allSuppliers": "全部供应商",
+      "reset": "重置筛选",
+      "creditBadge": "¥1 = $1 额度",
+      "creditHint": "1 元人民币充值获得 1 美元站内额度。此处为充值比例。",
+      "totalModels": "模型总数",
+      "billingNotes": "计费说明",
+      "results": "{count}/{total} 个模型",
+      "priceSource": "价格参考：{group}",
+      "showResults": "查看 {count} 个模型",
+      "multiplier": "倍率 {rate}",
+      "tierHint": "超过此上下文长度时使用阶梯价格，详见价格详情。",
+      "vision": "支持图片输入",
+      "contextWindow": "上下文窗口",
+      "maxOutput": "最大输出",
+      "perMillion": "/M",
+      "original": "官方价",
+      "unavailableInReference": "参考分组暂无此模型，请在下方选择可用分组查看价格。",
+      "groupPrices": "分组价格",
+      "baseTierNote": "标准时段 · 基础档价格，其他计费规则见详情。",
+      "cacheWrite5m": "缓存写入 5min"
+    },
     clearSearch: '清空搜索',
     "brands": {
       "all": "全部"

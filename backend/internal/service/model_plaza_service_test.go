@@ -57,6 +57,74 @@ func TestListPlazaGroups_GroupCentricAggregation(t *testing.T) {
 	require.Equal(t, "claude-sonnet", out[0].Models[1].Name)
 }
 
+func TestListPlazaGroups_CatalogMetadata(t *testing.T) {
+	pricing := &PricingService{cfg: &config.Config{}}
+	data, err := pricing.parsePricingData([]byte(`{
+		"claude-sonnet-4.5": {"input_cost_per_token":0.000003,"output_cost_per_token":0.000015,"max_input_tokens":200000,"max_output_tokens":64000,"supports_vision":true,"mode":"chat"},
+		"plain-model": {"input_cost_per_token":0.000001,"max_input_tokens":-1,"max_output_tokens":0,"supports_vision":false},
+		"no-metadata": {"input_cost_per_token":0.000002},
+		"malformed-metadata": {"input_cost_per_token":0.000007,"max_input_tokens":"unknown"}
+	}`))
+	require.NoError(t, err)
+	pricing.pricingData = data
+	require.Equal(t, 7e-6, data["malformed-metadata"].InputCostPerToken)
+	require.Nil(t, data["malformed-metadata"].MaxInputTokens)
+	svc := newPlazaService([]Channel{
+		plazaPricedChannel(1, "catalog", []int64{10}, PlatformAnthropic, "claude-sonnet-4.5", "plain-model", "no-metadata", "unknown"),
+	}, []Group{{ID: 10, Platform: PlatformAnthropic}}, pricing)
+	groups, err := svc.ListGroups(context.Background())
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	models := make(map[string]PlazaModel)
+	for _, model := range groups[0].Models {
+		models[model.Name] = model
+	}
+	metadata := models["claude-sonnet-4.5"].Metadata
+	require.NotNil(t, metadata)
+	require.Equal(t, 200000, *metadata.ContextWindow)
+	require.Equal(t, 64000, *metadata.MaxOutputTokens)
+	require.True(t, *metadata.SupportsVision)
+	require.Equal(t, "chat", metadata.Mode)
+	require.Equal(t, 3e-6, *models["claude-sonnet-4.5"].Pricing.InputPrice)
+	require.Nil(t, models["plain-model"].Metadata.ContextWindow)
+	require.Nil(t, models["plain-model"].Metadata.MaxOutputTokens)
+	require.False(t, *models["plain-model"].Metadata.SupportsVision)
+	require.Nil(t, models["unknown"].Metadata)
+	require.Nil(t, models["no-metadata"].Metadata)
+	require.Nil(t, newPlazaService(nil, nil, nil).modelMetadata("anything"))
+}
+
+func TestPlazaDisplayPricing_PreservesOneHourCachePrice(t *testing.T) {
+	for _, price := range []float64{0, 6e-6} {
+		channel := []ChannelModelPricing{{
+			Platform: PlatformAnthropic, Models: []string{"claude-sonnet-4"}, BillingMode: BillingModeToken,
+			CacheWritePrice: testPtrFloat64(3e-6), CacheWrite1hPrice: testPtrFloat64(price),
+			Intervals: []PricingInterval{{MinTokens: 10000, CacheWrite1hPrice: testPtrFloat64(9e-6)}},
+		}}
+		billing, resolver := newTokenCostTestEnv(t, PlatformAnthropic, channel, nil)
+		svc := &ModelPlazaService{billingService: billing, resolver: resolver}
+		model := PlazaModel{Name: "claude-sonnet-4", Platform: PlatformAnthropic, Pricing: &channel[0]}
+		g := enabledGroup(PlatformAnthropic)
+		svc.fillDisplayPricing(context.Background(), &model, g)
+		require.NotNil(t, model.Pricing.CacheWrite1hPrice)
+		require.InDelta(t, price, *model.Pricing.CacheWrite1hPrice, 1e-15)
+		require.Len(t, model.Pricing.Intervals, 2, "1h-only price changes must retain their tier boundary")
+		require.InDelta(t, 9e-6, *model.Pricing.Intervals[1].CacheWrite1hPrice, 1e-15)
+		for _, tokens := range []int{1000, 20000} {
+			cost, err := billing.CalculateTokenCostForRequest(TokenCostRequest{
+				Ctx: context.Background(), Model: model.Name, Group: g, RateMultiplier: 0.5, Resolver: resolver,
+				Tokens: UsageTokens{CacheCreationTokens: tokens, CacheCreation1hTokens: tokens},
+			})
+			require.NoError(t, err)
+			unitPrice := *model.Pricing.CacheWrite1hPrice
+			if tokens > 10000 {
+				unitPrice = *model.Pricing.Intervals[1].CacheWrite1hPrice
+			}
+			require.InDelta(t, unitPrice*float64(tokens)*0.5, cost.ActualCost, 1e-12)
+		}
+	}
+}
+
 func TestListPlazaGroups_DedupFirstWinsWithPricingUpgrade(t *testing.T) {
 	// 同名模型:先见者胜;仅当已存条目无定价而新条目有定价时升级替换。
 	unpriced := Channel{

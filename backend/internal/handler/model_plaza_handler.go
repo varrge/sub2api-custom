@@ -72,7 +72,8 @@ type modelPlazaModel struct {
 	// LongContextBasis 多档时的计价基准："whole_request"（整单按档）| "marginal"（仅超出部分）。
 	LongContextBasis string `json:"long_context_basis,omitempty"`
 	// TimePricing 分时倍率时段，落在时段内的请求整单乘倍率；无分时省略。
-	TimePricing *modelPlazaTimePricing `json:"time_pricing,omitempty"`
+	TimePricing *modelPlazaTimePricing      `json:"time_pricing,omitempty"`
+	Metadata    *service.PlazaModelMetadata `json:"metadata,omitempty"`
 }
 
 // modelPlazaGroup 广场分组条目（白名单字段）。
@@ -97,6 +98,8 @@ type modelPlazaGroup struct {
 	// 不取分组/用户专属倍率。
 	ImageRateIndependent bool    `json:"image_rate_independent"`
 	ImageRateMultiplier  float64 `json:"image_rate_multiplier"`
+	VideoRateIndependent bool    `json:"video_rate_independent"`
+	VideoRateMultiplier  float64 `json:"video_rate_multiplier"`
 	// 分组是否启用长上下文阶梯计费；关闭时模型实付列只展示最低档/基础价。
 	LongContextPricingEnabled bool              `json:"long_context_pricing_enabled"`
 	Models                    []modelPlazaModel `json:"models"`
@@ -200,6 +203,7 @@ func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64) mo
 			OfficialPricing:  toModelPlazaOfficialPricing(m.OfficialPricing),
 			LongContextBasis: string(m.LongContextBasis),
 			TimePricing:      toModelPlazaTimePricing(m.TimePricing),
+			Metadata:         m.Metadata,
 		})
 	}
 	dto := modelPlazaGroup{
@@ -220,6 +224,8 @@ func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64) mo
 		IsExclusive:               g.IsExclusive,
 		ImageRateIndependent:      g.ImageRateIndependent,
 		ImageRateMultiplier:       g.ImageRateMultiplier,
+		VideoRateIndependent:      g.VideoRateIndependent,
+		VideoRateMultiplier:       g.VideoRateMultiplier,
 		LongContextPricingEnabled: g.LongContextPricingEnabled,
 		Models:                    models,
 	}

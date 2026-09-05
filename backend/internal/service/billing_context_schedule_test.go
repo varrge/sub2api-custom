@@ -484,6 +484,9 @@ func TestResolveContextPricingSchedule_ParityWithBilling(t *testing.T) {
 				assertCostClose(t, expectedCostFromSchedule(sched, kindInput, c), cost(UsageTokens{InputTokens: c}), "input@%d", c)
 				assertCostClose(t, expectedCostFromSchedule(sched, kindCacheRead, c), cost(UsageTokens{CacheReadTokens: c}), "cache_read@%d", c)
 				assertCostClose(t, expectedCostFromSchedule(sched, kindCacheWrite, c), cost(UsageTokens{CacheCreationTokens: c}), "cache_write@%d", c)
+				if tier := tierAt(sched.Tiers, c); tier.CacheWrite1h != nil {
+					assertCostClose(t, float64(c)**tier.CacheWrite1h, cost(UsageTokens{CacheCreationTokens: c, CacheCreation1hTokens: c}), "cache_write_1h@%d", c)
+				}
 				wantOutput := float64(outputProbe) * tierPrice(tierAt(sched.Tiers, c), kindOutput)
 				gotOutput := cost(UsageTokens{InputTokens: c, OutputTokens: outputProbe}) - cost(UsageTokens{InputTokens: c})
 				assertCostClose(t, wantOutput, gotOutput, "output@%d", c)

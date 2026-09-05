@@ -107,6 +107,9 @@ var (
 // LiteLLMModelPricing LiteLLM价格数据结构
 // 只保留我们需要的字段，使用指针来处理可能缺失的值
 type LiteLLMModelPricing struct {
+	MaxInputTokens                      *int    `json:"max_input_tokens,omitempty"`
+	MaxOutputTokens                     *int    `json:"max_output_tokens,omitempty"`
+	SupportsVision                      *bool   `json:"supports_vision,omitempty"`
 	InputCostPerToken                   float64 `json:"input_cost_per_token"`
 	InputCostPerTokenPriority           float64 `json:"input_cost_per_token_priority"`
 	OutputCostPerToken                  float64 `json:"output_cost_per_token"`
@@ -456,6 +459,17 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 			SupportsPromptCaching: entry.SupportsPromptCaching,
 			SupportsServiceTier:   entry.SupportsServiceTier,
 			TokenPricingAbsent:    entry.InputCostPerToken == nil && entry.OutputCostPerToken == nil,
+		}
+		// Optional display metadata must never invalidate an otherwise usable price entry.
+		var metadata struct {
+			MaxInputTokens  *int  `json:"max_input_tokens"`
+			MaxOutputTokens *int  `json:"max_output_tokens"`
+			SupportsVision  *bool `json:"supports_vision"`
+		}
+		if json.Unmarshal(rawEntry, &metadata) == nil {
+			pricing.MaxInputTokens = metadata.MaxInputTokens
+			pricing.MaxOutputTokens = metadata.MaxOutputTokens
+			pricing.SupportsVision = metadata.SupportsVision
 		}
 
 		if entry.InputCostPerToken != nil {

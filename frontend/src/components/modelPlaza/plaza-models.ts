@@ -1,6 +1,5 @@
-import type { ModelPlazaGroup, PlazaModel, PlazaOfficialPricing } from '@/api/modelPlaza'
+import type { ModelPlazaGroup, PlazaModel } from '@/api/modelPlaza'
 import type { BillingMode } from '@/constants/channel'
-import type { UserSupportedModelPricing } from '@/api/channels'
 import type { GroupPlatform } from '@/types'
 import { effectiveGroupRate } from '@/utils/temporary-rate'
 
@@ -21,198 +20,125 @@ export interface AggregatedPlazaModel {
   name: string
   brand: PlazaBrandInfo
   billingMode: BillingMode
-  officialPricing: PlazaOfficialPricing | null
-  /** 多个分组下基准价范围 (USD per token 或 USD per unit) */
-  priceRanges: {
-    input?: [number, number]
-    output?: [number, number]
-    cacheWrite?: [number, number]
-    cacheWrite1h?: [number, number]
-    cacheRead?: [number, number]
-    perRequest?: [number, number]
-    imageInput?: [number, number]
-    imageOutput?: [number, number]
-  }
-  hasPriceDifferences: boolean
   variants: GroupModelVariant[]
 }
 
 export const SUPPORTED_BRANDS: Record<string, { name: string; platform: GroupPlatform }> = {
-  claude: { name: 'CLAUDE', platform: 'anthropic' },
-  codex: { name: 'CODEX', platform: 'openai' },
-  deepseek: { name: 'DEEPSEEK', platform: 'deepseek' },
-  gemini: { name: 'GEMINI', platform: 'gemini' },
+  claude: { name: 'Claude', platform: 'anthropic' },
+  openai: { name: 'OpenAI', platform: 'openai' },
+  deepseek: { name: 'DeepSeek', platform: 'deepseek' },
+  gemini: { name: 'Gemini', platform: 'gemini' },
   glm: { name: 'GLM', platform: 'zhipu' },
-  gpt: { name: 'GPT', platform: 'openai' },
-  grok: { name: 'GROK', platform: 'grok' },
-  kimi: { name: 'KIMI', platform: 'kimi' },
-  nano: { name: 'NANO', platform: 'gemini' },
-  antigravity: { name: 'ANTIGRAVITY', platform: 'antigravity' }
+  grok: { name: 'Grok', platform: 'grok' },
+  kimi: { name: 'Kimi', platform: 'kimi' }
 }
 
 export function inferModelBrand(modelName: string, fallbackPlatform?: string): PlazaBrandInfo {
   const name = (modelName || '').toLowerCase().trim()
   const platform = (fallbackPlatform || '').toLowerCase().trim()
 
-  if (/nano[-_ ]?banana|gemini.*image/i.test(name)) {
-    return { id: 'nano', name: 'NANO', platform: 'gemini' }
-  }
-  if (/claude/i.test(name)) {
-    return { id: 'claude', name: 'CLAUDE', platform: 'anthropic' }
-  }
-  if (/codex/i.test(name)) {
-    return { id: 'codex', name: 'CODEX', platform: 'openai' }
-  }
-  if (/deepseek/i.test(name)) {
-    return { id: 'deepseek', name: 'DEEPSEEK', platform: 'deepseek' }
-  }
-  if (/gemini|imagen|veo/i.test(name)) {
-    return { id: 'gemini', name: 'GEMINI', platform: 'gemini' }
-  }
-  if (/\bglm|chatglm|cogview|cogvideo/i.test(name) || platform === 'zhipu') {
-    return { id: 'glm', name: 'GLM', platform: 'zhipu' }
-  }
-  if (/\bgpt|chatgpt|^o[1-9](?:-|_|\b)|text-embedding|dall-e|whisper|tts|sora/i.test(name)) {
-    return { id: 'gpt', name: 'GPT', platform: 'openai' }
-  }
-  if (/grok/i.test(name)) {
-    return { id: 'grok', name: 'GROK', platform: 'grok' }
-  }
-  if (/kimi|moonshot/i.test(name)) {
-    return { id: 'kimi', name: 'KIMI', platform: 'kimi' }
-  }
-
-  // Fallback by platform
-  if (platform === 'anthropic') return { id: 'claude', name: 'CLAUDE', platform: 'anthropic' }
-  if (platform === 'openai') return { id: 'gpt', name: 'GPT', platform: 'openai' }
-  if (platform === 'gemini') return { id: 'gemini', name: 'GEMINI', platform: 'gemini' }
-  if (platform === 'deepseek') return { id: 'deepseek', name: 'DEEPSEEK', platform: 'deepseek' }
-  if (platform === 'zhipu') return { id: 'glm', name: 'GLM', platform: 'zhipu' }
-  if (platform === 'kimi') return { id: 'kimi', name: 'KIMI', platform: 'kimi' }
-  if (platform === 'grok') return { id: 'grok', name: 'GROK', platform: 'grok' }
-  if (platform === 'antigravity') return { id: 'antigravity', name: 'ANTIGRAVITY', platform: 'antigravity' }
-
-  const cleanId = platform || 'other'
-  const cleanPlatform: GroupPlatform | undefined =
-    platform === 'anthropic' ||
-    platform === 'openai' ||
-    platform === 'gemini' ||
-    platform === 'grok' ||
-    platform === 'deepseek' ||
-    platform === 'kimi' ||
-    platform === 'zhipu' ||
-    platform === 'antigravity'
-      ? platform
-      : undefined
-
-  return {
-    id: cleanId,
-    name: cleanId.toUpperCase(),
-    platform: cleanPlatform
-  }
+  const patterns: [string, RegExp][] = [
+    ['claude', /claude/], ['deepseek', /deepseek/], ['grok', /grok/],
+    ['kimi', /kimi|moonshot/], ['glm', /\bglm|chatglm|cogview|cogvideo/],
+    ['gemini', /gemini|imagen|veo|nano[-_ ]?banana/],
+    ['openai', /gpt|codex|(?:^|\/)o[1-9](?:-|_|\b)|text-embedding|dall-e|whisper|sora/]
+  ]
+  const id = patterns.find(([, pattern]) => pattern.test(name))?.[0] ??
+    Object.keys(SUPPORTED_BRANDS).find(key => SUPPORTED_BRANDS[key].platform === platform)
+  return id ? { id, ...SUPPORTED_BRANDS[id] } : { id: platform || 'other', name: platform || 'Other' }
 }
 
-function calculateRange(values: (number | null | undefined)[]): [number, number] | undefined {
-  const valid = values.filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
-  if (valid.length === 0) return undefined
-  const min = Math.min(...valid)
-  const max = Math.max(...valid)
-  return [min, max]
+export type PlazaModelType = 'text' | 'image' | 'video' | 'other'
+
+export function plazaModelType(model: PlazaModel): PlazaModelType {
+  const mode = model.metadata?.mode ?? ''
+  if (model.pricing?.billing_mode === 'video' || mode.includes('video')) return 'video'
+  if (model.pricing?.billing_mode === 'image' || ['image_generation', 'image', 'image_edit'].includes(mode)) return 'image'
+  if (['audio_transcription', 'audio_speech', 'audio'].includes(mode)) return 'other'
+  return model.pricing?.billing_mode === 'token' ? 'text' : 'other'
+}
+
+export function variantKey(variant: GroupModelVariant): string {
+  return `${variant.group.id}:${variant.model.platform}:${variant.model.name}`
+}
+
+/** A reference group controls prices only, never filters the all-groups catalog. */
+export function selectPriceVariant(model: AggregatedPlazaModel, groupId: number | null, overrideKey?: string | null): GroupModelVariant | null {
+  if (overrideKey) {
+    const override = model.variants.find(variant => variantKey(variant) === overrideKey)
+    if (override) return override
+  }
+  return model.variants.find(variant => variant.group.id === groupId) ?? null
+}
+
+export interface PlazaPriceCell {
+  id: string
+  labelKey: string
+  price: number | null
+  original: number | null
+  unitKey: string
+}
+
+export function modelPriceCells(variant: GroupModelVariant): PlazaPriceCell[] {
+  const { model, effectiveRate: rate } = variant
+  const pricing = model.pricing
+  if (!pricing) return []
+  const finite = (value: number | null | undefined) => value != null && Number.isFinite(value) ? value : null
+  const paid = (value: number | null | undefined, scale = 1) => {
+    const price = finite(value)
+    return price === null ? null : price * rate * scale
+  }
+  if (pricing.billing_mode === 'token') {
+    const fields = ['input_price', 'output_price', 'cache_write_price', 'cache_write_1h_price', 'cache_read_price'] as const
+    const keys = ['inputPrice', 'outputPrice', 'cacheWritePrice', 'cacheWrite1hPrice', 'cacheReadPrice']
+    return fields.flatMap((field, index) => {
+      const original = finite(model.official_pricing?.[field])
+      if (index > 1 && pricing[field] == null && original == null) return []
+      return [{
+        id: field, labelKey: `modelPlaza.card.${keys[index]}`,
+        price: paid(pricing[field], 1e6), original: original === null ? null : original * 1e6,
+        unitKey: 'modelPlaza.catalog.perMillion'
+      }]
+    })
+  }
+  if (pricing.intervals.length) {
+    // Each media/audio tier keeps its own units, never merge different dimensions into a range.
+    return pricing.intervals.map((tier, index) => ({
+      id: `tier-${index}`, labelKey: tier.tier_label || 'modelPlaza.card.unitPrice',
+      price: paid(tier.per_request_price), original: null,
+      unitKey: nonTokenUnitKey(pricing.billing_mode, tier.tier_label)
+    }))
+  }
+  return [{ id: 'unit', labelKey: 'modelPlaza.card.unitPrice', price: paid(pricing.per_request_price), original: null, unitKey: nonTokenUnitKey(pricing.billing_mode) }]
+}
+
+export function formatTokenLimit(value: number | undefined): string {
+  if (!value || !Number.isFinite(value) || value < 0) return '—'
+  if (value >= 1e6) return `${Number((value / 1e6).toPrecision(3))}M`
+  if (value >= 1000) return `${Number((value / 1000).toPrecision(3))}K`
+  return String(value)
 }
 
 export function aggregatePlazaModels(groups: ModelPlazaGroup[], now: number | Date = Date.now()): AggregatedPlazaModel[] {
-  const map = new Map<string, {
-    name: string
-    brand: PlazaBrandInfo
-    billingMode: BillingMode
-    officialPricing: PlazaOfficialPricing | null
-    variants: GroupModelVariant[]
-  }>()
-
+  const models = new Map<string, AggregatedPlazaModel>()
   for (const group of groups) {
-    for (const model of group.models || []) {
+    for (const model of group.models) {
       const billingMode = model.pricing?.billing_mode || 'token'
       const effectiveRate = billingMode === 'image' && group.image_rate_independent
         ? group.image_rate_multiplier
-        : effectiveGroupRate(group, group.user_rate_multiplier, now)
-      const key = `${model.name.trim().toLowerCase()}::${billingMode}`
-
-      const brand = inferModelBrand(model.name, model.platform || group.platform)
-      if (!map.has(key)) {
-        map.set(key, {
-          name: model.name,
-          brand,
-          billingMode,
-          officialPricing: model.official_pricing || null,
-          variants: []
-        })
-      }
-
-      const entry = map.get(key)!
-      if (!entry.officialPricing && model.official_pricing) {
-        entry.officialPricing = model.official_pricing
-      }
-
-      entry.variants.push({
-        group,
-        model,
-        effectiveRate
-      })
+        : billingMode === 'video' && group.video_rate_independent
+          ? group.video_rate_multiplier ?? 1
+          : effectiveGroupRate(group, group.user_rate_multiplier, now)
+      const id = `${model.name.trim().toLowerCase()}::${billingMode}`
+      const entry = models.get(id) ?? { id, name: model.name, brand: inferModelBrand(model.name, model.platform), billingMode, variants: [] }
+      entry.variants.push({ group, model, effectiveRate })
+      models.set(id, entry)
     }
   }
-
-  const result: AggregatedPlazaModel[] = []
-
-  for (const [key, entry] of map.entries()) {
-    const basePricings = entry.variants
-      .map((v) => v.model.pricing)
-      .filter((p): p is UserSupportedModelPricing => p !== null && p !== undefined)
-
-    const inputRanges = calculateRange(basePricings.map((p) => p.input_price))
-    const outputRanges = calculateRange(basePricings.map((p) => p.output_price))
-    const cacheWriteRanges = calculateRange(basePricings.map((p) => p.cache_write_price))
-    const cacheWrite1hRanges = calculateRange(basePricings.map((p) => p.cache_write_1h_price))
-    const cacheReadRanges = calculateRange(basePricings.map((p) => p.cache_read_price))
-    const perRequestRanges = calculateRange(basePricings.flatMap((p) => [
-      p.per_request_price, ...p.intervals.map(tier => tier.per_request_price)
-    ]))
-    const imageInputRanges = calculateRange(basePricings.map((p) => p.image_input_price))
-    const imageOutputRanges = calculateRange(basePricings.map((p) => p.image_output_price))
-
-    const hasPriceDifferences = Boolean(
-      (inputRanges && inputRanges[0] !== inputRanges[1]) ||
-      (outputRanges && outputRanges[0] !== outputRanges[1]) ||
-      (cacheWriteRanges && cacheWriteRanges[0] !== cacheWriteRanges[1]) ||
-      (cacheWrite1hRanges && cacheWrite1hRanges[0] !== cacheWrite1hRanges[1]) ||
-      (cacheReadRanges && cacheReadRanges[0] !== cacheReadRanges[1]) ||
-      (imageInputRanges && imageInputRanges[0] !== imageInputRanges[1]) ||
-      (imageOutputRanges && imageOutputRanges[0] !== imageOutputRanges[1]) ||
-      (perRequestRanges && perRequestRanges[0] !== perRequestRanges[1])
-    )
-
-    result.push({
-      id: key,
-      name: entry.name,
-      brand: entry.brand,
-      billingMode: entry.billingMode,
-      officialPricing: entry.officialPricing,
-      priceRanges: {
-        input: inputRanges,
-        output: outputRanges,
-        cacheWrite: cacheWriteRanges,
-        cacheWrite1h: cacheWrite1hRanges,
-        cacheRead: cacheReadRanges,
-        perRequest: perRequestRanges,
-        imageInput: imageInputRanges,
-        imageOutput: imageOutputRanges
-      },
-      hasPriceDifferences,
-      variants: entry.variants.sort((a, b) => a.effectiveRate - b.effectiveRate || a.group.name.localeCompare(b.group.name))
-    })
+  for (const model of models.values()) {
+    model.variants.sort((a, b) => a.effectiveRate - b.effectiveRate || a.group.name.localeCompare(b.group.name) || a.model.platform.localeCompare(b.model.platform))
   }
-
-  // 默认按模型名升序排序
-  return result.sort((a, b) => a.name.localeCompare(b.name))
+  return [...models.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
 export function formatUsdPerMillion(pricePerToken: number | null | undefined): string | null {

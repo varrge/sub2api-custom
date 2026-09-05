@@ -599,6 +599,44 @@ export default {
 
   // Model Plaza (public group/model pricing showcase)
   modelPlaza: {
+    catalog: {
+      "filters": "Filters",
+      "filtersHint": "Browse model prices by group and provider.",
+      "type": "Model type",
+      "types": {
+        "all": "All",
+        "text": "Text",
+        "image": "Image",
+        "video": "Video",
+        "other": "Other"
+      },
+      "group": "Group",
+      "allGroups": "All groups",
+      "referenceGroup": "Price reference group",
+      "referenceHint": "Sets displayed prices in All groups without narrowing the catalog.",
+      "noGroups": "No groups available",
+      "suppliers": "Providers",
+      "allSuppliers": "All providers",
+      "reset": "Reset filters",
+      "creditBadge": "¥1 = $1 credit",
+      "creditHint": "Recharge 1 RMB for 1 USD of site credit. This is a credit conversion rate.",
+      "totalModels": "Total models",
+      "billingNotes": "Billing notes",
+      "results": "{count}/{total} models",
+      "priceSource": "Price reference: {group}",
+      "showResults": "Show {count} models",
+      "multiplier": "Multiplier {rate}",
+      "tierHint": "Tiered pricing applies above this context length. See pricing details.",
+      "vision": "Supports image input",
+      "contextWindow": "Context window",
+      "maxOutput": "Max output",
+      "perMillion": "/M",
+      "original": "Official",
+      "unavailableInReference": "Not available in the reference group. Select an available group below to see its price.",
+      "groupPrices": "Group prices",
+      "baseTierNote": "Standard time · Base tier prices. See details for other billing rules.",
+      "cacheWrite5m": "Cache write 5min"
+    },
     clearSearch: 'Clear search',
     "brands": {
       "all": "All"

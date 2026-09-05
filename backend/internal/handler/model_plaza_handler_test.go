@@ -23,6 +23,22 @@ func plazaGroups() []service.PlazaGroup {
 	}
 }
 
+func TestModelPlazaDTO_CatalogMetadata(t *testing.T) {
+	contextWindow, output, vision := 200000, 64000, false
+	group := service.PlazaGroup{Models: []service.PlazaModel{
+		{Name: "known", Metadata: &service.PlazaModelMetadata{ContextWindow: &contextWindow, MaxOutputTokens: &output, SupportsVision: &vision, Mode: "chat"}},
+		{Name: "unknown"},
+	}}
+	body, err := json.Marshal(toModelPlazaGroupDTO(&group, nil))
+	require.NoError(t, err)
+	var payload struct {
+		Models []map[string]any `json:"models"`
+	}
+	require.NoError(t, json.Unmarshal(body, &payload))
+	require.Equal(t, map[string]any{"context_window": float64(200000), "max_output_tokens": float64(64000), "supports_vision": false, "mode": "chat"}, payload.Models[0]["metadata"])
+	require.NotContains(t, payload.Models[1], "metadata")
+}
+
 func TestFilterPlazaVisibleGroups_AnonymousSeesOnlyNonExclusive(t *testing.T) {
 	// 匿名(allowedExclusive == nil):仅非专属分组;订阅型公开分组照常可见(橱窗语义)。
 	visible := filterPlazaVisibleGroups(plazaGroups(), nil, false)

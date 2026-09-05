@@ -30,6 +30,15 @@ type PlazaModel struct {
 	LongContextBasis ContextPricingBasis
 	// TimePricing 计费会生效的分时倍率时段；无分时为 nil。
 	TimePricing *TimePricingSchedule
+	Metadata    *PlazaModelMetadata
+}
+
+// PlazaModelMetadata only contains capabilities explicitly identified in the pricing catalog.
+type PlazaModelMetadata struct {
+	ContextWindow   *int   `json:"context_window,omitempty"`
+	MaxOutputTokens *int   `json:"max_output_tokens,omitempty"`
+	SupportsVision  *bool  `json:"supports_vision,omitempty"`
+	Mode            string `json:"mode,omitempty"`
 }
 
 // PlazaGroup 模型广场中以分组为顶层的条目。
@@ -57,6 +66,8 @@ type PlazaGroup struct {
 	// = 档位价 × ImageRateMultiplier，不乘分组/用户专属倍率（与计费口径一致）。
 	ImageRateIndependent bool
 	ImageRateMultiplier  float64
+	VideoRateIndependent bool
+	VideoRateMultiplier  float64
 	// LongContextPricingEnabled 分组是否按上下文长度应用阶梯价；关闭时模型展示的是最低档。
 	LongContextPricingEnabled bool
 	Models                    []PlazaModel
@@ -141,6 +152,8 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 			IsExclusive:               g.IsExclusive,
 			ImageRateIndependent:      g.ImageRateIndependent,
 			ImageRateMultiplier:       g.ImageRateMultiplier,
+			VideoRateIndependent:      g.VideoRateIndependent,
+			VideoRateMultiplier:       g.VideoRateMultiplier,
 			LongContextPricingEnabled: g.LongContextPricingEnabled,
 		}
 		groupEnt[g.ID] = g
@@ -216,6 +229,7 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 		for j := range pg.Models {
 			s.fillDisplayPricing(ctx, &pg.Models[j], g)
 			pg.Models[j].OfficialPricing = s.lookupOfficialPricing(ctx, pg.Models[j].Name, officialMemo)
+			pg.Models[j].Metadata = s.modelMetadata(pg.Models[j].Name)
 		}
 		out = append(out, *pg)
 	}
@@ -227,6 +241,27 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 		return out[i].Name < out[j].Name
 	})
 	return out, nil
+}
+
+func (s *ModelPlazaService) modelMetadata(name string) *PlazaModelMetadata {
+	p := s.pricingService.GetIdentifiedModelPricing(name)
+	if p == nil {
+		return nil
+	}
+	positive := func(value *int) *int {
+		if value == nil || *value <= 0 {
+			return nil
+		}
+		return value
+	}
+	metadata := &PlazaModelMetadata{
+		ContextWindow: positive(p.MaxInputTokens), MaxOutputTokens: positive(p.MaxOutputTokens),
+		SupportsVision: p.SupportsVision, Mode: p.Mode,
+	}
+	if metadata.ContextWindow == nil && metadata.MaxOutputTokens == nil && metadata.SupportsVision == nil && metadata.Mode == "" {
+		return nil
+	}
+	return metadata
 }
 
 // fillDisplayPricing 把模型的展示定价换成实收口径：
@@ -264,6 +299,7 @@ func plazaPricingFromSchedule(raw *ChannelModelPricing, sched *ContextPricingSch
 	out.InputPrice = first.Input
 	out.OutputPrice = first.Output
 	out.CacheWritePrice = first.CacheWrite
+	out.CacheWrite1hPrice = first.CacheWrite1h
 	out.CacheReadPrice = first.CacheRead
 	if len(sched.Tiers) > 1 {
 		out.Intervals = plazaIntervalsFromTiers(sched.Tiers)
@@ -275,14 +311,15 @@ func plazaIntervalsFromTiers(tiers []ContextPricingTier) []PricingInterval {
 	intervals := make([]PricingInterval, 0, len(tiers))
 	for i, t := range tiers {
 		intervals = append(intervals, PricingInterval{
-			MinTokens:       t.MinTokens,
-			MaxTokens:       t.MaxTokens,
-			TierLabel:       t.Label,
-			InputPrice:      t.Input,
-			OutputPrice:     t.Output,
-			CacheWritePrice: t.CacheWrite,
-			CacheReadPrice:  t.CacheRead,
-			SortOrder:       i,
+			MinTokens:         t.MinTokens,
+			MaxTokens:         t.MaxTokens,
+			TierLabel:         t.Label,
+			InputPrice:        t.Input,
+			OutputPrice:       t.Output,
+			CacheWritePrice:   t.CacheWrite,
+			CacheWrite1hPrice: t.CacheWrite1h,
+			CacheReadPrice:    t.CacheRead,
+			SortOrder:         i,
 		})
 	}
 	return intervals

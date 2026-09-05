@@ -12,6 +12,14 @@ function blank(models: string[], overrides: Partial<PricingFormEntry> = {}): Pri
 }
 
 describe('bulk default prices', () => {
+  it('preserves upstream max reasoning pricing overrides and imports catalog defaults', () => {
+    const entry = blank(['claude-fable-5-1'], { max_reasoning_effort_multiplier: 1.5 })
+    expect(canImportDefaultPricing('claude-fable-5-1', [entry])).toBe(false)
+    const result = mergeDefaultPricing([], [{ model: 'claude-fable-5-1', pricing: {
+      found: true, input_price: 10e-6, max_reasoning_effort_multiplier: 3
+    } }])
+    expect(result.entries[0].max_reasoning_effort_multiplier).toBe(3)
+  })
   it('splits blank rules by model and preserves the unselected names without mutating the draft', () => {
     const entries = [blank(['claude-a', 'claude-b', 'unknown'])]
     const before = structuredClone(entries)

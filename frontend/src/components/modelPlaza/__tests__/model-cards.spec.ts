@@ -36,6 +36,14 @@ function mountCatalog(groups: ModelPlazaGroup[]) {
 }
 
 describe('catalog prices', () => {
+  it('retains the upstream max reasoning notice while showing normal base prices', () => {
+    const m = model({ pricing: { ...model().pricing!, max_reasoning_effort_multiplier: 3 } })
+    const wrapper = mount(PlazaModelCard, { props: { model: aggregatePlazaModels([group({ models: [m] })])[0], priceGroupId: 1 } })
+    expect(wrapper.text()).toContain('modelPlaza.table.maxReasoningMultiplierBadge')
+    expect(wrapper.text()).toContain('modelPlaza.catalog.baseTierNote')
+    expect(wrapper.get('[data-price="input_price"]').text()).toBe('$1')
+    wrapper.unmount()
+  })
   it('uses official defaults when the backend has no override, and does not leak another group override', () => {
     const defaultModel = model({ pricing: { ...model().pricing!, input_price: 3e-6 } })
     const customModel = model({ pricing: { ...model().pricing!, input_price: 36e-6 } })

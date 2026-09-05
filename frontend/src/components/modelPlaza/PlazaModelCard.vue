@@ -9,6 +9,7 @@
           <h3 class="break-words text-[17px] font-bold leading-snug tracking-tight text-gray-950 [overflow-wrap:anywhere] dark:text-white">{{ model.name }}</h3>
           <div class="mt-2 flex flex-wrap items-center gap-1.5">
             <span v-if="selected" class="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-600 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300">{{ t('modelPlaza.catalog.multiplier', { rate: selected.effectiveRate }) }}</span>
+            <span v-if="selected?.model.pricing?.max_reasoning_effort_multiplier" class="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300" :title="t('modelPlaza.table.maxReasoningMultiplierHint', { multiplier: selected.model.pricing.max_reasoning_effort_multiplier })">{{ t('modelPlaza.table.maxReasoningMultiplierBadge', { multiplier: selected.model.pricing.max_reasoning_effort_multiplier }) }}</span>
             <span v-if="threshold" class="rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-600 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-300" :title="t('modelPlaza.catalog.tierHint')">&gt;{{ formatTokenLimit(threshold) }}</span>
           </div>
           <div v-if="selected" class="mt-2 flex flex-wrap items-center gap-1.5">
@@ -86,7 +87,7 @@ const threshold = computed(() => {
   return selected.value.model.pricing.intervals.map(tier => tier.min_tokens).filter(value => value > 0).sort((a, b) => a - b)[0]
 })
 const hasSpecialPricing = computed(() => !!selected.value && (
-  !!threshold.value || !!selected.value.model.time_pricing?.periods.length || selected.value.group.peak_rate_enabled
+  !!threshold.value || !!selected.value.model.time_pricing?.periods.length || selected.value.group.peak_rate_enabled || !!selected.value.model.pricing?.max_reasoning_effort_multiplier
 ))
 function priceLabel(cell: PlazaPriceCell) {
   if (cell.id === 'cache_write_price' && cells.value.some(entry => entry.id === 'cache_write_1h_price')) return t('modelPlaza.catalog.cacheWrite5m')

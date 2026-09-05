@@ -103,13 +103,13 @@
             <div
               v-if="generating"
               class="grid w-full max-w-4xl gap-4 p-4"
-              :class="form.count > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'"
+              :class="(pendingGeneration?.count || 1) > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'"
             >
               <div
-                v-for="index in form.count"
+                v-for="index in pendingGeneration?.count || 1"
                 :key="index"
                 class="result-skeleton-card"
-                :style="{ aspectRatio: selectedRatioCss }"
+                :style="{ aspectRatio: ratioShapes[pendingGeneration?.aspectRatio || 'auto'] }"
               >
                 <div class="absolute inset-0 flex flex-col items-center justify-center gap-3">
                   <div class="flex h-11 w-11 animate-pulse items-center justify-center rounded-xl bg-white/90 text-primary-500 shadow-sm backdrop-blur dark:bg-dark-800/90 dark:text-primary-400">
@@ -508,7 +508,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { keysAPI } from '@/api/keys'
@@ -517,6 +517,7 @@ import {
   listImageModels,
   supportedImageAspectRatios,
   supportsImageGeneration,
+  type GenerateImageOptions,
   type GeneratedImage,
   type ImageAspectRatio,
   type ImageQuality,
@@ -556,7 +557,8 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const ratioDetails = ref<HTMLDetailsElement | null>(null)
 const showMobileHistory = ref(false)
 const dragging = ref(false)
-const generating = ref(false)
+const pendingGeneration = shallowRef<GenerateImageOptions | null>(null)
+const generating = computed(() => pendingGeneration.value !== null)
 const results = ref<ImageResult[]>([])
 const activeResult = ref<ImageResult | null>(null)
 const preview = ref<ImageResult | null>(null)
@@ -733,6 +735,8 @@ function clearResults() {
 }
 
 async function submitGeneration() {
+  if (generating.value) return
+
   const key = selectedKey.value
   const prompt = form.prompt.trim()
   if (!key?.group) {
@@ -748,28 +752,29 @@ async function submitGeneration() {
     return
   }
 
-  generating.value = true
+  const request: GenerateImageOptions = {
+    apiKey: key.key,
+    platform: key.group.platform,
+    model: form.model.trim(),
+    prompt,
+    aspectRatio: form.aspectRatio,
+    quality: form.quality,
+    count: form.count,
+    referenceImages: referenceImages.value.map(image => image.file),
+  }
+  pendingGeneration.value = request
   try {
-    const mode: GenerationMode = referenceImages.value.length ? 'image' : 'text'
-    const generated = await generateImages({
-      apiKey: key.key,
-      platform: key.group.platform,
-      model: form.model.trim(),
-      prompt,
-      aspectRatio: form.aspectRatio,
-      quality: form.quality,
-      count: form.count,
-      referenceImages: referenceImages.value.map(image => image.file),
-    })
+    const mode: GenerationMode = request.referenceImages.length ? 'image' : 'text'
+    const generated = await generateImages(request)
     if (!generated.length) throw new Error(t('imageGeneration.noImageReturned'))
 
     const now = new Date().toLocaleString()
     const newResults = generated.map((image, index): ImageResult => ({
       ...image,
       id: `${Date.now()}-${index}`,
-      model: form.model.trim(),
+      model: request.model,
       createdAt: now,
-      aspectRatio: form.aspectRatio === 'auto' ? 'auto' : ratioShapes[form.aspectRatio],
+      aspectRatio: request.aspectRatio === 'auto' ? 'auto' : ratioShapes[request.aspectRatio],
       mode,
     }))
     results.value.unshift(...newResults)
@@ -778,7 +783,7 @@ async function submitGeneration() {
   } catch (error) {
     appStore.showError(errorMessage(error, t('imageGeneration.generateFailed')))
   } finally {
-    generating.value = false
+    pendingGeneration.value = null
   }
 }
 

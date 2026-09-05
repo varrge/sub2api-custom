@@ -599,6 +599,21 @@ func TestPricingService_GeminiFlashTierSpecificPricingTakesPrecedence(t *testing
 	}
 }
 
+func TestPricingService_GeminiFlashTierAliasesStayScoped(t *testing.T) {
+	basePricing := &LiteLLMModelPricing{InputCostPerToken: 0.75e-6, OutputCostPerToken: 3.75e-6}
+	svc := &PricingService{pricingData: map[string]*LiteLLMModelPricing{"gemini-3.7-flash": basePricing}}
+	for _, model := range []string{
+		"GEMINI-3.7-FLASH-HIGH", "models/gemini-3.7-flash-low",
+		"publishers/google/models/gemini-3.7-flash-medium",
+		"projects/test/locations/global/publishers/google/models/gemini-3.7-flash-tiered",
+	} {
+		require.Same(t, basePricing, svc.GetIdentifiedModelPricing(model), model)
+	}
+	for _, model := range []string{"gemini-3.8-flash-medium", "gemini-3.9-flash-high", "gemini-3.7-flash-high-extra"} {
+		require.Nil(t, svc.GetIdentifiedModelPricing(model), "missing/unknown models must not inherit another version's price: %s", model)
+	}
+}
+
 func TestBillingService_Gemini36FlashThinkingTierFallbacksAreBillable(t *testing.T) {
 	svc := NewBillingService(&config.Config{}, nil)
 	tokens := UsageTokens{InputTokens: 1_000_000, OutputTokens: 1_000_000, CacheReadTokens: 1_000_000}

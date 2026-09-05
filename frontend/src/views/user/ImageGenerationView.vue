@@ -19,6 +19,7 @@
           class="flex items-center gap-1.5 rounded-lg border border-gray-200/80 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 dark:border-dark-700 dark:bg-dark-800 dark:text-dark-200 dark:hover:bg-dark-700 lg:hidden"
           :aria-label="t('imageGeneration.historyTitle')"
           :aria-expanded="showMobileHistory"
+          aria-controls="image-studio-history"
           @click="showMobileHistory = !showMobileHistory"
         >
           <Icon name="clock" size="sm" />
@@ -53,7 +54,7 @@
       </div>
 
       <!-- Main Studio Workspace -->
-      <div v-else class="studio-grid">
+      <div v-else class="studio-grid" :class="{ 'studio-grid-history-open': showMobileHistory }">
         <!-- Main Canvas & Composer Section -->
         <section class="studio-canvas-section">
           <!-- Canvas Top Status Bar -->
@@ -72,6 +73,7 @@
                 type="button"
                 class="btn btn-ghost btn-sm text-xs"
                 :title="t('imageGeneration.preview')"
+                :aria-label="t('imageGeneration.previewTitle')"
                 @click="preview = activeResult"
               >
                 <Icon name="search" size="sm" />
@@ -80,6 +82,7 @@
               <button
                 type="button"
                 class="btn btn-secondary btn-sm text-xs"
+                :aria-label="t('imageGeneration.download')"
                 @click="downloadResult(activeResult)"
               >
                 <Icon name="download" size="sm" />
@@ -123,7 +126,7 @@
             <div v-else-if="activeResult" class="flex h-full w-full items-center justify-center p-4">
               <button
                 type="button"
-                class="group relative flex max-h-full max-w-full items-center justify-center rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                class="group relative flex h-full w-full items-center justify-center rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                 @click="preview = activeResult"
               >
                 <img
@@ -226,6 +229,7 @@
                   rows="3"
                   class="w-full resize-none bg-transparent text-[15px] leading-6 text-gray-900 outline-none placeholder:text-gray-400 focus:outline-none dark:text-gray-100 dark:placeholder:text-dark-400"
                   :placeholder="t('imageGeneration.promptPlaceholder')"
+                  :aria-label="t('imageGeneration.prompt')"
                   @paste="onPaste"
                 ></textarea>
               </div>
@@ -364,8 +368,9 @@
           </div>
         </section>
 
-        <!-- Right History Column (desktop) / inline disclosure (mobile) -->
+        <!-- Right History Column (desktop) / workspace panel (mobile) -->
         <aside
+          id="image-studio-history"
           class="history-sidebar"
           :class="[showMobileHistory ? 'history-sidebar-mobile-open' : 'history-sidebar-mobile-closed']"
         >
@@ -819,7 +824,8 @@ onBeforeUnmount(clearReferences)
 
 <style scoped>
 .studio-shell {
-  @apply flex min-h-[calc(100vh-4rem)] flex-col overflow-hidden bg-[#f7f7f6] dark:bg-[#0b0d13];
+  @apply flex min-h-[28rem] flex-col overflow-hidden bg-[#f7f7f6] dark:bg-[#0b0d13];
+  height: calc(100dvh - 4rem - 1px);
 }
 
 .studio-grid {
@@ -828,7 +834,7 @@ onBeforeUnmount(clearReferences)
 
 /* Canvas Viewport */
 .studio-canvas-section {
-  @apply flex min-h-[640px] min-w-0 flex-col lg:min-h-0 relative;
+  @apply relative flex min-h-0 min-w-0 flex-col;
 }
 
 .canvas-header {
@@ -836,7 +842,7 @@ onBeforeUnmount(clearReferences)
 }
 
 .canvas-viewport {
-  @apply relative flex min-h-[360px] flex-1 items-center justify-center overflow-auto p-4 sm:p-6;
+  @apply relative flex min-h-0 flex-1 items-center justify-center overflow-auto p-4 sm:p-6;
   background-image: radial-gradient(rgba(0, 0, 0, 0.025) 1px, transparent 1px);
   background-size: 24px 24px;
 }
@@ -851,11 +857,12 @@ onBeforeUnmount(clearReferences)
 
 /* Composer */
 .composer-container {
-  @apply pointer-events-none px-3 pb-3 sm:px-6 sm:pb-5;
+  @apply pointer-events-none shrink-0 px-3 pb-3 sm:px-6 sm:pb-5;
 }
 
 .composer-card {
   @apply pointer-events-auto mx-auto w-full max-w-3xl overflow-visible rounded-2xl border border-gray-200/80 bg-white/90 shadow-lg shadow-gray-900/[0.06] backdrop-blur-xl transition dark:border-dark-700/80 dark:bg-dark-900/90 dark:shadow-black/30;
+  container: image-composer / inline-size;
 }
 
 .composer-toolbar {
@@ -899,12 +906,12 @@ onBeforeUnmount(clearReferences)
 
 /* Ratio Popover Panel */
 .ratio-popover-panel {
-  @apply absolute bottom-[calc(100%+10px)] left-0 z-50 w-[min(380px,calc(100vw-2rem))] rounded-2xl border border-gray-200/80 bg-white/95 p-4 shadow-xl shadow-gray-900/10 backdrop-blur-xl dark:border-dark-700 dark:bg-dark-900/95 dark:shadow-black/50;
+  @apply absolute bottom-[calc(100%+10px)] left-0 z-50 w-[min(380px,calc(100cqw-1.5rem))] rounded-2xl border border-gray-200/80 bg-white/95 p-4 shadow-xl shadow-gray-900/10 backdrop-blur-xl dark:border-dark-700 dark:bg-dark-900/95 dark:shadow-black/50;
   max-height: min(540px, calc(100vh - 14rem));
   overflow-y: auto;
 }
 
-@media (min-width: 768px) {
+@container image-composer (min-width: 42rem) {
   .ratio-popover-panel {
     @apply left-auto right-0;
   }
@@ -936,7 +943,7 @@ details > summary::-webkit-details-marker {
 
 /* History Sidebar */
 .history-sidebar {
-  @apply flex flex-col border-t border-gray-200/70 bg-white/55 backdrop-blur-md dark:border-dark-700/70 dark:bg-dark-900/55 lg:border-l lg:border-t-0;
+  @apply flex min-h-0 flex-col border-t border-gray-200/70 bg-white/55 backdrop-blur-md dark:border-dark-700/70 dark:bg-dark-900/55 lg:border-l lg:border-t-0;
 }
 
 @media (max-width: 1023px) {
@@ -944,7 +951,10 @@ details > summary::-webkit-details-marker {
     @apply hidden;
   }
   .history-sidebar-mobile-open {
-    @apply flex max-h-[32rem];
+    @apply flex;
+  }
+  .studio-grid-history-open .studio-canvas-section {
+    @apply hidden;
   }
 }
 
@@ -988,7 +998,7 @@ details > summary::-webkit-details-marker {
   }
 }
 
-@media (min-width: 768px) {
+@container image-composer (min-width: 42rem) {
   .composer-settings {
     grid-template-columns: 2rem 10rem minmax(8rem, 1fr) auto 4.25rem auto;
   }

@@ -599,6 +599,44 @@ export default {
 
   // Model Plaza (public group/model pricing showcase)
   modelPlaza: {
+    clearSearch: 'Clear search',
+    "brands": {
+      "all": "All"
+    },
+    "searchPlaceholder": "Search model name...",
+    "modelCount": "{count} models available",
+    "groupDetail": "Group Details",
+    "pricingDetail": "Pricing Details",
+    "billingModes": {
+      "token": "Token Billing",
+      "image": "Image Billing",
+      "perRequest": "Per Request",
+      "video": "Video Billing"
+    },
+    "card": {
+      "unitPrice": "Unit price",
+      "perSecond": "/ second",
+      "perMinute": "/ minute",
+      "perHour": "/ hour",
+      "perMillionChars": "/ million characters",
+      "cacheWrite1hPrice": "Cache write (1h)",
+      "tierDetails": "See group details for tier prices.",
+      "referencePricing": "Official Reference",
+      "basePricing": "Base Price",
+      "groupPriceRange": "Base Price Range",
+      "inputPrice": "Input",
+      "outputPrice": "Output",
+      "cacheWritePrice": "Cache Write",
+      "cacheReadPrice": "Cache Read",
+      "imageInput": "Image Input",
+      "imageOutput": "Image Output",
+      "perRequestPrice": "Per Request",
+      "customRate": "Billing Type",
+      "viewGroupMultipliers": "View {n} group multipliers",
+      "expand": "Expand",
+      "collapse": "Collapse",
+      "details": "Details"
+    },
     title: 'Model Plaza',
     description: 'Browse available models and pricing by group',
     loading: 'Loading...',

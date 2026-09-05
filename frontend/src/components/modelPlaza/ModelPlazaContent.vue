@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-5">
+  <div class="space-y-6">
     <!-- 页头(独立形态下展示标题;后台形态 AppHeader 已有页面标题) -->
     <div v-if="!embedded">
       <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">{{ t('modelPlaza.title') }}</h1>
@@ -33,25 +33,87 @@
       {{ t('modelPlaza.loadFailed') }}
     </div>
     <template v-else>
-      <!-- 筛选区:平台 → 分组 → 倍率 -->
-      <PlazaFilterBar
-        :platforms="platforms"
-        :groups="groupOptions"
-        :rates="rates"
-        :platform="selectedPlatform"
-        :group-id="selectedGroupId"
-        :rate="selectedRate"
-        :search="searchQuery"
-        @update:platform="selectedPlatform = $event"
-        @update:group-id="selectedGroupId = $event"
-        @update:rate="selectedRate = $event"
-        @update:search="searchQuery = $event"
-      />
+      <!-- 筛选栏: 搜索框 + 品牌 Pill 胶囊 -->
+      <div class="rounded-2xl border border-gray-100 bg-white p-4 shadow-card dark:border-dark-700/50 dark:bg-dark-800/50">
+        <div class="flex flex-col gap-3.5">
+          <!-- 搜索输入框 -->
+          <div class="relative max-w-md">
+            <Icon
+              name="search"
+              size="xs"
+              class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-dark-400"
+            />
+            <input
+              v-model="searchQuery"
+              type="search"
+              :aria-label="t('modelPlaza.searchPlaceholder')"
+              :placeholder="t('modelPlaza.searchPlaceholder')"
+              class="w-full rounded-xl border border-gray-200 bg-gray-50/50 py-2 pl-9 pr-8 text-sm text-gray-900 placeholder-gray-400 transition focus:border-primary-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-700 dark:bg-dark-900/50 dark:text-white dark:placeholder-dark-400 dark:focus:border-primary-400 dark:focus:bg-dark-900"
+            />
+            <button
+              v-if="searchQuery"
+              type="button"
+              :aria-label="t('modelPlaza.clearSearch')"
+              class="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-dark-200"
+              @click="searchQuery = ''"
+            >
+              <Icon name="x" size="xs" class="h-3.5 w-3.5" />
+            </button>
+          </div>
 
-      <!-- 分组分节的模型清单(默认按生效倍率升序) -->
-      <div v-if="filteredGroups.length > 0" class="space-y-5">
-        <PlazaGroupSection v-for="g in filteredGroups" :key="g.id" :group="g" />
+          <!-- 品牌 Pills 筛选 -->
+          <div class="flex flex-wrap items-center gap-2">
+            <!-- 全部 -->
+            <button
+              type="button"
+              :aria-pressed="selectedBrand === 'all'"
+              class="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+              :class="selectedBrand === 'all'
+                ? 'bg-primary-600 text-white shadow-sm dark:bg-primary-500'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-dark-700 dark:text-dark-200 dark:hover:bg-dark-600'"
+              @click="selectedBrand = 'all'"
+            >
+              {{ t('modelPlaza.brands.all') }}
+            </button>
+
+            <!-- 动态品牌 -->
+            <button
+              v-for="brand in availableBrands"
+              :key="brand.id"
+              type="button"
+              :aria-pressed="selectedBrand === brand.id"
+              class="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+              :class="selectedBrand === brand.id
+                ? 'bg-primary-600 text-white shadow-sm dark:bg-primary-500'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-dark-700 dark:text-dark-200 dark:hover:bg-dark-600'"
+              @click="selectedBrand = brand.id"
+            >
+              <PlatformIcon :platform="brand.platform" size="xs" class="h-3.5 w-3.5" />
+              <span>{{ brand.name }}</span>
+            </button>
+          </div>
+        </div>
       </div>
+
+      <!-- 模型计数 -->
+      <div class="flex items-center justify-between text-xs text-gray-500 dark:text-dark-400">
+        <span>{{ t('modelPlaza.modelCount', { count: filteredModels.length }) }}</span>
+      </div>
+
+      <!-- 模型卡片网格: 1/2/3 列响应式 -->
+      <div
+        v-if="filteredModels.length > 0"
+        class="grid grid-cols-1 items-start gap-5 md:grid-cols-2 xl:grid-cols-3"
+      >
+        <PlazaModelCard
+          v-for="model in filteredModels"
+          :key="model.id"
+          :model="model"
+          @open-group-detail="handleOpenGroupDetail"
+        />
+      </div>
+
+      <!-- 空状态 -->
       <div
         v-else
         class="rounded-2xl border border-dashed border-gray-300 px-5 py-12 text-center text-sm text-gray-500 dark:border-dark-600 dark:text-dark-400"
@@ -59,20 +121,35 @@
         {{ searchActive ? t('modelPlaza.noSearchResult') : t('modelPlaza.empty') }}
       </div>
     </template>
+
+    <!-- 弹窗展示分组详情 (包含窄化的该模型定价表) -->
+    <BaseDialog
+      :show="showDetailDialog"
+      :title="dialogTitle"
+      width="extra-wide"
+      @close="showDetailDialog = false"
+    >
+      <div v-if="activeGroupDetail" class="mt-2">
+        <PlazaGroupSection :group="activeGroupDetail" />
+      </div>
+    </BaseDialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import Icon from '@/components/icons/Icon.vue'
-import PlazaFilterBar from './PlazaFilterBar.vue'
+import PlatformIcon from '@/components/common/PlatformIcon.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
 import PlazaGroupSection from './PlazaGroupSection.vue'
+import PlazaModelCard from './PlazaModelCard.vue'
 import type { ModelPlazaGroup, ModelPlazaResponse } from '@/api/modelPlaza'
 import { useAuthStore } from '@/stores/auth'
-import { effectiveGroupRate, useTemporaryRateNow } from '@/utils/temporary-rate'
+import { useTemporaryRateNow } from '@/utils/temporary-rate'
+import { aggregatePlazaModels, type AggregatedPlazaModel, type PlazaBrandInfo, type GroupModelVariant } from './plaza-models'
 
 const props = defineProps<{
   response: ModelPlazaResponse | null
@@ -87,12 +164,10 @@ const authStore = useAuthStore()
 const temporaryRateNow = useTemporaryRateNow()
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 
-const selectedPlatform = ref<string>('all')
-const selectedGroupId = ref<number | 'all'>('all')
-const selectedRate = ref<number | 'all'>('all')
+const selectedBrand = ref<string>('all')
 const searchQuery = ref('')
 
-const searchActive = computed(() => searchQuery.value.trim() !== '')
+const searchActive = computed(() => searchQuery.value.trim() !== '' || selectedBrand.value !== 'all')
 
 const descriptionHtml = computed(() => {
   const md = props.response?.description?.trim()
@@ -100,59 +175,51 @@ const descriptionHtml = computed(() => {
   return DOMPurify.sanitize(marked.parse(md) as string)
 })
 
-/** 生效倍率 = 用户专属倍率 ?? 分组默认倍率。 */
-function effectiveRate(g: ModelPlazaGroup): number {
-  return effectiveGroupRate(g, g.user_rate_multiplier, temporaryRateNow.value)
-}
-
-const platforms = computed(() =>
-  [...new Set((props.response?.groups ?? []).map((g) => g.platform).filter(Boolean))].sort()
-)
-
-const groupOptions = computed(() =>
-  (props.response?.groups ?? []).map((g) => ({
-    id: g.id,
-    name: g.name,
-    platform: g.platform,
-    rate: effectiveRate(g)
-  }))
-)
-
-/** 全量生效倍率;当前组合下不可用的项由 FilterBar 置灰而非隐藏。 */
-const rates = computed(() =>
-  [...new Set((props.response?.groups ?? []).map(effectiveRate))].sort((a, b) => a - b)
-)
-
-/** 数据刷新后选中的倍率可能不复存在,重置为全部。 */
-watch(rates, (list) => {
-  if (selectedRate.value !== 'all' && !list.includes(selectedRate.value)) {
-    selectedRate.value = 'all'
-  }
+const allAggregatedModels = computed(() => {
+  const groups = props.response?.groups ?? []
+  return aggregatePlazaModels(groups, temporaryRateNow.value)
 })
 
-const filteredGroups = computed(() => {
-  let groups = props.response?.groups ?? []
-  if (selectedPlatform.value !== 'all') {
-    groups = groups.filter((g) => g.platform === selectedPlatform.value)
+const availableBrands = computed<PlazaBrandInfo[]>(() => {
+  const map = new Map<string, PlazaBrandInfo>()
+  for (const m of allAggregatedModels.value) {
+    if (!map.has(m.brand.id)) {
+      map.set(m.brand.id, m.brand)
+    }
   }
-  if (selectedGroupId.value !== 'all') {
-    groups = groups.filter((g) => g.id === selectedGroupId.value)
+  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
+})
+
+const filteredModels = computed<AggregatedPlazaModel[]>(() => {
+  let list = allAggregatedModels.value
+  if (selectedBrand.value !== 'all') {
+    list = list.filter((m) => m.brand.id === selectedBrand.value)
   }
-  if (selectedRate.value !== 'all') {
-    groups = groups.filter((g) => effectiveRate(g) === selectedRate.value)
-  }
-  // 模型名搜索:分组内只留命中的模型,整组无命中则隐藏该分组。
   const q = searchQuery.value.trim().toLowerCase()
   if (q) {
-    groups = groups
-      .map((g) => ({ ...g, models: g.models.filter((m) => m.name.toLowerCase().includes(q)) }))
-      .filter((g) => g.models.length > 0)
+    list = list.filter((m) => m.name.toLowerCase().includes(q))
   }
-  // 专属倍率会改变生效值,不能只依赖后端按默认倍率的排序。
-  return [...groups].sort(
-    (a, b) => effectiveRate(a) - effectiveRate(b) || a.name.localeCompare(b.name)
-  )
+  return list
 })
+
+// 详情弹窗
+const showDetailDialog = ref(false)
+const activeGroupDetail = ref<ModelPlazaGroup | null>(null)
+const targetModelName = ref<string>('')
+
+const dialogTitle = computed(() => {
+  if (!activeGroupDetail.value) return t('modelPlaza.groupDetail')
+  return `${activeGroupDetail.value.name} - ${targetModelName.value || t('modelPlaza.pricingDetail')}`
+})
+
+function handleOpenGroupDetail({ group, model }: GroupModelVariant) {
+  targetModelName.value = model.name
+  activeGroupDetail.value = {
+    ...group,
+    models: [model]
+  }
+  showDetailDialog.value = true
+}
 </script>
 
 <style scoped>
@@ -164,34 +231,72 @@ const filteredGroups = computed(() => {
 .plaza-description :deep(h1),
 .plaza-description :deep(h2),
 .plaza-description :deep(h3) {
-  @apply mb-2 mt-3 font-semibold text-gray-900 first:mt-0 dark:text-white;
+  margin-top: 0.75rem;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: rgb(17 24 39);
+}
+
+:global(.dark) .plaza-description :deep(h1),
+:global(.dark) .plaza-description :deep(h2),
+:global(.dark) .plaza-description :deep(h3) {
+  color: rgb(255 255 255);
 }
 
 .plaza-description :deep(p) {
-  @apply mb-2 text-gray-700 last:mb-0 dark:text-dark-200;
+  margin-bottom: 0.5rem;
+  color: rgb(55 65 81);
+}
+
+:global(.dark) .plaza-description :deep(p) {
+  color: rgb(229 231 235);
 }
 
 .plaza-description :deep(a) {
-  @apply text-primary-600 underline underline-offset-4 hover:text-primary-700 dark:text-primary-300;
+  color: rgb(37 99 235);
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 
 .plaza-description :deep(ul) {
-  @apply mb-2 list-disc pl-5;
+  margin-bottom: 0.5rem;
+  list-style-type: disc;
+  padding-left: 1.25rem;
 }
 
 .plaza-description :deep(ol) {
-  @apply mb-2 list-decimal pl-5;
+  margin-bottom: 0.5rem;
+  list-style-type: decimal;
+  padding-left: 1.25rem;
 }
 
 .plaza-description :deep(li) {
-  @apply mb-0.5 text-gray-700 dark:text-dark-200;
+  margin-bottom: 0.125rem;
 }
 
 .plaza-description :deep(code) {
-  @apply rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs dark:bg-dark-800;
+  border-radius: 0.25rem;
+  background-color: rgb(243 244 246);
+  padding: 0.125rem 0.375rem;
+  font-family: monospace;
+  font-size: 0.75rem;
+}
+
+:global(.dark) .plaza-description :deep(code) {
+  background-color: rgb(31 41 55);
 }
 
 .plaza-description :deep(blockquote) {
-  @apply my-2 border-l-4 border-gray-300 pl-3 text-gray-600 dark:border-dark-600 dark:text-dark-300;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  border-left-width: 4px;
+  border-color: rgb(209 213 219);
+  padding-left: 0.75rem;
+  color: rgb(75 85 99);
+}
+
+:global(.dark) .plaza-description :deep(blockquote) {
+  border-color: rgb(75 85 99);
+  color: rgb(156 163 175);
 }
 </style>

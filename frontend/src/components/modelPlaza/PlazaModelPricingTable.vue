@@ -186,7 +186,7 @@
                 >
                   <span class="font-sans text-gray-400 dark:text-dark-500">{{ tierLabel(iv) }}</span>
                   {{ paidRequestPrice(m, iv.per_request_price)
-                  }}<span class="font-sans text-gray-400 dark:text-dark-500">{{ perUnitSuffix(m) }}</span>
+                  }}<span class="font-sans text-gray-400 dark:text-dark-500">{{ perUnitSuffix(m, iv.tier_label) }}</span>
                 </span>
               </div>
               <template v-else-if="m.pricing?.per_request_price != null">
@@ -297,6 +297,7 @@
 </template>
 
 <script setup lang="ts">
+import { nonTokenUnitKey } from './plaza-models'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatScaled } from '@/utils/pricing'
@@ -366,6 +367,7 @@ function billingMode(m: PlazaModel): BillingMode {
 }
 
 function billingModeLabel(m: PlazaModel): string {
+  if (billingMode(m) === 'video') return t('modelPlaza.billingModes.video')
   return billingMode(m) === BILLING_MODE_IMAGE
     ? t('modelPlaza.table.perImage')
     : t('modelPlaza.table.perRequest')
@@ -428,10 +430,8 @@ function official(value: number | null | undefined): string {
 }
 
 /** 非 token 计费的单位后缀:按图片 → “/ 张”,按次 → “/ 次”。 */
-function perUnitSuffix(m: PlazaModel): string {
-  return billingMode(m) === BILLING_MODE_IMAGE
-    ? t('modelPlaza.table.perUnitImage')
-    : t('modelPlaza.table.perUnitRequest')
+function perUnitSuffix(m: PlazaModel, tierLabel?: string): string {
+  return t(nonTokenUnitKey(billingMode(m), tierLabel))
 }
 
 function hasCachePricing(m: PlazaModel): boolean {

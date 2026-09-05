@@ -43,6 +43,27 @@ export default {
 
     // Channel Management
     channels: {
+      bulkPricing: {
+        open: 'Import default prices',
+        title: 'Add model prices in bulk',
+        hint: 'Select models you support to fill their current default token prices, including cache prices. Existing custom prices and wildcard rules are preserved; blank multi-model rules are split by model. Save the channel or group to apply. Later catalog updates will not overwrite imported prices.',
+        sharedHint: 'Groups in the same channel share base prices; set each group multiplier separately.',
+        platform: 'Model platform',
+        search: 'Search model names…',
+        selectVisible: 'Select search results',
+        clear: 'Clear selection',
+        loading: 'Loading default prices {loaded} / {total}…',
+        retry: 'Retry',
+        failed: 'Could not load the model catalog. Please retry.',
+        model: 'Model',
+        input: 'Input',
+        output: 'Output',
+        empty: 'No models to add, or matching models already have custom prices.',
+        unavailable: 'Skipped {count} models with unavailable token prices or failed requests. Configure per-request, image and video prices using their respective billing settings.',
+        unit: 'Prices in USD per 1 million tokens',
+        apply: 'Fill {count} models',
+        success: 'Filled prices for {count} models. Save the form to apply.'
+      },
       title: 'Channel Management',
       description: 'Manage channels and custom model pricing',
       searchChannels: 'Search channels...',

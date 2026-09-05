@@ -604,8 +604,46 @@ export default {
 
   // Model Plaza (public group/model pricing showcase)
   modelPlaza: {
+    clearSearch: '清空搜索',
+    "brands": {
+      "all": "全部"
+    },
+    "searchPlaceholder": "搜索模型名称...",
+    "modelCount": "共 {count} 个可用模型",
+    "groupDetail": "分组详情",
+    "pricingDetail": "价格详情",
+    "billingModes": {
+      "token": "Token 计费",
+      "image": "按张计费",
+      "perRequest": "按次计费",
+      "video": "视频计费"
+    },
+    "card": {
+      "unitPrice": "单价",
+      "perSecond": "/ 秒",
+      "perMinute": "/ 分钟",
+      "perHour": "/ 小时",
+      "perMillionChars": "/ 百万字符",
+      "cacheWrite1hPrice": "缓存写入（1h）",
+      "tierDetails": "各档位价格见分组详情。",
+      "referencePricing": "官方参考价",
+      "basePricing": "渠道基础价",
+      "groupPriceRange": "分组基准价区间",
+      "inputPrice": "输入价格",
+      "outputPrice": "输出价格",
+      "cacheWritePrice": "缓存写入",
+      "cacheReadPrice": "缓存读取",
+      "imageInput": "图片输入",
+      "imageOutput": "图片生成",
+      "perRequestPrice": "单次调用",
+      "customRate": "计费类型",
+      "viewGroupMultipliers": "查看 {n} 个分组倍率",
+      "expand": "展开",
+      "collapse": "收起",
+      "details": "详情"
+    },
     title: '模型广场',
-    description: '按分组浏览可用模型与价格',
+    description: '浏览模型价格，展开对比各分组倍率',
     loading: '加载中...',
     empty: '暂无可展示的分组',
     loadFailed: '加载模型广场失败',

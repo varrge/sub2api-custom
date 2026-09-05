@@ -419,6 +419,10 @@
 
             <!-- Model Pricing -->
             <div>
+              <div class="mb-3 flex flex-wrap items-center gap-3">
+                <BulkPricingImport :platform="section.platform" :entries="section.model_pricing" @update="section.model_pricing = $event" />
+                <p class="text-xs text-gray-500 dark:text-dark-400">{{ t('admin.channels.bulkPricing.sharedHint') }}</p>
+              </div>
               <div class="mb-1 flex items-center justify-between">
                 <label class="input-label text-xs mb-0">{{ t('admin.channels.form.modelPricing', 'Model Pricing') }}</label>
                 <div class="flex items-center gap-2">
@@ -650,6 +654,7 @@ import Icon from '@/components/icons/Icon.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import PricingEntryCard from '@/components/admin/channel/PricingEntryCard.vue'
+import BulkPricingImport from '@/components/admin/channel/BulkPricingImport.vue'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { useKeyedDebouncedSearch } from '@/composables/useKeyedDebouncedSearch'
 

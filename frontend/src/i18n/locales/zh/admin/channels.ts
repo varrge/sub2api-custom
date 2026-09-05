@@ -43,6 +43,27 @@ export default {
 
     // Channel Management
     channels: {
+      bulkPricing: {
+        open: '批量填入默认价格',
+        title: '批量添加模型价格',
+        hint: '勾选实际支持的模型，批量填入当前默认 Token 价格（含缓存价格）。已有自定义价格和通配符规则会保留；空白多模型规则会按模型拆分。保存渠道或分组后生效，后续目录变化不会自动覆盖已填价格。',
+        sharedHint: '同一渠道的分组共享基础价，只需各自设置分组倍率。',
+        platform: '模型平台',
+        search: '搜索模型名称…',
+        selectVisible: '全选搜索结果',
+        clear: '清空选择',
+        loading: '正在读取默认价格 {loaded} / {total}…',
+        retry: '重试',
+        failed: '读取模型目录失败，请重试。',
+        model: '模型',
+        input: '输入',
+        output: '输出',
+        empty: '没有可添加的模型，或这些模型已有自定义价格。',
+        unavailable: '{count} 个模型没有可用的 Token 价格或读取失败，已跳过。按次、图片及视频价格请使用对应计费配置。',
+        unit: '价格单位：美元 / 100 万 Token',
+        apply: '填入 {count} 个模型',
+        success: '已填入 {count} 个模型的价格，保存表单后生效。'
+      },
       title: '渠道管理',
       description: '管理渠道和自定义模型定价',
       searchChannels: '搜索渠道...',

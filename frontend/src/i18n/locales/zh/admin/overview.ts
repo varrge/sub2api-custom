@@ -1043,8 +1043,8 @@ export default {
         pricePlaceholder: '可选'
       },
       modelPricing: {
-        title: '分组逐模型定价',
-        description: '匹配模型后覆盖渠道和内置价格。长上下文阶梯沿用官方/预设价卡，无需再手填区间。音频可用按次层级配置 realtime、tts、stt。',
+        title: '分组模型价格（可选覆盖）',
+        description: '使用统一基础价时无需逐个填写：留空沿用渠道或默认价格，仅设置分组倍率即可。需要本组独立价格时可批量填入，或手动添加覆盖规则。长上下文阶梯沿用官方/预设价卡。音频支持 realtime、tts、stt 按次层级。',
         longContext: '启用长上下文阶梯定价',
         longContextHint: '勾选后按渠道区间或官方预设阶梯计费；关闭后默认按第一档，账号显式开启时除外。',
         add: '添加模型价格'

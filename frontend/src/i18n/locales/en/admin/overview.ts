@@ -1046,8 +1046,8 @@ export default {
         pricePlaceholder: 'optional'
       },
       modelPricing: {
-        title: 'Per-model group pricing',
-        description: 'Overrides channel and built-in prices for matching models. Long-context tiers come from official presets — do not enter custom intervals. Use per-request tiers such as realtime, tts, and stt for audio.',
+        title: 'Group model prices (optional overrides)',
+        description: 'For shared base prices, leave this empty to inherit channel or default prices and set only the group multiplier. Import prices in bulk or add overrides when this group needs its own prices. Long-context tiers use official presets. Audio supports per-request tiers such as realtime, tts, and stt.',
         longContext: 'Enable long-context tier pricing',
         longContextHint: 'When checked, channel intervals or official preset tiers apply. Otherwise the first tier is used unless the account explicitly enables long-context billing.',
         add: 'Add model price'

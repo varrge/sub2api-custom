@@ -106,6 +106,7 @@
             {{ t('admin.channels.form.defaultPrices') }}
             <span class="ml-1 font-normal text-gray-400">$/MTok</span>
           </label>
+          <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">{{ t('admin.channels.form.defaultPricesHint') }}</p>
           <div class="pricing-default-grid mt-1 grid gap-2">
             <div>
               <label class="text-xs text-gray-400">{{ t('admin.channels.form.inputPrice') }}</label>

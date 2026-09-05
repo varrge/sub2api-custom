@@ -631,7 +631,7 @@ export default {
       "contextWindow": "Context window",
       "maxOutput": "Max output",
       "perMillion": "/M",
-      "original": "Official",
+      "original": "Base price",
       "unavailableInReference": "Not available in the reference group. Select an available group below to see its price.",
       "groupPrices": "Group prices",
       "baseTierNote": "Standard time · Base tier prices. See details for other billing rules.",
@@ -698,7 +698,7 @@ export default {
       noModels: 'No models configured for this group',
       noPricing: 'Pricing not configured',
       peakNote: 'Peak hours {window}: billing rate ×{multiplier}',
-      longContextDisabledNote: 'Long-context tier pricing is disabled for this group: requests above the threshold are billed at the base tier; official tiers are for reference only'
+      longContextDisabledNote: 'Long-context tier pricing is disabled for this group: requests above the threshold are billed at the base tier'
     },
     table: {
       model: 'Model',
@@ -721,6 +721,7 @@ export default {
       timePricingRateHint: 'Effective rate {rate} × period multiplier {multiplier}',
       paidPrice: 'Your Price (Discounted)',
       officialPrice: 'Official Price',
+      basePrice: 'Base price (before multiplier)',
       rate: 'Rate',
       unitPerMillion: '$ / 1M tokens',
       perUnitRequest: '/ request',

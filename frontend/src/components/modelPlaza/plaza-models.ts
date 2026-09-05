@@ -1,4 +1,4 @@
-import type { ModelPlazaGroup, PlazaModel } from '@/api/modelPlaza'
+import type { ModelPlazaGroup, PlazaModel, PlazaOfficialPricing } from '@/api/modelPlaza'
 import type { BillingMode } from '@/constants/channel'
 import type { GroupPlatform } from '@/types'
 import { effectiveGroupRate } from '@/utils/temporary-rate'
@@ -79,6 +79,11 @@ export interface PlazaPriceCell {
   unitKey: string
 }
 
+/** The backend resolves official defaults and channel/group overrides before applying multipliers. */
+export function modelBasePricing(model: PlazaModel): PlazaOfficialPricing | null {
+  return model.pricing?.billing_mode === 'token' ? model.pricing : null
+}
+
 export function modelPriceCells(variant: GroupModelVariant): PlazaPriceCell[] {
   const { model, effectiveRate: rate } = variant
   const pricing = model.pricing
@@ -92,7 +97,7 @@ export function modelPriceCells(variant: GroupModelVariant): PlazaPriceCell[] {
     const fields = ['input_price', 'output_price', 'cache_write_price', 'cache_write_1h_price', 'cache_read_price'] as const
     const keys = ['inputPrice', 'outputPrice', 'cacheWritePrice', 'cacheWrite1hPrice', 'cacheReadPrice']
     return fields.flatMap((field, index) => {
-      const original = finite(model.official_pricing?.[field])
+      const original = finite(modelBasePricing(model)?.[field])
       if (index > 1 && pricing[field] == null && original == null) return []
       return [{
         id: field, labelKey: `modelPlaza.card.${keys[index]}`,

@@ -22,6 +22,7 @@ function tokenModel(overrides: Partial<PlazaModel> = {}): PlazaModel {
       input_price: 3e-6,
       output_price: 1.5e-5,
       cache_write_price: 3.75e-6,
+      cache_write_1h_price: 6e-6,
       cache_read_price: 3e-7,
       image_input_price: null,
       image_output_price: null,
@@ -56,6 +57,20 @@ function mountTable(
 }
 
 describe('PlazaModelPricingTable', () => {
+  it('uses the same overridden base in details as in cards, before multiplying group and time rates', () => {
+    const m = tokenModel({ pricing: {
+      ...tokenModel().pricing!, input_price: 36e-6, output_price: 180e-6,
+      cache_write_price: 45e-6, cache_write_1h_price: 0, cache_read_price: 3.6e-6
+    } })
+    const wrapper = mountTable([m], 0.2)
+    const cells = wrapper.find('tbody tr').findAll('td')
+    expect(cells[1].text()).toBe('$7.20')
+    expect(cells[4].text()).toBe('$36.00')
+    expect(cells[5].text()).toBe('$180.00')
+    expect(cells[6].text()).toContain('$45.00')
+    expect(cells[6].text()).toContain('$0.00')
+    wrapper.unmount()
+  })
   it('倍率为 1 时展示渠道单价原值($/1M),价格保底 2 位小数', () => {
     const wrapper = mountTable([tokenModel()], 1)
     const text = wrapper.text()
@@ -182,26 +197,27 @@ describe('PlazaModelPricingTable', () => {
     expect(names[2]).toContain('gpt-image-2')
   })
 
-  it('两级表头:实付区与官方区各拆输入/输出/缓存列', () => {
+  it('两级表头:实付区与基础价区各拆输入/输出/缓存列', () => {
     const wrapper = mountTable([tokenModel()], 1)
     const text = wrapper.text()
     expect(text).toContain('modelPlaza.table.paidPrice')
-    expect(text).toContain('modelPlaza.table.officialPrice')
+    expect(text).toContain('modelPlaza.table.basePrice')
     // token 行:模型 + 实付 3 列 + 官方 3 列 + 倍率
     expect(wrapper.findAll('tbody td')).toHaveLength(8)
   })
 
-  it('官方价包含 1h 缓存写入价;official_pricing 为 null 时官方三列显示 -', () => {
+  it('基础价包含 1h 缓存写入价;官方目录缺失时仍展示已配置的基础价', () => {
     const withOfficial = mountTable([tokenModel()], 1)
     expect(withOfficial.text()).toContain('$6.00')
     expect(withOfficial.text()).toContain('(1h')
 
     const withoutOfficial = mountTable([tokenModel({ official_pricing: null })], 1)
     const cells = withoutOfficial.findAll('tbody td')
-    // 官方 输入/输出/缓存 三列均为 -
-    expect(cells[4].text().trim()).toBe('-')
-    expect(cells[5].text().trim()).toBe('-')
-    expect(cells[6].text().trim()).toBe('-')
+    expect(cells[4].text().trim()).toBe('$3.00')
+    expect(cells[5].text().trim()).toBe('$15.00')
+    expect(cells[6].text()).toContain('$6.00')
+    const missing = mountTable([tokenModel({ pricing: null })], 1)
+    expect(missing.findAll('tbody td').slice(4, 7).map(cell => cell.text().trim())).toEqual(['-', '-', '-'])
   })
 
   it('实付价分别展示自定义 5m 与 1h 缓存写入价', () => {
@@ -495,8 +511,10 @@ describe('PlazaModelPricingTable 长上下文阶梯', () => {
     expect(cells[2].findAll('.leading-5')).toHaveLength(2)
   })
 
-  it('官方三列按 official_pricing.intervals 分档且不乘倍率,不内联 1h', () => {
-    const wrapper = mountTable([ladderModel()], 0.5)
+  it('基础三列沿用覆盖后的阶梯,不乘分组倍率或使用官方阶梯替代', () => {
+    const m = ladderModel()
+    m.official_pricing!.intervals = ladderIntervals().map(iv => ({ ...iv, input_price: 99e-6 }))
+    const wrapper = mountTable([m], 0.5)
     const cells = wrapper.findAll('tbody td')
     expect(cells[4].text()).toContain('≤272K')
     expect(cells[4].text()).toContain('$5.00')
@@ -508,6 +526,7 @@ describe('PlazaModelPricingTable 长上下文阶梯', () => {
     expect(cells[6].text()).toContain('$12.50')
     expect(cells[6].text()).toContain('$1.00')
     expect(cells[6].text()).not.toContain('(1h')
+    expect(cells[4].text()).not.toContain('$99.00')
   })
 
   it('整单计价的档位标签带 tooltip;边际计价在模型名旁加徽章并换用边际说明', () => {

@@ -636,7 +636,7 @@ export default {
       "contextWindow": "上下文窗口",
       "maxOutput": "最大输出",
       "perMillion": "/M",
-      "original": "官方价",
+      "original": "基础价",
       "unavailableInReference": "参考分组暂无此模型，请在下方选择可用分组查看价格。",
       "groupPrices": "分组价格",
       "baseTierNote": "标准时段 · 基础档价格，其他计费规则见详情。",
@@ -703,7 +703,7 @@ export default {
       noModels: '该分组暂未配置模型',
       noPricing: '未配置定价',
       peakNote: '高峰时段 {window} 计费倍率 ×{multiplier}',
-      longContextDisabledNote: '该分组未启用长上下文阶梯计费，超阈值请求仍按基础档计费，官方阶梯仅供参考'
+      longContextDisabledNote: '该分组未启用长上下文阶梯计费，超阈值请求仍按基础档计费'
     },
     table: {
       model: '模型',
@@ -725,6 +725,7 @@ export default {
       timePricingRateHint: '生效倍率 {rate} × 时段倍率 {multiplier}',
       paidPrice: '实付价格(折后)',
       officialPrice: '官方价格',
+      basePrice: '基础价格（倍率前）',
       rate: '折扣倍率',
       unitPerMillion: '$ / 1M token',
       perUnitRequest: '/ 次',

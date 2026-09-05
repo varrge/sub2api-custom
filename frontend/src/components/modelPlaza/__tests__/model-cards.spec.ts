@@ -36,6 +36,31 @@ function mountCatalog(groups: ModelPlazaGroup[]) {
 }
 
 describe('catalog prices', () => {
+  it('uses official defaults when the backend has no override, and does not leak another group override', () => {
+    const defaultModel = model({ pricing: { ...model().pricing!, input_price: 3e-6 } })
+    const customModel = model({ pricing: { ...model().pricing!, input_price: 36e-6 } })
+    const catalog = aggregatePlazaModels([group({ models: [defaultModel] }), group({ id: 2, models: [customModel] })])[0]
+    const defaults = modelPriceCells(selectPriceVariant(catalog, 1)!)
+    const custom = modelPriceCells(selectPriceVariant(catalog, 2)!)
+    expect(defaults.find(cell => cell.id === 'input_price')).toMatchObject({ price: 1.5, original: 3 })
+    expect(custom.find(cell => cell.id === 'input_price')).toMatchObject({ price: 18, original: 36 })
+    expect(defaultModel.official_pricing!.input_price).toBe(3e-6)
+  })
+  it('uses the channel override as the pre-multiplier reference instead of the catalog price', () => {
+    const overridden = model({ name: 'gpt-6-astra-fast', platform: 'openai', pricing: {
+      ...model().pricing!, input_price: 36e-6, output_price: 180e-6,
+      cache_write_price: 45e-6, cache_read_price: 3.6e-6
+    } })
+    const cards = aggregatePlazaModels([group({ models: [overridden], rate_multiplier: 0.2 })])
+    const cells = modelPriceCells(cards[0].variants[0])
+    expect(cells.find(cell => cell.id === 'input_price')).toMatchObject({ price: 7.2, original: 36 })
+    expect(cells.find(cell => cell.id === 'output_price')).toMatchObject({ price: 36, original: 180 })
+    const wrapper = mount(PlazaModelCard, { props: { model: cards[0], priceGroupId: 1 } })
+    expect(wrapper.get('[data-price="input_price"]').text()).toBe('$7.2')
+    expect(wrapper.findAll('s').map(item => item.text())).toContain('$36')
+    expect(wrapper.findAll('s').map(item => item.text())).not.toContain('$3')
+    wrapper.unmount()
+  })
   it('keeps composite platform variants and different billing modes separate', () => {
     const token = model()
     const request = model({ pricing: { ...token.pricing!, billing_mode: 'per_request', per_request_price: 0.1 } })
@@ -50,9 +75,9 @@ describe('catalog prices', () => {
     const entry = model({ pricing: { ...model().pricing!, input_price: 0, output_price: null, cache_write_1h_price: 8e-6 } })
     const card = aggregatePlazaModels([group({ models: [entry] })])[0]
     const cells = modelPriceCells(card.variants[0])
-    expect(cells.find(cell => cell.id === 'input_price')).toMatchObject({ price: 0, original: 3 })
-    expect(cells.find(cell => cell.id === 'output_price')).toMatchObject({ price: null, original: 15 })
-    expect(cells.find(cell => cell.id === 'cache_write_price')).toMatchObject({ price: 1.5, original: null })
+    expect(cells.find(cell => cell.id === 'input_price')).toMatchObject({ price: 0, original: 0 })
+    expect(cells.find(cell => cell.id === 'output_price')).toMatchObject({ price: null, original: null })
+    expect(cells.find(cell => cell.id === 'cache_write_price')).toMatchObject({ price: 1.5, original: 3 })
     expect(cells.find(cell => cell.id === 'cache_write_1h_price')).toMatchObject({ price: 4 })
     expect(formatUsdPerMillion(null)).toBeNull()
     expect(formatUsdPerMillion(0)).toBe('$0')
@@ -115,7 +140,7 @@ describe('catalog selection and interactions', () => {
     const groups = [group(), group({ id: 2, name: 'Subscription', rate_multiplier: 0.2 })]
     const wrapper = mount(PlazaModelCard, { props: { model: aggregatePlazaModels(groups)[0], priceGroupId: 1 } })
     expect(wrapper.get('[data-price="input_price"]').text()).toBe('$1')
-    expect(wrapper.find('s').text()).toBe('$3')
+    expect(wrapper.find('s').text()).toBe('$2')
     await wrapper.findAll('button[aria-pressed]').find(button => button.text().includes('Subscription'))!.trigger('click')
     expect(wrapper.get('[data-price="input_price"]').text()).toBe('$0.4')
     await wrapper.setProps({ model: aggregatePlazaModels(groups)[0] })

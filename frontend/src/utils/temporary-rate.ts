@@ -9,7 +9,7 @@ export interface TemporaryRateFields {
 
 export type TemporaryRateStatus = 'none' | 'upcoming' | 'active' | 'ended' | 'canceled'
 
-const useTemporaryRateClock = createGlobalState(() => useNow({ interval: 60_000 }))
+const useTemporaryRateClock = createGlobalState(() => useNow({ interval: 1000 }))
 
 export const useTemporaryRateNow = () => useTemporaryRateClock()
 
@@ -42,39 +42,42 @@ export function effectiveGroupRate(
   return fields.rate_multiplier ?? 1
 }
 
-function calendarDate(timestamp: number, timeZone?: string): string {
+function calendarDateTime(timestamp: number, timeZone?: string): string {
   const options: Intl.DateTimeFormatOptions = {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
     ...(timeZone ? { timeZone } : {})
   }
   try {
     const parts = new Intl.DateTimeFormat('en-CA', options).formatToParts(timestamp)
     const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value
-    return `${part('year')}-${part('month')}-${part('day')}`
+    return `${part('year')}-${part('month')}-${part('day')}T${part('hour')}:${part('minute')}:${part('second')}`
   } catch {
-    return new Date(timestamp).toISOString().slice(0, 10)
+    return new Date(timestamp).toISOString().slice(0, 19)
   }
 }
 
 export function temporaryRateInputDate(
   value?: string | null,
-  timeZone?: string,
-  exclusiveEnd = false
+  timeZone?: string
 ): string {
   if (!value) return ''
   const timestamp = Date.parse(value)
   if (!Number.isFinite(timestamp)) return ''
-  return calendarDate(timestamp - (exclusiveEnd ? 1 : 0), timeZone)
+  return calendarDateTime(timestamp, timeZone)
 }
 
 export function temporaryRateDateRange(fields: TemporaryRateFields, timeZone?: string): string {
-  const start = temporaryRateInputDate(fields.temporary_rate_starts_at, timeZone)
-  const end = temporaryRateInputDate(fields.temporary_rate_ends_at, timeZone, true)
+  const start = temporaryRateInputDate(fields.temporary_rate_starts_at, timeZone).replace('T', ' ')
+  const end = temporaryRateEndDate(fields, timeZone)
   return start && end ? `${start} – ${end}` : ''
 }
 
 export function temporaryRateEndDate(fields: TemporaryRateFields, timeZone?: string): string {
-  return temporaryRateInputDate(fields.temporary_rate_ends_at, timeZone, true)
+  return temporaryRateInputDate(fields.temporary_rate_ends_at, timeZone).replace('T', ' ')
 }

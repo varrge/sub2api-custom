@@ -8,8 +8,8 @@ import (
 )
 
 func TestGroupBaseRateMultiplierAt(t *testing.T) {
-	start := time.Date(2026, 9, 5, 0, 0, 0, 0, time.FixedZone("UTC+8", 8*60*60))
-	end := time.Date(2026, 9, 11, 0, 0, 0, 0, start.Location())
+	start := time.Date(2026, 9, 5, 12, 34, 56, 0, time.FixedZone("UTC+8", 8*60*60))
+	end := start.Add(time.Second)
 	g := &Group{
 		RateMultiplier:          0.8,
 		TemporaryRateEnabled:    true,
@@ -35,4 +35,5 @@ func TestValidateTemporaryRateConfig(t *testing.T) {
 	require.Error(t, ValidateTemporaryRateConfig(true, 0, &start, &end))
 	require.Error(t, ValidateTemporaryRateConfig(true, 0.5, nil, nil))
 	require.Error(t, ValidateTemporaryRateConfig(true, 0.5, &end, &start))
+	require.Error(t, ValidateTemporaryRateConfig(true, 0.5, &start, &start))
 }

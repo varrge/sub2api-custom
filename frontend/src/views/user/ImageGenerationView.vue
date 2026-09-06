@@ -14,16 +14,16 @@
 
         <!-- Mobile History Toggle -->
         <button
-          v-if="imageKeys.length"
+          v-if="studio.ready"
           type="button"
           class="flex items-center gap-1.5 rounded-lg border border-gray-200/80 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 dark:border-dark-700 dark:bg-dark-800 dark:text-dark-200 dark:hover:bg-dark-700 lg:hidden"
-          :aria-label="t('imageGeneration.historyTitle')"
+          :aria-label="t('imageGeneration.sessionsTitle')"
           :aria-expanded="showMobileHistory"
           aria-controls="image-studio-history"
           @click="showMobileHistory = !showMobileHistory"
         >
           <Icon name="clock" size="sm" />
-          <span>{{ t('imageGeneration.historyTitle') }}</span>
+          <span>{{ t('imageGeneration.sessionsTitle') }}</span>
           <span v-if="results.length" class="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary-100 px-1 text-[10px] font-semibold text-primary-700 dark:bg-primary-900/60 dark:text-primary-300">
             {{ results.length }}
           </span>
@@ -31,7 +31,7 @@
       </header>
 
       <!-- Loading Keys State -->
-      <div v-if="loadingKeys" class="flex flex-1 items-center justify-center p-8">
+      <div v-if="loadingKeys || !studio.ready" class="flex flex-1 items-center justify-center p-8">
         <div class="flex flex-col items-center justify-center text-center">
           <LoadingSpinner size="lg" class="text-primary-500" />
           <p class="mt-4 text-xs font-medium tracking-wide text-gray-500 dark:text-dark-400">{{ t('imageGeneration.loadingKeys') }}</p>
@@ -39,7 +39,7 @@
       </div>
 
       <!-- No Keys Available State -->
-      <div v-else-if="!imageKeys.length" class="flex flex-1 items-center justify-center p-6 text-center">
+      <div v-else-if="!imageKeys.length && !studio.sessions.some(session => session.results.length)" class="flex flex-1 items-center justify-center p-6 text-center">
         <div class="w-full max-w-sm rounded-2xl border border-gray-200/80 bg-white/80 p-8 shadow-sm backdrop-blur-md dark:border-dark-700/80 dark:bg-dark-900/80">
           <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 text-gray-400 dark:bg-dark-800 dark:text-dark-400">
             <Icon name="key" size="lg" />
@@ -57,6 +57,15 @@
       <div v-else class="studio-grid" :class="{ 'studio-grid-history-open': showMobileHistory }">
         <!-- Main Canvas & Composer Section -->
         <section class="studio-canvas-section">
+          <p v-if="studio.storageError" role="alert" class="shrink-0 bg-amber-50 px-4 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+            {{ t(studio.storageError === 'conflict' ? 'imageGeneration.sessionStorageConflict' : 'imageGeneration.sessionStorageError') }}
+          </p>
+          <p v-if="studio.activeSession?.interrupted" role="status" class="shrink-0 bg-amber-50 px-4 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+            {{ t('imageGeneration.sessionInterrupted') }}
+          </p>
+          <p v-if="studio.activeSession?.error" role="alert" class="shrink-0 bg-red-50 px-4 py-2 text-xs text-red-700 dark:bg-red-950 dark:text-red-200">
+            {{ sessionError }}
+          </p>
           <!-- Canvas Top Status Bar -->
           <div v-if="activeResult" class="canvas-header">
             <div class="flex min-w-0 items-center gap-2">
@@ -102,17 +111,20 @@
             <!-- Rendering / Generating State -->
             <div
               v-if="generating"
-              class="grid w-full max-w-4xl gap-4 p-4"
-              :class="(pendingGeneration?.count || 1) > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'"
+              class="rendering-grid"
+              :class="[
+                (pendingGeneration?.count || 1) > 1 ? 'grid-cols-2' : 'grid-cols-1',
+                (pendingGeneration?.count || 1) > 2 ? 'grid-rows-2' : 'grid-rows-1',
+              ]"
             >
               <div
                 v-for="index in pendingGeneration?.count || 1"
                 :key="index"
-                class="result-skeleton-card"
-                :style="{ aspectRatio: ratioShapes[pendingGeneration?.aspectRatio || 'auto'] }"
+                class="rendering-slot"
               >
-                <div class="absolute inset-0 flex flex-col items-center justify-center gap-3">
-                  <div class="flex h-11 w-11 animate-pulse items-center justify-center rounded-xl bg-white/90 text-primary-500 shadow-sm backdrop-blur dark:bg-dark-800/90 dark:text-primary-400">
+                <div class="result-skeleton-card" :style="{ '--image-ratio': ratioShapes[pendingGeneration?.aspectRatio || 'auto'] }" aria-hidden="true"></div>
+                <div class="absolute inset-0 flex flex-col items-center justify-center gap-2 p-1 text-center">
+                  <div class="rendering-icon flex h-11 w-11 shrink-0 animate-pulse items-center justify-center rounded-xl bg-white/90 text-primary-500 shadow-sm backdrop-blur dark:bg-dark-800/90 dark:text-primary-400">
                     <Icon name="sparkles" size="md" />
                   </div>
                   <span class="text-xs font-medium tracking-tight text-gray-500 dark:text-dark-300">
@@ -123,16 +135,16 @@
             </div>
 
             <!-- Active Result Display -->
-            <div v-else-if="activeResult" class="flex h-full w-full items-center justify-center p-4">
+            <div v-else-if="activeResult" class="flex h-full min-h-0 w-full min-w-0 items-center justify-center">
               <button
                 type="button"
-                class="group relative flex h-full w-full items-center justify-center rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                class="group relative flex h-full min-h-0 w-full min-w-0 items-center justify-center rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                 @click="preview = activeResult"
               >
                 <img
                   :src="activeResult.src"
                   :alt="t('imageGeneration.resultAlt', { index: results.indexOf(activeResult) + 1 })"
-                  class="max-h-full max-w-full rounded-2xl object-contain shadow-2xl shadow-gray-900/10 transition-transform duration-300 group-hover:scale-[1.01] dark:shadow-black/50"
+                  class="min-h-0 min-w-0 max-h-full max-w-full rounded-2xl object-contain shadow-2xl shadow-gray-900/10 dark:shadow-black/50"
                 />
                 <div class="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/0 opacity-0 transition-opacity duration-200 group-hover:bg-black/20 group-hover:opacity-100">
                   <span class="flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-900 shadow-md backdrop-blur dark:bg-dark-900/90 dark:text-white">
@@ -379,23 +391,13 @@
             <div class="flex items-center justify-between">
               <div>
                 <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-dark-300">
-                  {{ t('imageGeneration.historyTitle') }}
+                  {{ t('imageGeneration.sessionsTitle') }}
                 </h2>
                 <p class="mt-0.5 text-[11px] text-gray-400 dark:text-dark-400">
                   {{ t('imageGeneration.historySession') }}
                 </p>
               </div>
               <div class="flex items-center gap-1">
-                <button
-                  v-if="results.length"
-                  type="button"
-                  class="btn btn-ghost h-8 w-8 p-0 text-gray-400 hover:text-red-500 dark:text-dark-400 dark:hover:text-red-400"
-                  :aria-label="t('imageGeneration.clear')"
-                  :title="t('imageGeneration.clear')"
-                  @click="clearResults"
-                >
-                  <Icon name="trash" size="xs" />
-                </button>
                 <button
                   type="button"
                   class="btn btn-ghost h-8 w-8 p-0 text-gray-400 lg:hidden"
@@ -407,6 +409,25 @@
               </div>
             </div>
 
+            <button type="button" class="btn btn-secondary btn-sm mt-3 w-full justify-center" @click="studio.createSession(); showMobileHistory = false">
+              <Icon name="plus" size="sm" />
+              {{ t('imageGeneration.newSession') }}
+            </button>
+          </div>
+
+          <div class="max-h-40 shrink-0 space-y-1 overflow-y-auto border-b border-gray-100/80 p-2 dark:border-dark-700/80" data-testid="image-sessions">
+            <div v-for="session in studio.sessions" :key="session.id" class="flex items-center gap-1 rounded-lg" :class="session.id === studio.activeId ? 'bg-primary-50 dark:bg-primary-950' : ''">
+              <button type="button" class="min-w-0 flex-1 px-2 py-2 text-left" :aria-pressed="session.id === studio.activeId" @click="studio.activeId = session.id; showMobileHistory = false">
+                <span class="block truncate text-xs font-medium text-gray-800 dark:text-dark-100">{{ session.title || t('imageGeneration.untitledSession') }}</span>
+                <span class="block text-[10px] text-gray-500 dark:text-dark-400">{{ session.pending ? t('imageGeneration.generating') : t('imageGeneration.sessionImageCount', { count: session.results.length }) }}</span>
+              </button>
+              <button type="button" class="btn btn-ghost btn-sm shrink-0 px-2" :disabled="Boolean(session.pending)" :aria-label="t('imageGeneration.deleteSession')" @click="deletingSessionId = session.id">
+                <Icon name="trash" size="xs" />
+              </button>
+            </div>
+          </div>
+
+          <div class="shrink-0 px-4 pb-2">
             <!-- Filter Segmented Control -->
             <div class="mt-3 grid grid-cols-3 gap-1 rounded-lg bg-gray-100 p-0.5 dark:bg-dark-800">
               <button
@@ -474,6 +495,14 @@
 
       </div>
 
+      <ConfirmDialog
+        :show="Boolean(deletingSessionId)"
+        :title="t('imageGeneration.deleteSession')"
+        :message="t('imageGeneration.deleteSessionConfirm')"
+        @confirm="deleteSession"
+        @cancel="deletingSessionId = null"
+      />
+
       <!-- Preview Lightbox Dialog -->
       <BaseDialog
         :show="Boolean(preview)"
@@ -508,25 +537,23 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { keysAPI } from '@/api/keys'
 import {
-  generateImages,
   listImageModels,
   supportedImageAspectRatios,
   supportsImageGeneration,
-  type GenerateImageOptions,
-  type GeneratedImage,
   type ImageAspectRatio,
   type ImageQuality,
 } from '@/api/imageGeneration'
-import { BaseDialog, LoadingSpinner } from '@/components/common'
+import { BaseDialog, ConfirmDialog, LoadingSpinner } from '@/components/common'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import { useAppStore } from '@/stores/app'
+import { useImageStudioStore, type ImageStudioForm, type ImageStudioResult } from '@/stores/imageStudio'
 import type { ApiKey } from '@/types'
 
 interface ReferenceImage {
@@ -537,16 +564,9 @@ interface ReferenceImage {
 type GenerationMode = 'text' | 'image'
 type HistoryFilter = 'all' | GenerationMode
 
-interface ImageResult extends GeneratedImage {
-  id: string
-  model: string
-  createdAt: string
-  aspectRatio: string
-  mode: GenerationMode
-}
-
 const { t } = useI18n()
 const appStore = useAppStore()
+const studio = useImageStudioStore()
 const apiKeys = ref<ApiKey[]>([])
 const loadingKeys = ref(true)
 const loadingModels = ref(false)
@@ -557,22 +577,31 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const ratioDetails = ref<HTMLDetailsElement | null>(null)
 const showMobileHistory = ref(false)
 const dragging = ref(false)
-const pendingGeneration = shallowRef<GenerateImageOptions | null>(null)
+const pendingGeneration = computed(() => studio.activeSession?.pending ?? null)
 const generating = computed(() => pendingGeneration.value !== null)
-const results = ref<ImageResult[]>([])
-const activeResult = ref<ImageResult | null>(null)
-const preview = ref<ImageResult | null>(null)
+const results = computed(() => studio.activeSession?.results ?? [])
+const activeResult = computed({
+  get: () => results.value.find(result => result.id === studio.activeSession?.activeResultId) ?? null,
+  set: (result: ImageStudioResult | null) => { if (studio.activeSession) studio.activeSession.activeResultId = result?.id ?? null },
+})
+const preview = ref<ImageStudioResult | null>(null)
+const deletingSessionId = ref<string | null>(null)
+const sessionError = computed(() => {
+  const error = studio.activeSession?.error || ''
+  return error.startsWith('imageGeneration.') ? t(error) : error
+})
 const historyFilter = ref<HistoryFilter>('all')
 let modelRequestID = 0
 
-const form = reactive({
+const emptyForm: ImageStudioForm = {
   apiKeyId: null as number | null,
   model: '',
   prompt: '',
   aspectRatio: 'auto' as ImageAspectRatio,
   quality: 'standard' as ImageQuality,
   count: 1,
-})
+}
+const form = computed(() => studio.activeSession?.form ?? emptyForm)
 
 const ratioShapes: Record<ImageAspectRatio, string> = {
   auto: '1 / 1',
@@ -602,23 +631,23 @@ const imageKeys = computed(() => apiKeys.value.filter(key =>
   key.group?.allow_image_generation === true &&
   supportsImageGeneration(key.group.platform)
 ))
-const selectedKey = computed(() => imageKeys.value.find(key => key.id === form.apiKeyId) || null)
+const selectedKey = computed(() => imageKeys.value.find(key => key.id === form.value.apiKeyId) || null)
 const keyOptions = computed(() => imageKeys.value.map(key => ({
   value: key.id,
   label: `${key.name} · ${key.group?.name || ''}`,
 })))
 const modelOptions = computed(() => availableModels.value.map(model => ({ value: model, label: model })))
-const ratioOptions = computed(() => supportedImageAspectRatios(selectedKey.value?.group?.platform, form.model)
+const ratioOptions = computed(() => supportedImageAspectRatios(selectedKey.value?.group?.platform, form.value.model)
   .map(value => ({ value, cssRatio: ratioShapes[value] })))
-const ratioLabel = computed(() => form.aspectRatio === 'auto' ? t('imageGeneration.autoRatio') : form.aspectRatio)
-const selectedRatioCss = computed(() => form.aspectRatio === 'auto' ? '1 / 1' : ratioShapes[form.aspectRatio])
+const ratioLabel = computed(() => form.value.aspectRatio === 'auto' ? t('imageGeneration.autoRatio') : form.value.aspectRatio)
+const selectedRatioCss = computed(() => form.value.aspectRatio === 'auto' ? '1 / 1' : ratioShapes[form.value.aspectRatio])
 const filteredResults = computed(() => historyFilter.value === 'all'
   ? results.value
   : results.value.filter(result => result.mode === historyFilter.value))
 const displaySize = computed(() => {
-  const max = form.quality === 'high' ? 2048 : 1024
-  if (form.aspectRatio === 'auto') return { width: max, height: max }
-  const [widthRatio, heightRatio] = form.aspectRatio.split(':').map(Number)
+  const max = form.value.quality === 'high' ? 2048 : 1024
+  if (form.value.aspectRatio === 'auto') return { width: max, height: max }
+  const [widthRatio, heightRatio] = form.value.aspectRatio.split(':').map(Number)
   return widthRatio >= heightRatio
     ? { width: max, height: Math.round(max * heightRatio / widthRatio) }
     : { width: Math.round(max * widthRatio / heightRatio), height: max }
@@ -640,7 +669,6 @@ async function loadKeys() {
       page += 1
     }
     apiKeys.value = keys
-    form.apiKeyId = imageKeys.value[0]?.id || null
   } catch (error) {
     appStore.showError(errorMessage(error, t('imageGeneration.loadKeysFailed')))
   } finally {
@@ -652,7 +680,6 @@ async function loadModels() {
   const key = selectedKey.value
   const requestID = ++modelRequestID
   availableModels.value = []
-  form.model = ''
   modelError.value = ''
   if (!key?.group) return
 
@@ -661,7 +688,7 @@ async function loadModels() {
     const models = await listImageModels(key.key, key.group.platform)
     if (requestID !== modelRequestID) return
     availableModels.value = models
-    form.model = models[0] || ''
+    if (!form.value.model) form.value.model = models[0] || ''
   } catch (error) {
     if (requestID !== modelRequestID) return
     modelError.value = errorMessage(error, t('imageGeneration.loadModelsFailed'))
@@ -690,10 +717,7 @@ function addReferenceImages(files: File[]) {
   }
 
   const slots = Math.max(0, 4 - referenceImages.value.length)
-  referenceImages.value.push(...valid.slice(0, slots).map(file => ({
-    file,
-    url: URL.createObjectURL(file),
-  })))
+  studio.activeSession?.referenceFiles.push(...valid.slice(0, slots))
 }
 
 function clearReferences() {
@@ -720,30 +744,29 @@ function onPaste(event: ClipboardEvent) {
 }
 
 function removeReference(index: number) {
-  const [removed] = referenceImages.value.splice(index, 1)
-  if (removed) URL.revokeObjectURL(removed.url)
+  studio.activeSession?.referenceFiles.splice(index, 1)
 }
 
 function selectRatio(value: ImageAspectRatio) {
-  form.aspectRatio = value
+  form.value.aspectRatio = value
   if (ratioDetails.value) ratioDetails.value.open = false
 }
 
-function clearResults() {
-  results.value = []
-  activeResult.value = null
+function deleteSession() {
+  if (deletingSessionId.value) studio.deleteSession(deletingSessionId.value)
+  deletingSessionId.value = null
 }
 
 async function submitGeneration() {
   if (generating.value) return
 
   const key = selectedKey.value
-  const prompt = form.prompt.trim()
+  const prompt = form.value.prompt.trim()
   if (!key?.group) {
     appStore.showError(t('imageGeneration.selectKey'))
     return
   }
-  if (!form.model.trim()) {
+  if (!form.value.model.trim()) {
     appStore.showError(t('imageGeneration.selectModel'))
     return
   }
@@ -752,38 +775,12 @@ async function submitGeneration() {
     return
   }
 
-  const request: GenerateImageOptions = {
-    apiKey: key.key,
-    platform: key.group.platform,
-    model: form.model.trim(),
-    prompt,
-    aspectRatio: form.aspectRatio,
-    quality: form.quality,
-    count: form.count,
-    referenceImages: referenceImages.value.map(image => image.file),
-  }
-  pendingGeneration.value = request
   try {
-    const mode: GenerationMode = request.referenceImages.length ? 'image' : 'text'
-    const generated = await generateImages(request)
-    if (!generated.length) throw new Error(t('imageGeneration.noImageReturned'))
-
-    const now = new Date().toLocaleString()
-    const newResults = generated.map((image, index): ImageResult => ({
-      ...image,
-      id: `${Date.now()}-${index}`,
-      model: request.model,
-      createdAt: now,
-      aspectRatio: request.aspectRatio === 'auto' ? 'auto' : ratioShapes[request.aspectRatio],
-      mode,
-    }))
-    results.value.unshift(...newResults)
-    activeResult.value = newResults[0]
-    appStore.showSuccess(t('imageGeneration.generated', { count: generated.length }))
+    const count = await studio.generate(key.key, key.group.platform)
+    if (count) appStore.showSuccess(t('imageGeneration.generated', { count }))
   } catch (error) {
-    appStore.showError(errorMessage(error, t('imageGeneration.generateFailed')))
-  } finally {
-    pendingGeneration.value = null
+    const message = errorMessage(error, t('imageGeneration.generateFailed'))
+    appStore.showError(message.startsWith('imageGeneration.') ? t(message) : message)
   }
 }
 
@@ -800,7 +797,7 @@ function clickDownload(src: string, extension: string, openInNewTab = false) {
   link.remove()
 }
 
-async function downloadResult(result: ImageResult) {
+async function downloadResult(result: ImageStudioResult) {
   if (result.src.startsWith('data:')) {
     clickDownload(result.src, result.src.startsWith('data:image/jpeg') ? 'jpg' : result.src.startsWith('data:image/webp') ? 'webp' : 'png')
     return
@@ -818,23 +815,40 @@ async function downloadResult(result: ImageResult) {
   }
 }
 
-watch(() => form.apiKeyId, () => void loadModels())
-watch(ratioOptions, options => {
-  if (!options.some(option => option.value === form.aspectRatio)) form.aspectRatio = 'auto'
+watch([() => studio.activeId, imageKeys, loadingKeys], () => {
+  if (!studio.activeSession || loadingKeys.value) return
+  if (!imageKeys.value.some(key => key.id === form.value.apiKeyId)) {
+    if (form.value.apiKeyId !== null) form.value.model = ''
+    form.value.apiKeyId = imageKeys.value[0]?.id ?? null
+  }
+}, { immediate: true })
+watch([() => studio.activeId, selectedKey], ([id, key], [previousId, previousKey]) => {
+  if (id === previousId && previousKey && previousKey.id !== key?.id) form.value.model = ''
+  preview.value = null
+  dragging.value = false
+  if (ratioDetails.value) ratioDetails.value.open = false
+  void loadModels()
+}, { immediate: true })
+watch([ratioOptions, selectedKey], ([options, key]) => {
+  if (key && !options.some(option => option.value === form.value.aspectRatio)) form.value.aspectRatio = 'auto'
 })
+watch(() => studio.activeSession?.referenceFiles, files => {
+  clearReferences()
+  referenceImages.value = (files || []).map(file => ({ file, url: URL.createObjectURL(file) }))
+}, { immediate: true, deep: true })
 
 onMounted(() => void loadKeys())
-onBeforeUnmount(clearReferences)
+onBeforeUnmount(() => { modelRequestID++; clearReferences(); void studio.flush() })
 </script>
 
 <style scoped>
 .studio-shell {
-  @apply flex min-h-[28rem] flex-col overflow-hidden bg-[#f7f7f6] dark:bg-[#0b0d13];
+  @apply flex min-h-0 flex-col overflow-hidden bg-[#f7f7f6] dark:bg-[#0b0d13];
   height: calc(100dvh - 4rem - 1px);
 }
 
 .studio-grid {
-  @apply grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] lg:overflow-hidden;
+  @apply grid min-h-0 flex-1 grid-cols-1 grid-rows-1 lg:grid-cols-[minmax(0,1fr)_280px] lg:overflow-hidden;
 }
 
 /* Canvas Viewport */
@@ -847,7 +861,7 @@ onBeforeUnmount(clearReferences)
 }
 
 .canvas-viewport {
-  @apply relative flex min-h-0 flex-1 items-center justify-center overflow-auto p-4 sm:p-6;
+  @apply relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-4 sm:p-6;
   background-image: radial-gradient(rgba(0, 0, 0, 0.025) 1px, transparent 1px);
   background-size: 24px 24px;
 }
@@ -1010,8 +1024,52 @@ details > summary::-webkit-details-marker {
 }
 
 /* Skeleton loader */
+.rendering-grid {
+  @apply grid h-full min-h-0 w-full max-w-4xl gap-3;
+}
+
+.rendering-slot {
+  @apply relative grid min-h-0 min-w-0 place-items-center;
+  container-type: size;
+}
+
 .result-skeleton-card {
-  @apply relative mx-auto w-full max-w-xl overflow-hidden rounded-2xl border border-gray-200/90 bg-gray-100 shadow-sm dark:border-dark-700 dark:bg-dark-800;
+  @apply relative overflow-hidden rounded-2xl border border-gray-200/90 bg-gray-100 shadow-sm dark:border-dark-700 dark:bg-dark-800;
+  width: min(100cqw, calc(100cqh * (var(--image-ratio))));
+  aspect-ratio: var(--image-ratio);
+}
+
+@container (max-height: 8rem) {
+  .rendering-icon {
+    display: none;
+  }
+}
+
+@media (max-height: 600px) {
+  .studio-shell > header,
+  .canvas-header {
+    @apply h-8;
+  }
+
+  .canvas-viewport {
+    @apply p-2;
+  }
+
+  #image-prompt {
+    height: 1.5rem;
+  }
+
+  .composer-container {
+    @apply pb-2;
+  }
+
+  .composer-note {
+    display: none;
+  }
+
+  .empty-apple-icon {
+    display: none;
+  }
 }
 
 .result-skeleton-card::before {

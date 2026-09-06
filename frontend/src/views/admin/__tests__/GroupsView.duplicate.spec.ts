@@ -50,7 +50,7 @@ vi.mock('@/api/admin', () => ({
 }))
 
 vi.mock('@/stores/app', () => ({
-  useAppStore: () => ({ showSuccess, showError })
+  useAppStore: () => ({ showSuccess, showError, cachedPublicSettings: { server_timezone: 'Asia/Shanghai' } })
 }))
 
 vi.mock('@/stores/onboarding', () => ({
@@ -300,6 +300,64 @@ describe('GroupsView duplicate action', () => {
 
     expect(updateGroup).toHaveBeenCalledTimes(1)
     expect(showError).toHaveBeenCalledWith('group name already exists')
+    wrapper.unmount()
+  })
+
+  it('keeps existing full-day activity boundaries unchanged when saving other fields', async () => {
+    listGroups.mockResolvedValueOnce({ items: [{ ...sourceGroup,
+      temporary_rate_enabled: true, temporary_rate_multiplier: 0.5,
+      temporary_rate_starts_at: '2026-09-04T16:00:00Z',
+      temporary_rate_ends_at: '2026-09-10T16:00:00Z'
+    }], total: 1 })
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === 'common.edit')!.trigger('click')
+    await flushPromises()
+
+    const start = wrapper.get<HTMLInputElement>('#edit-temporary-rate-start')
+    const end = wrapper.get<HTMLInputElement>('#edit-temporary-rate-end')
+    expect(start.attributes('type')).toBe('datetime-local')
+    expect(start.attributes('step')).toBe('1')
+    expect(end.attributes('step')).toBe('1')
+    expect(start.element.value).toMatch(/^2026-09-05T00:00(:00)?$/)
+    expect(end.element.value).toMatch(/^2026-09-11T00:00(:00)?$/)
+    await wrapper.get('#edit-group-form').trigger('submit')
+    await flushPromises()
+    expect(updateGroup).toHaveBeenCalledTimes(1)
+    expect(updateGroup.mock.calls[0]![1]).not.toHaveProperty('temporary_rate_start_date')
+    expect(updateGroup.mock.calls[0]![1]).not.toHaveProperty('temporary_rate_end_date')
+    wrapper.unmount()
+  })
+
+  it('submits exact seconds and rejects an empty or reversed activity interval', async () => {
+    listGroups.mockResolvedValueOnce({ items: [{ ...sourceGroup,
+      temporary_rate_enabled: true, temporary_rate_multiplier: 0.5,
+      temporary_rate_starts_at: '2026-09-05T04:34:56Z',
+      temporary_rate_ends_at: '2026-09-05T04:34:57Z'
+    }], total: 1 })
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === 'common.edit')!.trigger('click')
+    await flushPromises()
+    const start = wrapper.get<HTMLInputElement>('#edit-temporary-rate-start')
+    const end = wrapper.get<HTMLInputElement>('#edit-temporary-rate-end')
+    expect(start.element.value).toMatch(/^2026-09-05T12:34:56(\.000)?$/)
+    expect(end.element.value).toMatch(/^2026-09-05T12:34:57(\.000)?$/)
+
+    await start.setValue('2026-09-05T12:35:00')
+    for (const value of ['2026-09-05T12:34:59', '2026-09-05T12:35']) {
+      await end.setValue(value)
+      await wrapper.get('#edit-group-form').trigger('submit')
+      expect(updateGroup).not.toHaveBeenCalled()
+      expect(showError).toHaveBeenLastCalledWith('admin.groups.temporaryRate.rangeInvalid')
+    }
+    await end.setValue('2026-09-05T12:35:01')
+    await wrapper.get('#edit-group-form').trigger('submit')
+    await flushPromises()
+    expect(updateGroup).toHaveBeenCalledWith(42, expect.objectContaining({
+      temporary_rate_start_date: '2026-09-05T12:35',
+      temporary_rate_end_date: expect.stringMatching(/^2026-09-05T12:35:01(\.000)?$/)
+    }))
     wrapper.unmount()
   })
 })

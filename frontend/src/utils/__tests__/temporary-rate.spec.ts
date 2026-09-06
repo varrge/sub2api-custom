@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   effectiveGroupRate,
+  temporaryRateDateRange,
+  temporaryRateEndDate,
   temporaryRateInputDate,
-  temporaryRateStatus
+  temporaryRateStatus,
+  useTemporaryRateNow
 } from '../temporary-rate'
 
 const activity = {
@@ -22,9 +25,43 @@ describe('temporary group rate', () => {
     expect(effectiveGroupRate(activity, null, Date.parse('2026-09-10T16:00:00Z'))).toBe(0.8)
   })
 
-  it('shows the inclusive end date in the server timezone', () => {
-    expect(temporaryRateInputDate(activity.temporary_rate_starts_at, 'Asia/Shanghai')).toBe('2026-09-05')
-    expect(temporaryRateInputDate(activity.temporary_rate_ends_at, 'Asia/Shanghai', true)).toBe('2026-09-10')
+  it('preserves the exact legacy full-day interval in the server timezone', () => {
+    expect(temporaryRateInputDate(activity.temporary_rate_starts_at, 'Asia/Shanghai')).toBe('2026-09-05T00:00:00')
+    expect(temporaryRateInputDate(activity.temporary_rate_ends_at, 'Asia/Shanghai')).toBe('2026-09-11T00:00:00')
+  })
+
+  it('shows second-precision times without shifting the exclusive end', () => {
+    const fields = {
+      ...activity,
+      temporary_rate_starts_at: '2026-09-05T04:34:56Z',
+      temporary_rate_ends_at: '2026-09-05T04:34:57Z'
+    }
+    expect(temporaryRateInputDate(fields.temporary_rate_starts_at, 'Asia/Shanghai')).toBe('2026-09-05T12:34:56')
+    expect(temporaryRateDateRange(fields, 'Asia/Shanghai')).toBe('2026-09-05 12:34:56 – 2026-09-05 12:34:57')
+    expect(temporaryRateEndDate(fields, 'Asia/Shanghai')).toBe('2026-09-05 12:34:57')
+    expect(temporaryRateInputDate(fields.temporary_rate_starts_at, 'UTC')).toBe('2026-09-05T04:34:56')
+    expect(temporaryRateInputDate('invalid', 'Asia/Shanghai')).toBe('')
+  })
+
+  it('refreshes the shared rate clock across one-second activity boundaries', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-05T04:34:55Z'))
+    try {
+      const fields = {
+        ...activity,
+        temporary_rate_starts_at: '2026-09-05T04:34:56Z',
+        temporary_rate_ends_at: '2026-09-05T04:34:57Z'
+      }
+      const now = useTemporaryRateNow()
+      expect(temporaryRateStatus(fields, now.value)).toBe('upcoming')
+      vi.advanceTimersByTime(1000)
+      expect(effectiveGroupRate(fields, null, now.value)).toBe(0.5)
+      vi.advanceTimersByTime(1000)
+      expect(temporaryRateStatus(fields, now.value)).toBe('ended')
+      expect(effectiveGroupRate(fields, null, now.value)).toBe(0.8)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('keeps disabled configured activities as canceled', () => {

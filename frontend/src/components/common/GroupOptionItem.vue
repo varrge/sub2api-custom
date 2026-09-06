@@ -1,5 +1,5 @@
 <template>
-  <div class="flex min-w-0 flex-1 items-start justify-between gap-3">
+  <div class="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-x-3 gap-y-1">
     <!-- Left: name + description -->
     <div
       class="flex min-w-0 flex-1 flex-col items-start"
@@ -36,13 +36,6 @@
           </template>
         </span>
         <span
-          v-if="temporaryRateText"
-          class="inline-flex items-center whitespace-nowrap rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 dark:bg-sky-900/20 dark:text-sky-300"
-          :title="temporaryRateText"
-        >
-          {{ temporaryRateText }}
-        </span>
-        <span
           v-if="hasPeakRate"
           class="inline-flex items-center whitespace-nowrap rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"
           :title="peakRateTitle"
@@ -62,6 +55,13 @@
         <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
       </svg>
     </div>
+    <span
+      v-if="temporaryRateText"
+      class="w-full whitespace-normal rounded-lg bg-sky-50 px-3 py-1 text-left text-xs font-semibold text-sky-700 [overflow-wrap:anywhere] dark:bg-sky-900/20 dark:text-sky-300"
+      :title="temporaryRateText"
+    >
+      {{ temporaryRateText }}
+    </span>
   </div>
 </template>
 

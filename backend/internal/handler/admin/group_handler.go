@@ -257,11 +257,24 @@ func parseTemporaryRateDate(value string, endExclusive bool) (*time.Time, error)
 	if value == "" {
 		return nil, nil
 	}
-	parsed, err := time.ParseInLocation("2006-01-02", value, timezone.Location())
-	if err != nil {
-		return nil, fmt.Errorf("temporary rate date must use YYYY-MM-DD: %w", err)
+	// Keep date-only API clients compatible; datetime-local values specify the
+	// exact boundary in the server timezone (including an exclusive end).
+	layout := "2006-01-02T15:04:05"
+	dateOnly := len(value) == len("2006-01-02")
+	if dateOnly {
+		layout = "2006-01-02"
+	} else if len(value) == len("2006-01-02T15:04") {
+		layout = "2006-01-02T15:04"
 	}
-	if endExclusive {
+	parsed, err := time.ParseInLocation(layout, value, timezone.Location())
+	if err != nil {
+		return nil, fmt.Errorf("temporary rate time must use YYYY-MM-DDTHH:mm:ss: %w", err)
+	}
+	// Some datetime-local implementations include a zero fractional component.
+	if parsed.Nanosecond() != 0 || parsed.Format(layout) != strings.SplitN(value, ".", 2)[0] {
+		return nil, fmt.Errorf("invalid temporary rate time in server timezone: %s", value)
+	}
+	if dateOnly && endExclusive {
 		parsed = parsed.AddDate(0, 0, 1)
 	}
 	return &parsed, nil

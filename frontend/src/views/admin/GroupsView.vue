@@ -624,19 +624,19 @@
             <input v-model="createForm.temporary_rate_enabled" type="checkbox" class="rounded border-gray-300 text-sky-600 focus:ring-sky-500" />
             {{ t("admin.groups.temporaryRate.enable") }}
           </label>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.groups.temporaryRate.hint") }}</p>
-          <div v-if="createForm.temporary_rate_enabled" class="mt-3 grid gap-3 sm:grid-cols-3">
-            <div>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.groups.temporaryRate.hint", { timezone: appStore.cachedPublicSettings?.server_timezone ?? '' }) }}</p>
+          <div v-if="createForm.temporary_rate_enabled" class="mt-3 grid gap-3 sm:grid-cols-2">
+            <div class="sm:col-span-2">
               <label class="input-label">{{ t("admin.groups.temporaryRate.multiplier") }}</label>
               <input v-model.number="createForm.temporary_rate_multiplier" type="number" min="0.001" step="0.001" required class="input" />
             </div>
             <div>
-              <label class="input-label">{{ t("admin.groups.temporaryRate.startDate") }}</label>
-              <input v-model="createForm.temporary_rate_start_date" type="date" required class="input" />
+              <label for="create-temporary-rate-start" class="input-label">{{ t("admin.groups.temporaryRate.startDate") }}</label>
+              <input id="create-temporary-rate-start" v-model="createForm.temporary_rate_start_date" type="datetime-local" step="1" required class="input" />
             </div>
             <div>
-              <label class="input-label">{{ t("admin.groups.temporaryRate.endDate") }}</label>
-              <input v-model="createForm.temporary_rate_end_date" type="date" required class="input" />
+              <label for="create-temporary-rate-end" class="input-label">{{ t("admin.groups.temporaryRate.endDate") }}</label>
+              <input id="create-temporary-rate-end" v-model="createForm.temporary_rate_end_date" type="datetime-local" step="1" required class="input" />
             </div>
           </div>
         </div>
@@ -2450,19 +2450,19 @@
               {{ temporaryRateStatusText(editTemporaryRateStatus) }}
             </span>
           </div>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.groups.temporaryRate.hint") }}</p>
-          <div v-if="editForm.temporary_rate_enabled" class="mt-3 grid gap-3 sm:grid-cols-3">
-            <div>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.groups.temporaryRate.hint", { timezone: appStore.cachedPublicSettings?.server_timezone ?? '' }) }}</p>
+          <div v-if="editForm.temporary_rate_enabled" class="mt-3 grid gap-3 sm:grid-cols-2">
+            <div class="sm:col-span-2">
               <label class="input-label">{{ t("admin.groups.temporaryRate.multiplier") }}</label>
               <input v-model.number="editForm.temporary_rate_multiplier" type="number" min="0.001" step="0.001" required class="input" />
             </div>
             <div>
-              <label class="input-label">{{ t("admin.groups.temporaryRate.startDate") }}</label>
-              <input v-model="editForm.temporary_rate_start_date" type="date" required class="input" />
+              <label for="edit-temporary-rate-start" class="input-label">{{ t("admin.groups.temporaryRate.startDate") }}</label>
+              <input id="edit-temporary-rate-start" v-model="editForm.temporary_rate_start_date" type="datetime-local" step="1" required class="input" />
             </div>
             <div>
-              <label class="input-label">{{ t("admin.groups.temporaryRate.endDate") }}</label>
-              <input v-model="editForm.temporary_rate_end_date" type="date" required class="input" />
+              <label for="edit-temporary-rate-end" class="input-label">{{ t("admin.groups.temporaryRate.endDate") }}</label>
+              <input id="edit-temporary-rate-end" v-model="editForm.temporary_rate_end_date" type="datetime-local" step="1" required class="input" />
             </div>
           </div>
         </div>
@@ -6232,7 +6232,8 @@ const validateTemporaryRateForm = (form: {
     appStore.showError(t("admin.groups.temporaryRate.datesRequired"));
     return false;
   }
-  if (form.temporary_rate_end_date < form.temporary_rate_start_date) {
+  // datetime-local may omit :00 seconds; compare equally precise wall times.
+  if (form.temporary_rate_end_date.slice(0, 19).padEnd(19, ":00") <= form.temporary_rate_start_date.slice(0, 19).padEnd(19, ":00")) {
     appStore.showError(t("admin.groups.temporaryRate.rangeInvalid"));
     return false;
   }
@@ -6441,7 +6442,6 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.temporary_rate_end_date = temporaryRateInputDate(
     group.temporary_rate_ends_at,
     appStore.cachedPublicSettings?.server_timezone,
-    true,
   );
   editTemporaryRateOriginal.value = {
     enabled: editForm.temporary_rate_enabled,

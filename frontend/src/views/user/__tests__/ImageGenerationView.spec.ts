@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { createPinia } from 'pinia'
+import { useImageStudioStore } from '@/stores/imageStudio'
 import ImageGenerationView from '../ImageGenerationView.vue'
 
 const { generate, showError } = vi.hoisted(() => ({ generate: vi.fn(), showError: vi.fn() }))
@@ -7,14 +9,18 @@ const { generate, showError } = vi.hoisted(() => ({ generate: vi.fn(), showError
 vi.mock('@/api/keys', () => ({ keysAPI: { list: vi.fn().mockResolvedValue({
   items: [{ id: 1, name: 'Studio', key: 'test-key', status: 'active', group: {
     name: 'Images', platform: 'openai', allow_image_generation: true,
+  } }, { id: 2, name: 'Gemini', key: 'gemini-key', status: 'active', group: {
+    name: 'Gemini', platform: 'gemini', allow_image_generation: true,
   } }], pages: 1,
 }) } }))
 vi.mock('@/api/imageGeneration', async importOriginal => ({
   ...await importOriginal<typeof import('@/api/imageGeneration')>(),
-  listImageModels: vi.fn().mockResolvedValue(['gpt-image-1', 'gpt-image-1.5']),
+  listImageModels: vi.fn().mockImplementation(async (_key, platform) => platform === 'gemini' ? ['gemini-3-pro-image'] : ['gpt-image-1', 'gpt-image-1.5']),
   generateImages: generate,
 }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showError, showSuccess: vi.fn() }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isAuthenticated: true, user: { id: 42 } }) }))
+vi.mock('@/stores/imageStudioStorage', () => ({ loadImageStudio: vi.fn().mockResolvedValue(null), saveImageStudio: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('vue-i18n', async importOriginal => ({
   ...await importOriginal<typeof import('vue-i18n')>(),
   useI18n: () => ({ t: (key: string) => key }),
@@ -28,20 +34,49 @@ const SelectStub = {
   </select>`,
 }
 let view: VueWrapper
+let pinia: ReturnType<typeof createPinia>
+
+function mountView() {
+  return mount(ImageGenerationView, { global: { plugins: [pinia], stubs: {
+    AppLayout: { template: '<main><slot /></main>' },
+    Select: SelectStub, BaseDialog: true, ConfirmDialog: true, RouterLink: true, Icon: true, LoadingSpinner: true,
+  } } })
+}
 
 beforeEach(async () => {
   generate.mockReset()
   showError.mockReset()
-  view = mount(ImageGenerationView, { global: { stubs: {
-    AppLayout: { template: '<main><slot /></main>' },
-    Select: SelectStub, BaseDialog: true, RouterLink: true, Icon: true, LoadingSpinner: true,
-  } } })
+  pinia = createPinia()
+  view = mountView()
   await flushPromises()
   await view.get('#image-prompt').setValue('A quiet forest')
 })
-afterEach(() => view.unmount())
+afterEach(() => { view.unmount(); useImageStudioStore(pinia).$dispose() })
 
 describe('image studio requests in progress', () => {
+  it('changes model defaults only when the selected key changes', async () => {
+    await view.get('#image-model').setValue('gpt-image-1.5')
+    await view.get('#image-api-key').setValue('2')
+    await flushPromises()
+    expect((view.get('#image-model').element as HTMLSelectElement).value).toBe('gemini-3-pro-image')
+  })
+  it('retains the draft and receives an in-flight result after leaving and remounting the page', async () => {
+    let complete!: (images: { src: string }[]) => void
+    generate.mockImplementation(() => new Promise(resolve => { complete = resolve }))
+    await view.get('#image-model').setValue('gpt-image-1.5')
+    await view.get('form').trigger('submit')
+    view.unmount()
+    complete([{ src: 'data:image/png;base64,QUJD' }])
+    await flushPromises()
+    view = mountView()
+    await flushPromises()
+    expect((view.get('#image-prompt').element as HTMLTextAreaElement).value).toBe('A quiet forest')
+    expect((view.get('#image-model').element as HTMLSelectElement).value).toBe('gpt-image-1.5')
+    expect(view.findAll('.history-item-card')).toHaveLength(1)
+    expect(view.get('.canvas-viewport img').attributes('src')).toBe('data:image/png;base64,QUJD')
+    expect(generate).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps progress and completed history tied to the submitted settings while editing the next draft', async () => {
     let complete!: (images: { src: string }[]) => void
     generate.mockImplementation(() => new Promise(resolve => { complete = resolve }))

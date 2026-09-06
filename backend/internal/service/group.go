@@ -190,15 +190,15 @@ func ValidateTemporaryRateConfig(enabled bool, multiplier float64, startsAt, end
 	}
 	if startsAt == nil && endsAt == nil {
 		if enabled {
-			return errors.New("temporary rate dates are required when enabled")
+			return errors.New("temporary rate start and end times are required when enabled")
 		}
 		return nil
 	}
 	if startsAt == nil || endsAt == nil {
-		return errors.New("temporary rate start and end dates must both be set")
+		return errors.New("temporary rate start and end times must both be set")
 	}
 	if !startsAt.Before(*endsAt) {
-		return errors.New("temporary rate end date must not be before start date")
+		return errors.New("temporary rate end time must be later than start time")
 	}
 	return nil
 }

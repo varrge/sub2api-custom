@@ -57,6 +57,60 @@ func TestListPlazaGroups_GroupCentricAggregation(t *testing.T) {
 	require.Equal(t, "claude-sonnet", out[0].Models[1].Name)
 }
 
+func TestListPlazaGroups_FiltersEachGroupByModelAllowlist(t *testing.T) {
+	groupIDs := []int64{1, 2, 3, 4, 5}
+	channels := []Channel{
+		plazaPricedChannel(1, "images", groupIDs, PlatformOpenAI, "gpt-image-1", "gpt-image-2", "gpt-5.5"),
+		plazaPricedChannel(2, "claude", groupIDs, PlatformAnthropic, "claude-sonnet-4.5", "claude-opus-4.6"),
+	}
+	groups := []Group{
+		{ID: 1, Platform: PlatformOpenAI, RateMultiplier: 0.2, ModelAllowlist: GroupModelAllowlist{Enabled: true, Models: []string{"gpt-image-2"}}},
+		{ID: 2, Platform: PlatformOpenAI, RateMultiplier: 0.5, ModelAllowlist: GroupModelAllowlist{Enabled: true, Models: []string{"gpt-image-*"}}},
+		{ID: 3, Platform: PlatformOpenAI, RateMultiplier: 1, ModelAllowlist: GroupModelAllowlist{Models: []string{"gpt-image-2"}}},
+		{ID: 4, Platform: PlatformOpenAI, ModelAllowlist: GroupModelAllowlist{Enabled: true}},
+		{ID: 5, Platform: PlatformComposite, RateMultiplier: 1, ModelAllowlist: GroupModelAllowlist{Enabled: true, Models: []string{"gpt-image-2", "claude-sonnet-*"}}},
+	}
+	out, err := newPlazaService(channels, groups, nil).ListGroups(context.Background())
+	require.NoError(t, err)
+	got := make(map[int64][]string)
+	for _, group := range out {
+		for _, model := range group.Models {
+			got[group.ID] = append(got[group.ID], model.Name)
+			require.InDelta(t, 3e-6, *model.Pricing.InputPrice, 1e-12, "filtering must not scale or replace base prices")
+		}
+	}
+	require.Equal(t, map[int64][]string{
+		1: {"gpt-image-2"},
+		2: {"gpt-image-1", "gpt-image-2"},
+		3: {"gpt-5.5", "gpt-image-1", "gpt-image-2"},
+		5: {"claude-sonnet-4.5", "gpt-image-2"},
+	}, got, "each group keeps its own allowed subset; disabled lists do not filter, empty enabled lists hide the group")
+	require.Equal(t, 0.2, out[0].RateMultiplier)
+	require.Equal(t, 0.5, out[1].RateMultiplier)
+}
+
+func TestListPlazaGroups_AllowlistUsesGatewayAliases(t *testing.T) {
+	for _, tc := range []struct {
+		platform string
+		allowed  string
+		listed   string
+	}{
+		{PlatformOpenAI, "gpt-5.5", "gpt-5.5-codex-high"},
+		{PlatformGemini, "gemini-2.5-pro", "models/gemini-2.5-pro"},
+		{PlatformAnthropic, "claude-sonnet-4.5", "Claude-Sonnet-4.5"},
+	} {
+		t.Run(tc.platform, func(t *testing.T) {
+			channel := plazaPricedChannel(1, "aliases", []int64{1}, tc.platform, tc.listed, "other-model")
+			group := Group{ID: 1, Platform: tc.platform, ModelAllowlist: GroupModelAllowlist{Enabled: true, Models: []string{tc.allowed}}}
+			out, err := newPlazaService([]Channel{channel}, []Group{group}, nil).ListGroups(context.Background())
+			require.NoError(t, err)
+			require.Len(t, out, 1)
+			require.Len(t, out[0].Models, 1)
+			require.Equal(t, tc.listed, out[0].Models[0].Name, "retain the configured public model spelling")
+		})
+	}
+}
+
 func TestListPlazaGroups_CatalogMetadata(t *testing.T) {
 	pricing := &PricingService{cfg: &config.Config{}}
 	data, err := pricing.parsePricingData([]byte(`{

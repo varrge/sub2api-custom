@@ -1,6 +1,6 @@
 <template>
   <div class="plaza-pricing-table overflow-x-auto" :style="accentStyle">
-    <table class="w-full min-w-[1000px] table-fixed border-collapse text-sm tabular-nums">
+    <table class="w-full min-w-[1000px] table-auto border-collapse text-sm tabular-nums">
       <colgroup>
         <col class="w-[25%]" />
         <col class="w-[11%]" />
@@ -307,7 +307,7 @@
 import { modelBasePricing, nonTokenUnitKey } from './plaza-models'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { formatScaled } from '@/utils/pricing'
+import { formatScaled, resolveIntervalPrices } from '@/utils/pricing'
 import { platformAccentColor, platformBadgeLightClass, platformLabel } from '@/utils/platformColors'
 import {
   BILLING_MODE_TOKEN,
@@ -489,17 +489,20 @@ function sortByContext(intervals: UserPricingInterval[]): UserPricingInterval[] 
 
 /** token 模式的阶梯定价(内联进输入/输出/缓存列)。 */
 function tokenIntervals(m: PlazaModel): UserPricingInterval[] {
-  return sortByContext(m.pricing?.intervals ?? [])
+  return sortByContext(m.pricing?.intervals ?? []).map(iv => resolveIntervalPrices(iv, m.pricing!))
 }
 
 /** 基础价阶梯与实付价使用同一个解析结果。 */
 function baseIntervals(m: PlazaModel): UserPricingInterval[] {
-  return sortByContext(modelBasePricing(m)?.intervals ?? [])
+  return m.pricing?.billing_mode === BILLING_MODE_TOKEN ? tokenIntervals(m) : []
 }
 
 /** 任一档带缓存价才按档渲染缓存列;否则沿用平价的写入/读取两行。 */
 function hasTierCachePricing(intervals: UserPricingInterval[]): boolean {
-  return intervals.some((iv) => iv.cache_write_price != null || iv.cache_write_1h_price != null || iv.cache_read_price != null)
+  return intervals.some((iv) =>
+    iv.cache_write_price != null || iv.cache_write_1h_price != null || iv.cache_read_price != null ||
+    iv.cache_write_multiplier != null || iv.cache_read_multiplier != null
+  )
 }
 
 /** 档位说明:整单按档计价,或(平台旧规则)仅超出部分按档计价。 */

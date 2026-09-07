@@ -23,6 +23,7 @@ func TestAPIKeyAuthSnapshotGroupCodexModelsManifestRoundtrip(t *testing.T) {
 			Hydrated:             true,
 			TemporaryRateEnabled: true, TemporaryRateMultiplier: 0.2,
 			TemporaryRateStartsAt: &startsAt, TemporaryRateEndsAt: &endsAt,
+			ModelAllowlist: GroupModelAllowlist{Enabled: true, Models: []string{"gpt-image-2"}},
 			CodexModelsManifestConfig: GroupCodexModelsManifestConfig{
 				Enabled:             true,
 				AccountIDs:          []int64{7, 8},
@@ -49,8 +50,11 @@ func TestAPIKeyAuthSnapshotGroupCodexModelsManifestRoundtrip(t *testing.T) {
 	require.Equal(t, 0.2, materialized.Group.TemporaryRateMultiplier)
 	require.True(t, materialized.Group.TemporaryRateStartsAt.Equal(startsAt))
 	require.True(t, materialized.Group.TemporaryRateEndsAt.Equal(endsAt))
-	// Both the previous custom and upstream snapshots used v23 with different fields.
-	cached.Snapshot.Version = 23
+	require.True(t, materialized.Group.ModelAllowlist.Enabled)
+	require.True(t, materialized.Group.ModelAllowlist.Allows("gpt-image-2"))
+	require.False(t, materialized.Group.ModelAllowlist.Allows("gpt-6-astra"))
+	// Both the previous custom and upstream snapshots used v24 with different fields.
+	cached.Snapshot.Version = 24
 	_, used, err = svc.applyAuthCacheEntry(apiKey.Key, &cached)
 	require.NoError(t, err)
 	require.False(t, used)

@@ -104,7 +104,7 @@ func (s *Store) PreparePurchase(ctx context.Context, userID, productID int64, mo
 	default:
 		return nil, fmt.Errorf("%w: purchase mode must be solo, create or join", ErrInvalid)
 	}
-	if err := checkEligibility(ctx, s.db, userID, p.GroupID); err != nil {
+	if err := checkPurchaseEligibility(ctx, s.db, userID, p.GroupID); err != nil {
 		return nil, err
 	}
 	purchase.Product = *p

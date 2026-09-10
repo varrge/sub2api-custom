@@ -119,18 +119,19 @@ func lockUser(ctx context.Context, tx *sql.Tx, userID int64) error {
 	return notFound(tx.QueryRowContext(ctx, `SELECT id FROM users WHERE id=$1 FOR UPDATE`, userID).Scan(&id))
 }
 
-func checkEligibility(ctx context.Context, q queryer, userID, groupID int64) error {
+// Purchasing an offered subscription grants its entitlement. Standard-group
+// binding restrictions must not require that entitlement before it is bought;
+// API key binding remains gated by an active paid card or legacy subscription.
+func checkPurchaseEligibility(ctx context.Context, q queryer, userID, groupID int64) error {
 	var eligible bool
 	err := q.QueryRowContext(ctx, `SELECT u.status='active' AND u.deleted_at IS NULL
 		AND g.status='active' AND g.deleted_at IS NULL AND g.subscription_type='subscription'
-		AND ((NOT g.is_exclusive AND NOT u.restrict_public_groups)
-		 OR EXISTS(SELECT 1 FROM user_allowed_groups a WHERE a.user_id=u.id AND a.group_id=g.id))
 		FROM users u CROSS JOIN groups g WHERE u.id=$1 AND g.id=$2`, userID, groupID).Scan(&eligible)
 	if err != nil {
 		return notFound(err)
 	}
 	if !eligible {
-		return fmt.Errorf("%w: user cannot bind this subscription group", ErrInvalid)
+		return fmt.Errorf("%w: user or subscription group is unavailable", ErrInvalid)
 	}
 	return nil
 }

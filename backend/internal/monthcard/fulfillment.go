@@ -124,7 +124,7 @@ func (s *Store) Fulfill(ctx context.Context, orderID, userID int64, paidAt time.
 	default:
 		return nil, ErrInvalid
 	}
-	if err = checkEligibility(ctx, tx, userID, p.GroupID); err != nil {
+	if err = checkPurchaseEligibility(ctx, tx, userID, p.GroupID); err != nil {
 		if errors.Is(err, ErrInvalid) || errors.Is(err, ErrNotFound) {
 			return nil, fmt.Errorf("%w: %v", ErrCannotJoin, err)
 		}

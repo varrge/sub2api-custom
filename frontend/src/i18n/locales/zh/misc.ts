@@ -309,7 +309,7 @@ export default {
 
   // Payment System
   payment: {
-    title: '充值/订阅',
+    title: '充值/拼团大厅',
     amountLabel: '充值金额',
     paymentAmount: '支付金额',
     creditedBalance: '到账余额',

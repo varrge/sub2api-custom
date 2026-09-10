@@ -209,7 +209,7 @@ export default {
     logout: 'Logout',
     github: 'GitHub',
     mySubscriptions: 'My Subscriptions',
-    buySubscription: 'Recharge / Subscription',
+    buySubscription: 'Recharge / Group Buy Hall',
     docs: 'Docs',
     myOrders: 'My Orders',
     orderManagement: 'Orders',

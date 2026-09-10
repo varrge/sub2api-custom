@@ -1818,6 +1818,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 	upstreamReq.Header.Set("Content-Type", "application/json")
 	upstreamReq.Header.Set("Accept", "text/event-stream")
 	upstreamReq.Header.Set("OpenAI-Beta", "responses=experimental")
+	upstreamReq = upstreamReq.WithContext(WithHTTPUpstreamProfile(upstreamReq.Context(), HTTPUpstreamProfileOpenAIImages))
 
 	proxyURL := ""
 	if account.ProxyID != nil && account.Proxy != nil {

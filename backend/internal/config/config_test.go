@@ -653,6 +653,30 @@ func TestLoadOpenAIResponseHeaderTimeoutFromEnv(t *testing.T) {
 	require.Equal(t, 1800, cfg.Gateway.OpenAIResponseHeaderTimeout)
 }
 
+func TestLoadImageResponseHeaderTimeout(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		value string
+		want  int
+	}{
+		{name: "default", want: 600},
+		{name: "custom", value: "300", want: 300},
+		{name: "disabled", value: "0", want: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetViperWithJWTSecret(t)
+			t.Setenv("GATEWAY_OPENAI_RESPONSE_HEADER_TIMEOUT", "60")
+			if tc.value != "" {
+				t.Setenv("GATEWAY_IMAGE_RESPONSE_HEADER_TIMEOUT", tc.value)
+			}
+			cfg, err := Load()
+			require.NoError(t, err)
+			require.Equal(t, tc.want, cfg.Gateway.ImageResponseHeaderTimeout)
+			require.Equal(t, 60, cfg.Gateway.OpenAIResponseHeaderTimeout)
+		})
+	}
+}
+
 func TestLoadImageNonstreamKeepaliveFromEnv(t *testing.T) {
 	resetViperWithJWTSecret(t)
 	t.Setenv("GATEWAY_IMAGE_NONSTREAM_KEEPALIVE_INTERVAL", "15")
@@ -1819,6 +1843,11 @@ func TestValidateConfigErrors(t *testing.T) {
 			name:    "gateway response header timeout",
 			mutate:  func(c *Config) { c.Gateway.ResponseHeaderTimeout = -1 },
 			wantErr: "gateway.response_header_timeout",
+		},
+		{
+			name:    "gateway image response header timeout",
+			mutate:  func(c *Config) { c.Gateway.ImageResponseHeaderTimeout = -1 },
+			wantErr: "gateway.image_response_header_timeout",
 		},
 		{
 			name:    "gateway openai response header timeout",

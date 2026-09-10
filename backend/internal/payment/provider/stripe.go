@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	stripe "github.com/stripe/stripe-go/v85"
@@ -212,11 +213,14 @@ func parseStripePaymentIntent(event *stripe.Event, status string, rawBody string
 		RawData: rawBody,
 		Metadata: map[string]string{
 			"currency": currency,
+			"paid_at":  time.Unix(event.Created, 0).UTC().Format(time.RFC3339),
 		},
 	}, nil
 }
 
 // Refund creates a Stripe refund.
+func (s *Stripe) SupportsIdempotentRefund() bool { return true }
+
 func (s *Stripe) Refund(ctx context.Context, req payment.RefundRequest) (*payment.RefundResponse, error) {
 	s.ensureInit()
 

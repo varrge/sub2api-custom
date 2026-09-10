@@ -3,8 +3,8 @@
     <template #cell-id="{ value }">
       <span class="font-mono text-sm">#{{ value }}</span>
     </template>
-    <template #cell-out_trade_no="{ value }">
-      <span class="text-sm text-gray-900 dark:text-white">{{ value }}</span>
+    <template #cell-out_trade_no="{ value, row }">
+      <span class="text-sm text-gray-900 dark:text-white">{{ value }}</span><span v-if="row.order_type === 'month_card'" class="badge badge-info ml-2">{{ t('groupBuy.monthCardOrder') }}</span>
     </template>
     <template v-if="showUser" #cell-user_email="{ value, row }">
       <div class="text-sm">
@@ -18,7 +18,7 @@
         <span v-if="row.fee_rate > 0" class="ml-1 text-xs text-gray-400" :title="t('payment.orders.fee') + ': ' + row.fee_rate + '%'">
           ({{ t('payment.orders.fee') }} {{ row.fee_rate }}%)
         </span>
-        <div v-if="row.amount !== row.pay_amount" class="text-xs text-gray-500">
+        <div v-if="row.amount !== row.pay_amount && row.order_type !== 'month_card'" class="text-xs text-gray-500">
           {{ t('payment.orders.creditedAmount') }}: {{ creditedAmountSymbol }}{{ row.amount.toFixed(2) }}
         </div>
       </div>

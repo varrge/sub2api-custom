@@ -20,6 +20,7 @@ import (
 type PaymentHandler struct {
 	paymentService *service.PaymentService
 	configService  *service.PaymentConfigService
+	GroupBuy       *GroupBuyHandler
 }
 
 // NewPaymentHandler creates a new PaymentHandler.
@@ -27,6 +28,7 @@ func NewPaymentHandler(paymentService *service.PaymentService, configService *se
 	return &PaymentHandler{
 		paymentService: paymentService,
 		configService:  configService,
+		GroupBuy:       NewGroupBuyHandler(paymentService.MonthCardStore()),
 	}
 }
 
@@ -248,6 +250,9 @@ type CreateOrderRequest struct {
 	PaymentSource     string  `json:"payment_source"`
 	OrderType         string  `json:"order_type"`
 	PlanID            int64   `json:"plan_id"`
+	ProductID         int64   `json:"product_id"`
+	Mode              string  `json:"mode"`
+	TeamCode          string  `json:"team_code"`
 	// IsMobile lets the frontend declare its mobile status directly. When
 	// nil we fall back to User-Agent heuristics (which miss iPadOS / some
 	// embedded browsers that strip the "Mobile" keyword).
@@ -297,6 +302,9 @@ func (h *PaymentHandler) CreateOrder(c *gin.Context) {
 		PaymentSource:   req.PaymentSource,
 		OrderType:       req.OrderType,
 		PlanID:          req.PlanID,
+		ProductID:       req.ProductID,
+		Mode:            req.Mode,
+		TeamCode:        req.TeamCode,
 		Locale:          c.GetHeader("Accept-Language"),
 	})
 	if err != nil {
@@ -340,6 +348,9 @@ func applyWeChatPaymentResumeClaims(req *CreateOrderRequest, claims *service.WeC
 	}
 	if claims.PlanID > 0 {
 		req.PlanID = claims.PlanID
+	}
+	if claims.OrderType == payment.OrderTypeMonthCard {
+		req.ProductID, req.Mode, req.TeamCode = claims.ProductID, claims.Mode, claims.TeamCode
 	}
 	return nil
 }

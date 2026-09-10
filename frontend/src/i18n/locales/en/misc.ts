@@ -382,7 +382,7 @@ export default {
     activeSubscription: 'Active Subscription',
     noActiveSubscription: 'No active subscription',
     tabTopUp: 'Top Up',
-    tabSubscribe: 'Subscribe',
+    tabSubscribe: 'Group buy',
     noPlans: 'No subscription plans available',
     notAvailable: 'Top-up is currently unavailable',
     confirmSubscription: 'Confirm Subscription',

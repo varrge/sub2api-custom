@@ -3,15 +3,18 @@ package service
 import (
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/monthcard"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 )
 
 const subscriptionDayDuration = 24 * time.Hour
 
 type UserSubscription struct {
-	ID      int64
-	UserID  int64
-	GroupID int64
+	// Request-owned admission; ID remains zero for the aggregate entitlement.
+	MonthCardSnapshot *monthcard.Snapshot
+	ID                int64
+	UserID            int64
+	GroupID           int64
 
 	StartsAt  time.Time
 	ExpiresAt time.Time

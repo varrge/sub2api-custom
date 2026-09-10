@@ -9,6 +9,7 @@ import (
 	"math"
 	"strings"
 
+	"github.com/Wei-Shaw/sub2api/internal/monthcard"
 	"github.com/shopspring/decimal"
 )
 
@@ -17,6 +18,8 @@ var ErrUsageBillingRequestConflict = errors.New("usage billing request fingerpri
 
 // UsageBillingCommand describes one billable request that must be applied at most once.
 type UsageBillingCommand struct {
+	MonthCardSnapshot  *monthcard.Snapshot
+	MonthCardCost      float64
 	RequestID          string
 	APIKeyID           int64
 	RequestFingerprint string
@@ -81,6 +84,7 @@ const UsageBillingMonetaryScale = 8
 // 在参数进入 SQL 之前量化一次，两条语句就都拿到已经落在 8 位刻度上的同一个金额，
 // 存储阶段不再发生任何舍入，delta 精确相等。
 func (c *UsageBillingCommand) quantizeMonetaryFields() {
+	c.MonthCardCost = QuantizeUsageBillingAmount(c.MonthCardCost)
 	c.BalanceCost = QuantizeUsageBillingAmount(c.BalanceCost)
 	c.SubscriptionCost = QuantizeUsageBillingAmount(c.SubscriptionCost)
 	c.APIKeyQuotaCost = QuantizeUsageBillingAmount(c.APIKeyQuotaCost)
@@ -132,6 +136,9 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 	if payloadHash := strings.TrimSpace(c.RequestPayloadHash); payloadHash != "" {
 		raw += "|" + payloadHash
 	}
+	if c.MonthCardSnapshot != nil {
+		raw += fmt.Sprintf("|month_card:%0.10f|%s", c.MonthCardCost, c.MonthCardSnapshot.Fingerprint())
+	}
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:])
 }
@@ -163,6 +170,7 @@ type AccountQuotaState struct {
 }
 
 type UsageBillingApplyResult struct {
+	MonthCardSettlement  *monthcard.Settlement
 	Applied              bool
 	APIKeyQuotaExhausted bool
 	NewBalance           *float64           // post-deduction balance (nil = no balance deduction)

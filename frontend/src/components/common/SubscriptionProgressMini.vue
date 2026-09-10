@@ -11,14 +11,14 @@
         <!-- Combined progress indicator -->
         <div class="flex items-center gap-0.5">
           <div
-            v-for="(sub, index) in displaySubscriptions.slice(0, 3)"
+            v-for="(item, index) in orderedItems.slice(0, 3)"
             :key="index"
             class="h-2 w-2 rounded-full"
-            :class="getProgressDotClass(sub)"
+            :class="item.card ? (availableQuota(item.card) > 0 ? 'bg-sky-500' : 'bg-amber-500') : getProgressDotClass(item.legacy!)"
           ></div>
         </div>
         <span class="text-xs font-medium text-purple-700 dark:text-purple-300">
-          {{ activeSubscriptions.length }}
+          {{ activeSubscriptions.length + activeCards.length }}
         </span>
       </div>
     </button>
@@ -34,13 +34,19 @@
             {{ t('subscriptionProgress.title') }}
           </h3>
           <p class="mt-0.5 text-xs text-gray-500 dark:text-dark-400">
-            {{ t('subscriptionProgress.activeCount', { count: activeSubscriptions.length }) }}
+            {{ t('subscriptionProgress.activeCount', { count: activeSubscriptions.length + activeCards.length }) }}
           </p>
         </div>
 
         <div class="max-h-64 overflow-y-auto">
+          <template v-for="item in orderedItems" :key="`${item.kind}:${item.id}`">
+          <div v-if="item.card" class="border-b border-gray-50 p-3 dark:border-dark-700/50">
+            <p class="text-sm font-medium">{{ item.card!.product_name }} · {{ item.card!.group_name }}</p><p class="mt-1 font-mono text-xs text-gray-500">{{ item.card!.code }}</p>
+            <p class="mt-2 text-xs">{{ t('groupBuy.weeklyUsage') }}: {{ usd(item.card!.weekly_used_usd) }} / {{ usd(item.card!.weekly_quota_usd) }}</p><p class="mt-1 text-xs">{{ t('groupBuy.totalUsage') }}: {{ usd(item.card!.total_used_usd) }} / {{ usd(item.card!.total_quota_usd) }}</p><p class="mt-1 text-xs text-primary-600">{{ t('groupBuy.available', { amount: usd(availableQuota(item.card!)) }) }}</p>
+          </div>
+          <template v-else>
           <div
-            v-for="subscription in displaySubscriptions"
+            v-for="subscription in item.legacy ? [item.legacy] : []"
             :key="subscription.id"
             class="border-b border-gray-50 p-3 last:border-b-0 dark:border-dark-700/50"
           >
@@ -161,6 +167,8 @@
               </template>
             </div>
           </div>
+          </template>
+          </template>
         </div>
 
         <div class="border-t border-gray-100 p-2 dark:border-dark-700">
@@ -183,6 +191,7 @@ import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import { useSubscriptionStore } from '@/stores'
 import type { UserSubscription } from '@/types'
+import { orderedEntitlements, usd, availableQuota } from '@/features/group-buy/model'
 
 const { t } = useI18n()
 
@@ -193,16 +202,10 @@ const tooltipOpen = ref(false)
 
 // Use store data instead of local state
 const activeSubscriptions = computed(() => subscriptionStore.activeSubscriptions)
-const hasActiveSubscriptions = computed(() => subscriptionStore.hasActiveSubscriptions)
+const activeCards = computed(() => (subscriptionStore.monthCards || []).filter(card => card.status === 'active' && Date.parse(card.expires_at) > Date.now()))
+const hasActiveSubscriptions = computed(() => subscriptionStore.hasActiveSubscriptions || activeCards.value.length > 0)
+const orderedItems = computed(() => orderedEntitlements(activeCards.value, activeSubscriptions.value, subscriptionStore.entitlementOrders || []))
 
-const displaySubscriptions = computed(() => {
-  // Sort by most usage (highest percentage first)
-  return [...activeSubscriptions.value].sort((a, b) => {
-    const aMax = getMaxUsagePercentage(a)
-    const bMax = getMaxUsagePercentage(b)
-    return bMax - aMax
-  })
-})
 
 function getMaxUsagePercentage(sub: UserSubscription): number {
   const percentages: number[] = []
@@ -294,6 +297,7 @@ function handleClickOutside(event: MouseEvent) {
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
+  subscriptionStore.fetchMonthCards?.().catch(() => {})
   // Trigger initial fetch if not already loaded
   // The actual data loading is handled by App.vue globally
   subscriptionStore.fetchActiveSubscriptions().catch((error) => {

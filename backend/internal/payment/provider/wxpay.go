@@ -369,6 +369,9 @@ func buildWxpayTransactionMetadata(tx *payments.Transaction) map[string]string {
 	}
 
 	metadata := map[string]string{}
+	if paidAt := wxSV(tx.SuccessTime); paidAt != "" {
+		metadata["paid_at"] = paidAt
+	}
 	if appID := wxSV(tx.Appid); appID != "" {
 		metadata[wxpayMetadataAppID] = appID
 	}
@@ -454,6 +457,8 @@ func (w *Wxpay) VerifyNotification(ctx context.Context, rawBody string, headers 
 		Amount: amt, Status: st, RawData: rawBody, Metadata: buildWxpayTransactionMetadata(&tx),
 	}, nil
 }
+
+func (w *Wxpay) SupportsIdempotentRefund() bool { return true }
 
 func (w *Wxpay) Refund(ctx context.Context, req payment.RefundRequest) (*payment.RefundResponse, error) {
 	c, err := w.ensureClient()

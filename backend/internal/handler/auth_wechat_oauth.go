@@ -91,6 +91,9 @@ type wechatPaymentOAuthContext struct {
 	Amount      string `json:"amount,omitempty"`
 	OrderType   string `json:"order_type,omitempty"`
 	PlanID      int64  `json:"plan_id,omitempty"`
+	ProductID   int64  `json:"product_id,omitempty"`
+	Mode        string `json:"mode,omitempty"`
+	TeamCode    string `json:"team_code,omitempty"`
 }
 
 // WeChatOAuthStart starts the WeChat OAuth login flow and stores the short-lived
@@ -360,6 +363,9 @@ func (h *AuthHandler) WeChatPaymentOAuthStart(c *gin.Context) {
 		Amount:      strings.TrimSpace(c.Query("amount")),
 		OrderType:   strings.TrimSpace(c.Query("order_type")),
 		PlanID:      parseWeChatPaymentPlanID(c.Query("plan_id")),
+		ProductID:   parseWeChatPaymentPlanID(c.Query("product_id")),
+		Mode:        strings.TrimSpace(c.Query("mode")),
+		TeamCode:    strings.TrimSpace(c.Query("team_code")),
 	})
 	if err != nil {
 		response.ErrorFrom(c, infraerrors.InternalServer("OAUTH_CONTEXT_ENCODE_FAILED", "failed to encode oauth context").WithCause(err))
@@ -461,6 +467,9 @@ func (h *AuthHandler) WeChatPaymentOAuthCallback(c *gin.Context) {
 		Amount:      paymentContext.Amount,
 		OrderType:   paymentContext.OrderType,
 		PlanID:      paymentContext.PlanID,
+		ProductID:   paymentContext.ProductID,
+		Mode:        paymentContext.Mode,
+		TeamCode:    paymentContext.TeamCode,
 		RedirectTo:  redirectTo,
 		Scope:       scope,
 	})

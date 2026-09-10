@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/Wei-Shaw/sub2api/internal/monthcard"
 	"github.com/stretchr/testify/require"
 )
 
@@ -95,6 +97,39 @@ func TestGetUserGroupVisibilityEmptyAndErrors(t *testing.T) {
 			if tc.userErr != nil {
 				require.Zero(t, subs.calls)
 			}
+		})
+	}
+}
+
+// Month-card ownership must retain visibility when group restrictions change,
+// just as legacy subscriptions do; storage failure must not reveal all groups.
+func TestGetUserGroupVisibilityIncludesMonthCards(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		t.Run(map[bool]string{false: "owned card", true: "database failure"}[fail], func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer func() { _ = db.Close() }()
+			query := mock.ExpectQuery("SELECT DISTINCT c.group_id FROM month_card_cards").WithArgs(int64(1))
+			failure := errors.New("month cards unavailable")
+			if fail {
+				query.WillReturnError(failure)
+			} else {
+				query.WillReturnRows(sqlmock.NewRows([]string{"group_id"}).AddRow(42))
+			}
+			svc := &APIKeyService{
+				userRepo:    &visibilityUserRepo{user: &User{ID: 1, AllowedGroups: []int64{7}, RestrictPublicGroups: true}},
+				userSubRepo: &visibilitySubRepo{}, monthCardStore: monthcard.NewStore(db),
+			}
+			visible, restricted, err := svc.GetUserGroupVisibility(context.Background(), 1)
+			if fail {
+				require.ErrorIs(t, err, failure)
+				require.Nil(t, visible)
+			} else {
+				require.NoError(t, err)
+				require.True(t, restricted)
+				require.Equal(t, map[int64]struct{}{7: {}, 42: {}}, visible)
+			}
+			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}
 }

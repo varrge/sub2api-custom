@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/internal/monthcard"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
@@ -31,6 +32,13 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 	if cmd.RequestID == "" {
 		return nil, service.ErrUsageBillingRequestIDRequired
 	}
+	if cmd.MonthCardSnapshot != nil {
+		canonical, persistErr := r.persistMonthCardBilling(ctx, cmd)
+		if persistErr != nil {
+			return nil, persistErr
+		}
+		cmd = canonical
+	}
 
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -47,12 +55,26 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 		return nil, err
 	}
 	if !applied {
+		if cmd.MonthCardSnapshot != nil {
+			if _, err := tx.ExecContext(ctx, `DELETE FROM month_card_billing_pending WHERE request_id=$1 AND api_key_id=$2`, cmd.RequestID, cmd.APIKeyID); err != nil {
+				return nil, err
+			}
+			if err := tx.Commit(); err != nil {
+				return nil, err
+			}
+			tx = nil
+		}
 		return &service.UsageBillingApplyResult{Applied: false}, nil
 	}
 
 	result := &service.UsageBillingApplyResult{Applied: true}
 	if err := r.applyUsageBillingEffects(ctx, tx, cmd, result); err != nil {
 		return nil, err
+	}
+	if cmd.MonthCardSnapshot != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM month_card_billing_pending WHERE request_id=$1 AND api_key_id=$2`, cmd.RequestID, cmd.APIKeyID); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -172,6 +194,18 @@ func (r *usageBillingRepository) applyBatchImageBalanceHold(
 }
 
 func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand, result *service.UsageBillingApplyResult) error {
+	if cmd.MonthCardSnapshot != nil {
+		if cmd.MonthCardSnapshot.UserID != cmd.UserID || cmd.SubscriptionCost != 0 || cmd.BalanceCost != 0 || cmd.SubscriptionID != nil {
+			return errors.New("inconsistent month card billing command")
+		}
+		settlement, err := monthcard.SettleTx(ctx, tx, cmd.MonthCardSnapshot, cmd.RequestID, cmd.APIKeyID, cmd.MonthCardCost)
+		if err != nil {
+			return err
+		}
+		result.MonthCardSettlement = settlement
+		result.NewBalance = settlement.NewBalance
+		result.BalanceOverdrafted = settlement.NewBalance != nil && *settlement.NewBalance < 0
+	}
 	if cmd.SubscriptionCost > 0 && cmd.SubscriptionID != nil {
 		if err := incrementUsageBillingSubscription(ctx, tx, *cmd.SubscriptionID, cmd.SubscriptionCost); err != nil {
 			return err

@@ -41,6 +41,7 @@ const (
 const (
 	OrderTypeBalance      = "balance"
 	OrderTypeSubscription = "subscription"
+	OrderTypeMonthCard    = "month_card"
 )
 
 // Entity statuses shared across users, groups, etc.
@@ -226,6 +227,13 @@ type Provider interface {
 	VerifyNotification(ctx context.Context, rawBody string, headers map[string]string) (*PaymentNotification, error)
 	// Refund requests a refund from the upstream provider.
 	Refund(ctx context.Context, req RefundRequest) (*RefundResponse, error)
+}
+
+// IdempotentRefundProvider guarantees that repeating the same order and amount
+// cannot create a second refund, including after a lost response or process exit.
+type IdempotentRefundProvider interface {
+	Provider
+	SupportsIdempotentRefund() bool
 }
 
 // RefundQueryProvider extends Provider with refund status querying.

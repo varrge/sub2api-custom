@@ -55,7 +55,7 @@
               <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.payAmount') }}</span>
               <span class="font-bold text-primary-600 dark:text-primary-400">{{ formatGatewayAmount(order.pay_amount) }}</span>
             </div>
-            <div v-if="hasAmountFields(order) && order.amount !== order.pay_amount" class="flex justify-between">
+            <div v-if="hasAmountFields(order) && order.order_type !== 'month_card' && order.amount !== order.pay_amount" class="flex justify-between">
               <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.creditedAmount') }}</span>
               <span class="font-medium text-gray-900 dark:text-white">{{ order.order_type === 'balance' ? '$' + order.amount.toFixed(2) : formatGatewayAmount(order.amount) }}</span>
             </div>
@@ -86,6 +86,7 @@
             </div>
           </div>
         </div>
+        <div v-if="isSuccess && order && 'order_type' in order && order.order_type === 'month_card'" class="space-y-3"><div v-if="purchasedCard" class="rounded-xl bg-white p-4 text-sm dark:bg-dark-800"><p>{{ purchasedCard.product_name }} · {{ purchasedCard.code }}</p><div v-if="purchasedCard.team_code" class="mt-3 flex flex-wrap gap-2"><button class="btn btn-secondary" @click="router.push({ path: '/group-buy', query: { team_code: purchasedCard.team_code } })">{{ t('groupBuy.teamCode') }} {{ purchasedCard.team_code }}</button><button class="btn btn-secondary" @click="copyPurchasedTeam">{{ t('groupBuy.copyCode') }}</button></div><p v-if="copyMessage" class="mt-2 text-xs" role="status">{{ copyMessage }}</p></div><button class="btn btn-primary w-full" @click="router.push('/subscriptions')">{{ t('groupBuy.viewCards') }}</button><button class="btn btn-secondary w-full" @click="router.push('/group-buy')">{{ t('groupBuy.hall') }}</button></div>
         <!-- Actions -->
         <div class="flex gap-3">
           <button class="btn btn-secondary flex-1" @click="router.push('/purchase')">{{ t('payment.result.backToRecharge') }}</button>
@@ -109,6 +110,8 @@ import {
 import { usePaymentStore } from '@/stores/payment'
 import { useAuthStore } from '@/stores/auth'
 import { paymentAPI } from '@/api/payment'
+import { groupBuyAPI } from '@/api/groupBuy'
+import type { MonthCard } from '@/types/groupBuy'
 import type { PublicOrderVerifyResult } from '@/api/payment'
 import type { OrderStatus, PaymentOrder } from '@/types/payment'
 import { formatPaymentAmount, normalizePaymentCurrency } from '@/components/payment/currency'
@@ -124,6 +127,13 @@ const authStore = useAuthStore()
 type ResolvedOrder = PaymentOrder | PublicOrderVerifyResult
 
 const order = ref<ResolvedOrder | null>(null)
+const purchasedCard = ref<MonthCard | null>(null)
+const cardLookupOrderId = ref(0)
+const copyMessage = ref('')
+async function copyPurchasedTeam() {
+  if (!purchasedCard.value?.team_code) return
+  try { await navigator.clipboard.writeText(purchasedCard.value.team_code); copyMessage.value = t('groupBuy.copied') } catch { copyMessage.value = t('groupBuy.copyFailed') }
+}
 const loading = ref(true)
 const currency = ref('CNY')
 
@@ -206,6 +216,10 @@ function setResolvedOrder(nextOrder: ResolvedOrder | null): void {
 function refreshUserBalanceForSuccessfulOrder(nextOrder: ResolvedOrder | null): void {
   if (!nextOrder || userBalanceRefreshStarted || normalizeOrderStatus(nextOrder.status) !== 'COMPLETED') {
     return
+  }
+  if ('order_type' in nextOrder && nextOrder.order_type === 'month_card' && cardLookupOrderId.value !== nextOrder.id) {
+    cardLookupOrderId.value = nextOrder.id
+    void groupBuyAPI.cards().then(cards => { purchasedCard.value = cards.find(card => card.order_id === nextOrder.id) || null }).catch(() => {})
   }
   if ('order_type' in nextOrder && nextOrder.order_type !== 'balance') {
     return

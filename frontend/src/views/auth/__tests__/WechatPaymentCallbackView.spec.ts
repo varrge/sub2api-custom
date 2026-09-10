@@ -114,3 +114,13 @@ describe('WechatPaymentCallbackView', () => {
     expect(wrapper.find('.bg-red-50').exists()).toBe(false)
   })
 })
+
+it.each(['solo', 'create', 'join'])('preserves month-card %s context stored in the signed OAuth redirect', async mode => {
+  const redirect = `/purchase?tab=subscription&order_type=month_card&product_id=41&mode=${mode}${mode === 'join' ? '&team_code=TEAM' : ''}`
+  locationState.current.hash = `#wechat_resume_token=month-card-token&redirect=${encodeURIComponent(redirect)}`
+  replaceMock.mockClear()
+  const wrapper = mount(WechatPaymentCallbackView)
+  await flushPromises()
+  expect(replaceMock).toHaveBeenCalledWith({ path: '/purchase', query: expect.objectContaining({ tab: 'subscription', order_type: 'month_card', product_id: '41', mode, wechat_resume_token: 'month-card-token', ...(mode === 'join' ? { team_code: 'TEAM' } : {}) }) })
+  wrapper.unmount()
+})

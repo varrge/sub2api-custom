@@ -192,6 +192,14 @@ func (s *PaymentService) checkPaidWithOptions(ctx context.Context, o *dbent.Paym
 			}
 			notificationTradeNo = upstreamTradeNo
 		}
+		if resp.PaidAt != "" {
+			metadata := make(map[string]string, len(resp.Metadata)+1)
+			for key, value := range resp.Metadata {
+				metadata[key] = value
+			}
+			metadata["paid_at"] = resp.PaidAt
+			resp.Metadata = metadata
+		}
 		if err := s.HandlePaymentNotification(ctx, &payment.PaymentNotification{TradeNo: notificationTradeNo, OrderID: o.OutTradeNo, Amount: resp.Amount, Status: payment.ProviderStatusSuccess, Metadata: resp.Metadata}, prov.ProviderKey()); err != nil {
 			slog.Error("fulfillment failed during checkPaid", "orderID", o.ID, "error", err)
 			// Still return already_paid — order was paid, fulfillment can be retried

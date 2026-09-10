@@ -36,6 +36,11 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	if !cfg.Enabled {
 		return nil, infraerrors.Forbidden("PAYMENT_DISABLED", "payment system is disabled")
 	}
+	if req.OrderType == payment.OrderTypeMonthCard {
+		if err := s.prepareMonthCardOrder(ctx, &req); err != nil {
+			return nil, err
+		}
+	}
 	plan, err := s.validateOrderInput(ctx, req, cfg)
 	if err != nil {
 		return nil, err
@@ -69,6 +74,9 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 			return nil, err
 		}
 	}
+	if req.OrderType == payment.OrderTypeMonthCard && methodCurrency != "CNY" {
+		return nil, infraerrors.BadRequest("MONTH_CARD_CURRENCY", "月卡以人民币定价，请选择人民币支付渠道")
+	}
 	payAmountStr, payAmount, err := calculateCreateOrderPayAmountForOrderType(limitAmount, feeRate, methodCurrency, req.OrderType, cfg.SubscriptionUSDToCNYRate)
 	if err != nil {
 		return nil, err
@@ -85,6 +93,9 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 		selectedCurrency = paymentProviderConfigCurrency(sel.ProviderKey, sel.Config)
 	}
 	if selectedCurrency != methodCurrency {
+		if req.OrderType == payment.OrderTypeMonthCard && selectedCurrency != "CNY" {
+			return nil, infraerrors.BadRequest("MONTH_CARD_CURRENCY", "月卡以人民币定价，请选择人民币支付渠道")
+		}
 		payAmountStr, payAmount, err = calculateCreateOrderPayAmountForOrderType(limitAmount, feeRate, selectedCurrency, req.OrderType, cfg.SubscriptionUSDToCNYRate)
 		if err != nil {
 			return nil, err
@@ -120,6 +131,15 @@ func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrder
 	}
 	if req.OrderType == payment.OrderTypeSubscription {
 		return s.validateSubOrder(ctx, req)
+	}
+	if req.OrderType == payment.OrderTypeMonthCard {
+		if req.monthCardPurchase == nil {
+			return nil, infraerrors.BadRequest("INVALID_MONTH_CARD", "month card purchase has not been validated")
+		}
+		return nil, nil
+	}
+	if req.OrderType != payment.OrderTypeBalance {
+		return nil, infraerrors.BadRequest("INVALID_ORDER_TYPE", "unknown payment order type")
 	}
 	if math.IsNaN(req.Amount) || math.IsInf(req.Amount, 0) || req.Amount <= 0 {
 		return nil, infraerrors.BadRequest("INVALID_AMOUNT", "amount must be a positive number")
@@ -171,6 +191,12 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		return nil, err
 	}
 	providerSnapshot := buildPaymentOrderProviderSnapshot(sel, req)
+	if req.monthCardPurchase != nil {
+		if providerSnapshot == nil {
+			providerSnapshot = make(map[string]any)
+		}
+		providerSnapshot["month_card_purchase"] = req.monthCardPurchase
+	}
 	selectedInstanceID := ""
 	selectedProviderKey := ""
 	if sel != nil {
@@ -208,6 +234,9 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 	}
 	if plan != nil {
 		b.SetPlanID(plan.ID).SetSubscriptionGroupID(plan.GroupID).SetSubscriptionDays(psComputeValidityDays(plan.ValidityDays, plan.ValidityUnit))
+	}
+	if req.monthCardPurchase != nil {
+		b.SetSubscriptionGroupID(req.monthCardPurchase.Product.GroupID).SetSubscriptionDays(30)
 	}
 	order, err := b.Save(ctx)
 	if err != nil {
@@ -769,6 +798,11 @@ func buildWeChatPaymentOAuthStartURL(req CreateOrderRequest, scope string) (stri
 	}
 	if req.PlanID > 0 {
 		q.Set("plan_id", strconv.FormatInt(req.PlanID, 10))
+	}
+	if req.OrderType == payment.OrderTypeMonthCard {
+		q.Set("product_id", strconv.FormatInt(req.ProductID, 10))
+		q.Set("mode", req.Mode)
+		q.Set("team_code", req.TeamCode)
 	}
 	if scope = strings.TrimSpace(scope); scope != "" {
 		q.Set("scope", scope)

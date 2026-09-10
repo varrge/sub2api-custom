@@ -47,8 +47,9 @@
         </div>
       </div>
 
+      <p v-if="order?.order_type === 'month_card'" class="rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">{{ t('groupBuy.refundHint') }}</p>
       <!-- Deduct Balance -->
-      <div>
+      <div v-if="order?.order_type !== 'month_card'">
         <div class="flex items-center gap-2">
           <input
             id="deduct-balance"
@@ -98,6 +99,7 @@
           <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">{{ creditedAmountSymbol }}</span>
           <input
             v-model.number="form.amount"
+            :readonly="order?.order_type === 'month_card'"
             type="number"
             step="0.01"
             min="0.01"
@@ -187,7 +189,7 @@ const emit = defineEmits<{
   (e: 'cancel'): void
 }>()
 
-const creditedAmountSymbol = currencySymbol('USD')
+const creditedAmountSymbol = computed(() => currencySymbol(props.order?.order_type === 'month_card' ? 'CNY' : 'USD'))
 
 const paymentAmountSymbol = computed(() => currencySymbol(props.order?.currency))
 
@@ -226,7 +228,8 @@ watch(() => props.show, (val) => {
       form.amount = maxRefundable.value
     }
     form.reason = props.order.refund_request_reason || ''
-    form.deduct_balance = true
+    if (props.order.order_type === 'month_card') form.amount = maxRefundable.value
+    form.deduct_balance = props.order.order_type !== 'month_card'
     form.force = false
   }
 })
@@ -236,6 +239,7 @@ function formatDateTime(dateStr: string): string {
 }
 
 function handleSubmit() {
+  if (props.order?.order_type === 'month_card' && form.amount !== maxRefundable.value) return
   if (form.amount <= 0 || form.amount > maxRefundable.value) return
   if (props.requireForce && !form.force) return
   emit('confirm', { ...form })

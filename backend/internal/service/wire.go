@@ -8,6 +8,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/monthcard"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -811,10 +812,12 @@ func ProvideAPIKeyService(
 	cfg *config.Config,
 	billingCacheService *BillingCacheService,
 	concurrencyService *ConcurrencyService,
+	db *sql.DB,
 ) *APIKeyService {
 	svc := NewAPIKeyService(apiKeyRepo, userRepo, groupRepo, userSubRepo, userGroupRateRepo, cache, cfg)
 	svc.SetRateLimitCacheInvalidator(billingCacheService)
 	svc.SetConcurrencyService(concurrencyService)
+	svc.SetMonthCardStore(monthcard.NewStore(db))
 	return svc
 }
 
@@ -971,9 +974,15 @@ func ProvideBalanceNotifyService(emailService *EmailService, settingRepo Setting
 }
 
 // ProvidePaymentService creates PaymentService and attaches notification email delivery.
-func ProvidePaymentService(entClient *dbent.Client, registry *payment.Registry, loadBalancer payment.LoadBalancer, redeemService *RedeemService, subscriptionSvc *SubscriptionService, configService *PaymentConfigService, userRepo UserRepository, groupRepo GroupRepository, affiliateService *AffiliateService, notificationEmailService *NotificationEmailService) *PaymentService {
+func ProvidePaymentService(entClient *dbent.Client, registry *payment.Registry, loadBalancer payment.LoadBalancer, redeemService *RedeemService, subscriptionSvc *SubscriptionService, configService *PaymentConfigService, userRepo UserRepository, groupRepo GroupRepository, affiliateService *AffiliateService, notificationEmailService *NotificationEmailService, db *sql.DB) *PaymentService {
 	svc := NewPaymentService(entClient, registry, loadBalancer, redeemService, subscriptionSvc, configService, userRepo, groupRepo, affiliateService)
 	svc.SetNotificationEmailService(notificationEmailService)
+	store := monthcard.NewStore(db)
+	svc.SetMonthCardStore(store)
+	subscriptionSvc.SetMonthCardStore(store)
+	if subscriptionSvc.billingCacheService != nil {
+		subscriptionSvc.billingCacheService.SetMonthCardStore(store)
+	}
 	return svc
 }
 

@@ -1,3 +1,4 @@
+vi.mock('@/api/groupBuy', () => ({ groupBuyAPI: { cards: vi.fn().mockResolvedValue([]), orders: vi.fn().mockResolvedValue([]) } }))
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useSubscriptionStore } from '@/stores/subscriptions'

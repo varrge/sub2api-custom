@@ -22,6 +22,28 @@ func RegisterPaymentRoutes(
 	settingService *service.SettingService,
 	panelRateLimiter *middleware.PanelRateLimiter,
 ) {
+	if h := paymentHandler.GroupBuy; h != nil {
+		groupBuy := v1.Group("/group-buy")
+		groupBuy.Use(gin.HandlerFunc(jwtAuth), middleware.BackendModeUserGuard(settingService), panelRateLimiter.Global(), gin.HandlerFunc(auditLog))
+		groupBuy.GET("/products", h.Products)
+		groupBuy.GET("/teams", h.Teams)
+		groupBuy.GET("/teams/:code", h.Team)
+		groupBuy.GET("/cards", h.Cards)
+		groupBuy.GET("/order", h.GetOrder)
+		groupBuy.PUT("/order", h.SetOrder)
+		groupBuy.GET("/allocations", h.Allocations)
+
+		adminGroupBuy := v1.Group("/admin/group-buy")
+		adminGroupBuy.Use(gin.HandlerFunc(adminAuth), gin.HandlerFunc(auditLog), middleware.AdminComplianceGuard(settingService))
+		adminGroupBuy.GET("/products", h.AdminProducts)
+		adminGroupBuy.POST("/products", h.SaveProduct)
+		adminGroupBuy.PUT("/products/:id", h.SaveProduct)
+		adminGroupBuy.GET("/teams", h.AdminTeams)
+		adminGroupBuy.GET("/teams/:code", h.AdminTeam)
+		adminGroupBuy.GET("/teams/:code/cards", h.TeamCards)
+		adminGroupBuy.GET("/cards", h.AdminCards)
+		adminGroupBuy.GET("/allocations", h.AdminAllocations)
+	}
 	// --- User-facing payment endpoints (authenticated) ---
 	authenticated := v1.Group("/payment")
 	authenticated.Use(gin.HandlerFunc(jwtAuth))
@@ -90,6 +112,7 @@ func RegisterPaymentRoutes(
 			adminOrders.POST("/:id/retry", adminPaymentHandler.RetryFulfillment)
 			adminOrders.POST("/:id/refund", adminPaymentHandler.ProcessRefund)
 			adminOrders.POST("/:id/refund/query", adminPaymentHandler.QueryAndFinalizeRefund)
+			adminOrders.POST("/:id/refund/confirm", adminPaymentHandler.ConfirmMonthCardRefund)
 		}
 
 		// Subscription Plans

@@ -259,6 +259,8 @@ func (a *Airwallex) VerifyNotification(_ context.Context, rawBody string, header
 	}, nil
 }
 
+func (a *Airwallex) SupportsIdempotentRefund() bool { return true }
+
 func (a *Airwallex) Refund(ctx context.Context, req payment.RefundRequest) (*payment.RefundResponse, error) {
 	intentID := strings.TrimSpace(req.TradeNo)
 	if intentID == "" {

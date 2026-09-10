@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/monthcard"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
@@ -322,6 +323,22 @@ func (s *OpenAIGatewayService) ResolveGrokMediaVideoRequestAccount(
 	requestID string,
 	userID, apiKeyID int64,
 ) (int64, error) {
+	if s != nil {
+		if durable, ok := s.usageBillingRepo.(grokVideoPendingRepository); ok {
+			pending, err := durable.LoadGrokVideoPending(ctx, requestID, userID, apiKeyID)
+			if err != nil {
+				return 0, err
+			}
+			if pending != nil {
+				if derefGroupID(pending.GroupID) != derefGroupID(groupID) {
+					return 0, fmt.Errorf("grok video group ownership changed")
+				}
+				if pending.AccountID > 0 {
+					return pending.AccountID, nil
+				}
+			}
+		}
+	}
 	if s == nil || s.cache == nil {
 		return 0, fmt.Errorf("grok video request binding cache is unavailable")
 	}
@@ -336,13 +353,17 @@ func (s *OpenAIGatewayService) ResolveGrokMediaVideoRequestAccount(
 // first observes a completed video URL. Status may omit model/duration; we fall
 // back to this snapshot, then defaults.
 type GrokVideoPendingBilling struct {
-	Model                       string   `json:"model"`
-	BillingModel                string   `json:"billing_model,omitempty"`
-	UpstreamModel               string   `json:"upstream_model,omitempty"`
-	VideoResolution             string   `json:"video_resolution,omitempty"`
-	VideoDurationSeconds        int      `json:"video_duration_seconds,omitempty"`
-	OriginalModel               string   `json:"original_model,omitempty"`
-	ResolvedVideoRateMultiplier *float64 `json:"resolved_video_rate_multiplier,omitempty"`
+	MonthCardSnapshot           *monthcard.Snapshot `json:"month_card_snapshot,omitempty"`
+	LegacySubscriptionID        *int64              `json:"legacy_subscription_id,omitempty"`
+	GroupID                     *int64              `json:"group_id,omitempty"`
+	AccountID                   int64               `json:"account_id,omitempty"`
+	Model                       string              `json:"model"`
+	BillingModel                string              `json:"billing_model,omitempty"`
+	UpstreamModel               string              `json:"upstream_model,omitempty"`
+	VideoResolution             string              `json:"video_resolution,omitempty"`
+	VideoDurationSeconds        int                 `json:"video_duration_seconds,omitempty"`
+	OriginalModel               string              `json:"original_model,omitempty"`
+	ResolvedVideoRateMultiplier *float64            `json:"resolved_video_rate_multiplier,omitempty"`
 	// CreatedAt is when the async create request entered the gateway (RFC3339Nano UTC).
 	// Deferred billing and duration_ms use this instant until the
 	// first official done+video.url observation (status poll or content download),
@@ -412,7 +433,7 @@ func (s *OpenAIGatewayService) StoreGrokVideoPendingBilling(
 	userID, apiKeyID int64,
 	pending GrokVideoPendingBilling,
 ) error {
-	if s == nil || s.cache == nil {
+	if s == nil {
 		return fmt.Errorf("grok video pending billing cache is unavailable")
 	}
 	key := grokVideoPendingBillingKey(requestID, userID, apiKeyID)
@@ -439,6 +460,22 @@ func (s *OpenAIGatewayService) StoreGrokVideoPendingBilling(
 	if err != nil {
 		return err
 	}
+	if durable, ok := s.usageBillingRepo.(grokVideoPendingRepository); ok {
+		if err := durable.StoreGrokVideoPending(ctx, requestID, userID, apiKeyID, &pending); err != nil {
+			return err
+		}
+		// SQL is authoritative, so a Redis failure cannot discard an accepted job.
+		if s.cache != nil {
+			_ = s.cache.SetGrokVideoPendingBilling(ctx, key, payload, grokVideoPendingBillingTTL(s.cfg))
+		}
+		return nil
+	}
+	if pending.MonthCardSnapshot != nil {
+		return fmt.Errorf("durable video billing snapshot repository is unavailable")
+	}
+	if s.cache == nil {
+		return fmt.Errorf("grok video pending billing cache is unavailable")
+	}
 	return s.cache.SetGrokVideoPendingBilling(ctx, key, payload, grokVideoPendingBillingTTL(s.cfg))
 }
 
@@ -448,12 +485,21 @@ func (s *OpenAIGatewayService) LoadGrokVideoPendingBilling(
 	requestID string,
 	userID, apiKeyID int64,
 ) (*GrokVideoPendingBilling, error) {
-	if s == nil || s.cache == nil {
+	if s == nil {
 		return nil, fmt.Errorf("grok video pending billing cache is unavailable")
 	}
 	key := grokVideoPendingBillingKey(requestID, userID, apiKeyID)
 	if key == "" {
 		return nil, fmt.Errorf("grok video pending billing key is invalid")
+	}
+	if durable, ok := s.usageBillingRepo.(grokVideoPendingRepository); ok {
+		pending, err := durable.LoadGrokVideoPending(ctx, requestID, userID, apiKeyID)
+		if err != nil || pending != nil {
+			return pending, err
+		}
+	}
+	if s.cache == nil {
+		return nil, fmt.Errorf("grok video pending billing cache is unavailable")
 	}
 	payload, err := s.cache.GetGrokVideoPendingBilling(ctx, key)
 	if err != nil || len(payload) == 0 {
@@ -464,6 +510,11 @@ func (s *OpenAIGatewayService) LoadGrokVideoPendingBilling(
 		return nil, err
 	}
 	return &pending, nil
+}
+
+type grokVideoPendingRepository interface {
+	StoreGrokVideoPending(context.Context, string, int64, int64, *GrokVideoPendingBilling) error
+	LoadGrokVideoPending(context.Context, string, int64, int64) (*GrokVideoPendingBilling, error)
 }
 
 // ClaimGrokVideoBilling returns true once for a completed video request so status

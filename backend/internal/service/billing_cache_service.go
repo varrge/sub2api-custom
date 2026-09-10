@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/monthcard"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
@@ -104,6 +105,7 @@ type subscriptionCacheInvalidationPubSub interface {
 // BillingCacheService 计费缓存服务
 // 负责余额和订阅数据的缓存管理，提供高性能的计费资格检查
 type BillingCacheService struct {
+	monthCardStore        *monthcard.Store
 	cache                 BillingCache
 	userRepo              UserRepository
 	subRepo               UserSubscriptionRepository
@@ -740,8 +742,16 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	if s.circuitBreaker != nil && !s.circuitBreaker.Allow() {
 		return ErrBillingServiceUnavailable
 	}
+	if s.monthCardStore != nil {
+		if err := s.monthCardStore.CheckDebt(ctx, user.ID); err != nil {
+			return mapMonthCardAdmissionError(err)
+		}
+	}
 
 	// 判断计费模式
+	if group != nil && group.IsSubscriptionType() && subscription == nil {
+		return ErrSubscriptionInvalid
+	}
 	isSubscriptionMode := group != nil && group.IsSubscriptionType() && subscription != nil
 
 	if isSubscriptionMode {
@@ -898,6 +908,12 @@ func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, userI
 
 // checkSubscriptionEligibility 检查订阅模式资格
 func (s *BillingCacheService) checkSubscriptionEligibility(ctx context.Context, userID int64, group *Group, subscription *UserSubscription) error {
+	if snapshot := subscription.MonthCardSnapshot; snapshot != nil {
+		if snapshot.UserID != userID || snapshot.GroupID != group.ID || len(snapshot.Candidates) == 0 {
+			return ErrSubscriptionInvalid
+		}
+		return nil
+	}
 	// 获取订阅缓存数据
 	subData, err := s.GetSubscriptionStatus(ctx, userID, group.ID)
 	if err != nil {

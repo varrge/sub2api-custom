@@ -140,6 +140,9 @@ onMounted(async () => {
     appendQueryParam(query, 'amount', amount)
     appendQueryParam(query, 'order_type', orderType)
     appendQueryParam(query, 'plan_id', planId)
+    appendQueryParam(query, 'product_id', readParam('product_id'))
+    appendQueryParam(query, 'mode', readParam('mode'))
+    appendQueryParam(query, 'team_code', readParam('team_code'))
   }
 
   await router.replace({

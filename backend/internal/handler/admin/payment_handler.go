@@ -275,6 +275,28 @@ func (h *PaymentHandler) QueryAndFinalizeRefund(c *gin.Context) {
 
 // --- Subscription Plans ---
 
+// ConfirmMonthCardRefund records a full refund already verified at the provider.
+func (h *PaymentHandler) ConfirmMonthCardRefund(c *gin.Context) {
+	orderID, ok := parseIDParam(c, "id")
+	if !ok {
+		return
+	}
+	var req struct {
+		Reference string `json:"reference" binding:"required"`
+		Confirmed bool   `json:"confirmed"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || !req.Confirmed {
+		response.BadRequest(c, "请先在原支付平台确认已全额退款，并填写退款流水号或核实说明")
+		return
+	}
+	result, err := h.paymentService.ConfirmMonthCardRefund(c.Request.Context(), orderID, req.Reference)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, result)
+}
+
 // ListPlans returns all subscription plans.
 // GET /api/v1/admin/payment/plans
 func (h *PaymentHandler) ListPlans(c *gin.Context) {

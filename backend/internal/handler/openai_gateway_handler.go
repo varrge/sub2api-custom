@@ -2758,6 +2758,9 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		// turn 级定价：首轮回退到 TurnStarted 的所属 turn 时刻；后续 turn 由
 		// BeforeTurn 重新冻结 pricingAt 并按最新门复核当前账号。
 		var turnPricing openAIWSTurnPricing
+		var turnSubscription atomic.Pointer[service.UserSubscription]
+		turnSubscription.Store(subscription)
+		wsBillingSessionID := uuid.NewString()
 		hooks := &service.OpenAIWSIngressHooks{
 			ClientLifecycleContext:      clientLifecycleCtx,
 			InitialRequestModel:         reqModel,
@@ -2779,6 +2782,16 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				if turn == 1 {
 					return nil
 				}
+				// Both native and passthrough ingress visit BeforeRequest. Each
+				// new turn gets its own immutable entitlement snapshot.
+				fresh, admissionErr := h.billingCacheService.RefreshMonthCardAdmission(ctx, apiKey.User.ID, apiKey.Group, turnSubscription.Load())
+				if admissionErr == nil {
+					admissionErr = h.billingCacheService.CheckBillingEligibility(ctx, apiKey.User, apiKey, apiKey.Group, fresh, service.QuotaPlatform(ctx, apiKey))
+				}
+				if admissionErr != nil {
+					return service.NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, admissionErr.Error(), admissionErr)
+				}
+				turnSubscription.Store(fresh)
 				if !gjson.ValidBytes(payload) {
 					return service.NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", errors.New("invalid json"))
 				}
@@ -2871,6 +2884,12 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				return nil
 			},
 			AfterTurn: func(turn int, result *service.OpenAIForwardResult, turnErr error) {
+				// Capture before dispatch: the next turn must never overwrite
+				// the snapshot referenced by an asynchronous billing worker.
+				subscription := turnSubscription.Load()
+				if result != nil && subscription != nil && subscription.MonthCardSnapshot != nil {
+					result.RequestID = fmt.Sprintf("ws-turn:%s:%d", wsBillingSessionID, turn)
+				}
 				turnStart := getTurnStart(turn)
 				cyberBlockBody := takeCyberTurnBody(turn)
 				// 每次 attempt 都清 cyber mark；failover 链结束前保留 recorded guard，

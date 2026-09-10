@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/smartwalle/alipay/v3"
@@ -24,7 +23,6 @@ const (
 const (
 	alipayFundChangeYes    = "Y"
 	alipayErrTradeNotExist = "ACQ.TRADE_NOT_EXIST"
-	alipayRefundSuffix     = "-refund"
 )
 
 var (
@@ -36,6 +34,12 @@ var (
 	}
 	alipayTradePagePay = func(client *alipay.Client, param alipay.TradePagePay) (*url.URL, error) {
 		return client.TradePagePay(param)
+	}
+	alipayTradeRefund = func(ctx context.Context, client *alipay.Client, param alipay.TradeRefund) (*alipay.TradeRefundRsp, error) {
+		return client.TradeRefund(ctx, param)
+	}
+	alipayRefundQuery = func(ctx context.Context, client *alipay.Client, param alipay.TradeFastPayRefundQuery) (*alipay.TradeFastPayRefundQueryRsp, error) {
+		return client.TradeFastPayRefundQuery(ctx, param)
 	}
 )
 
@@ -314,6 +318,12 @@ func (a *Alipay) VerifyNotification(ctx context.Context, rawBody string, _ map[s
 	}
 
 	metadata := a.MerchantIdentityMetadata()
+	if metadata == nil {
+		metadata = map[string]string{}
+	}
+	if paidAt := values.Get("gmt_payment"); paidAt != "" {
+		metadata["paid_at"] = paidAt
+	}
 	if appID := strings.TrimSpace(notification.AppId); appID != "" {
 		if metadata == nil {
 			metadata = map[string]string{}
@@ -332,36 +342,73 @@ func (a *Alipay) VerifyNotification(ctx context.Context, rawBody string, _ map[s
 }
 
 // Refund requests a refund through Alipay.
+func (a *Alipay) SupportsIdempotentRefund() bool { return true }
+
 func (a *Alipay) Refund(ctx context.Context, req payment.RefundRequest) (*payment.RefundResponse, error) {
 	client, err := a.getClient()
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := client.TradeRefund(ctx, alipay.TradeRefund{
+	refundID, err := alipayRefundRequestID(req.OrderID, req.Amount)
+	if err != nil {
+		return nil, err
+	}
+	result, err := alipayTradeRefund(ctx, client, alipay.TradeRefund{
 		OutTradeNo:   req.OrderID,
 		RefundAmount: req.Amount,
 		RefundReason: req.Reason,
-		OutRequestNo: fmt.Sprintf("%s-refund-%d", req.OrderID, time.Now().UnixNano()),
+		OutRequestNo: refundID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("alipay TradeRefund: %w", err)
 	}
 
 	refundStatus := payment.ProviderStatusPending
-	if result.FundChange == alipayFundChangeYes {
+	if result != nil && result.FundChange == alipayFundChangeYes {
 		refundStatus = payment.ProviderStatusSuccess
-	}
-
-	refundID := result.TradeNo
-	if refundID == "" {
-		refundID = req.OrderID + alipayRefundSuffix
 	}
 
 	return &payment.RefundResponse{
 		RefundID: refundID,
 		Status:   refundStatus,
 	}, nil
+}
+
+func alipayRefundRequestID(orderID, amount string) (string, error) {
+	minor, err := payment.AmountToMinorUnit(amount, "CNY")
+	if err != nil || minor <= 0 || strings.TrimSpace(orderID) == "" {
+		return "", fmt.Errorf("alipay refund requires an order and positive amount")
+	}
+	return fmt.Sprintf("%s-refund-%d", strings.TrimSpace(orderID), minor), nil
+}
+
+// QueryRefund also reconstructs the stable request ID after a crash before the
+// local refund audit record was written. Repeated refund requests share this ID.
+func (a *Alipay) QueryRefund(ctx context.Context, req payment.RefundQueryRequest) (*payment.RefundResponse, error) {
+	client, err := a.getClient()
+	if err != nil {
+		return nil, err
+	}
+	refundID := strings.TrimSpace(req.RefundID)
+	if refundID == "" {
+		refundID, err = alipayRefundRequestID(req.OrderID, req.Amount)
+		if err != nil {
+			return nil, err
+		}
+	}
+	result, err := alipayRefundQuery(ctx, client, alipay.TradeFastPayRefundQuery{OutTradeNo: req.OrderID, OutRequestNo: refundID})
+	if err != nil {
+		return nil, fmt.Errorf("alipay refund query: %w", err)
+	}
+	if result == nil {
+		return nil, fmt.Errorf("alipay refund query returned no result")
+	}
+	status := payment.ProviderStatusFailed
+	if result.RefundStatus == "REFUND_SUCCESS" {
+		status = payment.ProviderStatusSuccess
+	}
+	return &payment.RefundResponse{RefundID: refundID, Status: status}, nil
 }
 
 // CancelPayment closes a pending trade on Alipay.

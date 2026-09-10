@@ -21,7 +21,7 @@ export type OrderStatus =
 
 export type PaymentType = 'alipay' | 'wxpay' | 'alipay_direct' | 'wxpay_direct' | 'stripe' | 'easypay' | 'airwallex'
 
-export type OrderType = 'balance' | 'subscription'
+export type OrderType = 'balance' | 'subscription' | 'month_card'
 
 // ==================== Configuration ====================
 
@@ -94,6 +94,7 @@ export interface PaymentOrder {
   status: OrderStatus
   order_type: OrderType
   created_at: string
+  updated_at?: string
   expires_at: string
   paid_at?: string
   completed_at?: string
@@ -103,6 +104,9 @@ export interface PaymentOrder {
   refund_requested_by?: number
   refund_request_reason?: string
   plan_id?: number
+  product_id?: number
+  mode?: 'solo' | 'create' | 'join'
+  team_code?: string
   provider_instance_id?: string
 }
 
@@ -175,6 +179,9 @@ export interface CreateOrderRequest {
   payment_type: string
   order_type: string
   plan_id?: number
+  product_id?: number
+  mode?: 'solo' | 'create' | 'join'
+  team_code?: string
   return_url?: string
   payment_source?: string
   openid?: string

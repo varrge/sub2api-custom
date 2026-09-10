@@ -146,6 +146,16 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 		}
 
 		// Key 状态检查（状态字段可能因后台异步刷新而滞后，故显式拦截）。
+		if subscriptionService != nil {
+			if err := subscriptionService.CheckAccountDebt(c.Request.Context(), apiKey.User.ID); err != nil {
+				status := 403
+				if !errors.Is(err, service.ErrAccountUsageDebt) {
+					status = 503
+				}
+				abortWithGoogleError(c, status, err.Error())
+				return
+			}
+		}
 		switch apiKey.Status {
 		case service.StatusAPIKeyQuotaExhausted:
 			abortWithGoogleError(c, 429, "API key 额度已用完")
@@ -173,6 +183,10 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 				apiKey.Group.ID,
 			)
 			if err != nil {
+				if errors.Is(err, service.ErrBillingServiceUnavailable) {
+					abortWithGoogleError(c, 503, err.Error())
+					return
+				}
 				abortWithGoogleError(c, 403, "No active subscription found for this group")
 				return
 			}
@@ -200,6 +214,10 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 
 			c.Set(string(ContextKeySubscription), subscription)
 		} else {
+			if isSubscriptionType {
+				abortWithGoogleError(c, 503, "Subscription admission is unavailable")
+				return
+			}
 			if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
 				abortWithGoogleError(c, 403, "Insufficient account balance")
 				return

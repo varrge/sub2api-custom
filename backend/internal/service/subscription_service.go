@@ -11,6 +11,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/monthcard"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
@@ -44,6 +45,7 @@ var (
 
 // SubscriptionService 订阅服务
 type SubscriptionService struct {
+	monthCardStore      *monthcard.Store
 	groupRepo           GroupRepository
 	userSubRepo         UserSubscriptionRepository
 	billingCacheService *BillingCacheService
@@ -726,6 +728,16 @@ func (s *SubscriptionService) GetByID(ctx context.Context, id int64) (*UserSubsc
 // 使用 L1 缓存 + singleflight 加速中间件热路径。
 // 返回缓存对象的浅拷贝，调用方可安全修改字段而不会污染缓存或触发 data race。
 func (s *SubscriptionService) GetActiveSubscription(ctx context.Context, userID, groupID int64) (*UserSubscription, error) {
+	if s.monthCardStore != nil {
+		snapshot, err := s.monthCardStore.Admit(ctx, userID, groupID, time.Now())
+		if err != nil {
+			return nil, mapMonthCardAdmissionError(err)
+		}
+		if snapshot != nil {
+			return &UserSubscription{UserID: userID, GroupID: groupID, StartsAt: snapshot.StartedAt,
+				ExpiresAt: snapshot.Candidates[0].ExpiresAt, Status: SubscriptionStatusActive, MonthCardSnapshot: snapshot}, nil
+		}
+	}
 	key := subCacheKey(userID, groupID)
 
 	// L1 缓存命中：返回浅拷贝
@@ -878,7 +890,12 @@ func (s *SubscriptionService) AdminResetQuota(ctx context.Context, subscriptionI
 	now := s.now()
 	// 日窗口锚点取当天 0 点：手动重置只清空用量，不改变“每天 0 点刷新”的节奏。
 	// 周/月窗口保持锚定重置时刻（期限对齐滚动窗口语义）。
-	if err := s.userSubRepo.ResetUsageWindows(ctx, sub.ID, resetDaily, resetWeekly, resetMonthly, timezone.StartOfDay(now), now); err != nil {
+	if s.monthCardStore != nil {
+		err = s.monthCardStore.ResetLegacyQuota(ctx, sub.UserID, sub.ID, resetDaily, resetWeekly, resetMonthly, timezone.StartOfDay(now), now)
+	} else {
+		err = s.userSubRepo.ResetUsageWindows(ctx, sub.ID, resetDaily, resetWeekly, resetMonthly, timezone.StartOfDay(now), now)
+	}
+	if err != nil {
 		return nil, err
 	}
 	// Invalidate L1 ristretto cache. Ristretto's Del() is asynchronous by design,
@@ -986,6 +1003,12 @@ func (s *SubscriptionService) CheckUsageLimits(ctx context.Context, sub *UserSub
 // 仅做内存检查，不触发 DB 写入。调用方必须在放行请求前同步完成窗口维护。
 // 返回 needsMaintenance 表示是否需要执行窗口维护并回读数据库快照。
 func (s *SubscriptionService) ValidateAndCheckLimits(sub *UserSubscription, group *Group) (needsMaintenance bool, err error) {
+	if sub != nil && sub.MonthCardSnapshot != nil {
+		if group == nil || sub.MonthCardSnapshot.UserID != sub.UserID || sub.MonthCardSnapshot.GroupID != group.ID || len(sub.MonthCardSnapshot.Candidates) == 0 {
+			return false, ErrSubscriptionInvalid
+		}
+		return false, nil
+	}
 	now := s.now()
 	// 1. 验证订阅状态
 	if sub.Status == SubscriptionStatusExpired {

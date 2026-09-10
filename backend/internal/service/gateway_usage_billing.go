@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"time"
@@ -228,6 +229,7 @@ func resolveUsageBillingRequestID(ctx context.Context, upstreamRequestID string)
 func isForcedUsageBillingRequestID(requestID string) bool {
 	id := strings.TrimSpace(requestID)
 	return strings.HasPrefix(id, "web_search:") ||
+		strings.HasPrefix(id, "ws-turn:") ||
 		strings.HasPrefix(id, "grok-video:") ||
 		strings.HasPrefix(id, "grok_audio:") ||
 		strings.HasPrefix(id, "grok_realtime:")
@@ -310,7 +312,14 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 	// user-specific) rate multiplier consumes subscription quota at the expected
 	// speed. TotalCost remains the raw (pre-multiplier) value; downstream guards
 	// on "> 0" still correctly skip free subscriptions (RateMultiplier == 0).
-	if p.IsSubscriptionBill && p.Subscription != nil && p.Cost.TotalCost > 0 {
+	if p.Subscription != nil && p.Subscription.MonthCardSnapshot != nil {
+		cmd.MonthCardSnapshot = p.Subscription.MonthCardSnapshot
+		cmd.MonthCardCost = p.Cost.ActualCost
+		cmd.SubscriptionID = nil
+		if usageLog != nil {
+			usageLog.SubscriptionID = nil
+		}
+	} else if p.IsSubscriptionBill && p.Subscription != nil && p.Cost.TotalCost > 0 {
 		cmd.SubscriptionID = &p.Subscription.ID
 		cmd.SubscriptionCost = p.Cost.ActualCost
 	} else if p.Cost.ActualCost > 0 {
@@ -338,6 +347,9 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 
 	cmd := buildUsageBillingCommand(requestID, usageLog, p)
 	if cmd == nil || cmd.RequestID == "" || repo == nil {
+		if p.Subscription != nil && p.Subscription.MonthCardSnapshot != nil {
+			return false, errors.New("transactional repository required for month card settlement")
+		}
 		postUsageBilling(ctx, p, deps)
 		return true, nil
 	}
@@ -370,7 +382,14 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 		return
 	}
 
-	if p.IsSubscriptionBill {
+	if result != nil && result.MonthCardSettlement != nil {
+		if deps.billingCacheService != nil && p.User != nil && p.APIKey != nil && p.APIKey.GroupID != nil {
+			_ = deps.billingCacheService.InvalidateSubscription(ctx, p.User.ID, *p.APIKey.GroupID)
+			if result.NewBalance != nil {
+				_ = deps.billingCacheService.InvalidateUserBalance(ctx, p.User.ID)
+			}
+		}
+	} else if p.IsSubscriptionBill {
 		if p.Cost.ActualCost > 0 && p.User != nil && p.APIKey != nil && p.APIKey.GroupID != nil {
 			deps.billingCacheService.QueueUpdateSubscriptionUsage(p.User.ID, *p.APIKey.GroupID, p.Cost.ActualCost)
 		}
@@ -867,7 +886,9 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	}, s.billingDeps(), s.usageBillingRepo)
 
 	if billingErr != nil {
-		usageLog.ActualCost = 0
+		if subscription == nil || subscription.MonthCardSnapshot == nil {
+			usageLog.ActualCost = 0
+		}
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
 		return billingErr
 	}
@@ -1217,7 +1238,7 @@ func resolveBillingMode(result *ForwardResult, cost *CostBreakdown) *string {
 }
 
 func optionalSubscriptionID(subscription *UserSubscription) *int64 {
-	if subscription != nil {
+	if subscription != nil && subscription.MonthCardSnapshot == nil && subscription.ID > 0 {
 		return &subscription.ID
 	}
 	return nil

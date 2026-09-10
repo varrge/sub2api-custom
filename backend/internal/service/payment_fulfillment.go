@@ -113,7 +113,7 @@ func (s *PaymentService) confirmPayment(ctx context.Context, oid int64, tradeNo 
 		s.writeAuditLog(ctx, o.ID, "PAYMENT_AMOUNT_MISMATCH", pk, map[string]any{"expected": o.PayAmount, "paid": paid, "tradeNo": tradeNo})
 		return fmt.Errorf("amount mismatch: expected %s, got %s", strconv.FormatFloat(o.PayAmount, 'f', -1, 64), strconv.FormatFloat(paid, 'f', -1, 64))
 	}
-	return s.toPaid(ctx, o, tradeNo, paid, pk)
+	return s.toPaid(ctx, o, tradeNo, paid, pk, paymentConfirmedAt(metadata, o.CreatedAt, time.Now()))
 }
 
 func paymentAmountToleranceForCurrency(currency string) float64 {
@@ -147,21 +147,28 @@ func expectedNotificationProviderKey(registry *payment.Registry, orderPaymentTyp
 	return strings.TrimSpace(orderPaymentType)
 }
 
-func (s *PaymentService) toPaid(ctx context.Context, o *dbent.PaymentOrder, tradeNo string, paid float64, pk string) error {
+func (s *PaymentService) toPaid(ctx context.Context, o *dbent.PaymentOrder, tradeNo string, paid float64, pk string, confirmedAt ...time.Time) error {
 	previousStatus := o.Status
 	now := time.Now()
+	paidAt := now
+	if o.OrderType == payment.OrderTypeMonthCard && len(confirmedAt) > 0 && !confirmedAt[0].IsZero() {
+		paidAt = confirmedAt[0]
+	}
 	grace := now.Add(-paymentGraceMinutes * time.Minute)
+	eligible := paymentorder.Or(
+		paymentorder.StatusEQ(OrderStatusPending),
+		paymentorder.StatusEQ(OrderStatusCancelled),
+		paymentorder.And(paymentorder.StatusEQ(OrderStatusExpired), paymentorder.UpdatedAtGTE(grace)),
+	)
+	if o.OrderType == payment.OrderTypeMonthCard {
+		// Late verified card payments must be fulfilled or refunded even after
+		// the legacy payment grace period, never silently acknowledged and lost.
+		eligible = paymentorder.StatusIn(OrderStatusPending, OrderStatusCancelled, OrderStatusExpired)
+	}
 	c, err := s.entClient.PaymentOrder.Update().Where(
 		paymentorder.IDEQ(o.ID),
-		paymentorder.Or(
-			paymentorder.StatusEQ(OrderStatusPending),
-			paymentorder.StatusEQ(OrderStatusCancelled),
-			paymentorder.And(
-				paymentorder.StatusEQ(OrderStatusExpired),
-				paymentorder.UpdatedAtGTE(grace),
-			),
-		),
-	).SetStatus(OrderStatusPaid).SetPayAmount(paid).SetPaymentTradeNo(tradeNo).SetPaidAt(now).ClearFailedAt().ClearFailedReason().Save(ctx)
+		eligible,
+	).SetStatus(OrderStatusPaid).SetPayAmount(paid).SetPaymentTradeNo(tradeNo).SetPaidAt(paidAt).ClearFailedAt().ClearFailedReason().Save(ctx)
 	if err != nil {
 		return fmt.Errorf("update to PAID: %w", err)
 	}
@@ -217,6 +224,9 @@ func (s *PaymentService) executeFulfillment(ctx context.Context, oid int64) erro
 	o, err := s.entClient.PaymentOrder.Get(ctx, oid)
 	if err != nil {
 		return fmt.Errorf("get order: %w", err)
+	}
+	if o.OrderType == payment.OrderTypeMonthCard {
+		return s.ExecuteMonthCardFulfillment(ctx, oid)
 	}
 	if o.OrderType == payment.OrderTypeSubscription {
 		return s.ExecuteSubscriptionFulfillment(ctx, oid)

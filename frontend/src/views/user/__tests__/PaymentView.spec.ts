@@ -5,6 +5,8 @@ import { PAYMENT_RECOVERY_STORAGE_KEY } from '@/components/payment/paymentFlow'
 import { formatPaymentAmount } from '@/components/payment/currency'
 import AmountInput from '@/components/payment/AmountInput.vue'
 import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
+import ProductCatalog from '@/features/group-buy/ProductCatalog.vue'
+import type { GroupBuyProduct, GroupBuyTeam } from '@/types/groupBuy'
 import en from '@/i18n/locales/en'
 import zh from '@/i18n/locales/zh'
 import type { CheckoutInfoResponse, MethodLimit, SubscriptionPlan } from '@/types/payment'
@@ -24,6 +26,9 @@ const showError = vi.hoisted(() => vi.fn())
 const showInfo = vi.hoisted(() => vi.fn())
 const showWarning = vi.hoisted(() => vi.fn())
 const getCheckoutInfo = vi.hoisted(() => vi.fn())
+const getGroupBuyProducts = vi.hoisted(() => vi.fn().mockResolvedValue([]))
+const getGroupBuyTeam = vi.hoisted(() => vi.fn())
+vi.mock('@/api/groupBuy', () => ({ groupBuyAPI: { products: getGroupBuyProducts, team: getGroupBuyTeam } }))
 const getUserGroupRates = vi.hoisted(() => vi.fn())
 const bridgeInvoke = vi.hoisted(() => vi.fn())
 const translate = vi.hoisted(() => vi.fn((key: string) => key))
@@ -248,6 +253,9 @@ async function mountSubscriptionConfirm(options: Parameters<typeof checkoutInfoW
     },
   })
   await flushPromises()
+  await flushPromises()
+  // Legacy plans remain available through explicit selection. Group deep links now open the month-card catalog.
+  wrapper.getComponent(SubscriptionPlanCard).vm.$emit('select', checkoutInfoWithPlansFixture(options).data.plans[0])
   await flushPromises()
   return wrapper
 }
@@ -830,5 +838,63 @@ describe('PaymentView WeChat JSAPI flow', () => {
     expect(showWarning).toHaveBeenCalledWith('payment.errors.mobilePaymentFallbackToQr')
     expect(showError).not.toHaveBeenCalled()
     expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toContain('weixin://wxpay/bizpayurl?pr=fallback-native')
+  })
+})
+
+describe('independent month-card checkout', () => {
+  const product: GroupBuyProduct = { id: 41, group_id: 3, group_name: 'OpenAI', platform: 'openai', name: 'Independent monthly', description: '', price_cny: 198, base_quota_usd: 940, tiers: [{ members: 6, quota_usd: 1000 }], max_members: 10, recruitment_hours: 48, for_sale: true, sort_order: 0 }
+  const team: GroupBuyTeam = { id: 5, code: 'FROZEN-TEAM', product_id: 41, product: { ...product, price_cny: 188 }, member_count: 4, current_quota_usd: 960, next_quota_usd: 1000, next_members: 6, starts_at: '2099-01-01T00:00:00Z', closes_at: '2099-01-03T00:00:00Z', status: 'recruiting', joined: false }
+
+  it.each(['solo', 'create'] as const)('creates a separate %s month-card order at its fixed CNY price', async mode => {
+    const wrapper = await mountSubscriptionPlanList(0)
+    createOrder.mockReset().mockResolvedValue({ order_id: 91, amount: 198, pay_amount: 198, currency: 'CNY', qr_code: 'pay:91', expires_at: '2099-01-01T00:00:00Z' })
+    wrapper.getComponent(ProductCatalog).vm.$emit('select', { product, mode })
+    await flushPromises()
+    expect(wrapper.text()).toContain('¥198.00')
+    await wrapper.get('button.btn-primary.w-full').trigger('click')
+    expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ order_type: 'month_card', product_id: 41, mode, amount: 198 }))
+    expect(createOrder.mock.calls[0][0]).not.toHaveProperty('plan_id')
+    wrapper.unmount()
+  })
+
+  it('blocks non-CNY methods while leaving the original recharge method list available', async () => {
+    const wrapper = await mountSubscriptionPlanList(0)
+    getCheckoutInfo.mockResolvedValue(checkoutInfoFixture({ methods: { stripe: { ...checkoutInfoFixture().data.methods.wxpay, currency: 'USD' } } }))
+    wrapper.unmount()
+    const current = shallowMount(PaymentView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } } })
+    await flushPromises()
+    current.getComponent(ProductCatalog).vm.$emit('select', { product, mode: 'solo' })
+    await flushPromises()
+    expect(current.get('button.btn-primary.w-full').attributes('disabled')).toBeDefined()
+    current.unmount()
+  })
+
+  it.each(['solo', 'create', 'join'] as const)('preserves %s product/team context through token-only WeChat OAuth redirects', async mode => {
+    vi.useRealTimers()
+    window.localStorage.clear()
+    routeState.query = { tab: 'subscription', order_type: 'month_card', mode, product_id: '41', ...(mode === 'join' ? { team_code: team.code } : {}), wechat_resume_token: `token-${mode}` }
+    getGroupBuyProducts.mockResolvedValue([product])
+    getGroupBuyTeam.mockResolvedValue(team)
+    getCheckoutInfo.mockResolvedValue(checkoutInfoFixture({ subscription_usd_to_cny_rate: 7.2, balance_recharge_multiplier: 0.15 }))
+    createOrder.mockReset().mockResolvedValue(oauthOrderFixture())
+    const originalLocation = window.location
+    const locationState = { href: 'http://localhost/purchase', origin: 'http://localhost' }
+    Object.defineProperty(window, 'location', { configurable: true, value: locationState })
+    let wrapper: ReturnType<typeof shallowMount> | undefined
+    try {
+      wrapper = shallowMount(PaymentView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } } })
+      await flushPromises()
+      await flushPromises()
+      expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ order_type: 'month_card', product_id: 41, mode, wechat_resume_token: `token-${mode}`, team_code: mode === 'join' ? team.code : undefined }))
+      const redirect = new URL(new URL(locationState.href, locationState.origin).searchParams.get('redirect')!, locationState.origin)
+      expect(redirect.searchParams.get('order_type')).toBe('month_card')
+      expect(redirect.searchParams.get('mode')).toBe(mode)
+      expect(redirect.searchParams.get('product_id')).toBe('41')
+      expect(redirect.searchParams.get('team_code')).toBe(mode === 'join' ? team.code : null)
+      if (mode === 'join') expect(wrapper.text()).toContain('¥188.00')
+    } finally {
+      wrapper?.unmount()
+      Object.defineProperty(window, 'location', { configurable: true, value: originalLocation })
+    }
   })
 })

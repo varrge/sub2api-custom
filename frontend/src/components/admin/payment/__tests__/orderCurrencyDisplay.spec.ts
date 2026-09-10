@@ -151,3 +151,18 @@ describe('admin order currency display', () => {
     expect(text).toContain('$100.00')
   })
 })
+
+it('limits a month-card refund to the full CNY order and hides balance deduction', async () => {
+  const wrapper = mount(AdminRefundDialog, {
+    props: { show: false, order: orderFactory({ order_type: 'month_card', currency: 'CNY', amount: 198, pay_amount: 198, fee_rate: 0, refund_amount: 0 }) },
+    global: { stubs: { BaseDialog: BaseDialogStub } },
+  })
+  await wrapper.setProps({ show: true })
+  expect(wrapper.text()).toContain('¥198.00')
+  expect(wrapper.text()).toContain('groupBuy.refundHint')
+  expect(wrapper.find('#deduct-balance').exists()).toBe(false)
+  expect(wrapper.get('input[type="number"]').attributes('readonly')).toBeDefined()
+  await wrapper.get('textarea').setValue('Approved full card refund')
+  await wrapper.get('form').trigger('submit')
+  expect(wrapper.emitted('confirm')?.[0]?.[0]).toEqual({ amount: 198, reason: 'Approved full card refund', deduct_balance: false, force: false })
+})

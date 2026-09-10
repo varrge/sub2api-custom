@@ -392,6 +392,12 @@ func (e *EasyPay) VerifyNotification(_ context.Context, rawBody string, _ map[st
 	amount, _ := strconv.ParseFloat(params["money"], 64)
 
 	metadata := e.MerchantIdentityMetadata()
+	if metadata == nil {
+		metadata = map[string]string{}
+	}
+	if paidAt := params["endtime"]; paidAt != "" {
+		metadata["paid_at"] = paidAt
+	}
 	if pid := strings.TrimSpace(params["pid"]); pid != "" {
 		if metadata == nil {
 			metadata = map[string]string{}

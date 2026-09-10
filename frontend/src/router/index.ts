@@ -304,6 +304,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/group-buy',
+    name: 'GroupBuyHall',
+    component: () => import('@/features/group-buy/GroupBuyHallView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: false, requiresPayment: true, title: 'Group Buy Hall', titleKey: 'groupBuy.hall' }
+  },
+  {
+    path: '/admin/group-buy',
+    name: 'AdminGroupBuy',
+    component: () => import('@/features/group-buy/AdminGroupBuyView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Group Buy Management', titleKey: 'groupBuy.admin' }
+  },
+  {
     path: '/subscriptions',
     name: 'Subscriptions',
     component: () => import('@/views/user/SubscriptionsView.vue'),

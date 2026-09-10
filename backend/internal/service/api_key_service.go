@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/monthcard"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -283,6 +284,7 @@ type RateLimitCacheInvalidator interface {
 }
 
 type APIKeyService struct {
+	monthCardStore            *monthcard.Store
 	apiKeyRepo                APIKeyRepository
 	userRepo                  UserRepository
 	groupRepo                 GroupRepository
@@ -450,6 +452,17 @@ func (s *APIKeyService) incrementAPIKeyErrorCount(ctx context.Context, userID in
 func (s *APIKeyService) canUserBindGroup(ctx context.Context, user *User, group *Group) bool {
 	// 订阅类型分组：需要有效订阅
 	if group.IsSubscriptionType() {
+		if s.monthCardStore != nil {
+			groups, err := s.monthCardStore.BindingGroups(ctx, user.ID)
+			if err != nil {
+				return false
+			}
+			for _, id := range groups {
+				if id == group.ID {
+					return true
+				}
+			}
+		}
 		_, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, user.ID, group.ID)
 		return err == nil // 有有效订阅则允许
 	}
@@ -1041,6 +1054,15 @@ func (s *APIKeyService) GetAvailableGroups(ctx context.Context, userID int64) ([
 	for _, sub := range activeSubscriptions {
 		subscribedGroupIDs[sub.GroupID] = true
 	}
+	if s.monthCardStore != nil {
+		groups, err := s.monthCardStore.BindingGroups(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range groups {
+			subscribedGroupIDs[id] = true
+		}
+	}
 
 	// 过滤出用户有权限的分组
 	availableGroups := make([]Group, 0)
@@ -1091,6 +1113,15 @@ func (s *APIKeyService) GetUserGroupVisibility(ctx context.Context, userID int64
 	}
 	for _, sub := range subscriptions {
 		allowed[sub.GroupID] = struct{}{}
+	}
+	if s.monthCardStore != nil {
+		groups, err := s.monthCardStore.BindingGroups(ctx, userID)
+		if err != nil {
+			return nil, false, fmt.Errorf("list active month cards: %w", err)
+		}
+		for _, id := range groups {
+			allowed[id] = struct{}{}
+		}
 	}
 	return allowed, user.RestrictPublicGroups, nil
 }

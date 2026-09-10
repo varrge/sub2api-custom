@@ -23,6 +23,20 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    services:
+      monthcard-postgres:
+        image: postgres:18.1-alpine3.23
+        env:
+          POSTGRES_USER: monthcard_test
+          POSTGRES_PASSWORD: isolated-test-password
+          POSTGRES_DB: monthcard_test
+        ports:
+          - 55439:5432
+        options: >-
+          --health-cmd "pg_isready -U monthcard_test -d monthcard_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -40,6 +54,13 @@ jobs:
       - name: Integration tests
         working-directory: backend
         run: make test-integration
+      - name: Month-card PostgreSQL concurrency and payment recovery
+        working-directory: backend
+        env:
+          MONTHCARD_TEST_DSN: postgres://monthcard_test:isolated-test-password@127.0.0.1:55439/monthcard_test?sslmode=disable
+          MONTHCARD_BILLING_TEST_DSN: postgres://monthcard_test:isolated-test-password@127.0.0.1:55439/monthcard_test?sslmode=disable
+          MONTHCARD_PAYMENT_TEST_DSN: postgres://monthcard_test:isolated-test-password@127.0.0.1:55439/monthcard_test?sslmode=disable
+        run: go test -race ./internal/monthcard -count=1
 
   frontend:
     runs-on: ubuntu-latest

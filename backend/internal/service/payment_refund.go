@@ -233,6 +233,9 @@ func (s *PaymentService) PrepareRefund(ctx context.Context, oid int64, amt float
 	if amt <= 0 {
 		amt = o.Amount
 	}
+	if o.OrderType == payment.OrderTypeMonthCard && amt != o.Amount {
+		return nil, nil, infraerrors.BadRequest("MONTH_CARD_FULL_REFUND_ONLY", "月卡仅支持整单退款并撤销对应月卡")
+	}
 	orderCurrency := PaymentOrderCurrency(o)
 	if amt-o.Amount > paymentAmountToleranceForCurrency(orderCurrency) {
 		return nil, nil, infraerrors.BadRequest("REFUND_AMOUNT_EXCEEDED", "refund amount exceeds recharge")
@@ -246,6 +249,9 @@ func (s *PaymentService) PrepareRefund(ctx context.Context, oid int64, amt float
 		rr = fmt.Sprintf("refund order:%d", o.ID)
 	}
 	p := &RefundPlan{OrderID: oid, Order: o, RefundAmount: amt, GatewayAmount: ga, Reason: rr, Force: force, DeductBalance: deduct, DeductionType: payment.DeductionTypeNone}
+	if o.OrderType == payment.OrderTypeMonthCard {
+		return p, nil, nil
+	}
 	if deduct {
 		if er := s.prepDeduct(ctx, o, p, force); er != nil {
 			return nil, er, nil
@@ -259,7 +265,9 @@ func (s *PaymentService) prepDeduct(ctx context.Context, o *dbent.PaymentOrder, 
 		p.DeductionType = payment.DeductionTypeSubscription
 		if o.SubscriptionGroupID != nil && o.SubscriptionDays != nil {
 			p.SubDaysToDeduct = *o.SubscriptionDays
-			sub, err := s.subscriptionSvc.GetActiveSubscription(ctx, o.UserID, *o.SubscriptionGroupID)
+			// Refund the legacy entitlement bought by this order, independently
+			// of the user's current mixed month-card admission candidate.
+			sub, err := s.subscriptionSvc.userSubRepo.GetActiveByUserIDAndGroupID(ctx, o.UserID, *o.SubscriptionGroupID)
 			if err == nil && sub != nil {
 				p.SubscriptionID = sub.ID
 			} else if !force {
@@ -296,7 +304,13 @@ func (s *PaymentService) deductAvailableBalance(ctx context.Context, userID int6
 }
 
 func (s *PaymentService) ExecuteRefund(ctx context.Context, p *RefundPlan) (*RefundResult, error) {
-	c, err := s.entClient.PaymentOrder.Update().Where(paymentorder.IDEQ(p.OrderID), paymentorder.StatusIn(OrderStatusCompleted, OrderStatusRefundRequested, OrderStatusRefundPending, OrderStatusRefundFailed)).SetStatus(OrderStatusRefunding).Save(ctx)
+	claim := s.entClient.PaymentOrder.Update().Where(paymentorder.IDEQ(p.OrderID), paymentorder.StatusIn(OrderStatusCompleted, OrderStatusRefundRequested, OrderStatusRefundPending, OrderStatusRefundFailed)).SetStatus(OrderStatusRefunding)
+	if p.Order.OrderType == payment.OrderTypeMonthCard {
+		// Preserve enough information to query a provider after a process exit
+		// between the remote refund and its local acknowledgement.
+		claim.SetRefundAmount(p.RefundAmount).SetRefundReason(p.Reason).SetForceRefund(p.Force)
+	}
+	c, err := claim.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("lock: %w", err)
 	}
@@ -473,6 +487,9 @@ func (s *PaymentService) QueryAndFinalizeRefund(ctx context.Context, oid int64) 
 }
 
 func (s *PaymentService) finalizePendingRefundSuccess(ctx context.Context, p *RefundPlan) (_ *RefundResult, err error) {
+	if p.Order.OrderType == payment.OrderTypeMonthCard {
+		return s.finishMonthCardRefund(ctx, p)
+	}
 	tx, err := s.entClient.Tx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin refund finalization: %w", err)
@@ -606,6 +623,9 @@ func (s *PaymentService) handleGwFail(ctx context.Context, p *RefundPlan, gErr e
 }
 
 func (s *PaymentService) markRefundOk(ctx context.Context, p *RefundPlan) (*RefundResult, error) {
+	if p.Order.OrderType == payment.OrderTypeMonthCard {
+		return s.finishMonthCardRefund(ctx, p)
+	}
 	fs := OrderStatusRefunded
 	if p.RefundAmount < p.Order.Amount {
 		fs = OrderStatusPartiallyRefunded

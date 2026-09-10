@@ -150,14 +150,16 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 		defer userReleaseFunc()
 	}
 
-	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
-		reqLog.Info("grok_media.billing_eligibility_check_failed", zap.Error(err))
-		status, code, message, retryAfter := billingErrorDetails(err)
-		if retryAfter > 0 {
-			c.Header("Retry-After", strconv.Itoa(retryAfter))
+	if !endpoint.IsVideoLookupRequest() {
+		if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
+			reqLog.Info("grok_media.billing_eligibility_check_failed", zap.Error(err))
+			status, code, message, retryAfter := billingErrorDetails(err)
+			if retryAfter > 0 {
+				c.Header("Retry-After", strconv.Itoa(retryAfter))
+			}
+			h.errorResponse(c, status, code, message)
+			return
 		}
-		h.errorResponse(c, status, code, message)
-		return
 	}
 
 	sessionSeed := body
@@ -427,6 +429,8 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 			// Retry once: missing pending causes silent underpricing (status omits resolution).
 			resolvedVideoRateMultiplier := h.gatewayService.ResolveVideoRateMultiplierAt(requestCtx, apiKey, subject.UserID, requestStart)
 			pending := service.GrokVideoPendingBilling{
+				GroupID:                     apiKey.GroupID,
+				AccountID:                   account.ID,
 				Model:                       requestModel,
 				BillingModel:                firstNonEmptyString(result.BillingModel, requestModel),
 				UpstreamModel:               result.UpstreamModel,
@@ -436,6 +440,13 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 				ResolvedVideoRateMultiplier: &resolvedVideoRateMultiplier,
 				// Wall-clock start for usage duration_ms: create accepted → first done discovery.
 				CreatedAt: videoCreateStartedAt,
+			}
+			if subscription != nil {
+				pending.MonthCardSnapshot = subscription.MonthCardSnapshot
+				if subscription.MonthCardSnapshot == nil && subscription.ID > 0 {
+					id := subscription.ID
+					pending.LegacySubscriptionID = &id
+				}
 			}
 			if err := h.gatewayService.StoreGrokVideoPendingBilling(requestCtx, result.ResponseID, subject.UserID, apiKey.ID, pending); err != nil {
 				reqLog.Warn("grok_media.store_video_pending_billing_failed_retrying",
@@ -458,9 +469,12 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 		// Both paths share the same claim key so the customer is charged once.
 		if endpoint == service.GrokMediaEndpointVideoStatus || endpoint == service.GrokMediaEndpointVideoContent {
 			taskID := strings.TrimSpace(requestID)
-			billResult, billingPricingAt, videoRateMultiplierOverride := prepareGrokVideoCompletionBilling(requestCtx, h, reqLog, apiKey, subject, taskID, result, requestStart)
+			billResult, billingPricingAt, videoRateMultiplierOverride, billingSubscription := prepareGrokVideoCompletionBilling(requestCtx, h, reqLog, apiKey, subject, taskID, result, requestStart)
 			if billResult != nil {
-				recordGrokMediaUsage(c, h, reqLog, apiKey, subject, subscription, account, billResult, billResult.Model, body, taskID, billingPricingAt, videoRateMultiplierOverride)
+				if billingSubscription == nil {
+					billingSubscription = subscription
+				}
+				recordGrokMediaUsage(c, h, reqLog, apiKey, subject, billingSubscription, account, billResult, billResult.Model, body, taskID, billingPricingAt, videoRateMultiplierOverride)
 			}
 		} else if shouldRecordGrokMediaUsage(endpoint, requestModel, result) {
 			recordGrokMediaUsage(c, h, reqLog, apiKey, subject, subscription, account, result, requestModel, body, requestID, requestStart, nil)
@@ -545,17 +559,17 @@ func prepareGrokVideoCompletionBilling(
 	taskRequestID string,
 	statusResult *service.OpenAIForwardResult,
 	pricingAt time.Time,
-) (*service.OpenAIForwardResult, time.Time, *float64) {
+) (*service.OpenAIForwardResult, time.Time, *float64, *service.UserSubscription) {
 	if h == nil || h.gatewayService == nil || apiKey == nil || statusResult == nil {
-		return nil, pricingAt, nil
+		return nil, pricingAt, nil, nil
 	}
 	// Forward already set VideoCount only when status=done && video.url (official).
 	if statusResult.VideoCount <= 0 {
-		return nil, pricingAt, nil
+		return nil, pricingAt, nil, nil
 	}
 	taskRequestID = strings.TrimSpace(firstNonEmptyString(taskRequestID, statusResult.ResponseID))
 	if taskRequestID == "" {
-		return nil, pricingAt, nil
+		return nil, pricingAt, nil, nil
 	}
 	// Load create-time snapshot before claim so we can fail-closed without burning the claim
 	// when Redis lost pending and status cannot price the job.
@@ -566,6 +580,10 @@ func prepareGrokVideoCompletionBilling(
 	if pending != nil {
 		pricingAt = service.GrokVideoPendingPricingAt(pending.CreatedAt, pricingAt)
 	}
+	if apiKey.Group != nil && apiKey.Group.IsSubscriptionType() && (pending == nil || pending.MonthCardSnapshot == nil && pending.LegacySubscriptionID == nil) {
+		reqLog.Error("grok_media.video_billing_missing_entitlement_snapshot", zap.String("request_id", taskRequestID))
+		return nil, pricingAt, nil, nil
+	}
 	if pending == nil {
 		// Status omits resolution; without pending we would silently default to 480p and underbill.
 		// Allow billing only when official status carries duration (still may default resolution).
@@ -574,7 +592,7 @@ func prepareGrokVideoCompletionBilling(
 				zap.String("request_id", taskRequestID),
 				zap.String("reason", "no create-time snapshot and status has no video.duration"),
 			)
-			return nil, pricingAt, nil
+			return nil, pricingAt, nil, nil
 		}
 		reqLog.Error("grok_media.video_billing_without_pending",
 			zap.String("request_id", taskRequestID),
@@ -582,14 +600,20 @@ func prepareGrokVideoCompletionBilling(
 			zap.String("note", "resolution falls back to default 480p; investigate pending store failures"),
 		)
 	}
-	claimed, err := h.gatewayService.ClaimGrokVideoBilling(ctx, taskRequestID, subject.UserID, apiKey.ID)
+	// Month-card settlement has a durable transaction dedup key; a Redis claim
+	// must not burn the only billing opportunity before that command is stored.
+	claimed := true
+	var err error
+	if pending == nil || pending.MonthCardSnapshot == nil {
+		claimed, err = h.gatewayService.ClaimGrokVideoBilling(ctx, taskRequestID, subject.UserID, apiKey.ID)
+	}
 	if err != nil {
 		reqLog.Warn("grok_media.video_billing_claim_failed", zap.String("request_id", taskRequestID), zap.Error(err))
-		return nil, pricingAt, nil
+		return nil, pricingAt, nil, nil
 	}
 	if !claimed {
 		reqLog.Debug("grok_media.video_billing_already_claimed", zap.String("request_id", taskRequestID))
-		return nil, pricingAt, nil
+		return nil, pricingAt, nil, nil
 	}
 	// Re-merge with pending: resolution is request-only; model/duration fill gaps.
 	merged := *statusResult
@@ -640,9 +664,9 @@ func prepareGrokVideoCompletionBilling(
 		}
 	}
 	if pending == nil {
-		return &merged, pricingAt, nil
+		return &merged, pricingAt, nil, nil
 	}
-	return &merged, pricingAt, pending.ResolvedVideoRateMultiplier
+	return &merged, pricingAt, pending.ResolvedVideoRateMultiplier, grokVideoBillingSubscription(pending, subject.UserID)
 }
 
 func firstNonEmptyString(values ...string) string {
@@ -736,4 +760,24 @@ func recordGrokMediaUsage(
 			reqLog.Debug("grok_media.record_usage_failed", zap.Error(err))
 		}
 	})
+}
+
+// grokVideoBillingSubscription restores only billing identity; no user secrets or
+// mutable group/cache objects are persisted in deferred work.
+func grokVideoBillingSubscription(p *service.GrokVideoPendingBilling, userID int64) *service.UserSubscription {
+	if p == nil {
+		return nil
+	}
+	if p.MonthCardSnapshot != nil {
+		s := p.MonthCardSnapshot
+		return &service.UserSubscription{UserID: s.UserID, GroupID: s.GroupID, MonthCardSnapshot: s, Status: service.SubscriptionStatusActive}
+	}
+	if p.LegacySubscriptionID != nil && *p.LegacySubscriptionID > 0 {
+		sub := &service.UserSubscription{ID: *p.LegacySubscriptionID, UserID: userID, Status: service.SubscriptionStatusActive}
+		if p.GroupID != nil {
+			sub.GroupID = *p.GroupID
+		}
+		return sub
+	}
+	return nil
 }

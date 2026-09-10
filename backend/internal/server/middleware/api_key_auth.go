@@ -169,7 +169,7 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		// Async image task polling only reads data that already belongs to the
 		// authenticated key and must remain available after the completed
 		// generation consumes the key's remaining balance.
-		skipBilling := c.Request.URL.Path == "/v1/usage" || billingInfoRequest || isAsyncImageTaskRead(c.Request.Method, c.Request.URL.Path)
+		skipBilling := c.Request.URL.Path == "/v1/usage" || billingInfoRequest || isAsyncImageTaskRead(c.Request.Method, c.Request.URL.Path) || isAsyncVideoTaskRead(c.Request.Method, c.Request.URL.Path)
 
 		// ── 4. SimpleMode → early return ─────────────────────────────
 
@@ -189,6 +189,16 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		}
 
 		// ── 5. 按端点需要加载订阅 ───────────────────────────────────
+		if !skipBilling && subscriptionService != nil {
+			if err := subscriptionService.CheckAccountDebt(c.Request.Context(), apiKey.User.ID); err != nil {
+				status, code := 403, "ACCOUNT_USAGE_DEBT"
+				if !errors.Is(err, service.ErrAccountUsageDebt) {
+					status, code = 503, "BILLING_SERVICE_ERROR"
+				}
+				AbortWithError(c, status, code, err.Error())
+				return
+			}
+		}
 
 		var subscription *service.UserSubscription
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
@@ -202,6 +212,10 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			)
 			if subErr != nil {
 				if !skipBilling {
+					if errors.Is(subErr, service.ErrBillingServiceUnavailable) {
+						AbortWithError(c, 503, "BILLING_SERVICE_ERROR", subErr.Error())
+						return
+					}
 					AbortWithError(c, 403, "SUBSCRIPTION_NOT_FOUND", "No active subscription found for this group")
 					return
 				}
@@ -260,6 +274,10 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 				}
 			} else {
 				// 非订阅模式 或 订阅模式但 subscriptionService 未注入：回退到余额检查
+				if isSubscriptionType {
+					AbortWithError(c, 503, "BILLING_SERVICE_ERROR", "Subscription admission is unavailable")
+					return
+				}
 				if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
 					AbortWithError(c, 403, "INSUFFICIENT_BALANCE", "Insufficient account balance")
 					return
@@ -338,6 +356,25 @@ func isAsyncImageTaskRead(method, path string) bool {
 		return false
 	}
 	return strings.HasPrefix(path, "/v1/images/tasks/") || strings.HasPrefix(path, "/images/tasks/")
+}
+
+// Video reads still enforce key/user/group ownership in the handler, but do not
+// start another generation. They must remain available after expiry or debt.
+func isAsyncVideoTaskRead(method, path string) bool {
+	if method != http.MethodGet {
+		return false
+	}
+	for _, prefix := range []string{"/v1/videos/", "/videos/"} {
+		if !strings.HasPrefix(path, prefix) {
+			continue
+		}
+		parts := strings.Split(strings.TrimPrefix(path, prefix), "/")
+		if len(parts) > 0 && (parts[0] == "generations" || parts[0] == "edits" || parts[0] == "extensions") {
+			parts = parts[1:]
+		}
+		return len(parts) == 1 && parts[0] != "" || len(parts) == 2 && parts[0] != "" && parts[1] == "content"
+	}
+	return false
 }
 
 // GetAPIKeyFromContext 从上下文中获取API key

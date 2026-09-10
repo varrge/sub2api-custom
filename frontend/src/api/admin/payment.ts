@@ -53,6 +53,11 @@ export interface UpdatePaymentConfigRequest {
   help_text?: string
 }
 
+export interface ConfirmMonthCardRefundRequest {
+  reference: string
+  confirmed: true
+}
+
 export interface RefundResult {
   success: boolean
   warning?: string
@@ -118,6 +123,11 @@ export const adminPaymentAPI = {
   /** Process a refund */
   refundOrder(id: number, data: { amount: number; reason: string; deduct_balance?: boolean; force?: boolean }) {
     return apiClient.post<RefundResult>(`/admin/payment/orders/${id}/refund`, data)
+  },
+
+  /** Record a full month-card refund already verified with the original provider. */
+  confirmMonthCardRefund(id: number, data: ConfirmMonthCardRefundRequest) {
+    return apiClient.post<RefundResult>(`/admin/payment/orders/${id}/refund/confirm`, data)
   },
 
   /** Query and finalize a pending refund */

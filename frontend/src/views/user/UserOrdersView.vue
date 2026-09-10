@@ -62,9 +62,10 @@
           </div>
           <div class="mt-2 flex justify-between text-sm">
             <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.amount') }}</span>
-            <span class="text-gray-900 dark:text-white">${{ refundTarget.amount.toFixed(2) }}</span>
+            <span class="text-gray-900 dark:text-white">{{ refundTarget.order_type === 'month_card' ? '¥' : '$' }}{{ refundTarget.amount.toFixed(2) }}</span>
           </div>
         </div>
+        <p v-if="refundTarget.order_type === 'month_card'" class="text-sm text-amber-700">{{ t('groupBuy.refundHint') }}</p>
         <div>
           <label class="input-label">{{ t('payment.refundReason') }}</label>
           <textarea v-model="refundReason" rows="3" class="input mt-1 w-full" :placeholder="t('payment.refundReasonPlaceholder')" />

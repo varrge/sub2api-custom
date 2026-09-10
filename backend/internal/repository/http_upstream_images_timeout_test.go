@@ -26,7 +26,8 @@ func TestOpenAIImagesHeaderTimeoutIsolatedFromText(t *testing.T) {
 				ImageResponseHeaderTimeout:  600,
 				OpenAIHTTP2:                 config.GatewayOpenAIHTTP2Config{Enabled: true},
 			}}
-			svc := NewHTTPUpstream(cfg).(*httpUpstreamService)
+			svc, ok := NewHTTPUpstream(cfg).(*httpUpstreamService)
+			require.True(t, ok)
 			get := func(profile service.HTTPUpstreamProfile) *upstreamClientEntry {
 				t.Helper()
 				var entry *upstreamClientEntry
@@ -42,21 +43,21 @@ func TestOpenAIImagesHeaderTimeoutIsolatedFromText(t *testing.T) {
 			textEntry := get(service.HTTPUpstreamProfileOpenAI)
 			imageEntry := get(service.HTTPUpstreamProfileOpenAIImages)
 			require.NotSame(t, textEntry, imageEntry)
-			require.Equal(t, 60*time.Second, textEntry.client.Transport.(*http.Transport).ResponseHeaderTimeout)
-			require.Equal(t, 600*time.Second, imageEntry.client.Transport.(*http.Transport).ResponseHeaderTimeout)
+			require.Equal(t, 60*time.Second, imageTimeoutTestTransport(t, textEntry).ResponseHeaderTimeout)
+			require.Equal(t, 600*time.Second, imageTimeoutTestTransport(t, imageEntry).ResponseHeaderTimeout)
 			require.Same(t, textEntry, get(service.HTTPUpstreamProfileOpenAI), "image requests must not evict the text connection pool")
 			require.Same(t, imageEntry, get(service.HTTPUpstreamProfileOpenAIImages))
 			if !fingerprint {
 				require.Equal(t, upstreamProtocolModeOpenAIH2, imageEntry.protocolMode)
-				require.True(t, imageEntry.client.Transport.(*http.Transport).ForceAttemptHTTP2)
+				require.True(t, imageTimeoutTestTransport(t, imageEntry).ForceAttemptHTTP2)
 			}
 			cfg.Gateway.ImageResponseHeaderTimeout = 300
 			updated := get(service.HTTPUpstreamProfileOpenAIImages)
 			require.NotSame(t, imageEntry, updated)
-			require.Equal(t, 300*time.Second, updated.client.Transport.(*http.Transport).ResponseHeaderTimeout)
+			require.Equal(t, 300*time.Second, imageTimeoutTestTransport(t, updated).ResponseHeaderTimeout)
 			require.Same(t, textEntry, get(service.HTTPUpstreamProfileOpenAI))
 			cfg.Gateway.ImageResponseHeaderTimeout = 0
-			require.Zero(t, get(service.HTTPUpstreamProfileOpenAIImages).client.Transport.(*http.Transport).ResponseHeaderTimeout)
+			require.Zero(t, imageTimeoutTestTransport(t, get(service.HTTPUpstreamProfileOpenAIImages)).ResponseHeaderTimeout)
 		})
 	}
 }
@@ -75,7 +76,7 @@ func TestOpenAIImagesHeaderTimeoutAllowsSlowHeaders(t *testing.T) {
 	svc := NewHTTPUpstream(&config.Config{Gateway: config.GatewayConfig{
 		OpenAIResponseHeaderTimeout: 1,
 		ImageResponseHeaderTimeout:  3,
-	}}).(*httpUpstreamService)
+	}})
 	for _, profile := range []service.HTTPUpstreamProfile{service.HTTPUpstreamProfileOpenAIImages, service.HTTPUpstreamProfileOpenAI} {
 		t.Run(string(profile), func(t *testing.T) {
 			req, err := http.NewRequestWithContext(service.WithHTTPUpstreamProfile(t.Context(), profile), http.MethodPost, server.URL, nil)
@@ -87,7 +88,7 @@ func TestOpenAIImagesHeaderTimeoutAllowsSlowHeaders(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { require.NoError(t, resp.Body.Close()) }()
 			require.Equal(t, http.StatusOK, resp.StatusCode)
 			body, err := io.ReadAll(resp.Body)
 			require.NoError(t, err)
@@ -97,13 +98,14 @@ func TestOpenAIImagesHeaderTimeoutAllowsSlowHeaders(t *testing.T) {
 }
 
 func TestOpenAIImagesHTTP2ProxyFallback(t *testing.T) {
-	svc := NewHTTPUpstream(&config.Config{Gateway: config.GatewayConfig{
+	svc, ok := NewHTTPUpstream(&config.Config{Gateway: config.GatewayConfig{
 		ImageResponseHeaderTimeout: 600,
 		OpenAIHTTP2: config.GatewayOpenAIHTTP2Config{
 			Enabled: true, AllowProxyFallbackToHTTP1: true,
 			FallbackErrorThreshold: 1, FallbackWindowSeconds: 60, FallbackTTLSeconds: 600,
 		},
 	}}).(*httpUpstreamService)
+	require.True(t, ok)
 	proxy := "http://proxy.local:8080"
 	svc.recordOpenAIHTTP2Failure(service.HTTPUpstreamProfileOpenAIImages, upstreamProtocolModeOpenAIH2, proxy, errors.New("http2: timeout awaiting response headers"))
 	require.False(t, svc.isOpenAIHTTP2FallbackActive(proxy))
@@ -112,5 +114,12 @@ func TestOpenAIImagesHTTP2ProxyFallback(t *testing.T) {
 	entry, err := svc.getClientEntry(proxy, 75, 4, service.HTTPUpstreamProfileOpenAIImages, false, false)
 	require.NoError(t, err)
 	require.Equal(t, upstreamProtocolModeOpenAIH1Fallback, entry.protocolMode)
-	require.Equal(t, 600*time.Second, entry.client.Transport.(*http.Transport).ResponseHeaderTimeout)
+	require.Equal(t, 600*time.Second, imageTimeoutTestTransport(t, entry).ResponseHeaderTimeout)
+}
+
+func imageTimeoutTestTransport(t *testing.T, entry *upstreamClientEntry) *http.Transport {
+	t.Helper()
+	transport, ok := entry.client.Transport.(*http.Transport)
+	require.True(t, ok, "expected *http.Transport")
+	return transport
 }

@@ -216,6 +216,7 @@ gateway:
   openai_response_header_timeout: 0
   # OpenAI image generation/edit response header timeout (seconds, 0=disabled)
   # OpenAI 图片生成/编辑独立响应头超时（秒），默认600；不影响文本请求或图片流间隔超时。
+  # 适用 API Key 和原生 OAuth；插件托管 OAuth 使用插件自身超时配置。
   image_response_header_timeout: 600
   # Grok text Responses first-byte timeout (seconds, 0=disabled; default 120)
   # Grok 文本 Responses 首字节超时时间（秒，0=禁用；默认 120）

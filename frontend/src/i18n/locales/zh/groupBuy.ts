@@ -117,6 +117,22 @@ export default {
     "frozenRules": "本团固定规则",
     "endedReason": "结束状态",
     "refundCard": "退款将撤销此订单对应的独立月卡。",
-    "monthCardOrder": "月卡订单"
-}
+    "monthCardOrder": "月卡订单",
+    "recruitmentHoursFormatted": "{hours} 小时招募",
+    "per30Days": "/ 30 天",
+    "perWeek": "/ 周",
+    "perCardSuffix": "/ 卡",
+    "maxTierBadge": "最高档",
+    "baseTierLabel": "基础额度",
+    "tierLadderTitle": "拼团额度阶梯",
+    "tierLadderPerCard": "每卡额度",
+    "tierMembersCount": "{count} 人团",
+    "viewRules": "规则说明",
+    "hideRules": "收起说明",
+    "ruleHighlight1": "付款即得 30 天独立月卡",
+    "ruleHighlight2": "周限额为总额 1/4，每 7 天重置",
+    "ruleHighlight3": "拼团升档增加每卡额度，到期时间不变",
+    "soloActionSub": "固定基础额度",
+    "createActionSub": "开团享升档"
+  }
 }

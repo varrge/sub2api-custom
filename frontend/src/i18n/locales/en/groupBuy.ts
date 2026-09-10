@@ -117,6 +117,22 @@ export default {
     "frozenRules": "Rules fixed for this team",
     "endedReason": "Closing status",
     "refundCard": "Refunding revokes the independent card linked to this order.",
-    "monthCardOrder": "Month card order"
-}
+    "monthCardOrder": "Month card order",
+    "recruitmentHoursFormatted": "{hours}h recruitment",
+    "per30Days": "/ 30 days",
+    "perWeek": "/ week",
+    "perCardSuffix": "/ card",
+    "maxTierBadge": "Max tier",
+    "baseTierLabel": "Base quota",
+    "tierLadderTitle": "Group buy tiers",
+    "tierLadderPerCard": "Per-card quota",
+    "tierMembersCount": "{count} members",
+    "viewRules": "Rules & Details",
+    "hideRules": "Hide Details",
+    "ruleHighlight1": "Independent 30-day card upon payment",
+    "ruleHighlight2": "Weekly limit is 1/4 total, resets every 7 days",
+    "ruleHighlight3": "Group upgrades boost per-card quota without altering expiry",
+    "soloActionSub": "Base quota only",
+    "createActionSub": "Unlock tier bonuses"
+  }
 }

@@ -109,7 +109,12 @@ func TestGetUserGroupVisibilityIncludesMonthCards(t *testing.T) {
 			db, mock, err := sqlmock.New()
 			require.NoError(t, err)
 			defer func() { _ = db.Close() }()
-			query := mock.ExpectQuery("SELECT DISTINCT c.group_id FROM month_card_cards").WithArgs(int64(1))
+			// BindingGroups reconciles the freeze policy before reading owned cards.
+			mock.ExpectBegin()
+			mock.ExpectQuery("SELECT enabled,starts_at,ends_at FROM month_card_freeze_policy WHERE id=TRUE").
+				WillReturnRows(sqlmock.NewRows([]string{"enabled", "starts_at", "ends_at"}).AddRow(true, nil, nil))
+			mock.ExpectCommit()
+			query := mock.ExpectQuery("SELECT DISTINCT c.group_id FROM month_card_cards").WithArgs(int64(1), sqlmock.AnyArg())
 			failure := errors.New("month cards unavailable")
 			if fail {
 				query.WillReturnError(failure)

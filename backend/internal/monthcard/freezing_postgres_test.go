@@ -18,7 +18,7 @@ func freezeSettle(t *testing.T, db *sql.DB, snap *Snapshot, request string, cost
 	require.NoError(t, err)
 	tx, err := db.BeginTx(context.Background(), nil)
 	require.NoError(t, err)
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	result, err := SettleTx(context.Background(), tx, snap, request, 1, cost)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())

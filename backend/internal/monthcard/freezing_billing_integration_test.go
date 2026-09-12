@@ -43,9 +43,10 @@ func TestMonthCardFrozenClockSurvivesPendingRecoveryAndDedup(t *testing.T) {
 	require.NoError(t, err)
 	_, err = db.Exec(`DROP TRIGGER reject_freeze_test ON month_card_allocations`)
 	require.NoError(t, err)
-	recovery := repository.NewUsageBillingRepository(nil, db).(interface {
+	recovery, ok := repository.NewUsageBillingRepository(nil, db).(interface {
 		RecoverPendingMonthCardUsage(context.Context, int) error
 	})
+	require.True(t, ok)
 	require.NoError(t, recovery.RecoverPendingMonthCardUsage(ctx, 100))
 	require.NoError(t, recovery.RecoverPendingMonthCardUsage(ctx, 100))
 	require.Equal(t, 0.0, billingFloat(t, db, `SELECT COUNT(*) FROM month_card_billing_pending`))

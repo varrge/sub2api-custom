@@ -54,12 +54,16 @@ func corePostgres(t *testing.T) (*Store, *sql.DB) {
 	INSERT INTO users(id) SELECT generate_series(1,30);
 	INSERT INTO groups(id) VALUES(1),(2);`)
 	require.NoError(t, err)
-	for _, name := range []string{"238_month_card_core.sql", "239_month_card_billing.sql", "240_month_card_freeze.sql"} {
+	for _, name := range []string{"238_month_card_core.sql", "239_month_card_billing.sql", "240_month_card_freeze.sql", "241_month_card_freeze_policy.sql"} {
 		b, err := os.ReadFile(filepath.Join("..", "..", "migrations", name))
 		require.NoError(t, err)
 		_, err = db.Exec(string(b))
 		require.NoError(t, err)
 	}
+	// Existing freeze behavior tests run inside an always-open administrator
+	// window. Production keeps the policy disabled until an administrator sets it.
+	_, err = db.Exec(`UPDATE month_card_freeze_policy SET enabled=TRUE,starts_at='2000-01-01T00:00:00Z',ends_at=NULL WHERE id=TRUE`)
+	require.NoError(t, err)
 	return NewStore(db), db
 }
 

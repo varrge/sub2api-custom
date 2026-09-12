@@ -33,6 +33,25 @@
       >
         {{ error }}
       </p>
+      <section class="card space-y-3 p-4">
+        <h2 class="font-semibold">{{ t('groupBuy.freezePolicy') }}</h2>
+        <p class="text-sm text-gray-500">{{ t('groupBuy.freezePolicyHint') }}</p>
+        <label class="flex items-center gap-2 text-sm">
+          <input v-model="freezePolicyEnabled" type="checkbox" />
+          {{ t('groupBuy.freezePolicyEnabled') }}
+        </label>
+        <div class="grid gap-3 md:grid-cols-2">
+          <label class="text-sm">{{ t('groupBuy.freezePolicyStarts') }}
+            <input v-model="freezePolicyStarts" type="datetime-local" class="input mt-1 w-full" />
+          </label>
+          <label class="text-sm">{{ t('groupBuy.freezePolicyEnds') }}
+            <input v-model="freezePolicyEnds" type="datetime-local" class="input mt-1 w-full" />
+          </label>
+        </div>
+        <button class="btn btn-primary" :disabled="freezePolicySaving" @click="saveFreezePolicy">
+          {{ freezePolicySaving ? t('common.loading') : t('groupBuy.saveFreezePolicy') }}
+        </button>
+      </section>
       <div v-if="loading" class="py-10 text-center">
         {{ t('common.loading') }}
       </div>
@@ -418,6 +437,10 @@ const teamDetail = ref<GroupBuyTeam | null>(null)
 const cancelTarget = ref<GroupBuyTeam | null>(null)
 const cancelling = ref(false)
 const cancelError = ref('')
+const freezePolicyEnabled = ref(false)
+const freezePolicyStarts = ref('')
+const freezePolicyEnds = ref('')
+const freezePolicySaving = ref(false)
 const draft = ref<GroupBuyProduct | null>(null)
 const productFields = [
   { key: 'price_cny', label: 'price', min: 0.01, step: 0.01 },
@@ -435,12 +458,37 @@ async function load() {
       adminGroupBuyAPI.teams(),
       adminAPI.groups.getAll()
     ])
+    if (adminGroupBuyAPI.freezePolicy) {
+      const policy = await adminGroupBuyAPI.freezePolicy()
+      freezePolicyEnabled.value = policy.enabled
+      freezePolicyStarts.value = toLocalDateTime(policy.starts_at)
+      freezePolicyEnds.value = toLocalDateTime(policy.ends_at)
+    }
     if (userId.value) await loadCards()
   } catch (err) {
     error.value = extractApiErrorMessage(err, t('groupBuy.loadFailed'))
   } finally {
     loading.value = false
   }
+}
+function toLocalDateTime(value?: string | null) {
+  if (!value) return ''
+  const date = new Date(value)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+async function saveFreezePolicy() {
+  freezePolicySaving.value = true
+  try {
+    await adminGroupBuyAPI.setFreezePolicy({
+      enabled: freezePolicyEnabled.value,
+      starts_at: freezePolicyStarts.value ? new Date(freezePolicyStarts.value).toISOString() : null,
+      ends_at: freezePolicyEnds.value ? new Date(freezePolicyEnds.value).toISOString() : null
+    })
+    app.showSuccess(t('groupBuy.freezePolicySaved'))
+  } catch (err) {
+    error.value = extractApiErrorMessage(err, t('groupBuy.freezePolicyFailed'))
+  } finally { freezePolicySaving.value = false }
 }
 async function loadCards() {
   if (!userId.value || !Number.isSafeInteger(userId.value) || userId.value <= 0) return

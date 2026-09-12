@@ -123,4 +123,8 @@ describe('month card freeze controls', () => {
       expect(view.find('button').exists()).toBe(false)
     }
   })
+  it('hides freeze controls outside the administrator freeze window', () => {
+    const view = mount(MonthCardCard, { props: { card: { ...card, freeze_allowed: false }, manageable: true }, global: global() })
+    expect(view.find('button').exists()).toBe(false)
+  })
 })

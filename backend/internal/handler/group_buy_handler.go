@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/monthcard"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
@@ -44,6 +45,25 @@ func (h *GroupBuyHandler) Products(c *gin.Context) {
 func (h *GroupBuyHandler) AdminProducts(c *gin.Context) {
 	items, err := h.store.ListProducts(c.Request.Context(), true)
 	groupBuyResponse(c, items, err)
+}
+
+func (h *GroupBuyHandler) FreezePolicy(c *gin.Context) {
+	p, err := h.store.FreezePolicy(c.Request.Context())
+	groupBuyResponse(c, p, err)
+}
+
+func (h *GroupBuyHandler) SetFreezePolicy(c *gin.Context) {
+	var req struct {
+		Enabled  bool       `json:"enabled"`
+		StartsAt *time.Time `json:"starts_at"`
+		EndsAt   *time.Time `json:"ends_at"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "冻结期参数无效")
+		return
+	}
+	p, err := h.store.SetFreezePolicy(c.Request.Context(), monthcard.FreezePolicy{Enabled: req.Enabled, StartsAt: req.StartsAt, EndsAt: req.EndsAt})
+	groupBuyResponse(c, p, err)
 }
 
 func (h *GroupBuyHandler) SaveProduct(c *gin.Context) {

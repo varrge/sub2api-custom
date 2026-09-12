@@ -53,7 +53,7 @@ func billingDB(t *testing.T) *sql.DB {
  INSERT INTO groups(id,name,platform) VALUES(1,'month cards','openai'),(2,'other group','openai');
  INSERT INTO api_keys(id,user_id,group_id) VALUES(1,1,1),(2,1,1),(3,2,1),(4,1,2);`)
 	require.NoError(t, err)
-	for _, name := range []string{"238_month_card_core.sql", "239_month_card_billing.sql", "240_month_card_freeze.sql"} {
+	for _, name := range []string{"238_month_card_core.sql", "239_month_card_billing.sql", "240_month_card_freeze.sql", "241_month_card_freeze_policy.sql"} {
 		b, err := os.ReadFile(filepath.Join("..", "..", "migrations", name))
 		require.NoError(t, err)
 		_, err = db.Exec(string(b))

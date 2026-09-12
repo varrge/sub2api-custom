@@ -14,6 +14,10 @@ func (s *Store) SetFrozen(ctx context.Context, userID, cardID int64, frozen bool
 	if userID <= 0 || cardID <= 0 {
 		return nil, ErrInvalid
 	}
+	now := s.now().UTC().Truncate(time.Microsecond)
+	if err := s.syncFreezePolicy(ctx, now); err != nil {
+		return nil, err
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -33,7 +37,14 @@ func (s *Store) SetFrozen(ctx context.Context, userID, cardID int64, frozen bool
 	if err != nil {
 		return nil, notFound(err)
 	}
-	now := s.now().UTC().Truncate(time.Microsecond)
+
+	policy, err := s.readFreezePolicy(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	if !policyActive(policy, now) && frozen {
+		return nil, fmt.Errorf("%w: 当前不在管理员设置的冻结期内", ErrInvalid)
+	}
 	if orderStatus == "REFUNDED" || (status != "active" && status != "frozen") {
 		return nil, fmt.Errorf("%w: 月卡已失效，无法冻结或解冻", ErrInvalid)
 	}
@@ -59,5 +70,6 @@ func (s *Store) SetFrozen(ctx context.Context, userID, cardID int64, frozen bool
 	if err = tx.Commit(); err != nil {
 		return nil, err
 	}
+	card.FreezeAllowed = policyActive(policy, now)
 	return card, nil
 }

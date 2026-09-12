@@ -79,6 +79,7 @@ type Card struct {
 	WeeklyWindowStart time.Time  `json:"weekly_window_start"`
 	WeeklyWindowEnd   time.Time  `json:"weekly_window_end"`
 	Priority          int        `json:"priority"`
+	FreezeAllowed     bool       `json:"freeze_allowed"`
 }
 
 type Purchase struct {

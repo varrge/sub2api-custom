@@ -46,6 +46,12 @@ export const groupBuyAPI = {
   }
 }
 export const adminGroupBuyAPI = {
+  async freezePolicy() {
+    return (await apiClient.get<{ enabled: boolean; starts_at?: string | null; ends_at?: string | null }>('/admin/group-buy/freeze-policy')).data
+  },
+  async setFreezePolicy(policy: { enabled: boolean; starts_at?: string | null; ends_at?: string | null }) {
+    return (await apiClient.put('/admin/group-buy/freeze-policy', policy)).data
+  },
   async allocations(user_id?: number) {
     return (
       await apiClient.get<ChargeAllocation[]>('/admin/group-buy/allocations', {

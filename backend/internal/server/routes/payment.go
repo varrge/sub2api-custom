@@ -38,6 +38,8 @@ func RegisterPaymentRoutes(
 		adminGroupBuy := v1.Group("/admin/group-buy")
 		adminGroupBuy.Use(gin.HandlerFunc(adminAuth), gin.HandlerFunc(auditLog), middleware.AdminComplianceGuard(settingService))
 		adminGroupBuy.GET("/products", h.AdminProducts)
+		adminGroupBuy.GET("/freeze-policy", h.FreezePolicy)
+		adminGroupBuy.PUT("/freeze-policy", h.SetFreezePolicy)
 		adminGroupBuy.POST("/products", h.SaveProduct)
 		adminGroupBuy.PUT("/products/:id", h.SaveProduct)
 		adminGroupBuy.GET("/teams", h.AdminTeams)

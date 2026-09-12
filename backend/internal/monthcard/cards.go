@@ -50,21 +50,41 @@ func (s *Store) ListCards(ctx context.Context, userID int64) ([]Card, error) {
 	if userID < 0 {
 		return nil, ErrInvalid
 	}
+	if err := s.syncFreezePolicy(ctx, s.now().UTC()); err != nil {
+		return nil, err
+	}
 	where := ` WHERE c.user_id=$2 ORDER BY COALESCE(p.priority,2147483647),c.expires_at,c.starts_at,c.id`
 	if userID == 0 {
 		where = ` WHERE $2::bigint=0 ORDER BY c.id DESC LIMIT 100`
 	}
-	return listCards(ctx, s.db, s.now(), where, userID)
+	items, err := listCards(ctx, s.db, s.now(), where, userID)
+	if err != nil {
+		return nil, err
+	}
+	allowed, err := s.FreezeAllowed(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		items[i].FreezeAllowed = allowed
+	}
+	return items, nil
 }
 
 func (s *Store) TeamCards(ctx context.Context, teamID int64) ([]Card, error) {
 	if teamID <= 0 {
 		return nil, ErrInvalid
 	}
+	if err := s.syncFreezePolicy(ctx, s.now().UTC()); err != nil {
+		return nil, err
+	}
 	return listCards(ctx, s.db, s.now(), ` WHERE c.team_id=$2 ORDER BY c.starts_at,c.id`, teamID)
 }
 
 func (s *Store) GetCardByOrder(ctx context.Context, orderID int64) (*Card, error) {
+	if err := s.syncFreezePolicy(ctx, s.now().UTC()); err != nil {
+		return nil, err
+	}
 	return scanCard(s.db.QueryRowContext(ctx, cardSelect+` WHERE c.order_id=$2`, s.now(), orderID))
 }
 

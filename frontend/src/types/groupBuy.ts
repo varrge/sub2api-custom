@@ -53,6 +53,7 @@ export interface MonthCard {
   weekly_window_start: string
   weekly_window_end: string
   priority: number
+  freeze_allowed?: boolean
   frozen_at?: string | null
   remaining_seconds?: number
 }

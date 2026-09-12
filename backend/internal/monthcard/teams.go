@@ -41,9 +41,19 @@ func (s *Store) ListTeams(ctx context.Context, userID, groupID int64, admin bool
 	now := s.now()
 	query := `SELECT ` + teamColumns + ` FROM month_card_teams t WHERE ($2::bigint=0 OR t.group_id=$2)`
 	if !admin {
-		query += ` AND t.status='recruiting' AND t.closes_at>$3`
+		query += ` AND t.status='recruiting' AND t.closes_at>$3
+			AND EXISTS (SELECT 1 FROM month_card_products p JOIN groups g ON g.id=p.group_id
+				WHERE p.id=t.product_id AND p.for_sale AND g.status='active' AND g.deleted_at IS NULL AND g.subscription_type='subscription')
+			AND t.id IN (SELECT id FROM (SELECT t2.id,ROW_NUMBER() OVER (PARTITION BY t2.product_id ORDER BY t2.starts_at,t2.id) AS rn
+				FROM month_card_teams t2 WHERE t2.status='recruiting' AND t2.closes_at>$3
+				AND EXISTS (SELECT 1 FROM month_card_products p2 JOIN groups g2 ON g2.id=p2.group_id
+					WHERE p2.id=t2.product_id AND p2.for_sale AND g2.status='active' AND g2.deleted_at IS NULL AND g2.subscription_type='subscription')) visible WHERE visible.rn=1)`
 	}
-	query += ` ORDER BY t.starts_at DESC,t.id DESC LIMIT 200`
+	if admin {
+		query += ` ORDER BY t.starts_at DESC,t.id DESC LIMIT 200`
+	} else {
+		query += ` ORDER BY t.starts_at,t.id`
+	}
 	args := []any{userID, groupID}
 	if !admin {
 		args = append(args, now)

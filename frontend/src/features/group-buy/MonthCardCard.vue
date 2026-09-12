@@ -87,7 +87,7 @@
           : `${t('groupBuy.nextReset')}: ${exactDate(card.weekly_window_end)}`
       }}
     </p>
-    <template v-if="manageable && (card.status === 'active' || frozen)">
+    <template v-if="manageable && card.freeze_allowed !== false && (card.status === 'active' || frozen)">
       <button type="button" class="mt-4 w-full rounded-xl border border-blue-200 bg-white py-3 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-50 disabled:opacity-50 dark:border-blue-800 dark:bg-dark-800 dark:text-blue-200 dark:hover:bg-blue-950" :disabled="busy" @click="toggleFreeze">
         {{ busy ? t('common.loading') : frozen ? t('groupBuy.thaw') : t('groupBuy.freeze') }}
       </button>

@@ -292,3 +292,31 @@ func TestConcurrentFreezeThawIsIdempotent(t *testing.T) {
 	require.True(t, got.ExpiresAt.Equal(start.Add(65*24*time.Hour)))
 	require.Equal(t, int64((30*24*time.Hour-time.Hour)/time.Second), got.RemainingSeconds)
 }
+
+func TestScheduledFreezeEndUsesConfiguredBoundary(t *testing.T) {
+	s, db := corePostgres(t)
+	ctx := context.Background()
+	start := time.Date(2030, 2, 1, 0, 0, 0, 0, time.UTC)
+	now := start
+	s.now = func() time.Time { return now }
+	p := coreSave(t, s, coreProduct())
+	card := coreBuy(t, s, db, 1, p, "solo", "")
+	windowStart := start.Add(-time.Hour)
+	end := start.Add(2 * time.Hour)
+	_, err := s.SetFreezePolicy(ctx, FreezePolicy{Enabled: true, StartsAt: &windowStart, EndsAt: &end})
+	require.NoError(t, err)
+	now = start.Add(time.Hour)
+	_, err = s.SetFrozen(ctx, 1, card.ID, true)
+	require.NoError(t, err)
+	now = start.Add(3 * time.Hour)
+	// Replacing an expired window before any card read must still reconcile
+	// against the old end boundary, even when the replacement window is active.
+	newStart := start.Add(2 * time.Hour)
+	newEnd := start.Add(4 * time.Hour)
+	_, err = s.SetFreezePolicy(ctx, FreezePolicy{Enabled: true, StartsAt: &newStart, EndsAt: &newEnd})
+	require.NoError(t, err)
+	got, err := s.GetCardByOrder(ctx, card.OrderID)
+	require.NoError(t, err)
+	require.Equal(t, "active", got.Status)
+	require.True(t, got.ExpiresAt.Equal(start.Add(30*24*time.Hour+time.Hour)))
+}

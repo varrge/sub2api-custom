@@ -49,6 +49,9 @@ func (s *Store) GetOrders(ctx context.Context, userID int64) ([]GroupOrder, erro
 	if userID <= 0 {
 		return nil, ErrInvalid
 	}
+	if err := s.syncFreezePolicy(ctx, s.now().UTC()); err != nil {
+		return nil, err
+	}
 	return getOrders(ctx, s.db, userID, 0, s.now())
 }
 
@@ -84,6 +87,9 @@ func materializeOrder(ctx context.Context, tx *sql.Tx, userID, groupID int64, no
 func (s *Store) SetOrder(ctx context.Context, userID, groupID int64, refs []Ref) error {
 	if userID <= 0 || groupID <= 0 || len(refs) > 10000 {
 		return ErrInvalid
+	}
+	if err := s.syncFreezePolicy(ctx, s.now().UTC()); err != nil {
+		return err
 	}
 	seen := make(map[Ref]bool, len(refs))
 	for _, ref := range refs {

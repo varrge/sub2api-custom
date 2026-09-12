@@ -88,6 +88,9 @@ func (s *Store) CheckDebt(ctx context.Context, userID int64) error {
 // BindingGroups is an ownership query, not billing admission: an exhausted card
 // still permits configuring its key, and debt never blocks configuration.
 func (s *Store) BindingGroups(ctx context.Context, userID int64) ([]int64, error) {
+	if err := s.syncFreezePolicy(ctx, s.now().UTC()); err != nil {
+		return nil, err
+	}
 	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT c.group_id FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id WHERE c.user_id=$1 AND c.status IN ('active','frozen') AND c.starts_at<=$2 AND c.expires_at+c.paused_us*INTERVAL '1 microsecond'>COALESCE(c.frozen_at,$2) AND o.status<>'REFUNDED'`, userID, s.now())
 	if err != nil {
 		return nil, err
@@ -107,6 +110,10 @@ func (s *Store) BindingGroups(ctx context.Context, userID int64) ([]int64, error
 // Admit deliberately precedes all legacy subscription caches. A previously
 // cached legacy subscription cannot bypass new cards, ordering, or account debt.
 func (s *Store) Admit(ctx context.Context, userID, groupID int64, at time.Time) (*Snapshot, error) {
+	at = at.UTC().Truncate(time.Microsecond)
+	if err := s.syncFreezePolicy(ctx, at); err != nil {
+		return nil, err
+	}
 	var exists bool
 	if err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM month_card_cards WHERE user_id=$1 AND group_id=$2)`, userID, groupID).Scan(&exists); err != nil {
 		return nil, err
@@ -114,7 +121,6 @@ func (s *Store) Admit(ctx context.Context, userID, groupID int64, at time.Time) 
 	if !exists {
 		return nil, nil
 	}
-	at = at.UTC().Truncate(time.Microsecond)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err

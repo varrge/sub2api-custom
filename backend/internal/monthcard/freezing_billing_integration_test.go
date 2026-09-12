@@ -23,7 +23,9 @@ func TestMonthCardFrozenClockSurvivesPendingRecoveryAndDedup(t *testing.T) {
 	require.NoError(t, err)
 	frozen, err := store.ListCards(ctx, 1)
 	require.NoError(t, err)
-	require.Equal(t, int64(28*24*3600), frozen[0].RemainingSeconds)
+	// PostgreSQL computes the remaining interval against the moving wall clock;
+	// allow its final whole-second truncation to lose one second.
+	require.InDelta(t, int64(28*24*3600), frozen[0].RemainingSeconds, 1)
 	_, err = store.SetFrozen(ctx, 1, 1, false)
 	require.NoError(t, err)
 	after, err := store.Admit(ctx, 1, 1, time.Now())

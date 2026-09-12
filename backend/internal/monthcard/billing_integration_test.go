@@ -59,6 +59,10 @@ func billingDB(t *testing.T) *sql.DB {
 		_, err = db.Exec(string(b))
 		require.NoError(t, err)
 	}
+	// These integration tests exercise explicit freeze/thaw operations. Keep
+	// the administrator window open for the whole disposable schema lifetime.
+	_, err = db.Exec(`UPDATE month_card_freeze_policy SET enabled=TRUE,starts_at='2000-01-01T00:00:00Z',ends_at=NULL WHERE id=TRUE`)
+	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO month_card_products(id,group_id,name,price_cny,base_quota_usd,max_members) VALUES(1,1,'test',198,100,10)`)
 	require.NoError(t, err)
 	return db

@@ -224,7 +224,7 @@ func TestCancelRecruitmentPreservesCardsAndRejectsPreparedJoins(t *testing.T) {
 	require.ErrorIs(t, err, ErrCannotJoin)
 	order := coreOrder(t, db, 4, s.now())
 	_, err = s.Fulfill(ctx, order, 4, s.now(), prepared)
-	require.ErrorIs(t, err, ErrCannotJoin)
+	require.ErrorIs(t, err, ErrTeamCancelled)
 	_, err = s.GetCardByOrder(ctx, order)
 	require.ErrorIs(t, err, ErrNotFound)
 }
@@ -256,7 +256,7 @@ func TestCancelRecruitmentAndLastJoinSerialize(t *testing.T) {
 		} else {
 			require.Equal(t, "cancelled", team.Status, fmt.Sprintf("iteration %d", i))
 			require.NoError(t, cancelErr)
-			require.ErrorIs(t, joinErr, ErrCannotJoin)
+			require.ErrorIs(t, joinErr, ErrTeamCancelled)
 			require.Equal(t, 1, team.MemberCount)
 		}
 	}

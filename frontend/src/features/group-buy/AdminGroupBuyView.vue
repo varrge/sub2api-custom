@@ -116,6 +116,14 @@
             >
               {{ t('groupBuy.inspect') }}
             </button>
+            <button
+              v-if="team.status === 'recruiting'"
+              class="btn btn-secondary mt-3 ml-2"
+              :disabled="cancelling"
+              @click="openCancellation(team)"
+            >
+              {{ t('groupBuy.cancelRecruitment') }}
+            </button>
           </article>
         </div>
       </template>
@@ -337,6 +345,9 @@
             {{ t('groupBuy.endedReason') }}:
             {{ t(`groupBuy.${teamDetail.status}`) }}
           </p>
+          <button v-if="teamDetail.status === 'recruiting'" class="btn btn-secondary" :disabled="cancelling" @click="openCancellation(teamDetail)">
+            {{ t('groupBuy.cancelRecruitment') }}
+          </button>
           <div
             v-for="card in teamDetail.cards || []"
             :key="card.id"
@@ -357,6 +368,14 @@
             </RouterLink>
           </div>
         </div>
+      </BaseDialog>
+      <BaseDialog :show="!!cancelTarget" :title="t('groupBuy.cancelRecruitment')" @close="!cancelling && (cancelTarget = null)">
+        <p class="text-sm leading-6">{{ t('groupBuy.cancelRecruitmentHint', { code: cancelTarget?.code || '' }) }}</p>
+        <p v-if="cancelError" role="alert" class="mt-3 text-sm text-red-600">{{ cancelError }}</p>
+        <template #footer>
+          <button class="btn btn-secondary" :disabled="cancelling" @click="cancelTarget = null">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" :disabled="cancelling" @click="cancelTeam">{{ t('groupBuy.cancelRecruitment') }}</button>
+        </template>
       </BaseDialog>
     </div>
   </AppLayout>
@@ -396,6 +415,9 @@ const allocations = ref<ChargeAllocation[]>([])
 const userId = ref<number | ''>('')
 const teamCode = ref('')
 const teamDetail = ref<GroupBuyTeam | null>(null)
+const cancelTarget = ref<GroupBuyTeam | null>(null)
+const cancelling = ref(false)
+const cancelError = ref('')
 const draft = ref<GroupBuyProduct | null>(null)
 const productFields = [
   { key: 'price_cny', label: 'price', min: 0.01, step: 0.01 },
@@ -507,6 +529,25 @@ async function inspectTeam(code: string) {
   } catch (err) {
     error.value = extractApiErrorMessage(err, t('groupBuy.loadFailed'))
   }
+}
+function openCancellation(team: GroupBuyTeam) {
+  cancelError.value = ''
+  cancelTarget.value = team
+}
+async function cancelTeam() {
+  if (!cancelTarget.value || cancelling.value) return
+  const code = cancelTarget.value.code
+  cancelling.value = true
+  cancelError.value = ''
+  try {
+    const team = await adminGroupBuyAPI.cancelTeam(code)
+    teams.value = teams.value.map(item => item.code === code ? team : item)
+    if (teamDetail.value?.code === code) teamDetail.value = { ...teamDetail.value, ...team }
+    cancelTarget.value = null
+    app.showSuccess(t('groupBuy.cancelled'))
+  } catch (err) {
+    cancelError.value = extractApiErrorMessage(err, t('groupBuy.cancelRecruitmentFailed'))
+  } finally { cancelling.value = false }
 }
 onMounted(load)
 </script>

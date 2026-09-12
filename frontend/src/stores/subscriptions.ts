@@ -22,6 +22,13 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
   let monthCardsPromise: Promise<void> | null = null
   let monthCardsFetchedAt = 0
   let monthCardsGeneration = 0
+  function updateMonthCard(card: MonthCard) {
+    // Discard reads started before this mutation returned.
+    monthCardsGeneration++
+    monthCardsFetchedAt = 0
+    monthCardsPromise = null
+    monthCards.value = monthCards.value.map(item => item.id === card.id ? card : item)
+  }
   async function fetchMonthCards(force = false): Promise<void> {
     if (!force && monthCardsFetchedAt && Date.now() - monthCardsFetchedAt < CACHE_TTL_MS) return
     if (monthCardsPromise && !force) return monthCardsPromise
@@ -155,6 +162,7 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
     monthCards,
     entitlementOrders,
     fetchMonthCards,
+    updateMonthCard,
     activeSubscriptions,
     loading,
     hasActiveSubscriptions,

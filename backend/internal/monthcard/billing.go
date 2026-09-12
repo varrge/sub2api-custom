@@ -116,19 +116,27 @@ func billingCardShare(ctx context.Context, tx *sql.Tx, snap *Snapshot, c Candida
 	var quota, used decimal.Decimal
 	var start, expiry time.Time
 	var status, orderStatus string
-	err := tx.QueryRowContext(ctx, `SELECT c.total_quota_usd,c.total_used_usd,c.starts_at,c.expires_at,c.status,o.status FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id
- WHERE c.id=$1 AND c.user_id=$2 AND c.group_id=$3 FOR UPDATE OF c`, c.ID, snap.UserID, snap.GroupID).Scan(&quota, &used, &start, &expiry, &status, &orderStatus)
+	var pausedUS int64
+	err := tx.QueryRowContext(ctx, `SELECT c.total_quota_usd,c.total_used_usd,c.starts_at,c.expires_at,c.status,o.status,c.paused_us FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id
+ WHERE c.id=$1 AND c.user_id=$2 AND c.group_id=$3 FOR UPDATE OF c`, c.ID, snap.UserID, snap.GroupID).Scan(&quota, &used, &start, &expiry, &status, &orderStatus, &pausedUS)
 	if errors.Is(err, sql.ErrNoRows) {
 		return decimal.Zero, nil
 	}
 	if err != nil {
 		return decimal.Zero, err
 	}
-	if (status != "active" && status != "expired") || orderStatus == "REFUNDED" {
+	if (status != "active" && status != "expired" && status != "frozen") || orderStatus == "REFUNDED" {
 		return decimal.Zero, nil
 	}
-	expected := start.Add((snap.StartedAt.Sub(start) / (7 * 24 * time.Hour)) * (7 * 24 * time.Hour))
-	if snap.StartedAt.Before(start) || !snap.StartedAt.Before(expiry) || !expected.Equal(c.WeeklyWindowStart) {
+	effectiveAt := snap.StartedAt.Add(-time.Duration(c.CardPausedUS) * time.Microsecond)
+	if c.CardPausedUS == 0 && pausedUS > 0 {
+		// A snapshot written by .4 has no paused-clock field. Preserve its
+		// wall-clock period identity when it is replayed after a newer app
+		// has paused the card.
+		effectiveAt = snap.StartedAt
+	}
+	expected := start.Add((effectiveAt.Sub(start) / (7 * 24 * time.Hour)) * (7 * 24 * time.Hour))
+	if c.CardPausedUS < 0 || c.CardPausedUS > pausedUS || !start.Equal(c.StartsAt) || effectiveAt.Before(start) || !effectiveAt.Before(expiry) || !expected.Equal(c.WeeklyWindowStart) {
 		return decimal.Zero, fmt.Errorf("month card snapshot period mismatch")
 	}
 	weekly, err := billingPeriodUsed(ctx, tx, c.Ref, "weekly", c.WeeklyWindowStart, 0, decimal.Zero)

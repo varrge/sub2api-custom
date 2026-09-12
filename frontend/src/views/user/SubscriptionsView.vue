@@ -30,7 +30,7 @@
       <!-- Subscriptions Grid -->
       <div v-else class="grid gap-6 lg:grid-cols-2">
         <template v-for="item in entitlements" :key="`${item.kind}:${item.id}`">
-        <MonthCardCard v-if="item.card" :card="item.card" />
+        <MonthCardCard v-if="item.card" :card="item.card" manageable @changed="cardChanged" />
         <template v-else>
         <div
           v-for="subscription in item.legacy ? [item.legacy] : []"
@@ -268,7 +268,7 @@ import { orderedEntitlements, refKey, usd } from '@/features/group-buy/model'
 import { groupBuyAPI } from '@/api/groupBuy'
 import { useSubscriptionStore } from '@/stores/subscriptions'
 import { useAuthStore } from '@/stores/auth'
-import type { ChargeAllocation } from '@/types/groupBuy'
+import type { ChargeAllocation, MonthCard } from '@/types/groupBuy'
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -321,6 +321,10 @@ const entitlements = computed(() => orderedEntitlements(monthCards.value, subscr
 const sortableEntitlements = computed(() => { const keys = new Set(subscriptionStore.entitlementOrders.flatMap(order => order.items.map(item => `${order.group_id}:${refKey(item)}`))); return entitlements.value.filter(item => keys.has(`${item.group_id}:${refKey(item)}`)) })
 const allocations = ref<ChargeAllocation[]>([])
 const monthCardError = ref('')
+function cardChanged(card: MonthCard) {
+  subscriptionStore.updateMonthCard(card)
+  void refreshCards()
+}
 async function refreshCards() {
   try { await subscriptionStore.fetchMonthCards(true); allocations.value = await groupBuyAPI.allocations(); monthCardError.value = '' } catch { monthCardError.value = t('groupBuy.loadFailed') }
 }

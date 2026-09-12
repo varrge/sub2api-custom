@@ -68,6 +68,39 @@ func (s *Store) GetTeam(ctx context.Context, code string, userID int64) (*Team, 
 	return scanTeam(s.db.QueryRowContext(ctx, `SELECT `+teamColumns+` FROM month_card_teams t WHERE t.code=$2`, userID, strings.TrimSpace(code)), s.now())
 }
 
+// CancelRecruitment is admin-only at the HTTP boundary. The team row lock is
+// shared with fulfillment: either the join commits first or cancellation does.
+// Existing cards, tier quota and payments are not modified by cancellation.
+func (s *Store) CancelRecruitment(ctx context.Context, code string) (*Team, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var id int64
+	if err = tx.QueryRowContext(ctx, `SELECT id FROM month_card_teams WHERE code=$1 FOR UPDATE`, strings.TrimSpace(code)).Scan(&id); err != nil {
+		return nil, notFound(err)
+	}
+	now := s.now()
+	team, err := scanTeam(tx.QueryRowContext(ctx, `SELECT `+teamColumns+` FROM month_card_teams t WHERE t.id=$2`, 0, id), now)
+	if err != nil {
+		return nil, err
+	}
+	if team.Status != "cancelled" {
+		if team.Status != "recruiting" || team.MemberCount >= team.Product.MaxMembers {
+			return nil, fmt.Errorf("%w: 仅招募中的拼团可以取消招募", ErrInvalid)
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE month_card_teams SET status='cancelled',cancelled_at=$2,updated_at=$2 WHERE id=$1`, id, now); err != nil {
+			return nil, err
+		}
+		team.Status = "cancelled"
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	return team, nil
+}
+
 func (s *Store) PreparePurchase(ctx context.Context, userID, productID int64, mode, teamCode string) (*Purchase, error) {
 	if userID <= 0 {
 		return nil, fmt.Errorf("%w: user is required", ErrInvalid)

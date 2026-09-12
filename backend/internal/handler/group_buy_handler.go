@@ -114,6 +114,28 @@ func (h *GroupBuyHandler) AdminTeam(c *gin.Context) {
 	groupBuyResponse(c, item, err)
 }
 
+func (h *GroupBuyHandler) CancelRecruitment(c *gin.Context) {
+	item, err := h.store.CancelRecruitment(c.Request.Context(), c.Param("code"))
+	groupBuyResponse(c, item, err)
+}
+
+func (h *GroupBuyHandler) FreezeCard(c *gin.Context) { h.setCardFrozen(c, true) }
+func (h *GroupBuyHandler) ThawCard(c *gin.Context)   { h.setCardFrozen(c, false) }
+
+func (h *GroupBuyHandler) setCardFrozen(c *gin.Context, frozen bool) {
+	user, ok := requireAuth(c)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		response.BadRequest(c, "月卡编号无效")
+		return
+	}
+	item, err := h.store.SetFrozen(c.Request.Context(), user.UserID, id, frozen)
+	groupBuyResponse(c, item, err)
+}
+
 func (h *GroupBuyHandler) TeamCards(c *gin.Context) {
 	team, err := h.store.GetTeam(c.Request.Context(), c.Param("code"), 0)
 	if err != nil {

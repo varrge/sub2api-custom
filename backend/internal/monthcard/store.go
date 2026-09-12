@@ -13,9 +13,10 @@ import (
 )
 
 var (
-	ErrNotFound   = errors.New("month card resource not found")
-	ErrInvalid    = errors.New("invalid month card operation")
-	ErrCannotJoin = errors.New("cannot join month card team")
+	ErrNotFound      = errors.New("month card resource not found")
+	ErrInvalid       = errors.New("invalid month card operation")
+	ErrCannotJoin    = errors.New("cannot join month card team")
+	ErrTeamCancelled = errors.New("month card team recruitment was cancelled; manual refund required")
 )
 
 type Tier struct {
@@ -55,26 +56,29 @@ type Team struct {
 }
 
 type Card struct {
-	ID                int64     `json:"id"`
-	UserID            int64     `json:"user_id"`
-	GroupID           int64     `json:"group_id"`
-	OrderID           int64     `json:"order_id"`
-	Code              string    `json:"code"`
-	GroupName         string    `json:"group_name"`
-	Platform          string    `json:"platform"`
-	ProductName       string    `json:"product_name"`
-	TeamCode          string    `json:"team_code"`
-	Status            string    `json:"status"`
-	TeamID            *int64    `json:"team_id"`
-	TotalQuotaUSD     float64   `json:"total_quota_usd"`
-	TotalUsedUSD      float64   `json:"total_used_usd"`
-	WeeklyQuotaUSD    float64   `json:"weekly_quota_usd"`
-	WeeklyUsedUSD     float64   `json:"weekly_used_usd"`
-	StartsAt          time.Time `json:"starts_at"`
-	ExpiresAt         time.Time `json:"expires_at"`
-	WeeklyWindowStart time.Time `json:"weekly_window_start"`
-	WeeklyWindowEnd   time.Time `json:"weekly_window_end"`
-	Priority          int       `json:"priority"`
+	ID                int64      `json:"id"`
+	UserID            int64      `json:"user_id"`
+	GroupID           int64      `json:"group_id"`
+	OrderID           int64      `json:"order_id"`
+	Code              string     `json:"code"`
+	GroupName         string     `json:"group_name"`
+	Platform          string     `json:"platform"`
+	ProductName       string     `json:"product_name"`
+	TeamCode          string     `json:"team_code"`
+	Status            string     `json:"status"`
+	TeamID            *int64     `json:"team_id"`
+	TotalQuotaUSD     float64    `json:"total_quota_usd"`
+	TotalUsedUSD      float64    `json:"total_used_usd"`
+	WeeklyQuotaUSD    float64    `json:"weekly_quota_usd"`
+	WeeklyUsedUSD     float64    `json:"weekly_used_usd"`
+	StartsAt          time.Time  `json:"starts_at"`
+	ExpiresAt         time.Time  `json:"expires_at"`
+	FrozenAt          *time.Time `json:"frozen_at,omitempty"`
+	PausedUS          int64      `json:"-"`
+	RemainingSeconds  int64      `json:"remaining_seconds"`
+	WeeklyWindowStart time.Time  `json:"weekly_window_start"`
+	WeeklyWindowEnd   time.Time  `json:"weekly_window_end"`
+	Priority          int        `json:"priority"`
 }
 
 type Purchase struct {

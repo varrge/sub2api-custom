@@ -18,6 +18,7 @@ import (
 )
 
 const monthCardAutomaticRefundReason = "拼团已结束或名额已满，未能发卡，自动原路退款"
+const monthCardManualRefundReason = "month card team recruitment was cancelled; manual refund required"
 
 // Only metadata produced by an authenticated provider callback is accepted.
 // Providers without a payment timestamp use the first verified confirmation,
@@ -123,6 +124,13 @@ func (s *PaymentService) ExecuteMonthCardFulfillment(ctx context.Context, oid in
 		return err
 	}
 	card, err := s.monthCards.Fulfill(ctx, o.ID, o.UserID, *o.PaidAt, purchase)
+	if errors.Is(err, monthcard.ErrTeamCancelled) {
+		// Cancellation deliberately has no automatic refund path. Keep the paid
+		// order failed and visible for an administrator to decide how to handle it.
+		s.markFailed(ctx, oid, lease, err)
+		s.writeAuditLog(ctx, o.ID, "MONTH_CARD_MANUAL_REFUND_REQUIRED", "system", map[string]any{"reason": monthCardManualRefundReason})
+		return err
+	}
 	if errors.Is(err, monthcard.ErrCannotJoin) {
 		// Preserve the paid order as a durable refund job, never silently turn it
 		// into a balance recharge or a different product.
@@ -259,7 +267,10 @@ func (s *PaymentService) RecoverMonthCardOrders(ctx context.Context) error {
 	orders, err := s.entClient.PaymentOrder.Query().Where(
 		paymentorder.OrderTypeEQ(payment.OrderTypeMonthCard), paymentorder.PaidAtNotNil(),
 		paymentorder.Or(
-			paymentorder.StatusIn(OrderStatusPaid, OrderStatusFailed, OrderStatusRecharging),
+			paymentorder.Or(
+				paymentorder.StatusIn(OrderStatusPaid, OrderStatusRecharging),
+				paymentorder.And(paymentorder.StatusEQ(OrderStatusFailed), paymentorder.FailedReasonNEQ(monthCardManualRefundReason)),
+			),
 			paymentorder.StatusEQ(OrderStatusRefundPending),
 			paymentorder.And(paymentorder.StatusEQ(OrderStatusRefunding), paymentorder.UpdatedAtLT(time.Now().Add(-5*time.Minute))),
 			paymentorder.And(paymentorder.RefundReasonEQ(monthCardAutomaticRefundReason), paymentorder.StatusIn(OrderStatusCompleted, OrderStatusRefundFailed, OrderStatusRefundPending)),

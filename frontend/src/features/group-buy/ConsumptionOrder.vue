@@ -31,8 +31,9 @@
                 <span v-if="item.kind === 'legacy'" class="badge badge-gray">
                   {{ t('groupBuy.legacy') }}
                 </span>
+                <span v-if="item.card?.status === 'frozen'" class="badge bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-200">{{ t('groupBuy.frozenInOrder') }}</span>
               </p>
-              <p v-if="index === 0" class="text-xs text-primary-600">
+              <p v-if="index === 0 && item.card?.status !== 'frozen'" class="text-xs text-primary-600">
                 {{ t('groupBuy.first') }}
               </p>
             </div>

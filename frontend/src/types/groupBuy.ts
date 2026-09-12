@@ -28,7 +28,7 @@ export interface GroupBuyTeam {
   next_members: number
   starts_at: string
   closes_at: string
-  status: 'recruiting' | 'full' | 'closed'
+  status: 'recruiting' | 'full' | 'closed' | 'cancelled'
   joined: boolean
   cards?: MonthCard[]
 }
@@ -43,7 +43,7 @@ export interface MonthCard {
   product_name: string
   team_code: string
   team_id: number | null
-  status: 'active' | 'expired' | 'revoked'
+  status: 'active' | 'frozen' | 'expired' | 'revoked'
   total_quota_usd: number
   total_used_usd: number
   weekly_quota_usd: number
@@ -53,6 +53,8 @@ export interface MonthCard {
   weekly_window_start: string
   weekly_window_end: string
   priority: number
+  frozen_at?: string | null
+  remaining_seconds?: number
 }
 export interface EntitlementRef {
   kind: 'card' | 'legacy'

@@ -31,6 +31,9 @@ type Snapshot struct {
 
 type Candidate struct {
 	Ref
+	// Captured at admission so later freeze/thaw operations cannot move this
+	// request to a different historical quota window. Omitted for old snapshots.
+	CardPausedUS       int64      `json:"card_paused_us,omitempty"`
 	DailyGeneration    int64      `json:"daily_generation,omitempty"`
 	WeeklyGeneration   int64      `json:"weekly_generation,omitempty"`
 	MonthlyGeneration  int64      `json:"monthly_generation,omitempty"`
@@ -85,7 +88,7 @@ func (s *Store) CheckDebt(ctx context.Context, userID int64) error {
 // BindingGroups is an ownership query, not billing admission: an exhausted card
 // still permits configuring its key, and debt never blocks configuration.
 func (s *Store) BindingGroups(ctx context.Context, userID int64) ([]int64, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT c.group_id FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id WHERE c.user_id=$1 AND c.status='active' AND c.starts_at<=NOW() AND c.expires_at>NOW() AND o.status<>'REFUNDED'`, userID)
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT c.group_id FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id WHERE c.user_id=$1 AND c.status IN ('active','frozen') AND c.starts_at<=$2 AND c.expires_at+c.paused_us*INTERVAL '1 microsecond'>COALESCE(c.frozen_at,$2) AND o.status<>'REFUNDED'`, userID, s.now())
 	if err != nil {
 		return nil, err
 	}
@@ -125,9 +128,9 @@ func (s *Store) Admit(ctx context.Context, userID, groupID int64, at time.Time) 
 		return nil, ErrDebt
 	}
 	snap := &Snapshot{UserID: userID, GroupID: groupID, StartedAt: at, Candidates: []Candidate{}}
-	rows, err := tx.QueryContext(ctx, `SELECT c.id,c.starts_at,c.expires_at,c.total_quota_usd,c.total_used_usd
+	rows, err := tx.QueryContext(ctx, `SELECT c.id,c.starts_at,c.expires_at+c.paused_us*INTERVAL '1 microsecond',c.total_quota_usd,c.total_used_usd,c.paused_us
  FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id
- WHERE c.user_id=$1 AND c.group_id=$2 AND c.status='active' AND c.starts_at<=$3 AND c.expires_at>$3 AND o.status<>'REFUNDED'
+ WHERE c.user_id=$1 AND c.group_id=$2 AND c.status='active' AND c.frozen_at IS NULL AND (c.thawed_at IS NULL OR c.thawed_at<=$3) AND c.starts_at<=$3 AND c.expires_at+c.paused_us*INTERVAL '1 microsecond'>$3 AND o.status<>'REFUNDED'
  ORDER BY c.id`, userID, groupID, at)
 	if err != nil {
 		return nil, err
@@ -140,7 +143,7 @@ func (s *Store) Admit(ctx context.Context, userID, groupID int64, at time.Time) 
 	for rows.Next() {
 		var r cardRow
 		r.c.Kind = "card"
-		if err := rows.Scan(&r.c.ID, &r.c.StartsAt, &r.c.ExpiresAt, &r.quota, &r.used); err != nil {
+		if err := rows.Scan(&r.c.ID, &r.c.StartsAt, &r.c.ExpiresAt, &r.quota, &r.used, &r.c.CardPausedUS); err != nil {
 			_ = rows.Close()
 			return nil, err
 		}
@@ -152,7 +155,10 @@ func (s *Store) Admit(ctx context.Context, userID, groupID int64, at time.Time) 
 	}
 	_ = rows.Close()
 	for _, r := range cards {
-		r.c.WeeklyWindowStart = r.c.StartsAt.Add((at.Sub(r.c.StartsAt) / (7 * 24 * time.Hour)) * (7 * 24 * time.Hour))
+		// The ledger window is on the unpaused clock, never a shifted wall-clock
+		// timestamp. Existing usage and late settlements keep the same identity.
+		effectiveAt := at.Add(-time.Duration(r.c.CardPausedUS) * time.Microsecond)
+		r.c.WeeklyWindowStart = r.c.StartsAt.Add((effectiveAt.Sub(r.c.StartsAt) / (7 * 24 * time.Hour)) * (7 * 24 * time.Hour))
 		var used decimal.Decimal
 		err := tx.QueryRowContext(ctx, `SELECT used_usd FROM month_card_period_usage WHERE kind='card' AND entitlement_id=$1 AND period_kind='weekly' AND window_start=$2`, r.c.ID, r.c.WeeklyWindowStart).Scan(&used)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {

@@ -92,6 +92,9 @@ func (s *Store) Fulfill(ctx context.Context, orderID, userID int64, paidAt time.
 			}
 			return nil, err
 		}
+		if team.Status == "cancelled" {
+			return nil, ErrTeamCancelled
+		}
 		if team.Code != purchase.TeamCode || team.ProductID != p.ID || team.Status != "recruiting" || team.Joined || team.MemberCount >= team.Product.MaxMembers || !paidAt.Before(team.ClosesAt) {
 			return nil, ErrCannotJoin
 		}
@@ -235,7 +238,9 @@ func (s *Store) RevokeOrder(ctx context.Context, orderID int64) error {
 			return err
 		}
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE month_card_cards SET status='revoked',revoked_at=COALESCE(revoked_at,NOW()),updated_at=NOW() WHERE id=$1 AND status<>'revoked'`, id)
+	_, err = tx.ExecContext(ctx, `UPDATE month_card_cards SET status='revoked',revoked_at=COALESCE(revoked_at,$2),updated_at=$2,
+		paused_us=paused_us+CASE WHEN frozen_at IS NULL THEN 0 ELSE GREATEST(0,EXTRACT(EPOCH FROM($2::timestamptz-frozen_at))*1000000)::bigint END,
+		frozen_at=NULL WHERE id=$1 AND status<>'revoked'`, id, s.now().UTC().Truncate(time.Microsecond))
 	if err != nil {
 		return err
 	}

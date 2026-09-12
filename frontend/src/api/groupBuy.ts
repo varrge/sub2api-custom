@@ -32,6 +32,12 @@ export const groupBuyAPI = {
   async cards() {
     return (await apiClient.get<MonthCard[]>('/group-buy/cards')).data
   },
+  async freezeCard(id: number) {
+    return (await apiClient.post<MonthCard>(`/group-buy/cards/${id}/freeze`)).data
+  },
+  async thawCard(id: number) {
+    return (await apiClient.post<MonthCard>(`/group-buy/cards/${id}/thaw`)).data
+  },
   async orders() {
     return (await apiClient.get<EntitlementOrder[]>('/group-buy/order')).data
   },
@@ -50,6 +56,9 @@ export const adminGroupBuyAPI = {
   async products() {
     return (await apiClient.get<GroupBuyProduct[]>('/admin/group-buy/products'))
       .data
+  },
+  async cancelTeam(code: string) {
+    return (await apiClient.post<GroupBuyTeam>(`/admin/group-buy/teams/${encodeURIComponent(code)}/cancel-recruitment`)).data
   },
   async saveProduct(product: GroupBuyProduct) {
     return (

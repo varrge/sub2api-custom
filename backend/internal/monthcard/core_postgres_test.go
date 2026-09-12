@@ -54,7 +54,7 @@ func corePostgres(t *testing.T) (*Store, *sql.DB) {
 	INSERT INTO users(id) SELECT generate_series(1,30);
 	INSERT INTO groups(id) VALUES(1),(2);`)
 	require.NoError(t, err)
-	for _, name := range []string{"238_month_card_core.sql", "239_month_card_billing.sql"} {
+	for _, name := range []string{"238_month_card_core.sql", "239_month_card_billing.sql", "240_month_card_freeze.sql"} {
 		b, err := os.ReadFile(filepath.Join("..", "..", "migrations", name))
 		require.NoError(t, err)
 		_, err = db.Exec(string(b))

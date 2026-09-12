@@ -9,18 +9,19 @@ import (
 // Keep the final partial week attached to its start even after expiry. NOW is
 // passed once so every card returned by this call uses the same instant.
 const cardSelect = `SELECT c.id,c.user_id,c.group_id,c.order_id,c.code,c.group_name,c.platform,c.product_name,
-	COALESCE(t.code,''),CASE WHEN c.status='revoked' OR o.status='REFUNDED' THEN 'revoked' WHEN c.expires_at<=$1 THEN 'expired' ELSE c.status END,
+	COALESCE(t.code,''),CASE WHEN c.status='revoked' OR o.status='REFUNDED' THEN 'revoked' WHEN c.status='frozen' THEN 'frozen' WHEN c.expires_at + pause.total_pause <=$1 THEN 'expired' ELSE c.status END,
 	c.team_id,c.total_quota_usd,c.total_used_usd,ROUND(c.total_quota_usd/4,8),COALESCE(w.used_usd,0),
-	c.starts_at,c.expires_at,v.window_start,LEAST(v.window_start+INTERVAL '168 hours',c.expires_at),COALESCE(p.priority,2147483647)
+	c.starts_at,c.expires_at + pause.total_pause,v.window_start + pause.total_pause,LEAST(v.window_start+INTERVAL '168 hours',c.expires_at)+pause.total_pause,COALESCE(p.priority,2147483647),c.frozen_at,c.paused_us,GREATEST(0,FLOOR(EXTRACT(EPOCH FROM(c.expires_at+pause.total_pause-$1::timestamptz))))::bigint
 	FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id
 	LEFT JOIN month_card_teams t ON t.id=c.team_id
-	CROSS JOIN LATERAL (SELECT c.starts_at+LEAST(4,GREATEST(0,FLOOR(EXTRACT(EPOCH FROM ($1::timestamptz-c.starts_at))/604800)))::int*INTERVAL '168 hours' AS window_start) v
+	CROSS JOIN LATERAL (SELECT c.paused_us * INTERVAL '1 microsecond' + CASE WHEN c.frozen_at IS NULL THEN INTERVAL '0' ELSE GREATEST(INTERVAL '0', $1::timestamptz-c.frozen_at) END AS total_pause) pause
+	CROSS JOIN LATERAL (SELECT c.starts_at+LEAST(4,GREATEST(0,FLOOR(EXTRACT(EPOCH FROM (($1::timestamptz-pause.total_pause)-c.starts_at))/604800)))::int*INTERVAL '168 hours' AS window_start) v
 	LEFT JOIN month_card_period_usage w ON w.kind='card' AND w.entitlement_id=c.id AND w.period_kind='weekly' AND w.window_start=v.window_start
 	LEFT JOIN month_card_priorities p ON p.user_id=c.user_id AND p.group_id=c.group_id AND p.kind='card' AND p.reference_id=c.id`
 
 func scanCard(row rowScanner) (*Card, error) {
 	var c Card
-	err := row.Scan(&c.ID, &c.UserID, &c.GroupID, &c.OrderID, &c.Code, &c.GroupName, &c.Platform, &c.ProductName, &c.TeamCode, &c.Status, &c.TeamID, &c.TotalQuotaUSD, &c.TotalUsedUSD, &c.WeeklyQuotaUSD, &c.WeeklyUsedUSD, &c.StartsAt, &c.ExpiresAt, &c.WeeklyWindowStart, &c.WeeklyWindowEnd, &c.Priority)
+	err := row.Scan(&c.ID, &c.UserID, &c.GroupID, &c.OrderID, &c.Code, &c.GroupName, &c.Platform, &c.ProductName, &c.TeamCode, &c.Status, &c.TeamID, &c.TotalQuotaUSD, &c.TotalUsedUSD, &c.WeeklyQuotaUSD, &c.WeeklyUsedUSD, &c.StartsAt, &c.ExpiresAt, &c.WeeklyWindowStart, &c.WeeklyWindowEnd, &c.Priority, &c.FrozenAt, &c.PausedUS, &c.RemainingSeconds)
 	if err != nil {
 		return nil, notFound(err)
 	}

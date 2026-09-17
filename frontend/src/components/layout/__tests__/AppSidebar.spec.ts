@@ -77,17 +77,8 @@ vi.mock('@/stores', () => ({
   useSupportTicketStore: () => ({ adminUnreadCount: 0, userUnreadCount: 0 }),
 }))
 
-vi.mock('@/utils/featureFlags', () => ({
-  FeatureFlags: {
-    affiliate: 'affiliate',
-    availableChannels: 'availableChannels',
-    channelMonitor: 'channelMonitor',
-    imageGeneration: 'imageGeneration',
-    payment: 'payment',
-    pluginManagement: 'pluginManagement',
-    riskControl: 'riskControl',
-    supportTicket: 'supportTicket',
-  },
+vi.mock('@/utils/featureFlags', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/utils/featureFlags')>(),
   makeSidebarFlag: () => () => true,
 }))
 

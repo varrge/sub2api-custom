@@ -7,6 +7,7 @@ import AppHeader from '../AppHeader.vue'
 const state = vi.hoisted(() => ({
   routePath: '/dashboard',
   routeName: 'Dashboard',
+  routeMeta: {} as Record<string, string>,
   isAdmin: false,
   imageGenerationEnabled: true,
   modelPlazaEnabled: true,
@@ -20,6 +21,8 @@ const state = vi.hoisted(() => ({
   settings: {
     top_quick_menu_items: [] as string[],
     custom_menu_items: [],
+    subscription_enabled: true,
+    payment_balance_disabled: false,
   },
 }))
 
@@ -31,7 +34,7 @@ vi.mock('vue-router', () => ({
     get path() { return state.routePath },
     get name() { return state.routeName },
     params: {},
-    meta: {},
+    get meta() { return state.routeMeta },
   }),
 }))
 
@@ -73,21 +76,18 @@ vi.mock('@/stores/supportTickets', () => ({
   }),
 }))
 
-vi.mock('@/utils/featureFlags', () => ({
-  FeatureFlags: {
-    imageGeneration: 'imageGeneration',
-    modelPlaza: 'modelPlaza',
-    supportTicket: 'supportTicket',
-    payment: 'payment',
+vi.mock('@/utils/featureFlags', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/utils/featureFlags')>(),
+  isFeatureFlagEnabled: (flag: { key: string }) => {
+    switch (flag.key) {
+      case 'subscription_enabled': return state.settings.subscription_enabled
+      case 'image_generation_enabled': return state.imageGenerationEnabled
+      case 'model_plaza_enabled': return state.modelPlazaEnabled
+      case 'payment_enabled': return state.paymentEnabled
+      case 'support_ticket_enabled': return state.supportTicketsEnabled
+      default: return false
+    }
   },
-  isFeatureFlagEnabled: (flag: string) =>
-    flag === 'imageGeneration'
-      ? state.imageGenerationEnabled
-      : flag === 'modelPlaza'
-        ? state.modelPlazaEnabled
-        : flag === 'payment'
-          ? state.paymentEnabled
-          : state.supportTicketsEnabled,
 }))
 
 const RouterLinkStub = defineComponent({
@@ -118,6 +118,9 @@ describe('AppHeader top quick menu', () => {
   beforeEach(() => {
     state.routePath = '/dashboard'
     state.routeName = 'Dashboard'
+    state.routeMeta = {}
+    state.settings.subscription_enabled = true
+    state.settings.payment_balance_disabled = false
     state.isAdmin = false
     state.imageGenerationEnabled = true
     state.modelPlazaEnabled = true
@@ -135,6 +138,21 @@ describe('AppHeader top quick menu', () => {
   afterEach(() => {
     wrapper?.unmount()
     document.documentElement.classList.remove('dark')
+  })
+
+  it.each([
+    [false, false, 'nav.recharge', 'purchase.rechargeDescription'],
+    [true, true, 'nav.subscribe', 'purchase.subscriptionDescription'],
+  ])('renders the purchase heading for subscription=%s and balanceDisabled=%s', (subscription, balanceDisabled, title, description) => {
+    state.routePath = '/purchase'
+    state.routeName = 'PurchaseSubscription'
+    state.routeMeta = { titleKey: 'payment.title', descriptionKey: 'payment.description' }
+    state.settings.subscription_enabled = subscription
+    state.settings.payment_balance_disabled = balanceDisabled
+    const view = mountHeader()
+    expect(view.text()).toContain(title)
+    expect(view.text()).toContain(description)
+    expect(view.find('subscription-progress-mini-stub').exists()).toBe(subscription)
   })
 
   it('renders configured items in order and moves model plaza out of its legacy slot', () => {

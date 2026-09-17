@@ -93,7 +93,7 @@
           <LocaleSwitcher />
 
           <!-- Subscription Progress (for users with active subscriptions) -->
-          <SubscriptionProgressMini v-if="user" class="header-subscription" />
+          <SubscriptionProgressMini v-if="user && subscriptionFeatureEnabled" class="header-subscription" />
 
           <!-- Announcement Bell -->
           <AnnouncementBell v-if="user" data-testid="header-announcement" />
@@ -178,6 +178,8 @@ import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeUrl } from '@/utils/url'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
+import { resolveRouteMetaKeys } from '@/router/title'
+import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
 import { TOP_QUICK_MENU_OPTIONS, normalizeTopQuickMenuItems } from '@/utils/topQuickMenu'
 
 const router = useRouter()
@@ -195,6 +197,7 @@ const imageGenerationEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.
 const modelPlazaEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.modelPlaza))
 const supportTicketsEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.supportTicket))
 const paymentEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.payment))
+const subscriptionFeatureEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.subscription))
 const configuredTopQuickMenuItems = computed(() =>
   normalizeTopQuickMenuItems(appStore.cachedPublicSettings?.top_quick_menu_items),
 )
@@ -233,6 +236,10 @@ const balanceAriaLabel = computed(() => {
   return paymentEnabled.value ? `${label}. ${t('nav.buySubscription')}` : label
 })
 
+const routeMetaKeys = computed(() => resolveRouteMetaKeys(route, {
+  billingMode: resolveSiteBillingMode(appStore.cachedPublicSettings),
+}))
+
 const pageTitle = computed(() => {
   // For custom pages, use the menu item's label instead of generic "自定义页面"
   if (route.name === 'CustomPage') {
@@ -242,7 +249,7 @@ const pageTitle = computed(() => {
       ?? (authStore.isAdmin ? adminSettingsStore.customMenuItems.find((item) => item.id === id) : undefined)
     if (menuItem?.label) return menuItem.label
   }
-  const titleKey = route.meta.titleKey as string
+  const titleKey = routeMetaKeys.value.titleKey
   if (titleKey) {
     return t(titleKey)
   }
@@ -250,7 +257,7 @@ const pageTitle = computed(() => {
 })
 
 const pageDescription = computed(() => {
-  const descKey = route.meta.descriptionKey as string
+  const descKey = routeMetaKeys.value.descriptionKey
   if (descKey) {
     return t(descKey)
   }

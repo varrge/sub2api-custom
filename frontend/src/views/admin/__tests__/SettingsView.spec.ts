@@ -733,6 +733,31 @@ describe("admin SettingsView payment visible method controls", () => {
     adminSettingsFetch.mockResolvedValue(undefined);
   });
 
+  it("loads and saves the open button visibility for each custom menu", async () => {
+    const menuItems = [
+      { id: "docs", label: "Docs", url: "https://example.com/docs", icon_svg: "", visibility: "user", sort_order: 0 },
+      { id: "help", label: "Help", url: "https://example.com/help", icon_svg: "", visibility: "user", sort_order: 1, hide_open_button: true },
+    ];
+    getSettings.mockResolvedValue({ ...baseSettingsResponse, custom_menu_items: menuItems });
+    const wrapper = mountView();
+    await flushPromises();
+
+    const toggles = wrapper.findAll<HTMLInputElement>('[data-testid="custom-menu-hide-open-button"]');
+    expect(toggles.map(toggle => toggle.element.checked)).toEqual([false, true]);
+    await toggles[0].setValue(true);
+    await toggles[1].setValue(false);
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({
+      custom_menu_items: [
+        { ...menuItems[0], hide_open_button: true },
+        { ...menuItems[1], hide_open_button: false },
+      ],
+    }));
+    wrapper.unmount();
+  });
+
   it("submits the compact home page toggle", async () => {
     const wrapper = mountView();
     await flushPromises();
@@ -747,6 +772,30 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(updateSettings).toHaveBeenCalledWith(
       expect.objectContaining({ compact_home_enabled: true }),
     );
+  });
+
+  it.each([
+    ["recharge_only", false, false],
+    ["subscription_only", true, true],
+    ["recharge_and_subscription", true, false],
+  ])("saves both billing flags for site mode %s", async (mode, subscription, balanceDisabled) => {
+    getSettings.mockResolvedValueOnce({ ...baseSettingsResponse, subscription_enabled: true, payment_balance_disabled: true });
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+    const selector = wrapper.findAll("select").find((node) =>
+      node.find('option[value="recharge_and_subscription"]').exists(),
+    );
+    expect(selector).toBeDefined();
+    expect((selector!.element as HTMLSelectElement).value).toBe("subscription_only");
+    await selector!.setValue(mode);
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({
+      subscription_enabled: subscription,
+      payment_balance_disabled: balanceDisabled,
+    }));
+    wrapper.unmount();
   });
 
   it("saves the support ticket switch and immediately refreshes public settings", async () => {

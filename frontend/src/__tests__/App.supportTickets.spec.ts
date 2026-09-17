@@ -46,6 +46,8 @@ vi.mock('@/stores', () => ({
   useAdminSettingsStore: () => ({ customMenuItems: [] }),
 }))
 
+vi.mock('@/stores/app', () => ({ useAppStore: () => mocks.app }))
+
 vi.mock('@/api/setup', () => ({ getSetupStatus: mocks.getSetupStatus }))
 vi.mock('@/utils/branding', () => ({ updateFavicon: vi.fn() }))
 

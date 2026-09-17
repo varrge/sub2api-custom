@@ -103,6 +103,28 @@ func TestSettingHandler_GetPublicSettings_ExposesSupportTicketFlag(t *testing.T)
 	require.True(t, resp.Data.SupportTicketEnabled)
 }
 
+func TestSettingHandler_GetPublicSettings_ExposesSubscriptionOnlyMode(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := NewSettingHandler(service.NewSettingService(&settingHandlerPublicRepoStub{values: map[string]string{
+		service.SettingKeySubscriptionEnabled: "true",
+		service.SettingBalancePayDisabled:     "true",
+	}}, &config.Config{}), "test-version")
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/settings/public", nil)
+	h.GetPublicSettings(c)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var resp struct {
+		Data struct {
+			SubscriptionEnabled    bool `json:"subscription_enabled"`
+			PaymentBalanceDisabled bool `json:"payment_balance_disabled"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
+	require.True(t, resp.Data.SubscriptionEnabled)
+	require.True(t, resp.Data.PaymentBalanceDisabled)
+}
+
 func TestSettingHandler_GetPublicSettings_ExposesTopQuickMenuItems(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	h := NewSettingHandler(service.NewSettingService(&settingHandlerPublicRepoStub{values: map[string]string{

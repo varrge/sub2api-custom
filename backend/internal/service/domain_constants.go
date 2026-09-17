@@ -44,11 +44,12 @@ const (
 	PlatformAntigravity = domain.PlatformAntigravity
 	PlatformGrok        = domain.PlatformGrok
 	// 国产 OpenAI 兼容供应商（与 grok 一样经 OpenAI 网关转发）。
-	PlatformKimi      = domain.PlatformKimi
-	PlatformZhipu     = domain.PlatformZhipu
-	PlatformDeepseek  = domain.PlatformDeepseek
-	PlatformMiniMax   = domain.PlatformMiniMax
-	PlatformComposite = domain.PlatformComposite
+	PlatformKimi       = domain.PlatformKimi
+	PlatformZhipu      = domain.PlatformZhipu
+	PlatformDeepseek   = domain.PlatformDeepseek
+	PlatformMiniMax    = domain.PlatformMiniMax
+	PlatformOpenCodeGo = domain.PlatformOpenCodeGo
+	PlatformComposite  = domain.PlatformComposite
 	// PlatformKiro is retained for unsupported-platform threshold tests and legacy
 	// account rows. Scheduling-threshold evaluation never pauses kiro accounts.
 	PlatformKiro = "kiro"
@@ -58,6 +59,8 @@ const (
 const (
 	AccountModePayG   = domain.AccountModePayG
 	AccountModeCoding = domain.AccountModeCoding
+	AccountModeZen    = domain.AccountModeZen
+	AccountModeGo     = domain.AccountModeGo
 )
 
 // 上游 API 协议（国产供应商）：决定转发端点与格式，与接入模式正交。
@@ -77,17 +80,21 @@ const (
 	DefaultZhipuCodingBaseURL = "https://open.bigmodel.cn/api/coding/paas/v4"
 	DefaultDeepseekBaseURL    = "https://api.deepseek.com"
 	// MiniMax 按量付费与 Coding/Token Plan 共用推理域名，靠 API Key 区分套餐。
-	DefaultMiniMaxBaseURL = "https://api.minimaxi.com/v1"
+	DefaultMiniMaxBaseURL     = "https://api.minimaxi.com/v1"
+	DefaultOpenCodeGoBaseURL  = "https://opencode.ai/zen/go/v1"
+	DefaultOpenCodeZenBaseURL = "https://opencode.ai/zen/v1"
 )
 
 // 国产供应商 Anthropic 协议端点的默认 base_url（上游路径为 {base}/v1/messages）。
 // 与前端 credentialsBuilder.ts 中的预设保持一致。
 const (
-	DefaultKimiPayGAnthropicBaseURL   = "https://api.moonshot.cn/anthropic"
-	DefaultKimiCodingAnthropicBaseURL = "https://api.kimi.com/coding"
-	DefaultZhipuAnthropicBaseURL      = "https://open.bigmodel.cn/api/anthropic"
-	DefaultDeepseekAnthropicBaseURL   = "https://api.deepseek.com/anthropic"
-	DefaultMiniMaxAnthropicBaseURL    = "https://api.minimaxi.com/anthropic"
+	DefaultKimiPayGAnthropicBaseURL    = "https://api.moonshot.cn/anthropic"
+	DefaultKimiCodingAnthropicBaseURL  = "https://api.kimi.com/coding"
+	DefaultZhipuAnthropicBaseURL       = "https://open.bigmodel.cn/api/anthropic"
+	DefaultDeepseekAnthropicBaseURL    = "https://api.deepseek.com/anthropic"
+	DefaultMiniMaxAnthropicBaseURL     = "https://api.minimaxi.com/anthropic"
+	DefaultOpenCodeGoAnthropicBaseURL  = "https://opencode.ai/zen/go"
+	DefaultOpenCodeZenAnthropicBaseURL = "https://opencode.ai/zen"
 )
 
 // IsCNProvider 报告 platform 是否为国产 OpenAI 兼容供应商（kimi/zhipu/deepseek/minimax）。
@@ -98,6 +105,14 @@ func IsCNProvider(platform string) bool {
 	default:
 		return false
 	}
+}
+
+func IsOpenCodeGo(platform string) bool {
+	return platform == PlatformOpenCodeGo
+}
+
+func IsMultiProtocolAPIKeyProvider(platform string) bool {
+	return IsCNProvider(platform) || platform == PlatformOpenCodeGo
 }
 
 // AllowedQuotaPlatforms 是允许设置 user × platform quota 的平台列表（单一权威来源）。
@@ -113,6 +128,7 @@ var AllowedQuotaPlatforms = []string{
 	PlatformZhipu,
 	PlatformDeepseek,
 	PlatformMiniMax,
+	PlatformOpenCodeGo,
 }
 
 // AllowedSchedulingThresholdPlatforms 是允许设置账号自动停调阈值的平台列表。
@@ -125,6 +141,7 @@ var AllowedSchedulingThresholdPlatforms = []string{
 	PlatformKimi,
 	PlatformZhipu,
 	PlatformMiniMax,
+	PlatformOpenCodeGo,
 }
 
 // IsAllowedQuotaPlatform 报告 s 是否为合法的 quota platform 标识。
@@ -513,6 +530,10 @@ const (
 	// user-facing aggregate view. When false: user endpoint returns an empty list and the
 	// sidebar entry is hidden. Defaults to false (opt-in feature).
 	SettingKeyAvailableChannelsEnabled = "available_channels_enabled"
+
+	// SettingKeySubscriptionEnabled gates the user-facing subscription surface.
+	// Missing and empty values remain enabled for backward compatibility.
+	SettingKeySubscriptionEnabled = "subscription_enabled"
 
 	// SettingKeyImageGenerationEnabled controls the hosted image-generation page
 	// and its navigation entries. Missing values remain enabled for compatibility.

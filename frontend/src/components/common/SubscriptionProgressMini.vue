@@ -1,5 +1,5 @@
 <template>
-  <div v-if="hasActiveSubscriptions" class="relative" ref="containerRef">
+  <div v-if="subscriptionFeatureEnabled && hasActiveSubscriptions" class="relative" ref="containerRef">
     <!-- Mini Progress Display -->
     <button
       @click="toggleTooltip"
@@ -190,12 +190,14 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import { useSubscriptionStore } from '@/stores'
+import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 import type { UserSubscription } from '@/types'
 import { orderedEntitlements, usd, availableQuota } from '@/features/group-buy/model'
 
 const { t } = useI18n()
 
 const subscriptionStore = useSubscriptionStore()
+const subscriptionFeatureEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.subscription))
 
 const containerRef = ref<HTMLElement | null>(null)
 const tooltipOpen = ref(false)
@@ -297,6 +299,7 @@ function handleClickOutside(event: MouseEvent) {
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
+  if (!subscriptionFeatureEnabled.value) return
   subscriptionStore.fetchMonthCards?.().catch(() => {})
   // Trigger initial fetch if not already loaded
   // The actual data loading is handled by App.vue globally

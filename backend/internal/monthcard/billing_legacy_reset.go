@@ -25,11 +25,40 @@ func (s *Store) ResetLegacyQuota(ctx context.Context, userID, subscriptionID int
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	var owner int64
-	if err := tx.QueryRowContext(ctx, `SELECT id FROM users WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, userID).Scan(&owner); err != nil {
+	if err := s.ResetLegacyQuotaInTx(ctx, tx, userID, subscriptionID, daily, weekly, monthly, day, now); err != nil {
 		return err
 	}
-	if err := tx.QueryRowContext(ctx, `SELECT id FROM user_subscriptions WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL FOR UPDATE`, subscriptionID, userID).Scan(&owner); err != nil {
+	return tx.Commit()
+}
+
+// LegacyQuotaTx is the SQL surface shared by sql.Tx and an Ent transaction client.
+type LegacyQuotaTx interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}
+
+// ResetLegacyQuotaInTx leaves commit/rollback to the caller, so quota and billing
+// generations roll back together when a bulk operation fails after the reset.
+func (s *Store) ResetLegacyQuotaInTx(ctx context.Context, tx LegacyQuotaTx, userID, subscriptionID int64, daily, weekly, monthly bool, day, now time.Time) error {
+	lock := func(query string, args ...any) error {
+		rows, err := tx.QueryContext(ctx, query, args...)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = rows.Close() }()
+		if !rows.Next() {
+			if err := rows.Err(); err != nil {
+				return err
+			}
+			return sql.ErrNoRows
+		}
+		var owner int64
+		return rows.Scan(&owner)
+	}
+	if err := lock(`SELECT id FROM users WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, userID); err != nil {
+		return err
+	}
+	if err := lock(`SELECT id FROM user_subscriptions WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL FOR UPDATE`, subscriptionID, userID); err != nil {
 		return err
 	}
 	// Every explicit reset grants a new generation, including resetting zero
@@ -68,5 +97,5 @@ func (s *Store) ResetLegacyQuota(ctx context.Context, userID, subscriptionID int
 	if n == 0 {
 		return ErrNotFound
 	}
-	return tx.Commit()
+	return nil
 }

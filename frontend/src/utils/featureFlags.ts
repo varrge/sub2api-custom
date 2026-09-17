@@ -109,6 +109,11 @@ export const FeatureFlags = {
     mode: 'opt-in',
     label: 'Available Channels',
   }),
+  subscription: defineFlag({
+    key: 'subscription_enabled',
+    mode: 'opt-out',
+    label: 'Subscription',
+  }),
   supportTicket: defineFlag({
     key: 'support_ticket_enabled',
     mode: 'opt-in',
@@ -150,9 +155,15 @@ export type RegisteredFeatureFlag = keyof typeof FeatureFlags
  */
 export function isFeatureFlagEnabled(flag: FeatureFlagDefinition): boolean {
   const appStore = useAppStore()
-  const raw = appStore.cachedPublicSettings?.[flag.key] as
-    | boolean
-    | undefined
+  return resolveFeatureFlag(appStore.cachedPublicSettings, flag)
+}
+
+/** Resolve a flag from an already-available settings object without touching Pinia. */
+export function resolveFeatureFlag(
+  settings: Partial<PublicSettings> | null | undefined,
+  flag: FeatureFlagDefinition,
+): boolean {
+  const raw = settings?.[flag.key] as boolean | undefined
   if (typeof raw === 'boolean') return raw
   // Settings not yet loaded → fall back to the flag's declared mode:
   //   opt-out → visible by default, opt-in → hidden by default.

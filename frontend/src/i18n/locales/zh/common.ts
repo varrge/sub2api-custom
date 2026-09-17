@@ -209,6 +209,8 @@ export default {
     logout: '退出登录',
     github: 'GitHub',
     mySubscriptions: '我的订阅',
+    recharge: '充值',
+    subscribe: '订阅',
     buySubscription: '充值/拼团大厅',
     docs: '文档',
     myOrders: '我的订单',

@@ -7,6 +7,9 @@ const mocks = vi.hoisted(() => ({
   auth: null as any,
   supportTickets: null as any,
   fetchSubscriptions: vi.fn(),
+  fetchMonthCards: vi.fn().mockResolvedValue(undefined),
+  startGroupBuyPolling: vi.fn(),
+  clearGroupBuy: vi.fn(),
   startPolling: vi.fn(),
   clearSubscriptions: vi.fn(),
   fetchAnnouncements: vi.fn(),
@@ -32,7 +35,14 @@ vi.mock('@/stores', () => ({
   useSubscriptionStore: () => ({
     fetchActiveSubscriptions: mocks.fetchSubscriptions,
     startPolling: mocks.startPolling,
+    stopPolling: vi.fn(),
     clear: mocks.clearSubscriptions,
+  }),
+  useGroupBuyStore: () => ({
+    fetchMonthCards: mocks.fetchMonthCards,
+    startPolling: mocks.startGroupBuyPolling,
+    stopPolling: vi.fn(),
+    clear: mocks.clearGroupBuy,
   }),
   useAnnouncementStore: () => ({
     fetchAnnouncements: mocks.fetchAnnouncements,
@@ -112,4 +122,24 @@ describe('App support ticket unread lifecycle', () => {
     expect(mocks.supportTickets.initializeUserUnread).toHaveBeenCalledOnce()
     wrapper.unmount()
   })
+  it('syncs group buys independently of the subscription switch and clears both on logout', async () => {
+    mocks.app.cachedPublicSettings.subscription_enabled = false
+    const wrapper = mount(App, { global: { stubs: { Toast: true, NavigationProgress: true, AdminComplianceDialog: true, AnnouncementPopup: true } } })
+    await flushPromises()
+    expect(mocks.fetchSubscriptions).not.toHaveBeenCalled()
+    expect(mocks.fetchMonthCards).toHaveBeenCalledOnce()
+    expect(mocks.startGroupBuyPolling).toHaveBeenCalledOnce()
+    mocks.app.cachedPublicSettings.subscription_enabled = true
+    await flushPromises()
+    expect(mocks.fetchSubscriptions).toHaveBeenCalledOnce()
+    mocks.app.cachedPublicSettings.subscription_enabled = false
+    await flushPromises()
+    expect(mocks.clearSubscriptions).toHaveBeenCalledOnce()
+    expect(mocks.clearGroupBuy).not.toHaveBeenCalled()
+    mocks.auth.isAuthenticated = false
+    await flushPromises()
+    expect(mocks.clearGroupBuy).toHaveBeenCalledOnce()
+    wrapper.unmount()
+  })
+
 })

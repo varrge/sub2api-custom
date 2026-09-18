@@ -24,7 +24,7 @@ describe('hall live data and share links', () => {
     await flushPromises()
     expect(wrapper.findAllComponents(TeamCard)).toHaveLength(1)
     wrapper.getComponent(TeamCard).vm.$emit('join', team)
-    expect(push).toHaveBeenCalledWith({ path: '/purchase', query: { tab: 'subscription', mode: 'join', team_code: team.code } })
+    expect(push).toHaveBeenCalledWith({ path: '/purchase', query: { tab: 'group-buy', mode: 'join', team_code: team.code } })
     wrapper.unmount()
   })
   it('keeps closed team details available from an existing share link', async () => {

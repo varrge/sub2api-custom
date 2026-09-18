@@ -766,7 +766,7 @@ const purchaseNavLabel = computed(() => {
       return t('nav.buySubscription')
   }
 })
-const flagGroupBuy = () => flagPayment() && flagSubscription()
+const flagGroupBuy = flagPayment
 const flagAffiliate = makeSidebarFlag(FeatureFlags.affiliate)
 const flagRiskControl = makeSidebarFlag(FeatureFlags.riskControl)
 const flagPluginManagement = makeSidebarFlag(FeatureFlags.pluginManagement)
@@ -793,6 +793,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon, hideInSimpleMode: true, featureFlag: flagAvailableChannels },
     { path: '/monitor', label: t('nav.channelStatus'), icon: SignalIcon, featureFlag: flagChannelMonitor },
     { path: '/group-buy', label: t('groupBuy.hall'), icon: UsersIcon, hideInSimpleMode: true, featureFlag: flagGroupBuy },
+    { path: '/my-group-buy', label: t('groupBuy.myGroupBuy'), icon: UsersIcon, hideInSimpleMode: true },
     { path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true, featureFlag: flagSubscription },
     { path: '/tickets', label: t('supportTickets.myTickets'), icon: TicketIcon, featureFlag: flagSupportTicket, badge: () => supportTicketStore.userUnreadCount },
     { path: '/purchase', label: purchaseNavLabel.value, icon: RechargeSubscriptionIcon, hideInSimpleMode: true, featureFlag: flagPayment },

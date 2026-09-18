@@ -311,7 +311,7 @@ export default {
 
   // Payment System
   payment: {
-    title: '充值/拼团大厅',
+    title: '充值/订阅/拼团',
     amountLabel: '充值金额',
     paymentAmount: '支付金额',
     creditedBalance: '到账余额',
@@ -408,7 +408,7 @@ export default {
     activeSubscription: '当前订阅',
     noActiveSubscription: '暂无有效订阅',
     tabTopUp: '充值',
-    tabSubscribe: '拼团',
+    tabSubscribe: '订阅',
     noPlans: '暂无可用订阅套餐',
     notAvailable: '充值功能暂未开放',
     billingUnavailable: '充值与订阅均暂未开放，请联系管理员。',

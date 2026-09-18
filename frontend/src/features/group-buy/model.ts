@@ -60,7 +60,7 @@ export function purchaseQuery(query: LocationQuery) {
     teamCode: typeof query.team_code === 'string' ? query.team_code : '',
     mode,
     groupBuy:
-      query.tab === 'subscription' || query.tab === 'group-buy' || !!mode
+      query.tab === 'group-buy' || query.order_type === 'month_card' || !!mode
   }
 }
 export interface EntitlementItem extends EntitlementRef {

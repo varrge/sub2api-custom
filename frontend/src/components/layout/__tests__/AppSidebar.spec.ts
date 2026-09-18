@@ -10,6 +10,7 @@ import AppSidebar from '../AppSidebar.vue'
 
 const sidebarState = vi.hoisted(() => ({
   isAdmin: true,
+  subscriptionEnabled: true,
   isSimpleMode: false,
   mobileOpen: false,
   contactInfo: 'support@example.com',
@@ -79,7 +80,7 @@ vi.mock('@/stores', () => ({
 
 vi.mock('@/utils/featureFlags', async (importOriginal) => ({
   ...await importOriginal<typeof import('@/utils/featureFlags')>(),
-  makeSidebarFlag: () => () => true,
+  makeSidebarFlag: (flag: { key: string }) => () => flag.key === 'subscription_enabled' ? sidebarState.subscriptionEnabled : true,
 }))
 
 vi.mock('@/composables/useBatchImageAccess', () => ({
@@ -221,6 +222,7 @@ function mountSidebar() {
 describe('AppSidebar account menu interactions', () => {
   beforeEach(() => {
     sidebarState.isAdmin = true
+    sidebarState.subscriptionEnabled = true
     sidebarState.isSimpleMode = false
     sidebarState.mobileOpen = false
     sidebarState.contactInfo = 'support@example.com'
@@ -233,6 +235,15 @@ describe('AppSidebar account menu interactions', () => {
     sidebarWrapper = undefined
     sidebarHost = undefined
     vi.useRealTimers()
+  })
+
+  it('keeps group-buy navigation visible when official subscriptions are disabled', () => {
+    sidebarState.isAdmin = false
+    sidebarState.subscriptionEnabled = false
+    const view = mountSidebar()
+    expect(view.find('[data-to="/subscriptions"]').exists()).toBe(false)
+    expect(view.get('[data-to="/my-group-buy"]').text()).toBe('groupBuy.myGroupBuy')
+    expect(view.get('[data-to="/group-buy"]').text()).toBe('groupBuy.hall')
   })
 
   it('toggles the menu from the account trigger', async () => {

@@ -8,9 +8,12 @@
             {{ t('groupBuy.activeTeams', { count: activeTeams.length }) }}
           </p>
         </div>
+        <div class="flex flex-wrap gap-2">
+          <RouterLink to="/my-group-buy" class="btn btn-secondary">{{ t('groupBuy.myGroupBuy') }}</RouterLink>
         <button class="btn btn-secondary" :disabled="loading" @click="load">
           {{ t('common.refresh') }}
         </button>
+        </div>
       </div>
       <div
         class="rounded-xl border border-sky-100 bg-sky-50 p-4 text-sm leading-6 text-sky-800 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-200"
@@ -72,7 +75,7 @@
           <p class="my-3 text-sm text-gray-500">
             {{ t('groupBuy.noTeamsHint') }}
           </p>
-          <RouterLink to="/purchase?tab=subscription" class="btn btn-primary">
+          <RouterLink to="/purchase?tab=group-buy" class="btn btn-primary">
             {{ t('groupBuy.purchase') }}
           </RouterLink>
         </div>
@@ -158,7 +161,7 @@ async function lookup(updateRoute = true) {
 function join(team: GroupBuyTeam) {
   router.push({
     path: '/purchase',
-    query: { tab: 'subscription', mode: 'join', team_code: team.code }
+    query: { tab: 'group-buy', mode: 'join', team_code: team.code }
   })
 }
 function clearDetail() {

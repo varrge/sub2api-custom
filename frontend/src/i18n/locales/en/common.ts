@@ -211,7 +211,7 @@ export default {
     mySubscriptions: 'My Subscriptions',
     recharge: 'Recharge',
     subscribe: 'Subscribe',
-    buySubscription: 'Recharge / Group Buy Hall',
+    buySubscription: 'Recharge / Subscribe',
     docs: 'Docs',
     myOrders: 'My Orders',
     orderManagement: 'Orders',

@@ -1,10 +1,10 @@
 <template>
   <AppLayout>
     <div class="space-y-6">
-      <div class="flex flex-wrap justify-between gap-3"><h1 class="text-2xl font-bold">{{ t('userSubscriptions.title') }}</h1><div class="flex gap-2"><RouterLink to="/group-buy" class="btn btn-secondary">{{ t('groupBuy.hall') }}</RouterLink><button class="btn btn-secondary" :disabled="loading" @click="loadSubscriptions">{{ t('common.refresh') }}</button></div></div>
-      <p v-if="(authStore.user?.balance ?? 0) < 0" class="rounded-xl bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950" role="alert">{{ t('groupBuy.debt', { amount: usd(authStore.user?.balance ?? 0) }) }} <RouterLink to="/purchase?tab=recharge" class="underline">{{ t('payment.tabTopUp') }}</RouterLink></p>
-      <p v-if="monthCardError" class="text-sm text-red-600" role="alert">{{ monthCardError }}</p>
-      <ConsumptionOrder :items="sortableEntitlements" @saved="refreshCards" />
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h1 class="text-2xl font-bold">{{ t('userSubscriptions.title') }}</h1>
+        <button class="btn btn-secondary" :disabled="loading" @click="loadSubscriptions">{{ t('common.refresh') }}</button>
+      </div>
       <!-- Loading State -->
       <div v-if="loading" class="flex justify-center py-12">
         <div
@@ -13,7 +13,7 @@
       </div>
 
       <!-- Empty State -->
-      <div v-else-if="subscriptions.length === 0 && monthCards.length === 0 && !monthCardError" class="card p-12 text-center">
+      <div v-else-if="subscriptions.length === 0" class="card p-12 text-center">
         <div
           class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-dark-700"
         >
@@ -29,11 +29,8 @@
 
       <!-- Subscriptions Grid -->
       <div v-else class="grid gap-6 lg:grid-cols-2">
-        <template v-for="item in entitlements" :key="`${item.kind}:${item.id}`">
-        <MonthCardCard v-if="item.card" :card="item.card" manageable @changed="cardChanged" />
-        <template v-else>
         <div
-          v-for="subscription in item.legacy ? [item.legacy] : []"
+          v-for="subscription in subscriptions"
           :key="subscription.id"
           class="overflow-hidden rounded-2xl border bg-white dark:bg-dark-800"
           :class="platformBorderClass(subscription.group?.platform || '')"
@@ -85,7 +82,7 @@
                 :class="['rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-colors', platformButtonClass(subscription.group?.platform || '')]"
                 @click="router.push({ path: '/purchase', query: { tab: 'subscription', group: String(subscription.group_id) } })"
               >
-                {{ t('groupBuy.purchase') }}
+                {{ t('payment.renewNow') }}
               </button>
             </div>
           </div>
@@ -252,25 +249,13 @@
             </div>
           </div>
         </div>
-        </template>
-        </template>
       </div>
-      <AllocationTable v-if="allocations.length || monthCards.length" :allocations="allocations" :cards="monthCards" />
     </div>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
-import MonthCardCard from '@/features/group-buy/MonthCardCard.vue'
-import ConsumptionOrder from '@/features/group-buy/ConsumptionOrder.vue'
-import AllocationTable from '@/features/group-buy/AllocationTable.vue'
-import { orderedEntitlements, refKey, usd } from '@/features/group-buy/model'
-import { groupBuyAPI } from '@/api/groupBuy'
-import { useSubscriptionStore } from '@/stores/subscriptions'
-import { useAuthStore } from '@/stores/auth'
-import type { ChargeAllocation, MonthCard } from '@/types/groupBuy'
-
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
@@ -314,20 +299,6 @@ const temporaryRateNow = useTemporaryRateNow()
 const subscriptions = ref<UserSubscription[]>([])
 const userGroupRates = ref<Record<number, number>>({})
 const loading = ref(true)
-const authStore = useAuthStore()
-const subscriptionStore = useSubscriptionStore()
-const monthCards = computed(() => subscriptionStore.monthCards)
-const entitlements = computed(() => orderedEntitlements(monthCards.value, subscriptions.value, subscriptionStore.entitlementOrders))
-const sortableEntitlements = computed(() => { const keys = new Set(subscriptionStore.entitlementOrders.flatMap(order => order.items.map(item => `${order.group_id}:${refKey(item)}`))); return entitlements.value.filter(item => keys.has(`${item.group_id}:${refKey(item)}`)) })
-const allocations = ref<ChargeAllocation[]>([])
-const monthCardError = ref('')
-function cardChanged(card: MonthCard) {
-  subscriptionStore.updateMonthCard(card)
-  void refreshCards()
-}
-async function refreshCards() {
-  try { await subscriptionStore.fetchMonthCards(true); allocations.value = await groupBuyAPI.allocations(); monthCardError.value = '' } catch { monthCardError.value = t('groupBuy.loadFailed') }
-}
 let poller: ReturnType<typeof setInterval>
 onUnmounted(() => clearInterval(poller))
 
@@ -372,7 +343,6 @@ function subscriptionTemporaryRateLabel(subscription: UserSubscription): string 
 async function loadSubscriptions() {
   try {
     loading.value = true
-    await refreshCards()
     const [items, rates] = await Promise.all([
       subscriptionsAPI.getMySubscriptions(),
       userGroupsAPI.getUserGroupRates().catch(() => ({}))
@@ -474,6 +444,6 @@ function formatResetTime(windowStart: string | null, windowHours: number): strin
 
 onMounted(() => {
   loadSubscriptions()
-  poller = setInterval(() => { refreshCards(); authStore.refreshUser().catch(() => {}); subscriptionsAPI.getMySubscriptions().then(items => { subscriptions.value = items }).catch(() => {}) }, 30000)
+  poller = setInterval(() => { subscriptionsAPI.getMySubscriptions().then(items => { subscriptions.value = items }).catch(() => {}) }, 30000)
 })
 </script>

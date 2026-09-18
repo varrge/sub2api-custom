@@ -110,7 +110,7 @@ const groups = computed(() =>
     return {
       id,
       name:
-        items[0]?.card?.group_name || items[0]?.legacy?.group?.name || `#${id}`,
+        items.find(item => item.card)?.card?.group_name || items.find(item => item.legacy)?.legacy?.group?.name || `#${id}`,
       items
     }
   })

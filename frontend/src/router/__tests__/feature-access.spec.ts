@@ -8,6 +8,7 @@ type NavigationGuard = (
 
 const routerHarness = vi.hoisted(() => ({
   guard: null as NavigationGuard | null,
+  routes: [] as Array<{ path: string; meta?: Record<string, unknown> }>,
 }))
 
 const authStore = vi.hoisted(() => ({
@@ -36,13 +37,15 @@ const appStore = vi.hoisted(() => ({
 
 vi.mock('vue-router', () => ({
   createWebHistory: vi.fn(() => ({})),
-  createRouter: vi.fn(() => ({
+  createRouter: vi.fn((options) => {
+    routerHarness.routes = options.routes
+    return ({
     beforeEach: vi.fn((guard: NavigationGuard) => {
       routerHarness.guard = guard
     }),
     afterEach: vi.fn(),
     onError: vi.fn(),
-  })),
+  }) }),
 }))
 
 vi.mock('@/stores/auth', () => ({
@@ -256,4 +259,22 @@ describe('subscription route guard (opt-out flag)', () => {
 
     expect(next).toHaveBeenCalledWith('/admin/dashboard')
   })
+  it.each(['/group-buy', '/my-group-buy'])('allows %s when official subscriptions are disabled', async path => {
+    appStore.cachedPublicSettings = { subscription_enabled: false, payment_enabled: true }
+    const route = routerHarness.routes.find(route => route.path === path)!
+    expect(route).toBeDefined()
+    expect(route.meta?.requiresSubscription).toBeUndefined()
+    const { navigation, next } = runGuard(route.meta!, path)
+    await navigation
+    expect(next).toHaveBeenCalledWith()
+  })
+
+  it('keeps owned month cards accessible when purchases are disabled too', async () => {
+    appStore.cachedPublicSettings = { subscription_enabled: false, payment_enabled: false }
+    const route = routerHarness.routes.find(route => route.path === '/my-group-buy')!
+    const { navigation, next } = runGuard(route.meta!, route.path)
+    await navigation
+    expect(next).toHaveBeenCalledWith()
+  })
+
 })

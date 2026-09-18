@@ -40,9 +40,11 @@ describe('group buy purchase and quota boundaries', () => {
     expect(wrapper.text()).toContain('最后周期，到期后不再重置')
     expect(wrapper.text()).toContain('$1,000.00 / $1,100.00')
   })
-  it('keeps subscription deep links in the month-card catalog without an implicit renewal', () => {
-    expect(purchaseQuery({ tab: 'subscription', group: '10' })).toEqual({ groupBuy: true, groupId: 10, productId: undefined, teamCode: '', mode: null })
-    expect(purchaseQuery({ mode: 'join', team_code: 'OLD-SNAPSHOT' })).toMatchObject({ groupBuy: true, mode: 'join', teamCode: 'OLD-SNAPSHOT' })
+  it('keeps official subscription links separate while accepting old month-card links', () => {
+    expect(purchaseQuery({ tab: 'subscription', group: '10' })).toEqual({ groupBuy: false, groupId: 10, productId: undefined, teamCode: '', mode: null })
+    expect(purchaseQuery({ tab: 'group-buy' })).toMatchObject({ groupBuy: true })
+    expect(purchaseQuery({ tab: 'subscription', order_type: 'month_card' })).toMatchObject({ groupBuy: true })
+    expect(purchaseQuery({ tab: 'subscription', mode: 'join', team_code: 'OLD-SNAPSHOT' })).toMatchObject({ groupBuy: true, mode: 'join', teamCode: 'OLD-SNAPSHOT' })
   })
 })
 
@@ -77,7 +79,7 @@ it('keeps legacy subscription and card identities distinct when their numeric ID
   const allocations: ChargeAllocation[] = [{ ...base, id: 10, kind: 'legacy', entitlement_id: card.id, amount_usd: 1 }, { ...base, id: 11, kind: 'card', entitlement_id: card.id, amount_usd: 2 }]
   const wrapper = mount(AllocationTable, { props: { allocations, cards: [card] }, global: global() })
   const parts = wrapper.findAll('tbody td')[1].findAll('p')
-  expect(parts[0].text()).toBe('旧订阅 #1: $1.00')
+  expect(parts[0].text()).toBe('订阅 #1: $1.00')
   expect(parts[1].text()).toBe('卡号 CARD: $2.00')
 })
 

@@ -96,7 +96,7 @@
     </div>
     <RouterLink
       v-if="team.joined"
-      to="/subscriptions"
+      to="/my-group-buy"
       class="mt-3 block text-center text-sm text-primary-600"
     >
       {{ t('groupBuy.viewCards') }}

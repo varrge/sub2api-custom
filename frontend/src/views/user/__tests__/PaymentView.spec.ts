@@ -21,6 +21,8 @@ const routerPush = vi.hoisted(() => vi.fn())
 const routerResolve = vi.hoisted(() => vi.fn(() => ({ href: '/payment/stripe?mock=1' })))
 const createOrder = vi.hoisted(() => vi.fn())
 const refreshUser = vi.hoisted(() => vi.fn())
+const fetchMonthCards = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+vi.mock('@/stores/groupBuy', () => ({ useGroupBuyStore: () => ({ fetchMonthCards }) }))
 const fetchActiveSubscriptions = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const showError = vi.hoisted(() => vi.fn())
 const showInfo = vi.hoisted(() => vi.fn())
@@ -270,17 +272,13 @@ async function mountSubscriptionConfirm(options: Parameters<typeof checkoutInfoW
   })
   await flushPromises()
   await flushPromises()
-  // Legacy plans remain available through explicit selection. Group deep links now open the month-card catalog.
-  const planCard = wrapper.findComponent(SubscriptionPlanCard)
-  if (planCard.exists()) planCard.vm.$emit('select', checkoutInfoWithPlansFixture(options).data.plans[0])
-  await flushPromises()
   return wrapper
 }
 
-async function mountSubscriptionPlanList(planCount: number, rates: Record<number, number> | Error = {}) {
+async function mountSubscriptionPlanList(planCount: number, rates: Record<number, number> | Error = {}, tab = 'subscription') {
   vi.useRealTimers()
   routeState.path = '/purchase'
-  routeState.query = { tab: 'subscription' }
+  routeState.query = { tab }
   routerReplace.mockReset().mockResolvedValue(undefined)
   routerPush.mockReset().mockResolvedValue(undefined)
   routerResolve.mockClear()
@@ -859,11 +857,13 @@ describe('PaymentView WeChat JSAPI flow', () => {
 })
 
 describe('independent month-card checkout', () => {
+  afterEach(() => appStoreState.setPublicSettings(undefined))
   const product: GroupBuyProduct = { id: 41, group_id: 3, group_name: 'OpenAI', platform: 'openai', name: 'Independent monthly', description: '', price_cny: 198, base_quota_usd: 940, tiers: [{ members: 6, quota_usd: 1000 }], max_members: 10, recruitment_hours: 48, for_sale: true, sort_order: 0 }
   const team: GroupBuyTeam = { id: 5, code: 'FROZEN-TEAM', product_id: 41, product: { ...product, price_cny: 188 }, member_count: 4, current_quota_usd: 960, next_quota_usd: 1000, next_members: 6, starts_at: '2099-01-01T00:00:00Z', closes_at: '2099-01-03T00:00:00Z', status: 'recruiting', joined: false }
 
   it.each(['solo', 'create'] as const)('creates a separate %s month-card order at its fixed CNY price', async mode => {
-    const wrapper = await mountSubscriptionPlanList(0)
+    appStoreState.setPublicSettings({ subscription_enabled: false })
+    const wrapper = await mountSubscriptionPlanList(0, {}, 'group-buy')
     createOrder.mockReset().mockResolvedValue({ order_id: 91, amount: 198, pay_amount: 198, currency: 'CNY', qr_code: 'pay:91', expires_at: '2099-01-01T00:00:00Z' })
     wrapper.getComponent(ProductCatalog).vm.$emit('select', { product, mode })
     await flushPromises()
@@ -875,7 +875,7 @@ describe('independent month-card checkout', () => {
   })
 
   it('blocks non-CNY methods while leaving the original recharge method list available', async () => {
-    const wrapper = await mountSubscriptionPlanList(0)
+    const wrapper = await mountSubscriptionPlanList(0, {}, 'group-buy')
     getCheckoutInfo.mockResolvedValue(checkoutInfoFixture({ methods: { stripe: { ...checkoutInfoFixture().data.methods.wxpay, currency: 'USD' } } }))
     wrapper.unmount()
     const current = shallowMount(PaymentView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } } })
@@ -888,6 +888,7 @@ describe('independent month-card checkout', () => {
 
   it.each(['solo', 'create', 'join'] as const)('preserves %s product/team context through token-only WeChat OAuth redirects', async mode => {
     vi.useRealTimers()
+    appStoreState.setPublicSettings({ subscription_enabled: false })
     window.localStorage.clear()
     routeState.query = { tab: 'subscription', order_type: 'month_card', mode, product_id: '41', ...(mode === 'join' ? { team_code: team.code } : {}), wechat_resume_token: `token-${mode}` }
     getGroupBuyProducts.mockResolvedValue([product])
@@ -904,6 +905,7 @@ describe('independent month-card checkout', () => {
       await flushPromises()
       expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ order_type: 'month_card', product_id: 41, mode, wechat_resume_token: `token-${mode}`, team_code: mode === 'join' ? team.code : undefined }))
       const redirect = new URL(new URL(locationState.href, locationState.origin).searchParams.get('redirect')!, locationState.origin)
+      expect(redirect.searchParams.get('tab')).toBe('group-buy')
       expect(redirect.searchParams.get('order_type')).toBe('month_card')
       expect(redirect.searchParams.get('mode')).toBe(mode)
       expect(redirect.searchParams.get('product_id')).toBe('41')
@@ -925,26 +927,26 @@ describe('PaymentView subscription feature flag', () => {
     return wrapper
       .findAll('button')
       .map((button) => button.text())
-      .filter((text) => text === 'payment.tabTopUp' || text === 'payment.tabSubscribe')
+      .filter((text) => text === 'payment.tabTopUp' || text === 'payment.tabSubscribe' || text === 'groupBuy.tab')
   }
 
   it('keeps the top-up / subscribe switcher when subscription_enabled is absent (opt-out default)', async () => {
     const wrapper = await mountSubscriptionPlanList(2)
 
-    expect(tabLabels(wrapper)).toEqual(['payment.tabTopUp', 'payment.tabSubscribe'])
+    expect(tabLabels(wrapper)).toEqual(['payment.tabTopUp', 'payment.tabSubscribe', 'groupBuy.tab'])
     expect(wrapper.findAllComponents(SubscriptionPlanCard)).toHaveLength(2)
   })
 
-  it('drops the subscribe tab, hides the switcher and ignores ?tab=subscription when subscriptions are disabled', async () => {
+  it('hides only the subscribe tab and ignores subscription links when subscriptions are disabled', async () => {
     appStoreState.setPublicSettings({ subscription_enabled: false })
     const wrapper = await mountSubscriptionPlanList(2)
 
-    expect(tabLabels(wrapper)).toEqual([])
+    expect(tabLabels(wrapper)).toEqual(['payment.tabTopUp', 'groupBuy.tab'])
     expect(wrapper.findAllComponents(SubscriptionPlanCard)).toHaveLength(0)
     expect(wrapper.text()).toContain('payment.rechargeAccount')
   })
 
-  it('shows an unavailable notice instead of a doomed top-up form when balance recharge is disabled too', async () => {
+  it('keeps the month-card catalog when both official subscriptions and balance recharge are disabled', async () => {
     appStoreState.setPublicSettings({ subscription_enabled: false })
     const wrapper = await mountSubscriptionConfirm({ checkout: { balance_disabled: true } })
 
@@ -952,7 +954,7 @@ describe('PaymentView subscription feature flag', () => {
     expect(wrapper.findAllComponents(SubscriptionPlanCard)).toHaveLength(0)
     expect(wrapper.text()).not.toContain('payment.confirmSubscription')
     expect(wrapper.text()).not.toContain('payment.rechargeAccount')
-    expect(wrapper.text()).toContain('payment.billingUnavailable')
+    expect(wrapper.findComponent(ProductCatalog).exists()).toBe(true)
     wrapper.unmount()
   })
 
@@ -963,23 +965,24 @@ describe('PaymentView subscription feature flag', () => {
     appStoreState.setPublicSettings({ subscription_enabled: false })
     await flushPromises()
 
-    expect(tabLabels(wrapper)).toEqual([])
+    expect(tabLabels(wrapper)).toEqual(['payment.tabTopUp', 'groupBuy.tab'])
     expect(wrapper.findAllComponents(SubscriptionPlanCard)).toHaveLength(0)
     expect(wrapper.text()).toContain('payment.rechargeAccount')
     wrapper.unmount()
   })
 
-  it('enters the subscribe tab when a subscription-only site turns subscriptions back on', async () => {
+  it('keeps the group-buy flow when subscriptions are re-enabled', async () => {
     appStoreState.setPublicSettings({ subscription_enabled: false })
     const wrapper = await mountSubscriptionConfirm({ checkout: { balance_disabled: true } })
-    expect(wrapper.text()).toContain('payment.billingUnavailable')
+    expect(wrapper.findComponent(ProductCatalog).exists()).toBe(true)
 
     appStoreState.setPublicSettings({ subscription_enabled: true })
     await flushPromises()
 
     expect(wrapper.text()).not.toContain('payment.billingUnavailable')
     expect(wrapper.text()).not.toContain('payment.rechargeAccount')
-    expect(wrapper.findAllComponents(SubscriptionPlanCard).length).toBeGreaterThan(0)
+    expect(wrapper.findComponent(ProductCatalog).exists()).toBe(true)
+    expect(tabLabels(wrapper)).toEqual(['payment.tabSubscribe', 'groupBuy.tab'])
     wrapper.unmount()
   })
 })

@@ -97,9 +97,8 @@
             </button>
             </template>
           </template>
-          <!-- Subscribe Tab -->
-          <template v-else-if="activeTab === 'subscription'">
-            <!-- Subscription confirm (inline, replaces plan list) -->
+          <!-- Group-buy Tab -->
+          <template v-else-if="activeTab === 'group-buy'">
             <template v-if="selectedMonthCard">
               <div class="card space-y-4 p-5">
                 <h2 class="text-xl font-bold">{{ t('groupBuy.confirm') }}</h2>
@@ -116,7 +115,11 @@
               <button class="btn btn-primary w-full" :disabled="!canSubmitMonthCard || submitting" @click="confirmMonthCard">{{ submitting ? t('common.processing') : t('groupBuy.pay', { amount: cny(monthCardTotal) }) }}</button>
               <button class="btn btn-secondary w-full" :disabled="submitting" @click="selectedMonthCard = null">{{ t('common.cancel') }}</button>
             </template>
-            <template v-else-if="selectedPlan">
+            <ProductCatalog v-else :group-id="purchaseQuery(route.query).groupId" @select="selectMonthCard" />
+          </template>
+          <!-- Official subscription Tab -->
+          <template v-else-if="activeTab === 'subscription'">
+            <template v-if="selectedPlan">
               <div class="card p-5">
                 <!-- Header: platform badge + plan name -->
                 <div class="mb-3 flex flex-wrap items-center gap-2">
@@ -209,8 +212,6 @@
             </template>
             <!-- Plan list -->
             <template v-else>
-              <ProductCatalog :group-id="purchaseQuery(route.query).groupId" @select="selectMonthCard" />
-              <details v-if="checkout.plans.length" class="card p-5"><summary class="cursor-pointer font-medium">{{ t('groupBuy.legacyProducts') }}</summary><p class="my-3 text-sm text-gray-500">{{ t('groupBuy.legacyHint') }}</p>
               <div v-if="checkout.plans.length === 0" class="card py-16 text-center">
                 <Icon name="gift" size="xl" class="mx-auto mb-3 text-gray-300 dark:text-dark-600" />
                 <p class="text-gray-500 dark:text-gray-400">{{ t('payment.noPlans') }}</p>
@@ -218,7 +219,6 @@
               <div v-else :class="planGridClass">
                 <SubscriptionPlanCard v-for="plan in checkout.plans" :key="plan.id" :plan="plan" :active-subscriptions="activeSubscriptions" :user-rate-multiplier="userGroupRates[plan.group_id] ?? null" @select="selectPlan" />
               </div>
-              </details>
               <!-- Active subscriptions (compact, below plan list) -->
               <div v-if="activeSubscriptions.length > 0">
                 <p class="mb-2 text-xs font-medium text-gray-400 dark:text-gray-500">{{ t('payment.activeSubscription') }}</p>
@@ -286,6 +286,7 @@
 </template>
 
 <script setup lang="ts">
+import { useGroupBuyStore } from '@/stores/groupBuy'
 import ProductCatalog from '@/features/group-buy/ProductCatalog.vue'
 import { canJoin, cny, usd, exactDate, purchaseQuery } from '@/features/group-buy/model'
 import { groupBuyAPI } from '@/api/groupBuy'
@@ -348,6 +349,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 const paymentStore = usePaymentStore()
 const subscriptionStore = useSubscriptionStore()
+const groupBuyStore = useGroupBuyStore()
 const appStore = useAppStore()
 const temporaryRateNow = useTemporaryRateNow()
 const userGroupRates = ref<Record<number, number>>({})
@@ -405,7 +407,8 @@ const loading = ref(true)
 const submitting = ref(false)
 const errorMessage = ref('')
 const errorHintMessage = ref('')
-const activeTab = ref<'recharge' | 'subscription'>('recharge')
+type PurchaseTab = 'recharge' | 'subscription' | 'group-buy'
+const activeTab = ref<PurchaseTab>('recharge')
 const amount = ref<number | null>(null)
 const selectedMethod = ref('')
 const selectedPlan = ref<SubscriptionPlan | null>(null)
@@ -418,10 +421,9 @@ const monthCardFee = computed(() => Math.ceil((selectedMonthCard.value?.product.
 const monthCardTotal = computed(() => (selectedMonthCard.value?.product.price_cny ?? 0) + monthCardFee.value)
 const canSubmitMonthCard = computed(() => !!selectedMonthCard.value && monthCardMethods.value.some(method => method.type === selectedMethod.value && method.available) && (!selectedMonthCard.value.team || canJoin(selectedMonthCard.value.team, monthCardNow.value)))
 function selectMonthCard(selection: MonthCardSelection) {
-  if (!subscriptionEnabled.value) return
   selectedPlan.value = null
   selectedMonthCard.value = selection
-  activeTab.value = 'subscription'
+  activeTab.value = 'group-buy'
   errorMessage.value = ''
   if (!monthCardMethods.value.some(method => method.type === selectedMethod.value && method.available)) selectedMethod.value = monthCardMethods.value.find(method => method.available)?.type ?? ''
 }
@@ -430,9 +432,8 @@ async function confirmMonthCard() {
   await createOrder(selectedMonthCard.value.product.price_cny, 'month_card')
 }
 async function loadMonthCardQuery() {
-  if (!subscriptionEnabled.value) return
   const query = purchaseQuery(route.query)
-  if (query.groupBuy) activeTab.value = 'subscription'
+  if (query.groupBuy) activeTab.value = 'group-buy'
   if (query.mode === 'join' && query.teamCode) {
     const team = await groupBuyAPI.team(query.teamCode)
     selectMonthCard({ product: team.product, mode: 'join', team })
@@ -574,7 +575,7 @@ function buildWechatOAuthAuthorizeUrl(
     redirectUrl.searchParams.set('payment_type', paymentType)
     redirectUrl.searchParams.set('order_type', context.orderType)
     if (context.orderType === 'month_card' && selectedMonthCard.value) {
-      redirectUrl.searchParams.set('tab', 'subscription')
+      redirectUrl.searchParams.set('tab', 'group-buy')
       redirectUrl.searchParams.set('mode', selectedMonthCard.value.mode)
       redirectUrl.searchParams.set('product_id', String(selectedMonthCard.value.product.id))
       if (selectedMonthCard.value.team) redirectUrl.searchParams.set('team_code', selectedMonthCard.value.team.code)
@@ -599,25 +600,27 @@ function buildWechatOAuthAuthorizeUrl(
   }
 }
 
+function refreshPurchasedEntitlements(orderType: OrderType | '') {
+  if (orderType === 'month_card') {
+    groupBuyStore.fetchMonthCards(true).catch(() => {})
+  } else if (orderType === 'subscription' && subscriptionEnabled.value) {
+    subscriptionStore.fetchActiveSubscriptions(true).catch(() => {})
+  }
+}
+
 function onPaymentDone() {
-  const wasSubscription = paymentState.value.orderType === 'subscription' || paymentState.value.orderType === 'month_card'
+  const orderType = paymentState.value.orderType
   resetPayment()
   selectedPlan.value = null
   selectedMonthCard.value = null
-  if (wasSubscription) {
-    subscriptionStore.fetchActiveSubscriptions(true).catch(() => {})
-    subscriptionStore.fetchMonthCards?.(true).catch(() => {})
-  }
+  refreshPurchasedEntitlements(orderType)
 }
 
 async function onPaymentSuccess() {
   const completedPayment = { ...paymentState.value }
   removeRecoverySnapshot()
   authStore.refreshUser()
-  if (paymentState.value.orderType === 'subscription' || paymentState.value.orderType === 'month_card') {
-    subscriptionStore.fetchActiveSubscriptions(true).catch(() => {})
-    subscriptionStore.fetchMonthCards?.(true).catch(() => {})
-  }
+  refreshPurchasedEntitlements(completedPayment.orderType)
   await redirectToPaymentResult(completedPayment)
 }
 
@@ -638,9 +641,10 @@ const renderedHelpText = computed(() => DOMPurify.sanitize(
 ))
 
 const tabs = computed(() => {
-  const result: { key: 'recharge' | 'subscription'; label: string }[] = []
+  const result: { key: PurchaseTab; label: string }[] = []
   if (!checkout.value.balance_disabled) result.push({ key: 'recharge', label: t('payment.tabTopUp') })
   if (subscriptionEnabled.value) result.push({ key: 'subscription', label: t('payment.tabSubscribe') })
+  result.push({ key: 'group-buy', label: t('groupBuy.tab') })
   return result
 })
 
@@ -651,7 +655,6 @@ watch(tabs, (available) => {
   activeTab.value = available[0]?.key ?? 'recharge'
   if (leavingSubscription) {
     selectedPlan.value = null
-    selectedMonthCard.value = null
     showRenewalModal.value = false
   }
 })
@@ -882,6 +885,8 @@ function planPeakRateLabel(plan: SubscriptionPlan): string {
 }
 
 function selectPlan(plan: SubscriptionPlan) {
+  if (!subscriptionEnabled.value) return
+  activeTab.value = 'subscription'
   selectedMonthCard.value = null
   selectedPlan.value = plan
   errorMessage.value = ''
@@ -890,9 +895,7 @@ function selectPlan(plan: SubscriptionPlan) {
 function selectPlanFromModal(plan: SubscriptionPlan) {
   showRenewalModal.value = false
   renewGroupId.value = null
-  selectedMonthCard.value = null
-  selectedPlan.value = plan
-  errorMessage.value = ''
+  selectPlan(plan)
 }
 
 function closeRenewalModal() {
@@ -906,7 +909,7 @@ async function handleSubmitRecharge() {
 }
 
 async function confirmSubscribe() {
-  if (!selectedPlan.value || submitting.value) return
+  if (!subscriptionEnabled.value || !selectedPlan.value || submitting.value) return
   await createOrder(selectedPlan.value.price, 'subscription', selectedPlan.value.id)
 }
 
@@ -1289,13 +1292,26 @@ onMounted(async () => {
         removeRecoverySnapshot()
       }
     }
+    const isGroupBuyFlow = purchaseQuery(route.query).groupBuy
+    const isWechatResume = hasWechatResumeQuery(route.query)
     try { await loadMonthCardQuery() } catch (error) {
       // The server's opaque token owns an existing checkout, including products since delisted.
       if (typeof route.query.wechat_resume_token !== 'string' || !route.query.wechat_resume_token) throw error
     }
     await resumeWechatPaymentFromQuery()
-    // Legacy subscription links select the group in the new catalog without silently renewing.
-    if (subscriptionEnabled.value && purchaseQuery(route.query).groupBuy) activeTab.value = 'subscription'
+    // Old month-card links are identified by their mode/order type, not the subscription tab.
+    if (!isGroupBuyFlow && route.query.tab === 'subscription' && subscriptionEnabled.value) {
+      activeTab.value = 'subscription'
+      if (route.query.group && paymentPhase.value === 'select' && !isWechatResume) {
+        const groupId = Number(route.query.group)
+        const groupPlans = checkout.value.plans.filter(plan => plan.group_id === groupId)
+        if (groupPlans.length === 1) selectPlan(groupPlans[0])
+        else if (groupPlans.length > 1) {
+          renewGroupId.value = groupId
+          showRenewalModal.value = true
+        }
+      }
+    }
   } catch (err: unknown) { appStore.showError(extractI18nErrorMessage(err, t, 'payment.errors', t('common.error'))) }
   finally { loading.value = false }
   // Fetch active subscriptions (uses cache, non-blocking)

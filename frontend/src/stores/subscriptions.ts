@@ -7,8 +7,6 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import subscriptionsAPI from '@/api/subscriptions'
 import type { UserSubscription } from '@/types'
-import { groupBuyAPI } from '@/api/groupBuy'
-import type { MonthCard, EntitlementOrder } from '@/types/groupBuy'
 
 // Cache TTL: 60 seconds
 const CACHE_TTL_MS = 60_000
@@ -17,31 +15,6 @@ const CACHE_TTL_MS = 60_000
 let requestGeneration = 0
 
 export const useSubscriptionStore = defineStore('subscriptions', () => {
-  const monthCards = ref<MonthCard[]>([])
-  const entitlementOrders = ref<EntitlementOrder[]>([])
-  let monthCardsPromise: Promise<void> | null = null
-  let monthCardsFetchedAt = 0
-  let monthCardsGeneration = 0
-  function updateMonthCard(card: MonthCard) {
-    // Discard reads started before this mutation returned.
-    monthCardsGeneration++
-    monthCardsFetchedAt = 0
-    monthCardsPromise = null
-    monthCards.value = monthCards.value.map(item => item.id === card.id ? card : item)
-  }
-  async function fetchMonthCards(force = false): Promise<void> {
-    if (!force && monthCardsFetchedAt && Date.now() - monthCardsFetchedAt < CACHE_TTL_MS) return
-    if (monthCardsPromise && !force) return monthCardsPromise
-    const generation = ++monthCardsGeneration
-    const request = Promise.all([groupBuyAPI.cards(), groupBuyAPI.orders()]).then(([cards, orders]) => {
-      if (generation !== monthCardsGeneration) return
-      monthCards.value = cards
-      entitlementOrders.value = orders
-      monthCardsFetchedAt = Date.now()
-    }).finally(() => { if (monthCardsPromise === request) monthCardsPromise = null })
-    monthCardsPromise = request
-    return request
-  }
   // State
   const activeSubscriptions = ref<UserSubscription[]>([])
   const loading = ref(false)
@@ -116,7 +89,6 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
     if (pollerInterval) return
 
     pollerInterval = setInterval(() => {
-      fetchMonthCards(true).catch(() => {})
       fetchActiveSubscriptions(true).catch((error) => {
         console.error('Subscription polling failed:', error)
       })
@@ -138,11 +110,6 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
    */
   function clear() {
     requestGeneration++
-    monthCardsGeneration++
-    monthCardsPromise = null
-    monthCardsFetchedAt = 0
-    monthCards.value = []
-    entitlementOrders.value = []
     activePromise = null
     activeSubscriptions.value = []
     loaded.value = false
@@ -155,14 +122,9 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
    */
   function invalidateCache() {
     lastFetchedAt.value = null
-    monthCardsFetchedAt = 0
   }
 
   return {
-    monthCards,
-    entitlementOrders,
-    fetchMonthCards,
-    updateMonthCard,
     activeSubscriptions,
     loading,
     hasActiveSubscriptions,

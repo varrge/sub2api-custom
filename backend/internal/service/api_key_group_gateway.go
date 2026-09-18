@@ -204,3 +204,43 @@ func (s *GatewayService) APIKeyGroupModelCatalog(ctx context.Context, groupID in
 	}
 	return models, useDefaults, nil
 }
+
+// APIKeyGroupGeminiModelCatalog includes opted-in Antigravity accounts in Gemini
+// groups without hiding models during temporary account limits. Direct
+// Antigravity and Composite groups do not require the mixed-scheduling opt-in.
+// Only unrestricted native Gemini accounts contribute the Gemini defaults.
+func (s *GatewayService) APIKeyGroupGeminiModelCatalog(ctx context.Context, groupID int64, platform string) (models []string, useDefaults bool, err error) {
+	platforms := []string{PlatformGemini, PlatformAntigravity}
+	switch platform {
+	case PlatformGemini, PlatformComposite:
+	case PlatformAntigravity:
+		platforms = []string{PlatformAntigravity}
+	default:
+		return nil, false, nil
+	}
+	accounts, err := s.accountRepo.ListModelAvailabilityCandidates(ctx, &groupID, platforms, false)
+	if err != nil {
+		return nil, false, err
+	}
+	seen := make(map[string]bool)
+	models = make([]string, 0)
+	for i := range accounts {
+		account := &accounts[i]
+		antigravity := account.Platform == PlatformAntigravity
+		if antigravity && platform == PlatformGemini && !account.IsMixedSchedulingEnabled() {
+			continue
+		}
+		mapping := account.GetModelMapping()
+		if account.Platform == PlatformGemini && len(mapping) == 0 {
+			useDefaults = true
+		}
+		for model := range mapping {
+			if strings.Contains(model, "*") || seen[model] || antigravity && !isAntigravityGeminiModel(model) {
+				continue
+			}
+			seen[model] = true
+			models = append(models, model)
+		}
+	}
+	return models, useDefaults, nil
+}

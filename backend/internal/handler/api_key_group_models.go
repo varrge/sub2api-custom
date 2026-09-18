@@ -89,24 +89,33 @@ func (h *GatewayHandler) MultiGroupModels(c *gin.Context) bool {
 			}
 			continue
 		}
-		platforms := []string{group.Platform}
-		if group.Platform == service.PlatformComposite {
-			platforms = []string{service.PlatformOpenAI, service.PlatformAnthropic, service.PlatformGemini, service.PlatformAntigravity, service.PlatformGrok, service.PlatformKimi, service.PlatformZhipu, service.PlatformDeepseek, service.PlatformMiniMax, service.PlatformOpenCodeGo}
-		}
 		groupIDs := []string{}
-		for _, platform := range platforms {
-			if google && platform != service.PlatformGemini && platform != service.PlatformAntigravity {
-				continue
-			}
-			models, useDefaults, err := h.gatewayService.APIKeyGroupModelCatalog(c.Request.Context(), group.ID, platform)
+		if google {
+			models, useDefaults, err := h.gatewayService.APIKeyGroupGeminiModelCatalog(c.Request.Context(), group.ID, group.Platform)
 			if err != nil {
-				h.errorResponse(c, 503, "api_error", "Failed to load group model catalog")
+				googleError(c, http.StatusServiceUnavailable, "Failed to load group model catalog")
 				return true
 			}
-			if useDefaults && !service.IsCNProvider(platform) {
-				models = append(models, defaultModelIDsForPlatform(platform)...)
+			if useDefaults {
+				models = append(models, defaultModelIDsForPlatform(service.PlatformGemini)...)
 			}
 			groupIDs = append(groupIDs, models...)
+		} else {
+			platforms := []string{group.Platform}
+			if group.Platform == service.PlatformComposite {
+				platforms = []string{service.PlatformOpenAI, service.PlatformAnthropic, service.PlatformGemini, service.PlatformAntigravity, service.PlatformGrok, service.PlatformKimi, service.PlatformZhipu, service.PlatformDeepseek, service.PlatformMiniMax, service.PlatformOpenCodeGo}
+			}
+			for _, platform := range platforms {
+				models, useDefaults, err := h.gatewayService.APIKeyGroupModelCatalog(c.Request.Context(), group.ID, platform)
+				if err != nil {
+					h.errorResponse(c, 503, "api_error", "Failed to load group model catalog")
+					return true
+				}
+				if useDefaults && !service.IsCNProvider(platform) {
+					models = append(models, defaultModelIDsForPlatform(platform)...)
+				}
+				groupIDs = append(groupIDs, models...)
+			}
 		}
 		if group.Platform == service.PlatformComposite {
 			aliases, err := h.gatewayService.APIKeyCompositeModelAliases(c.Request.Context(), group.ID, endpoint)

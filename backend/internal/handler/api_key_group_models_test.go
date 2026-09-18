@@ -106,6 +106,129 @@ func TestMultiGroupGoogleCatalogNormalizesNamesAndDoesNotFallbackToOtherPlatform
 	require.Equal(t, "models/gemini-test", response.Models[0].Name)
 }
 
+func TestMultiGroupGoogleCatalogIncludesEligibleAntigravityMappings(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		platform  string
+		mixed     bool
+		native    bool
+		allowlist bool
+	}{
+		{name: "mixed", platform: service.PlatformGemini, mixed: true},
+		{name: "mixed disabled", platform: service.PlatformGemini},
+		{name: "native and mixed", platform: service.PlatformGemini, mixed: true, native: true},
+		{name: "group allowlist", platform: service.PlatformGemini, mixed: true, native: true, allowlist: true},
+		{name: "direct antigravity", platform: service.PlatformAntigravity},
+		{name: "composite", platform: service.PlatformComposite, native: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			limitedUntil := time.Now().Add(time.Hour)
+			accounts := []service.Account{{
+				ID: 1, Platform: service.PlatformAntigravity, Status: service.StatusActive, Schedulable: true,
+				RateLimitResetAt: &limitedUntil, TempUnschedulableUntil: &limitedUntil,
+				Extra: map[string]any{"mixed_scheduling": tc.mixed},
+				Credentials: map[string]any{"model_mapping": map[string]any{
+					"gemini-synced-custom": "gemini-3.8-flash-high",
+					"gemini-hidden":        "gemini-3.8-flash-high",
+					"gemini-shared":        "gemini-3.8-flash-high",
+					"claude-custom":        "claude-sonnet-4-6",
+					"gemini-wildcard-*":    "gemini-3.8-flash-high",
+				}},
+			}}
+			if tc.native {
+				accounts = append(accounts, service.Account{ID: 2, Platform: service.PlatformGemini,
+					Credentials: map[string]any{"model_mapping": map[string]any{
+						"native-alias": "gemini-2.5-pro", "models/gemini-shared": "gemini-2.5-pro",
+					}},
+				})
+			}
+			repo := &multiGroupCatalogAccountRepo{gatewayModelsAccountRepoStub{byGroup: map[int64][]service.Account{
+				1: accounts,
+				2: {{Platform: service.PlatformGemini, Credentials: map[string]any{"model_mapping": map[string]any{
+					"gemini-later": "gemini-2.5-pro", "gemini-shared": "gemini-2.5-pro",
+				}}}},
+			}}}
+			h := newGatewayModelsHandlerForTest(repo)
+			groups := []*service.Group{
+				{ID: 1, Platform: tc.platform, ModelAllowlist: service.GroupModelAllowlist{Enabled: tc.allowlist, Models: []string{"gemini-synced-custom", "gemini-shared", "native-alias"}}},
+				{ID: 2, Platform: service.PlatformGemini},
+			}
+			request := func(model string) *httptest.ResponseRecorder {
+				t.Helper()
+				w := httptest.NewRecorder()
+				c, _ := gin.CreateTestContext(w)
+				path := "/v1beta/models"
+				if model != "" {
+					path += "/" + model
+					c.Params = gin.Params{{Key: "model", Value: model}}
+				}
+				c.Request = httptest.NewRequest(http.MethodGet, path, nil)
+				c.Set(string(middleware.ContextKeyAPIKey), &service.APIKey{MultiGroupEnabled: true, Groups: groups})
+				if model == "" {
+					h.GeminiV1BetaListModels(c)
+				} else {
+					h.GeminiV1BetaGetModel(c)
+				}
+				return w
+			}
+			w := request("")
+			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+			var catalog struct {
+				Models []struct {
+					Name string `json:"name"`
+				} `json:"models"`
+			}
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &catalog))
+			names := make(map[string]bool)
+			for _, model := range catalog.Models {
+				require.False(t, names[model.Name], "duplicate model %s", model.Name)
+				names[model.Name] = true
+			}
+			wantAntigravity := tc.mixed || tc.platform != service.PlatformGemini
+			for model, want := range map[string]bool{
+				"gemini-synced-custom": wantAntigravity,
+				"gemini-hidden":        wantAntigravity && !tc.allowlist,
+				"native-alias":         tc.native,
+				"gemini-later":         true,
+				"gemini-shared":        true,
+				"claude-custom":        false,
+				"gemini-wildcard-*":    false,
+			} {
+				require.Equal(t, want, names["models/"+model], model)
+				if strings.Contains(model, "*") {
+					continue
+				}
+				got := request(model)
+				if want {
+					require.Equal(t, http.StatusOK, got.Code, got.Body.String())
+					require.Contains(t, got.Body.String(), `"name":"models/`+model+`"`)
+				} else {
+					require.Equal(t, http.StatusNotFound, got.Code, got.Body.String())
+				}
+			}
+		})
+	}
+}
+
+func TestMultiGroupGoogleCatalogDefaultsRequireNativeGeminiAccount(t *testing.T) {
+	for _, native := range []bool{false, true} {
+		t.Run(map[bool]string{false: "antigravity only", true: "unrestricted native"}[native], func(t *testing.T) {
+			accounts := []service.Account{{Platform: service.PlatformAntigravity,
+				Extra:       map[string]any{"mixed_scheduling": true},
+				Credentials: map[string]any{"model_mapping": map[string]any{"gemini-synced-custom": "gemini-3.8-flash-high"}},
+			}}
+			if native {
+				accounts = append(accounts, service.Account{Platform: service.PlatformGemini})
+			}
+			repo := &multiGroupCatalogAccountRepo{gatewayModelsAccountRepoStub{byGroup: map[int64][]service.Account{1: accounts}}}
+			w := serveMultiGroupCatalog(t, newGatewayModelsHandlerForTest(repo), "/v1beta/models", &service.Group{ID: 1, Platform: service.PlatformGemini})
+			require.Contains(t, w.Body.String(), `"name":"models/gemini-synced-custom"`)
+			require.Equal(t, native, strings.Contains(w.Body.String(), `"name":"models/gemini-2.5-pro"`))
+			require.NotContains(t, w.Body.String(), "claude-")
+		})
+	}
+}
+
 func TestMultiGroupCodexCatalogRetainsLaterGroupVisionAndDirectEndpointShape(t *testing.T) {
 	repo := &multiGroupCatalogAccountRepo{gatewayModelsAccountRepoStub{byGroup: map[int64][]service.Account{
 		1: {{ID: 1, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey, Credentials: map[string]any{"model_mapping": map[string]any{"shared": "gpt-3.5-turbo"}}}},

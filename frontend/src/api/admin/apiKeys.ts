@@ -16,18 +16,18 @@ export interface UpdateApiKeyGroupResult {
 /**
  * Update an API key's group binding
  * @param id - API Key ID
- * @param groupId - Group ID (0 to unbind, positive to bind, null/undefined to skip)
- * @returns Updated API key with auto-grant info
+ * @param groupIds - Ordered group IDs (empty array unbinds all)
+ * @returns Updated API key (binding does not grant group access)
  */
-export async function updateApiKeyGroup(id: number, groupId: number | null): Promise<UpdateApiKeyGroupResult> {
+export async function updateApiKeyGroups(id: number, groupIds: number[]): Promise<UpdateApiKeyGroupResult> {
   const { data } = await apiClient.put<UpdateApiKeyGroupResult>(`/admin/api-keys/${id}`, {
-    group_id: groupId === null ? 0 : groupId
+    group_ids: [...groupIds]
   })
   return data
 }
 
 export const apiKeysAPI = {
-  updateApiKeyGroup
+  updateApiKeyGroups
 }
 
 export default apiKeysAPI

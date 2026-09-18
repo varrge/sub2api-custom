@@ -116,51 +116,54 @@ const (
 // APIKeyMutation represents an operation that mutates the APIKey nodes in the graph.
 type APIKeyMutation struct {
 	config
-	op                 Op
-	typ                string
-	id                 *int64
-	created_at         *time.Time
-	updated_at         *time.Time
-	deleted_at         *time.Time
-	key                *string
-	name               *string
-	status             *string
-	last_used_at       *time.Time
-	ip_whitelist       *[]string
-	appendip_whitelist []string
-	ip_blacklist       *[]string
-	appendip_blacklist []string
-	quota              *float64
-	addquota           *float64
-	quota_used         *float64
-	addquota_used      *float64
-	expires_at         *time.Time
-	rate_limit_5h      *float64
-	addrate_limit_5h   *float64
-	rate_limit_1d      *float64
-	addrate_limit_1d   *float64
-	rate_limit_7d      *float64
-	addrate_limit_7d   *float64
-	usage_5h           *float64
-	addusage_5h        *float64
-	usage_1d           *float64
-	addusage_1d        *float64
-	usage_7d           *float64
-	addusage_7d        *float64
-	window_5h_start    *time.Time
-	window_1d_start    *time.Time
-	window_7d_start    *time.Time
-	clearedFields      map[string]struct{}
-	user               *int64
-	cleareduser        bool
-	group              *int64
-	clearedgroup       bool
-	usage_logs         map[int64]struct{}
-	removedusage_logs  map[int64]struct{}
-	clearedusage_logs  bool
-	done               bool
-	oldValue           func(context.Context) (*APIKey, error)
-	predicates         []predicate.APIKey
+	op                  Op
+	typ                 string
+	id                  *int64
+	created_at          *time.Time
+	updated_at          *time.Time
+	deleted_at          *time.Time
+	key                 *string
+	name                *string
+	group_ids           *[]int64
+	appendgroup_ids     []int64
+	multi_group_enabled *bool
+	status              *string
+	last_used_at        *time.Time
+	ip_whitelist        *[]string
+	appendip_whitelist  []string
+	ip_blacklist        *[]string
+	appendip_blacklist  []string
+	quota               *float64
+	addquota            *float64
+	quota_used          *float64
+	addquota_used       *float64
+	expires_at          *time.Time
+	rate_limit_5h       *float64
+	addrate_limit_5h    *float64
+	rate_limit_1d       *float64
+	addrate_limit_1d    *float64
+	rate_limit_7d       *float64
+	addrate_limit_7d    *float64
+	usage_5h            *float64
+	addusage_5h         *float64
+	usage_1d            *float64
+	addusage_1d         *float64
+	usage_7d            *float64
+	addusage_7d         *float64
+	window_5h_start     *time.Time
+	window_1d_start     *time.Time
+	window_7d_start     *time.Time
+	clearedFields       map[string]struct{}
+	user                *int64
+	cleareduser         bool
+	group               *int64
+	clearedgroup        bool
+	usage_logs          map[int64]struct{}
+	removedusage_logs   map[int64]struct{}
+	clearedusage_logs   bool
+	done                bool
+	oldValue            func(context.Context) (*APIKey, error)
+	predicates          []predicate.APIKey
 }
 
 var _ ent.Mutation = (*APIKeyMutation)(nil)
@@ -537,6 +540,93 @@ func (m *APIKeyMutation) GroupIDCleared() bool {
 func (m *APIKeyMutation) ResetGroupID() {
 	m.group = nil
 	delete(m.clearedFields, apikey.FieldGroupID)
+}
+
+// SetGroupIds sets the "group_ids" field.
+func (m *APIKeyMutation) SetGroupIds(i []int64) {
+	m.group_ids = &i
+	m.appendgroup_ids = nil
+}
+
+// GroupIds returns the value of the "group_ids" field in the mutation.
+func (m *APIKeyMutation) GroupIds() (r []int64, exists bool) {
+	v := m.group_ids
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupIds returns the old "group_ids" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldGroupIds(ctx context.Context) (v []int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupIds is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupIds requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupIds: %w", err)
+	}
+	return oldValue.GroupIds, nil
+}
+
+// AppendGroupIds adds i to the "group_ids" field.
+func (m *APIKeyMutation) AppendGroupIds(i []int64) {
+	m.appendgroup_ids = append(m.appendgroup_ids, i...)
+}
+
+// AppendedGroupIds returns the list of values that were appended to the "group_ids" field in this mutation.
+func (m *APIKeyMutation) AppendedGroupIds() ([]int64, bool) {
+	if len(m.appendgroup_ids) == 0 {
+		return nil, false
+	}
+	return m.appendgroup_ids, true
+}
+
+// ResetGroupIds resets all changes to the "group_ids" field.
+func (m *APIKeyMutation) ResetGroupIds() {
+	m.group_ids = nil
+	m.appendgroup_ids = nil
+}
+
+// SetMultiGroupEnabled sets the "multi_group_enabled" field.
+func (m *APIKeyMutation) SetMultiGroupEnabled(b bool) {
+	m.multi_group_enabled = &b
+}
+
+// MultiGroupEnabled returns the value of the "multi_group_enabled" field in the mutation.
+func (m *APIKeyMutation) MultiGroupEnabled() (r bool, exists bool) {
+	v := m.multi_group_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMultiGroupEnabled returns the old "multi_group_enabled" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldMultiGroupEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMultiGroupEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMultiGroupEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMultiGroupEnabled: %w", err)
+	}
+	return oldValue.MultiGroupEnabled, nil
+}
+
+// ResetMultiGroupEnabled resets all changes to the "multi_group_enabled" field.
+func (m *APIKeyMutation) ResetMultiGroupEnabled() {
+	m.multi_group_enabled = nil
 }
 
 // SetStatus sets the "status" field.
@@ -1540,7 +1630,7 @@ func (m *APIKeyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *APIKeyMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 25)
 	if m.created_at != nil {
 		fields = append(fields, apikey.FieldCreatedAt)
 	}
@@ -1561,6 +1651,12 @@ func (m *APIKeyMutation) Fields() []string {
 	}
 	if m.group != nil {
 		fields = append(fields, apikey.FieldGroupID)
+	}
+	if m.group_ids != nil {
+		fields = append(fields, apikey.FieldGroupIds)
+	}
+	if m.multi_group_enabled != nil {
+		fields = append(fields, apikey.FieldMultiGroupEnabled)
 	}
 	if m.status != nil {
 		fields = append(fields, apikey.FieldStatus)
@@ -1632,6 +1728,10 @@ func (m *APIKeyMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case apikey.FieldGroupID:
 		return m.GroupID()
+	case apikey.FieldGroupIds:
+		return m.GroupIds()
+	case apikey.FieldMultiGroupEnabled:
+		return m.MultiGroupEnabled()
 	case apikey.FieldStatus:
 		return m.Status()
 	case apikey.FieldLastUsedAt:
@@ -1687,6 +1787,10 @@ func (m *APIKeyMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldName(ctx)
 	case apikey.FieldGroupID:
 		return m.OldGroupID(ctx)
+	case apikey.FieldGroupIds:
+		return m.OldGroupIds(ctx)
+	case apikey.FieldMultiGroupEnabled:
+		return m.OldMultiGroupEnabled(ctx)
 	case apikey.FieldStatus:
 		return m.OldStatus(ctx)
 	case apikey.FieldLastUsedAt:
@@ -1776,6 +1880,20 @@ func (m *APIKeyMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetGroupID(v)
+		return nil
+	case apikey.FieldGroupIds:
+		v, ok := value.([]int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupIds(v)
+		return nil
+	case apikey.FieldMultiGroupEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMultiGroupEnabled(v)
 		return nil
 	case apikey.FieldStatus:
 		v, ok := value.(string)
@@ -2114,6 +2232,12 @@ func (m *APIKeyMutation) ResetField(name string) error {
 		return nil
 	case apikey.FieldGroupID:
 		m.ResetGroupID()
+		return nil
+	case apikey.FieldGroupIds:
+		m.ResetGroupIds()
+		return nil
+	case apikey.FieldMultiGroupEnabled:
+		m.ResetMultiGroupEnabled()
 		return nil
 	case apikey.FieldStatus:
 		m.ResetStatus()
@@ -11315,65 +11439,69 @@ func (m *BatchImageItemMutation) ResetEdge(name string) error {
 // BatchImageJobMutation represents an operation that mutates the BatchImageJob nodes in the graph.
 type BatchImageJobMutation struct {
 	config
-	op                  Op
-	typ                 string
-	id                  *int64
-	batch_id            *string
-	user_id             *int64
-	adduser_id          *int64
-	api_key_id          *int64
-	addapi_key_id       *int64
-	account_id          *int64
-	addaccount_id       *int64
-	provider            *string
-	model               *string
-	task_name           *string
-	status              *string
-	provider_job_name   *string
-	provider_input_ref  *string
-	provider_output_ref *string
-	gcs_input_uri       *string
-	gcs_output_uri      *string
-	item_count          *int
-	additem_count       *int
-	success_count       *int
-	addsuccess_count    *int
-	fail_count          *int
-	addfail_count       *int
-	cancelled_count     *int
-	addcancelled_count  *int
-	estimated_cost      *float64
-	addestimated_cost   *float64
-	hold_amount         *float64
-	addhold_amount      *float64
-	actual_cost         *float64
-	addactual_cost      *float64
-	currency            *string
-	hold_id             *string
-	idempotency_key     *string
-	request_hash        *string
-	manifest_hash       *string
-	retry_count         *int
-	addretry_count      *int
-	version             *int
-	addversion          *int
-	output_expires_at   *time.Time
-	input_deleted_at    *time.Time
-	output_deleted_at   *time.Time
-	downloaded_at       *time.Time
-	user_deleted_at     *time.Time
-	last_error_code     *string
-	last_error_message  *string
-	created_at          *time.Time
-	updated_at          *time.Time
-	submitted_at        *time.Time
-	started_at          *time.Time
-	finished_at         *time.Time
-	settled_at          *time.Time
-	clearedFields       map[string]struct{}
-	done                bool
-	oldValue            func(context.Context) (*BatchImageJob, error)
-	predicates          []predicate.BatchImageJob
+	op                     Op
+	typ                    string
+	id                     *int64
+	batch_id               *string
+	user_id                *int64
+	adduser_id             *int64
+	api_key_id             *int64
+	addapi_key_id          *int64
+	group_id               *int64
+	addgroup_id            *int64
+	billing_snapshot       *jsontext.Value
+	appendbilling_snapshot jsontext.Value
+	account_id             *int64
+	addaccount_id          *int64
+	provider               *string
+	model                  *string
+	task_name              *string
+	status                 *string
+	provider_job_name      *string
+	provider_input_ref     *string
+	provider_output_ref    *string
+	gcs_input_uri          *string
+	gcs_output_uri         *string
+	item_count             *int
+	additem_count          *int
+	success_count          *int
+	addsuccess_count       *int
+	fail_count             *int
+	addfail_count          *int
+	cancelled_count        *int
+	addcancelled_count     *int
+	estimated_cost         *float64
+	addestimated_cost      *float64
+	hold_amount            *float64
+	addhold_amount         *float64
+	actual_cost            *float64
+	addactual_cost         *float64
+	currency               *string
+	hold_id                *string
+	idempotency_key        *string
+	request_hash           *string
+	manifest_hash          *string
+	retry_count            *int
+	addretry_count         *int
+	version                *int
+	addversion             *int
+	output_expires_at      *time.Time
+	input_deleted_at       *time.Time
+	output_deleted_at      *time.Time
+	downloaded_at          *time.Time
+	user_deleted_at        *time.Time
+	last_error_code        *string
+	last_error_message     *string
+	created_at             *time.Time
+	updated_at             *time.Time
+	submitted_at           *time.Time
+	started_at             *time.Time
+	finished_at            *time.Time
+	settled_at             *time.Time
+	clearedFields          map[string]struct{}
+	done                   bool
+	oldValue               func(context.Context) (*BatchImageJob, error)
+	predicates             []predicate.BatchImageJob
 }
 
 var _ ent.Mutation = (*BatchImageJobMutation)(nil)
@@ -11634,6 +11762,141 @@ func (m *BatchImageJobMutation) ResetAPIKeyID() {
 	m.api_key_id = nil
 	m.addapi_key_id = nil
 	delete(m.clearedFields, batchimagejob.FieldAPIKeyID)
+}
+
+// SetGroupID sets the "group_id" field.
+func (m *BatchImageJobMutation) SetGroupID(i int64) {
+	m.group_id = &i
+	m.addgroup_id = nil
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *BatchImageJobMutation) GroupID() (r int64, exists bool) {
+	v := m.group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the BatchImageJob entity.
+// If the BatchImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageJobMutation) OldGroupID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// AddGroupID adds i to the "group_id" field.
+func (m *BatchImageJobMutation) AddGroupID(i int64) {
+	if m.addgroup_id != nil {
+		*m.addgroup_id += i
+	} else {
+		m.addgroup_id = &i
+	}
+}
+
+// AddedGroupID returns the value that was added to the "group_id" field in this mutation.
+func (m *BatchImageJobMutation) AddedGroupID() (r int64, exists bool) {
+	v := m.addgroup_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (m *BatchImageJobMutation) ClearGroupID() {
+	m.group_id = nil
+	m.addgroup_id = nil
+	m.clearedFields[batchimagejob.FieldGroupID] = struct{}{}
+}
+
+// GroupIDCleared returns if the "group_id" field was cleared in this mutation.
+func (m *BatchImageJobMutation) GroupIDCleared() bool {
+	_, ok := m.clearedFields[batchimagejob.FieldGroupID]
+	return ok
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *BatchImageJobMutation) ResetGroupID() {
+	m.group_id = nil
+	m.addgroup_id = nil
+	delete(m.clearedFields, batchimagejob.FieldGroupID)
+}
+
+// SetBillingSnapshot sets the "billing_snapshot" field.
+func (m *BatchImageJobMutation) SetBillingSnapshot(j jsontext.Value) {
+	m.billing_snapshot = &j
+	m.appendbilling_snapshot = nil
+}
+
+// BillingSnapshot returns the value of the "billing_snapshot" field in the mutation.
+func (m *BatchImageJobMutation) BillingSnapshot() (r jsontext.Value, exists bool) {
+	v := m.billing_snapshot
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBillingSnapshot returns the old "billing_snapshot" field's value of the BatchImageJob entity.
+// If the BatchImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageJobMutation) OldBillingSnapshot(ctx context.Context) (v jsontext.Value, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBillingSnapshot is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBillingSnapshot requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBillingSnapshot: %w", err)
+	}
+	return oldValue.BillingSnapshot, nil
+}
+
+// AppendBillingSnapshot adds j to the "billing_snapshot" field.
+func (m *BatchImageJobMutation) AppendBillingSnapshot(j jsontext.Value) {
+	m.appendbilling_snapshot = append(m.appendbilling_snapshot, j...)
+}
+
+// AppendedBillingSnapshot returns the list of values that were appended to the "billing_snapshot" field in this mutation.
+func (m *BatchImageJobMutation) AppendedBillingSnapshot() (jsontext.Value, bool) {
+	if len(m.appendbilling_snapshot) == 0 {
+		return nil, false
+	}
+	return m.appendbilling_snapshot, true
+}
+
+// ClearBillingSnapshot clears the value of the "billing_snapshot" field.
+func (m *BatchImageJobMutation) ClearBillingSnapshot() {
+	m.billing_snapshot = nil
+	m.appendbilling_snapshot = nil
+	m.clearedFields[batchimagejob.FieldBillingSnapshot] = struct{}{}
+}
+
+// BillingSnapshotCleared returns if the "billing_snapshot" field was cleared in this mutation.
+func (m *BatchImageJobMutation) BillingSnapshotCleared() bool {
+	_, ok := m.clearedFields[batchimagejob.FieldBillingSnapshot]
+	return ok
+}
+
+// ResetBillingSnapshot resets all changes to the "billing_snapshot" field.
+func (m *BatchImageJobMutation) ResetBillingSnapshot() {
+	m.billing_snapshot = nil
+	m.appendbilling_snapshot = nil
+	delete(m.clearedFields, batchimagejob.FieldBillingSnapshot)
 }
 
 // SetAccountID sets the "account_id" field.
@@ -13504,7 +13767,7 @@ func (m *BatchImageJobMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *BatchImageJobMutation) Fields() []string {
-	fields := make([]string, 0, 40)
+	fields := make([]string, 0, 42)
 	if m.batch_id != nil {
 		fields = append(fields, batchimagejob.FieldBatchID)
 	}
@@ -13513,6 +13776,12 @@ func (m *BatchImageJobMutation) Fields() []string {
 	}
 	if m.api_key_id != nil {
 		fields = append(fields, batchimagejob.FieldAPIKeyID)
+	}
+	if m.group_id != nil {
+		fields = append(fields, batchimagejob.FieldGroupID)
+	}
+	if m.billing_snapshot != nil {
+		fields = append(fields, batchimagejob.FieldBillingSnapshot)
 	}
 	if m.account_id != nil {
 		fields = append(fields, batchimagejob.FieldAccountID)
@@ -13639,6 +13908,10 @@ func (m *BatchImageJobMutation) Field(name string) (ent.Value, bool) {
 		return m.UserID()
 	case batchimagejob.FieldAPIKeyID:
 		return m.APIKeyID()
+	case batchimagejob.FieldGroupID:
+		return m.GroupID()
+	case batchimagejob.FieldBillingSnapshot:
+		return m.BillingSnapshot()
 	case batchimagejob.FieldAccountID:
 		return m.AccountID()
 	case batchimagejob.FieldProvider:
@@ -13728,6 +14001,10 @@ func (m *BatchImageJobMutation) OldField(ctx context.Context, name string) (ent.
 		return m.OldUserID(ctx)
 	case batchimagejob.FieldAPIKeyID:
 		return m.OldAPIKeyID(ctx)
+	case batchimagejob.FieldGroupID:
+		return m.OldGroupID(ctx)
+	case batchimagejob.FieldBillingSnapshot:
+		return m.OldBillingSnapshot(ctx)
 	case batchimagejob.FieldAccountID:
 		return m.OldAccountID(ctx)
 	case batchimagejob.FieldProvider:
@@ -13831,6 +14108,20 @@ func (m *BatchImageJobMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAPIKeyID(v)
+		return nil
+	case batchimagejob.FieldGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
+	case batchimagejob.FieldBillingSnapshot:
+		v, ok := value.(jsontext.Value)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBillingSnapshot(v)
 		return nil
 	case batchimagejob.FieldAccountID:
 		v, ok := value.(int64)
@@ -14105,6 +14396,9 @@ func (m *BatchImageJobMutation) AddedFields() []string {
 	if m.addapi_key_id != nil {
 		fields = append(fields, batchimagejob.FieldAPIKeyID)
 	}
+	if m.addgroup_id != nil {
+		fields = append(fields, batchimagejob.FieldGroupID)
+	}
 	if m.addaccount_id != nil {
 		fields = append(fields, batchimagejob.FieldAccountID)
 	}
@@ -14147,6 +14441,8 @@ func (m *BatchImageJobMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedUserID()
 	case batchimagejob.FieldAPIKeyID:
 		return m.AddedAPIKeyID()
+	case batchimagejob.FieldGroupID:
+		return m.AddedGroupID()
 	case batchimagejob.FieldAccountID:
 		return m.AddedAccountID()
 	case batchimagejob.FieldItemCount:
@@ -14189,6 +14485,13 @@ func (m *BatchImageJobMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddAPIKeyID(v)
+		return nil
+	case batchimagejob.FieldGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddGroupID(v)
 		return nil
 	case batchimagejob.FieldAccountID:
 		v, ok := value.(int64)
@@ -14270,6 +14573,12 @@ func (m *BatchImageJobMutation) ClearedFields() []string {
 	var fields []string
 	if m.FieldCleared(batchimagejob.FieldAPIKeyID) {
 		fields = append(fields, batchimagejob.FieldAPIKeyID)
+	}
+	if m.FieldCleared(batchimagejob.FieldGroupID) {
+		fields = append(fields, batchimagejob.FieldGroupID)
+	}
+	if m.FieldCleared(batchimagejob.FieldBillingSnapshot) {
+		fields = append(fields, batchimagejob.FieldBillingSnapshot)
 	}
 	if m.FieldCleared(batchimagejob.FieldAccountID) {
 		fields = append(fields, batchimagejob.FieldAccountID)
@@ -14357,6 +14666,12 @@ func (m *BatchImageJobMutation) ClearField(name string) error {
 	case batchimagejob.FieldAPIKeyID:
 		m.ClearAPIKeyID()
 		return nil
+	case batchimagejob.FieldGroupID:
+		m.ClearGroupID()
+		return nil
+	case batchimagejob.FieldBillingSnapshot:
+		m.ClearBillingSnapshot()
+		return nil
 	case batchimagejob.FieldAccountID:
 		m.ClearAccountID()
 		return nil
@@ -14442,6 +14757,12 @@ func (m *BatchImageJobMutation) ResetField(name string) error {
 		return nil
 	case batchimagejob.FieldAPIKeyID:
 		m.ResetAPIKeyID()
+		return nil
+	case batchimagejob.FieldGroupID:
+		m.ResetGroupID()
+		return nil
+	case batchimagejob.FieldBillingSnapshot:
+		m.ResetBillingSnapshot()
 		return nil
 	case batchimagejob.FieldAccountID:
 		m.ResetAccountID()

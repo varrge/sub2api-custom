@@ -99,6 +99,26 @@ func (_c *APIKeyCreate) SetNillableGroupID(v *int64) *APIKeyCreate {
 	return _c
 }
 
+// SetGroupIds sets the "group_ids" field.
+func (_c *APIKeyCreate) SetGroupIds(v []int64) *APIKeyCreate {
+	_c.mutation.SetGroupIds(v)
+	return _c
+}
+
+// SetMultiGroupEnabled sets the "multi_group_enabled" field.
+func (_c *APIKeyCreate) SetMultiGroupEnabled(v bool) *APIKeyCreate {
+	_c.mutation.SetMultiGroupEnabled(v)
+	return _c
+}
+
+// SetNillableMultiGroupEnabled sets the "multi_group_enabled" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableMultiGroupEnabled(v *bool) *APIKeyCreate {
+	if v != nil {
+		_c.SetMultiGroupEnabled(*v)
+	}
+	return _c
+}
+
 // SetStatus sets the "status" field.
 func (_c *APIKeyCreate) SetStatus(v string) *APIKeyCreate {
 	_c.mutation.SetStatus(v)
@@ -383,6 +403,14 @@ func (_c *APIKeyCreate) defaults() error {
 		v := apikey.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := _c.mutation.GroupIds(); !ok {
+		v := apikey.DefaultGroupIds
+		_c.mutation.SetGroupIds(v)
+	}
+	if _, ok := _c.mutation.MultiGroupEnabled(); !ok {
+		v := apikey.DefaultMultiGroupEnabled
+		_c.mutation.SetMultiGroupEnabled(v)
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := apikey.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -448,6 +476,12 @@ func (_c *APIKeyCreate) check() error {
 		if err := apikey.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "APIKey.name": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.GroupIds(); !ok {
+		return &ValidationError{Name: "group_ids", err: errors.New(`ent: missing required field "APIKey.group_ids"`)}
+	}
+	if _, ok := _c.mutation.MultiGroupEnabled(); !ok {
+		return &ValidationError{Name: "multi_group_enabled", err: errors.New(`ent: missing required field "APIKey.multi_group_enabled"`)}
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "APIKey.status"`)}
@@ -530,6 +564,14 @@ func (_c *APIKeyCreate) createSpec() (*APIKey, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(apikey.FieldName, field.TypeString, value)
 		_node.Name = value
+	}
+	if value, ok := _c.mutation.GroupIds(); ok {
+		_spec.SetField(apikey.FieldGroupIds, field.TypeJSON, value)
+		_node.GroupIds = value
+	}
+	if value, ok := _c.mutation.MultiGroupEnabled(); ok {
+		_spec.SetField(apikey.FieldMultiGroupEnabled, field.TypeBool, value)
+		_node.MultiGroupEnabled = value
 	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(apikey.FieldStatus, field.TypeString, value)
@@ -778,6 +820,30 @@ func (u *APIKeyUpsert) UpdateGroupID() *APIKeyUpsert {
 // ClearGroupID clears the value of the "group_id" field.
 func (u *APIKeyUpsert) ClearGroupID() *APIKeyUpsert {
 	u.SetNull(apikey.FieldGroupID)
+	return u
+}
+
+// SetGroupIds sets the "group_ids" field.
+func (u *APIKeyUpsert) SetGroupIds(v []int64) *APIKeyUpsert {
+	u.Set(apikey.FieldGroupIds, v)
+	return u
+}
+
+// UpdateGroupIds sets the "group_ids" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateGroupIds() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldGroupIds)
+	return u
+}
+
+// SetMultiGroupEnabled sets the "multi_group_enabled" field.
+func (u *APIKeyUpsert) SetMultiGroupEnabled(v bool) *APIKeyUpsert {
+	u.Set(apikey.FieldMultiGroupEnabled, v)
+	return u
+}
+
+// UpdateMultiGroupEnabled sets the "multi_group_enabled" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateMultiGroupEnabled() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldMultiGroupEnabled)
 	return u
 }
 
@@ -1203,6 +1269,34 @@ func (u *APIKeyUpsertOne) UpdateGroupID() *APIKeyUpsertOne {
 func (u *APIKeyUpsertOne) ClearGroupID() *APIKeyUpsertOne {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.ClearGroupID()
+	})
+}
+
+// SetGroupIds sets the "group_ids" field.
+func (u *APIKeyUpsertOne) SetGroupIds(v []int64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetGroupIds(v)
+	})
+}
+
+// UpdateGroupIds sets the "group_ids" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateGroupIds() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateGroupIds()
+	})
+}
+
+// SetMultiGroupEnabled sets the "multi_group_enabled" field.
+func (u *APIKeyUpsertOne) SetMultiGroupEnabled(v bool) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetMultiGroupEnabled(v)
+	})
+}
+
+// UpdateMultiGroupEnabled sets the "multi_group_enabled" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateMultiGroupEnabled() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateMultiGroupEnabled()
 	})
 }
 
@@ -1841,6 +1935,34 @@ func (u *APIKeyUpsertBulk) UpdateGroupID() *APIKeyUpsertBulk {
 func (u *APIKeyUpsertBulk) ClearGroupID() *APIKeyUpsertBulk {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.ClearGroupID()
+	})
+}
+
+// SetGroupIds sets the "group_ids" field.
+func (u *APIKeyUpsertBulk) SetGroupIds(v []int64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetGroupIds(v)
+	})
+}
+
+// UpdateGroupIds sets the "group_ids" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateGroupIds() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateGroupIds()
+	})
+}
+
+// SetMultiGroupEnabled sets the "multi_group_enabled" field.
+func (u *APIKeyUpsertBulk) SetMultiGroupEnabled(v bool) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetMultiGroupEnabled(v)
+	})
+}
+
+// UpdateMultiGroupEnabled sets the "multi_group_enabled" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateMultiGroupEnabled() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateMultiGroupEnabled()
 	})
 }
 

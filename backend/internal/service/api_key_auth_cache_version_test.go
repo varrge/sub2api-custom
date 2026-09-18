@@ -69,3 +69,13 @@ func TestAPIKeyService_RejectsV24AuthSnapshotBeforeMergedModelAllowlist(t *testi
 		t.Fatalf("expected prior official/custom v24 snapshots to miss cache, got used=%v err=%v", ok, err)
 	}
 }
+
+func TestAPIKeyService_RejectsV25AuthSnapshotWithoutOrderedGroups(t *testing.T) {
+	svc := &APIKeyService{}
+	apiKey, ok, err := svc.applyAuthCacheEntry("k-before-multi-group", &APIKeyAuthCacheEntry{
+		Snapshot: &APIKeyAuthSnapshot{Version: 25},
+	})
+	if err != nil || ok || apiKey != nil {
+		t.Fatalf("expected v25 snapshots without all group bindings to miss cache, got used=%v err=%v", ok, err)
+	}
+}

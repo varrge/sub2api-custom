@@ -121,6 +121,18 @@ func (s *Store) Admit(ctx context.Context, userID, groupID int64, at time.Time) 
 	if !exists {
 		return nil, nil
 	}
+	return s.AdmitIncludingLegacy(ctx, userID, groupID, at)
+}
+
+// AdmitIncludingLegacy captures immutable entitlement windows for asynchronous
+// work, including users who have only a legacy subscription and no month cards.
+// Callers persist this snapshot before starting upstream work.
+func (s *Store) AdmitIncludingLegacy(ctx context.Context, userID, groupID int64, at time.Time) (*Snapshot, error) {
+	at = at.UTC().Truncate(time.Microsecond)
+	if err := s.syncFreezePolicy(ctx, at); err != nil {
+		return nil, err
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err

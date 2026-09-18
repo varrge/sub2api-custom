@@ -71,6 +71,8 @@ type OpenAIWSStateStore interface {
 	DeleteResponseAccount(ctx context.Context, groupID int64, responseID string) error
 	BindHTTPResponseOwner(ctx context.Context, groupID int64, responseID string, userID, apiKeyID int64, ttl time.Duration) error
 	GetHTTPResponseOwner(ctx context.Context, groupID int64, responseID string) (userID, apiKeyID int64, found bool, err error)
+	BindResourceGroup(ctx context.Context, kind, resourceID string, userID, apiKeyID, groupID int64, ttl time.Duration) error
+	GetResourceGroup(ctx context.Context, kind, resourceID string, userID, apiKeyID int64) (groupID int64, found bool, err error)
 
 	BindResponseConn(responseID, connID string, ttl time.Duration)
 	GetResponseConn(responseID string) (string, bool)
@@ -101,6 +103,7 @@ type defaultOpenAIWSStateStore struct {
 	responseToAccount    map[string]openAIWSAccountBinding
 	responseOwnerMu      sync.RWMutex
 	responseOwners       map[string]openAIHTTPResponseOwnerBinding
+	resourceGroups       map[string]openAIWSAccountBinding // protected by responseOwnerMu; accountID encodes groupID+1
 	responseToConnMu     sync.RWMutex
 	responseToConn       map[string]openAIWSConnBinding
 	sessionToTurnStateMu sync.RWMutex
@@ -124,6 +127,7 @@ func NewOpenAIWSStateStore(cache GatewayCache) OpenAIWSStateStore {
 		sessionToTurnState:      make(map[string]openAIWSTurnStateBinding, 256),
 		sessionToConn:           make(map[string]openAIWSSessionConnBinding, 256),
 		sessionInvalidEncrypted: make(map[string]openAIWSInvalidEncryptedBinding),
+		resourceGroups:          make(map[string]openAIWSAccountBinding, 256),
 	}
 	store.lastCleanupUnixNano.Store(time.Now().UnixNano())
 	return store
@@ -144,6 +148,10 @@ func (s *defaultOpenAIWSStateStore) BindHTTPResponseOwner(ctx context.Context, g
 		userID: userID, apiKeyID: apiKeyID, expiresAt: time.Now().Add(ttl),
 	}
 	s.responseOwnerMu.Unlock()
+	// Response continuation remains interoperable between keys of the same user.
+	if err := s.BindResourceGroup(ctx, "response", id, userID, 0, groupID, ttl); err != nil {
+		return err
+	}
 
 	if s.cache == nil {
 		return nil
@@ -511,6 +519,7 @@ func (s *defaultOpenAIWSStateStore) maybeCleanup() {
 
 	s.responseOwnerMu.Lock()
 	cleanupExpiredHTTPResponseOwnerBindings(s.responseOwners, now, openAIWSStateStoreCleanupMaxPerMap)
+	cleanupExpiredAccountBindings(s.resourceGroups, now, openAIWSStateStoreCleanupMaxPerMap)
 	s.responseOwnerMu.Unlock()
 
 	s.responseToConnMu.Lock()

@@ -77,9 +77,10 @@ type BatchImageReferenceInput struct {
 }
 
 type BatchImageOwner struct {
-	UserID   int64
-	APIKeyID int64
-	GroupID  *int64
+	UserID       int64
+	APIKeyID     int64
+	GroupID      *int64
+	Subscription *UserSubscription
 }
 
 type BatchImagePublicService struct {
@@ -241,6 +242,10 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 	if err != nil {
 		return nil, err
 	}
+	billingSnapshot, err := s.resolveBillingSnapshot(ctx, owner, account, pricingAt)
+	if err != nil {
+		return nil, err
+	}
 	parentBatchID := batchImageOptionalStringPtr(normalized.ParentBatchID)
 	if parentBatchID != nil {
 		parent, parentErr := s.Repo.GetBatchImageJobByBatchIDForOwner(ctx, owner.UserID, owner.APIKeyID, *parentBatchID)
@@ -259,10 +264,17 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 	accountID := account.ID
 	holdID := BatchImageHoldRequestID(batchID)
 	holdAmount := pricingSnapshot.HoldAmount
+	if billingSnapshot.MonthCardSnapshot != nil {
+		// Subscription quota is consumed after completion using the admitted
+		// windows, as with synchronous requests. It never freezes user balance.
+		holdAmount = 0
+	}
 	job, err := s.Repo.CreateBatchImageJob(ctx, CreateBatchImageJobParams{
 		BatchID:                 batchID,
 		UserID:                  owner.UserID,
 		APIKeyID:                &apiKeyID,
+		GroupID:                 owner.GroupID,
+		BillingSnapshot:         billingSnapshot,
 		AccountID:               &accountID,
 		Provider:                provider.Name(),
 		Model:                   normalized.Model,
@@ -633,13 +645,13 @@ func (s *BatchImagePublicService) ListModels(ctx context.Context, owner BatchIma
 		if !ok || provider == nil {
 			continue
 		}
-		accounts, err := s.listCandidateAccounts(ctx, owner.GroupID, batchImageProviderPlatform(providerName))
+		accounts, err := s.listModelCatalogAccounts(ctx, owner.GroupID, batchImageProviderPlatform(providerName))
 		if err != nil {
 			return nil, err
 		}
 		for i := range accounts {
 			account := accounts[i]
-			if !account.IsSchedulable() || !provider.SupportsAccount(&account) {
+			if !account.IsActive() || !account.Schedulable || !provider.SupportsAccount(&account) {
 				continue
 			}
 			for _, model := range batchImageModelsFromAccountMapping(&account) {
@@ -1440,4 +1452,74 @@ func parseBatchImageCursor(cursor string) int {
 		return 0
 	}
 	return offset
+}
+
+// ProbeGroup performs the same provider/account match as submission without
+// creating a job, reserving a hold, queuing work, or contacting a provider.
+func (s *BatchImagePublicService) ProbeGroup(ctx context.Context, owner BatchImageOwner, requestedProvider, model string) (bool, error) {
+	if !s.enabled() {
+		return false, ErrBatchImageDisabled
+	}
+	requestedProvider, model = strings.TrimSpace(requestedProvider), strings.TrimSpace(model)
+	if model == "" {
+		return false, ErrBatchImageInvalidModel
+	}
+	if requestedProvider != "" && !IsSupportedBatchImageProvider(requestedProvider) {
+		return false, ErrBatchImageUnsupportedProvider
+	}
+	if err := s.ensureGroupAllowsBatchImage(ctx, owner.GroupID); err != nil {
+		if errors.Is(err, ErrBatchImageGroupDisabled) {
+			return false, nil
+		}
+		return false, err
+	}
+	_, _, err := s.selectProviderAndAccount(ctx, owner, requestedProvider, model)
+	if errors.Is(err, ErrBatchImageNoAccountAvailable) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+type batchImageModelCatalogRepository interface {
+	ListModelAvailabilityCandidates(context.Context, *int64, []string, bool) ([]Account, error)
+}
+
+func (s *BatchImagePublicService) listModelCatalogAccounts(ctx context.Context, groupID *int64, platform string) ([]Account, error) {
+	if repo, ok := s.AccountRepo.(batchImageModelCatalogRepository); ok {
+		return repo.ListModelAvailabilityCandidates(ctx, groupID, []string{platform}, false)
+	}
+	return s.listCandidateAccounts(ctx, groupID, platform)
+}
+
+// ListModelsForGroups receives the authenticated, currently entitled collection.
+// It uses configuration eligibility only, so exhausted quotas do not hide models.
+func (s *BatchImagePublicService) ListModelsForGroups(ctx context.Context, owner BatchImageOwner, groups []*Group) (*BatchImagePublicModelsResponse, error) {
+	if !s.enabled() {
+		return nil, ErrBatchImageDisabled
+	}
+	out := &BatchImagePublicModelsResponse{Object: "list", Data: []BatchImagePublicModel{}}
+	seen := map[string]bool{}
+	for _, group := range groups {
+		if group == nil || !group.IsActive() || group.Platform != PlatformGemini || !group.AllowBatchImageGeneration {
+			continue
+		}
+		selected := owner
+		id := group.ID
+		selected.GroupID = &id
+		models, err := s.ListModels(ctx, selected)
+		if errors.Is(err, ErrBatchImageGroupDisabled) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, model := range models.Data {
+			identity := model.Provider + "\x00" + model.ID
+			if !seen[identity] {
+				seen[identity] = true
+				out.Data = append(out.Data, model)
+			}
+		}
+	}
+	return out, nil
 }

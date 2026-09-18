@@ -4,7 +4,7 @@
  */
 
 import { apiClient } from '../client'
-import type { AdminUser, UpdateUserRequest, PaginatedResponse, ApiKey } from '@/types'
+import type { AdminUser, UpdateUserRequest, PaginatedResponse, ApiKey, Group } from '@/types'
 
 export interface AdminBindAuthIdentityChannelRequest {
   channel: string
@@ -399,6 +399,12 @@ export async function resetPlatformQuotaWindow(
   return data
 }
 
+/** Groups the target user is already eligible to bind; this does not grant access. */
+export async function getAvailableGroups(userId: number): Promise<Group[]> {
+  const { data } = await apiClient.get<Group[]>(`/admin/users/${userId}/available-groups`)
+  return data
+}
+
 export const usersAPI = {
   list,
   getById,
@@ -410,6 +416,7 @@ export const usersAPI = {
   batchUpdateLimits,
   toggleStatus,
   getUserApiKeys,
+  getAvailableGroups,
   getUserUsageStats,
   getUserBalanceHistory,
   replaceGroup,

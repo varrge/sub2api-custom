@@ -162,6 +162,14 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 		}
 	}
 
+	var videoPricingSnapshot *service.GrokVideoPricingSnapshot
+	if isGrokVideoCreateEndpoint(endpoint) {
+		videoPricingSnapshot, err = h.gatewayService.SnapshotGrokVideoPricing(c.Request.Context(), apiKey, requestModel, requestInfo.Resolution, requestStart)
+		if err != nil {
+			h.errorResponse(c, http.StatusServiceUnavailable, "pricing_unavailable", "Video pricing is unavailable")
+			return
+		}
+	}
 	sessionSeed := body
 	if len(sessionSeed) == 0 && strings.TrimSpace(requestID) != "" {
 		sessionSeed = []byte(requestID)
@@ -183,6 +191,9 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 	// 范围内：显式豁免，防止 service 层防御性装门按文本 D 误过滤媒体请求，
 	// 也防止已计费的在途视频任务因绑定账号被门排除而查询返回伪 404。
 	requestCtx := service.WithOpenAIProfitControlSuppressed(c.Request.Context())
+	if endpoint.IsVideoLookupRequest() {
+		c.Request = c.Request.WithContext(requestCtx)
+	}
 	profitVetoCount := 0
 	failedAccountIDs := make(map[int64]struct{})
 	sameAccountRetryCount := make(map[int64]int)
@@ -217,6 +228,10 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 		var selection *service.AccountSelectionResult
 		var scheduleDecision service.OpenAIAccountScheduleDecision
 		if boundLookupAccountID > 0 {
+			if _, failed := failedAccountIDs[boundLookupAccountID]; failed {
+				h.errorResponse(c, http.StatusServiceUnavailable, "resource_unavailable", "The video's original account is unavailable")
+				return
+			}
 			selection, scheduleDecision, err = h.gatewayService.SelectGrokMediaVideoRequestAccount(
 				requestCtx, apiKey.GroupID, sessionHash, boundLookupAccountID, routingModel,
 			)
@@ -463,8 +478,9 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 			// Defer billing until status polling observes video.url. Persist create-time
 			// model/duration/resolution so status can still price if upstream omits them.
 			// Retry once: missing pending causes silent underpricing (status omits resolution).
-			resolvedVideoRateMultiplier := h.gatewayService.ResolveVideoRateMultiplierAt(requestCtx, apiKey, subject.UserID, requestStart)
+			resolvedVideoRateMultiplier := videoPricingSnapshot.RateMultiplier
 			pending := service.GrokVideoPendingBilling{
+				PricingSnapshot:             videoPricingSnapshot,
 				GroupID:                     apiKey.GroupID,
 				AccountID:                   account.ID,
 				Model:                       requestModel,
@@ -654,6 +670,7 @@ func prepareGrokVideoCompletionBilling(
 	// Re-merge with pending: resolution is request-only; model/duration fill gaps.
 	merged := *statusResult
 	if pending != nil {
+		merged.VideoPricingSnapshot = pending.PricingSnapshot
 		if strings.TrimSpace(merged.Model) == "" {
 			merged.Model = firstNonEmptyString(pending.BillingModel, pending.Model, pending.OriginalModel)
 		}

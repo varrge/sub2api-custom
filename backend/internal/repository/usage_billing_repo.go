@@ -136,7 +136,33 @@ func (r *usageBillingRepository) ReserveBatchImageBalance(ctx context.Context, c
 }
 
 func (r *usageBillingRepository) CaptureBatchImageBalance(ctx context.Context, cmd *service.BatchImageBalanceHoldCommand) (*service.BatchImageBalanceHoldResult, error) {
-	return r.applyBatchImageBalanceHold(ctx, cmd, captureUsageBillingBatchImageBalance)
+	return r.applyBatchImageBalanceHold(ctx, cmd, func(ctx context.Context, tx *sql.Tx, cmd *service.BatchImageBalanceHoldCommand) (*service.BatchImageBalanceHoldResult, error) {
+		result, err := captureUsageBillingBatchImageBalance(ctx, tx, cmd)
+		if err != nil {
+			return nil, err
+		}
+		usage := cmd.Usage
+		if usage == nil {
+			// Pre-snapshot jobs retain their balance contract and fingerprint,
+			// but newly captured usage must still count against the shared key.
+			usage = &service.UsageBillingCommand{UserID: cmd.UserID, APIKeyID: cmd.APIKeyID,
+				BatchImageID: cmd.BatchID, RequestID: cmd.RequestID,
+				APIKeyQuotaCost: cmd.ActualAmount, APIKeyRateLimitCost: cmd.ActualAmount}
+			if err := tx.QueryRowContext(ctx, `SELECT account_id FROM batch_image_jobs WHERE batch_id=$1 AND user_id=$2 AND api_key_id=$3`, cmd.BatchID, cmd.UserID, cmd.APIKeyID).Scan(&usage.AccountID); err != nil {
+				return nil, err
+			}
+		}
+		if usage.UserID != cmd.UserID || usage.APIKeyID != cmd.APIKeyID || usage.MonthCardSnapshot != nil || usage.BalanceCost != 0 || usage.SubscriptionCost != 0 || usage.SubscriptionID != nil {
+			return nil, errors.New("inconsistent batch balance accounting command")
+		}
+		if usage.BatchImageID != "" && (usage.BatchImageID != cmd.BatchID || usage.RequestID != cmd.RequestID) {
+			return nil, errors.New("batch capture and accounting job identities differ")
+		}
+		if err := r.applyUsageBillingEffects(ctx, tx, usage, &service.UsageBillingApplyResult{}); err != nil {
+			return nil, err
+		}
+		return result, nil
+	})
 }
 
 func (r *usageBillingRepository) ReleaseBatchImageBalance(ctx context.Context, cmd *service.BatchImageBalanceHoldCommand) (*service.BatchImageBalanceHoldResult, error) {
@@ -194,6 +220,17 @@ func (r *usageBillingRepository) applyBatchImageBalanceHold(
 }
 
 func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand, result *service.UsageBillingApplyResult) error {
+	acceptedBatch := cmd.BatchImageID != ""
+	if acceptedBatch {
+		var owned bool
+		if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM batch_image_jobs j JOIN api_keys k ON k.id=j.api_key_id
+ WHERE j.batch_id=$1 AND j.user_id=$2 AND k.user_id=$2 AND j.api_key_id=$3 AND j.account_id=$4)`, cmd.BatchImageID, cmd.UserID, cmd.APIKeyID, cmd.AccountID).Scan(&owned); err != nil {
+			return err
+		}
+		if !owned || cmd.RequestID != service.BatchImageCaptureRequestID(cmd.BatchImageID) {
+			return errors.New("batch billing command does not match its accepted job")
+		}
+	}
 	if cmd.MonthCardSnapshot != nil {
 		if cmd.MonthCardSnapshot.UserID != cmd.UserID || cmd.SubscriptionCost != 0 || cmd.BalanceCost != 0 || cmd.SubscriptionID != nil {
 			return errors.New("inconsistent month card billing command")
@@ -222,7 +259,7 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 	}
 
 	if cmd.APIKeyQuotaCost > 0 {
-		exhausted, err := incrementUsageBillingAPIKeyQuota(ctx, tx, cmd.APIKeyID, cmd.APIKeyQuotaCost)
+		exhausted, err := incrementUsageBillingAPIKeyQuota(ctx, tx, cmd.APIKeyID, cmd.APIKeyQuotaCost, acceptedBatch)
 		if err != nil {
 			return err
 		}
@@ -230,13 +267,13 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 	}
 
 	if cmd.APIKeyRateLimitCost > 0 {
-		if err := incrementUsageBillingAPIKeyRateLimit(ctx, tx, cmd.APIKeyID, cmd.APIKeyRateLimitCost); err != nil {
+		if err := incrementUsageBillingAPIKeyRateLimit(ctx, tx, cmd.APIKeyID, cmd.APIKeyRateLimitCost, acceptedBatch); err != nil {
 			return err
 		}
 	}
 
 	if cmd.AccountQuotaCost > 0 && (strings.EqualFold(cmd.AccountType, service.AccountTypeAPIKey) || strings.EqualFold(cmd.AccountType, service.AccountTypeBedrock)) {
-		quotaState, err := incrementUsageBillingAccountQuota(ctx, tx, cmd.AccountID, cmd.AccountQuotaCost)
+		quotaState, err := incrementUsageBillingAccountQuota(ctx, tx, cmd.AccountID, cmd.AccountQuotaCost, acceptedBatch)
 		if err != nil {
 			return err
 		}
@@ -447,7 +484,11 @@ func userExistsForBilling(ctx context.Context, tx *sql.Tx, userID int64) (bool, 
 	return true, nil
 }
 
-func incrementUsageBillingAPIKeyQuota(ctx context.Context, tx *sql.Tx, apiKeyID int64, amount float64) (bool, error) {
+func incrementUsageBillingAPIKeyQuota(ctx context.Context, tx *sql.Tx, apiKeyID int64, amount float64, acceptedBatch bool) (bool, error) {
+	activeOnly := " AND deleted_at IS NULL"
+	if acceptedBatch {
+		activeOnly = ""
+	}
 	var exhausted bool
 	err := tx.QueryRowContext(ctx, `
 		UPDATE api_keys
@@ -461,7 +502,7 @@ func incrementUsageBillingAPIKeyQuota(ctx context.Context, tx *sql.Tx, apiKeyID 
 				ELSE status
 			END,
 			updated_at = NOW()
-		WHERE id = $2 AND deleted_at IS NULL
+		WHERE id = $2`+activeOnly+`
 		RETURNING quota > 0 AND quota_used >= quota AND quota_used - $1 < quota
 	`, amount, apiKeyID, service.StatusAPIKeyActive, service.StatusAPIKeyQuotaExhausted).Scan(&exhausted)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -473,7 +514,11 @@ func incrementUsageBillingAPIKeyQuota(ctx context.Context, tx *sql.Tx, apiKeyID 
 	return exhausted, nil
 }
 
-func incrementUsageBillingAPIKeyRateLimit(ctx context.Context, tx *sql.Tx, apiKeyID int64, cost float64) error {
+func incrementUsageBillingAPIKeyRateLimit(ctx context.Context, tx *sql.Tx, apiKeyID int64, cost float64, acceptedBatch bool) error {
+	activeOnly := " AND deleted_at IS NULL"
+	if acceptedBatch {
+		activeOnly = ""
+	}
 	res, err := tx.ExecContext(ctx, `
 		UPDATE api_keys SET
 			usage_5h = CASE WHEN window_5h_start IS NOT NULL AND window_5h_start + INTERVAL '5 hours' <= NOW() THEN $1 ELSE usage_5h + $1 END,
@@ -483,7 +528,7 @@ func incrementUsageBillingAPIKeyRateLimit(ctx context.Context, tx *sql.Tx, apiKe
 			window_1d_start = CASE WHEN window_1d_start IS NULL OR window_1d_start + INTERVAL '24 hours' <= NOW() THEN date_trunc('day', NOW()) ELSE window_1d_start END,
 			window_7d_start = CASE WHEN window_7d_start IS NULL OR window_7d_start + INTERVAL '7 days' <= NOW() THEN date_trunc('day', NOW()) ELSE window_7d_start END,
 			updated_at = NOW()
-		WHERE id = $2 AND deleted_at IS NULL
+		WHERE id = $2`+activeOnly+`
 	`, cost, apiKeyID)
 	if err != nil {
 		return err
@@ -498,7 +543,11 @@ func incrementUsageBillingAPIKeyRateLimit(ctx context.Context, tx *sql.Tx, apiKe
 	return nil
 }
 
-func incrementUsageBillingAccountQuota(ctx context.Context, tx *sql.Tx, accountID int64, amount float64) (*service.AccountQuotaState, error) {
+func incrementUsageBillingAccountQuota(ctx context.Context, tx *sql.Tx, accountID int64, amount float64, acceptedBatch bool) (*service.AccountQuotaState, error) {
+	activeOnly := " AND deleted_at IS NULL"
+	if acceptedBatch {
+		activeOnly = ""
+	}
 	rows, err := tx.QueryContext(ctx,
 		`UPDATE accounts SET extra = (
 			COALESCE(extra, '{}'::jsonb)
@@ -534,7 +583,7 @@ func incrementUsageBillingAccountQuota(ctx context.Context, tx *sql.Tx, accountI
 				   ELSE '{}'::jsonb END
 			ELSE '{}'::jsonb END
 		), updated_at = NOW()
-		WHERE id = $2 AND deleted_at IS NULL
+		WHERE id = $2`+activeOnly+`
 		RETURNING
 			COALESCE((extra->>'quota_used')::numeric, 0),
 			COALESCE((extra->>'quota_limit')::numeric, 0),

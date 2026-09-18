@@ -42,7 +42,8 @@ func (s *imageTaskMemoryStore) Get(_ context.Context, _ string) (*ImageTaskRecor
 func TestImageTaskServiceLifecycleAndOwnership(t *testing.T) {
 	store := &imageTaskMemoryStore{}
 	svc := NewImageTaskServiceWithOptions(store, time.Hour, 10*time.Minute)
-	owner := ImageTaskOwner{UserID: 7, APIKeyID: 9}
+	groupID := int64(15)
+	owner := ImageTaskOwner{UserID: 7, APIKeyID: 9, GroupID: &groupID}
 
 	created, err := svc.Create(context.Background(), owner)
 	require.NoError(t, err)
@@ -52,6 +53,7 @@ func TestImageTaskServiceLifecycleAndOwnership(t *testing.T) {
 	require.Equal(t, time.Hour, store.ttl)
 	require.Equal(t, owner.UserID, store.task.UserID)
 	require.Equal(t, owner.APIKeyID, store.task.APIKeyID)
+	require.Equal(t, owner.GroupID, store.task.GroupID)
 
 	_, err = svc.Get(context.Background(), ImageTaskOwner{UserID: 7, APIKeyID: 10}, created.ID)
 	require.ErrorIs(t, err, ErrImageTaskNotFound)
@@ -59,6 +61,8 @@ func TestImageTaskServiceLifecycleAndOwnership(t *testing.T) {
 	result := json.RawMessage(`{"created":123,"data":[{"url":"https://example.test/image.png"}]}`)
 	require.NoError(t, svc.Complete(context.Background(), created.ID, http.StatusOK, result))
 
+	// Reordering/unbinding the original group does not remove resource access.
+	owner.GroupID = nil
 	completed, err := svc.Get(context.Background(), owner, created.ID)
 	require.NoError(t, err)
 	require.Equal(t, ImageTaskStatusCompleted, completed.Status)
@@ -66,6 +70,7 @@ func TestImageTaskServiceLifecycleAndOwnership(t *testing.T) {
 	require.Equal(t, "https://example.test/image.png", completed.ImageURL)
 	require.JSONEq(t, string(result), string(completed.Result))
 	require.NotNil(t, completed.CompletedAt)
+	require.Equal(t, int64(15), *store.task.GroupID)
 }
 
 func TestImageTaskServiceInvalidResultBecomesFailed(t *testing.T) {

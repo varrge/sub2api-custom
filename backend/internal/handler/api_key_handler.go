@@ -3,6 +3,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math"
 	"strconv"
@@ -32,13 +33,15 @@ func NewAPIKeyHandler(apiKeyService *service.APIKeyService) *APIKeyHandler {
 
 // CreateAPIKeyRequest represents the create API key request payload
 type CreateAPIKeyRequest struct {
-	Name          string   `json:"name" binding:"required"`
-	GroupID       *int64   `json:"group_id"`        // nullable
-	CustomKey     *string  `json:"custom_key"`      // 可选的自定义key
-	IPWhitelist   []string `json:"ip_whitelist"`    // IP 白名单
-	IPBlacklist   []string `json:"ip_blacklist"`    // IP 黑名单
-	Quota         *float64 `json:"quota"`           // 配额限制 (USD)
-	ExpiresInDays *int     `json:"expires_in_days"` // 过期天数
+	Name           string   `json:"name" binding:"required"`
+	GroupID        *int64   `json:"group_id"`
+	GroupIDs       *[]int64 `json:"group_ids"`
+	GroupIDPresent bool     `json:"-"`               // nullable
+	CustomKey      *string  `json:"custom_key"`      // 可选的自定义key
+	IPWhitelist    []string `json:"ip_whitelist"`    // IP 白名单
+	IPBlacklist    []string `json:"ip_blacklist"`    // IP 黑名单
+	Quota          *float64 `json:"quota"`           // 配额限制 (USD)
+	ExpiresInDays  *int     `json:"expires_in_days"` // 过期天数
 
 	// Rate limit fields (0 = unlimited)
 	RateLimit5h *float64 `json:"rate_limit_5h"`
@@ -48,14 +51,16 @@ type CreateAPIKeyRequest struct {
 
 // UpdateAPIKeyRequest represents the update API key request payload
 type UpdateAPIKeyRequest struct {
-	Name        string    `json:"name"`
-	GroupID     *int64    `json:"group_id"`
-	Status      string    `json:"status" binding:"omitempty,oneof=active inactive"`
-	IPWhitelist *[]string `json:"ip_whitelist"` // IP 白名单（nil 不修改，空数组清空）
-	IPBlacklist *[]string `json:"ip_blacklist"` // IP 黑名单（nil 不修改，空数组清空）
-	Quota       *float64  `json:"quota"`        // 配额限制 (USD), 0=无限制
-	ExpiresAt   *string   `json:"expires_at"`   // 过期时间 (ISO 8601)
-	ResetQuota  *bool     `json:"reset_quota"`  // 重置已用配额
+	Name           string    `json:"name"`
+	GroupID        *int64    `json:"group_id"`
+	GroupIDs       *[]int64  `json:"group_ids"`
+	GroupIDPresent bool      `json:"-"`
+	Status         string    `json:"status" binding:"omitempty,oneof=active inactive"`
+	IPWhitelist    *[]string `json:"ip_whitelist"` // IP 白名单（nil 不修改，空数组清空）
+	IPBlacklist    *[]string `json:"ip_blacklist"` // IP 黑名单（nil 不修改，空数组清空）
+	Quota          *float64  `json:"quota"`        // 配额限制 (USD), 0=无限制
+	ExpiresAt      *string   `json:"expires_at"`   // 过期时间 (ISO 8601)
+	ResetQuota     *bool     `json:"reset_quota"`  // 重置已用配额
 
 	// Rate limit fields (nil = no change, 0 = unlimited)
 	RateLimit5h         *float64 `json:"rate_limit_5h"`
@@ -197,12 +202,14 @@ func (h *APIKeyHandler) Create(c *gin.Context) {
 	}
 
 	svcReq := service.CreateAPIKeyRequest{
-		Name:          req.Name,
-		GroupID:       req.GroupID,
-		CustomKey:     req.CustomKey,
-		IPWhitelist:   req.IPWhitelist,
-		IPBlacklist:   req.IPBlacklist,
-		ExpiresInDays: req.ExpiresInDays,
+		Name:           req.Name,
+		GroupID:        req.GroupID,
+		GroupIDs:       req.GroupIDs,
+		GroupIDPresent: req.GroupIDPresent,
+		CustomKey:      req.CustomKey,
+		IPWhitelist:    req.IPWhitelist,
+		IPBlacklist:    req.IPBlacklist,
+		ExpiresInDays:  req.ExpiresInDays,
 	}
 	if req.Quota != nil {
 		svcReq.Quota = *req.Quota
@@ -265,6 +272,8 @@ func (h *APIKeyHandler) Update(c *gin.Context) {
 		svcReq.Name = &req.Name
 	}
 	svcReq.GroupID = req.GroupID
+	svcReq.GroupIDs = req.GroupIDs
+	svcReq.GroupIDPresent = req.GroupIDPresent
 	if req.Status != "" {
 		svcReq.Status = &req.Status
 	}
@@ -355,4 +364,23 @@ func (h *APIKeyHandler) GetUserGroupRates(c *gin.Context) {
 	}
 
 	response.Success(c, rates)
+}
+
+func (r *CreateAPIKeyRequest) UnmarshalJSON(data []byte) error {
+	type plain CreateAPIKeyRequest
+	if err := json.Unmarshal(data, (*plain)(r)); err != nil {
+		return err
+	}
+	present, err := service.ValidateAPIKeyGroupJSON(data)
+	r.GroupIDPresent = present
+	return err
+}
+func (r *UpdateAPIKeyRequest) UnmarshalJSON(data []byte) error {
+	type plain UpdateAPIKeyRequest
+	if err := json.Unmarshal(data, (*plain)(r)); err != nil {
+		return err
+	}
+	present, err := service.ValidateAPIKeyGroupJSON(data)
+	r.GroupIDPresent = present
+	return err
 }

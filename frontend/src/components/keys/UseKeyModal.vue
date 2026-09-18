@@ -6,8 +6,15 @@
     @close="emit('close')"
   >
     <div class="space-y-4">
+      <div v-if="groups && groups.length > 1" class="space-y-2">
+        <label for="key-example-group" class="input-label">{{ t('keys.multiGroup.exampleGroup') }}</label>
+        <select id="key-example-group" v-model.number="exampleGroupId" class="input" data-testid="key-example-group">
+          <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }} · {{ group.platform }}</option>
+        </select>
+        <p class="text-xs text-gray-500">{{ t('keys.multiGroup.exampleHint') }}</p>
+      </div>
       <!-- No Group Assigned Warning -->
-      <div v-if="!platform" class="flex items-start gap-3 p-4 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
+      <div v-if="!effectivePlatform" class="flex items-start gap-3 p-4 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
         <svg class="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
         </svg>
@@ -262,7 +269,7 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useClipboard } from '@/composables/useClipboard'
 import { fetchCodexModelsManifest } from '@/api/codex'
-import type { GroupPlatform } from '@/types'
+import type { Group, GroupPlatform } from '@/types'
 import {
   findCodexCatalogModel,
   formatCodexReasoningEffortTomlLine,
@@ -276,6 +283,7 @@ interface Props {
   baseUrl: string
   platform: GroupPlatform | null
   allowMessagesDispatch?: boolean
+  groups?: Group[]
 }
 
 interface Emits {
@@ -296,6 +304,13 @@ interface FileConfig {
 }
 
 const props = defineProps<Props>()
+const exampleGroupId = ref<number | null>(null)
+const exampleGroup = computed(() => props.groups?.find(group => group.id === exampleGroupId.value) ?? props.groups?.[0])
+const effectivePlatform = computed(() => exampleGroup.value?.platform ?? props.platform)
+const effectiveAllowMessagesDispatch = computed(() => exampleGroup.value?.allow_messages_dispatch ?? props.allowMessagesDispatch)
+watch(() => [props.apiKey, props.groups] as const, () => {
+  exampleGroupId.value = props.groups?.[0]?.id ?? null
+}, { immediate: true })
 const emit = defineEmits<Emits>()
 
 const { t } = useI18n()
@@ -316,7 +331,7 @@ let codexModelManifestRequestID = 0
 const showCodexModelCatalog = computed(() =>
   props.show &&
   (activeClientTab.value === 'codex' ||
-    (props.platform === 'openai' && activeClientTab.value === 'codex-ws'))
+    (effectivePlatform.value === 'openai' && activeClientTab.value === 'codex-ws'))
 )
 
 const codexModelCatalogPath = computed(() => {
@@ -327,12 +342,12 @@ const codexModelCatalogPath = computed(() => {
 
 const codexManifestContext = computed(() => {
   if (!showCodexModelCatalog.value) return ''
-  return `${props.platform}|${props.baseUrl}|${props.apiKey}`
+  return `${effectivePlatform.value}|${props.baseUrl}|${props.apiKey}`
 })
 
 // Reset tabs when platform changes
 const defaultClientTab = computed(() => {
-  switch (props.platform) {
+  switch (effectivePlatform.value) {
     case 'openai':
       return 'codex'
     case 'grok':
@@ -346,7 +361,7 @@ const defaultClientTab = computed(() => {
   }
 })
 
-watch(() => props.platform, () => {
+watch(() => [effectivePlatform.value, exampleGroup.value?.id] as const, () => {
   activeTab.value = 'unix'
   activeClientTab.value = defaultClientTab.value
   codexAuthMode.value = 'legacy'
@@ -435,14 +450,14 @@ const SparkleIcon = {
 }
 
 const clientTabs = computed((): TabConfig[] => {
-  if (!props.platform) return []
-  switch (props.platform) {
+  if (!effectivePlatform.value) return []
+  switch (effectivePlatform.value) {
     case 'openai': {
       const tabs: TabConfig[] = [
         { id: 'codex', label: t('keys.useKeyModal.cliTabs.codexCli'), icon: TerminalIcon },
         { id: 'codex-ws', label: t('keys.useKeyModal.cliTabs.codexCliWs'), icon: TerminalIcon },
       ]
-      if (props.allowMessagesDispatch) {
+      if (effectiveAllowMessagesDispatch.value) {
         tabs.push({ id: 'claude', label: t('keys.useKeyModal.cliTabs.claudeCode'), icon: TerminalIcon })
       }
       tabs.push({ id: 'opencode', label: t('keys.useKeyModal.cliTabs.opencode'), icon: TerminalIcon })
@@ -501,7 +516,7 @@ const openaiTabs: TabConfig[] = [
 const showShellTabs = computed(() => activeClientTab.value !== 'opencode')
 
 const showCodexAuthMode = computed(() =>
-  props.platform === 'openai' &&
+  effectivePlatform.value === 'openai' &&
   (activeClientTab.value === 'codex' || activeClientTab.value === 'codex-ws')
 )
 
@@ -515,14 +530,14 @@ const currentTabs = computed(() => {
 
 const platformDescription = computed(() => {
   if (activeClientTab.value === 'codex' &&
-    props.platform !== 'openai' &&
-    props.platform !== 'grok' &&
-    props.platform !== 'deepseek' &&
-    props.platform !== 'minimax' &&
-    props.platform !== 'composite') {
+    effectivePlatform.value !== 'openai' &&
+    effectivePlatform.value !== 'grok' &&
+    effectivePlatform.value !== 'deepseek' &&
+    effectivePlatform.value !== 'minimax' &&
+    effectivePlatform.value !== 'composite') {
     return t('keys.useKeyModal.routedCodex.description')
   }
-  switch (props.platform) {
+  switch (effectivePlatform.value) {
     case 'openai':
       if (activeClientTab.value === 'claude') {
         return t('keys.useKeyModal.description')
@@ -559,14 +574,14 @@ const platformDescription = computed(() => {
 
 const platformNote = computed(() => {
   if (activeClientTab.value === 'codex' &&
-    props.platform !== 'openai' &&
-    props.platform !== 'grok' &&
-    props.platform !== 'deepseek' &&
-    props.platform !== 'minimax' &&
-    props.platform !== 'composite') {
+    effectivePlatform.value !== 'openai' &&
+    effectivePlatform.value !== 'grok' &&
+    effectivePlatform.value !== 'deepseek' &&
+    effectivePlatform.value !== 'minimax' &&
+    effectivePlatform.value !== 'composite') {
     return t('keys.useKeyModal.routedCodex.note')
   }
-  switch (props.platform) {
+  switch (effectivePlatform.value) {
     case 'openai':
       if (activeClientTab.value === 'claude') {
         return t('keys.useKeyModal.note')
@@ -714,7 +729,7 @@ const currentFiles = computed((): FileConfig[] => {
   })()
 
   if (activeClientTab.value === 'opencode') {
-    switch (props.platform) {
+    switch (effectivePlatform.value) {
       case 'anthropic':
         return [generateOpenCodeConfig('anthropic', apiBase, apiKey)]
       case 'openai':
@@ -733,7 +748,7 @@ const currentFiles = computed((): FileConfig[] => {
     }
   }
 
-  switch (props.platform) {
+  switch (effectivePlatform.value) {
     case 'openai':
       if (activeClientTab.value === 'claude') {
         return generateAnthropicFiles(baseUrl, apiKey)
@@ -779,8 +794,8 @@ const currentFiles = computed((): FileConfig[] => {
       }
       return generateAnthropicFiles(baseRoot, apiKey)
     default:
-      if (activeClientTab.value === 'codex' && props.platform) {
-        return generateRoutedCodexFiles(apiBase, apiKey, props.platform)
+      if (activeClientTab.value === 'codex' && effectivePlatform.value) {
+        return generateRoutedCodexFiles(apiBase, apiKey, effectivePlatform.value)
       }
       return generateAnthropicFiles(baseUrl, apiKey)
   }

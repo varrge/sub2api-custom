@@ -181,6 +181,7 @@ func TestAPIKeyService_Update_ReactivatesQuotaExhaustedWhenQuotaUnlimited(t *tes
 			ID:        10,
 			UserID:    7,
 			Key:       "sk-test-unlimited",
+			GroupIDs:  []int64{1},
 			Status:    StatusAPIKeyQuotaExhausted,
 			Quota:     10,
 			QuotaUsed: 12,

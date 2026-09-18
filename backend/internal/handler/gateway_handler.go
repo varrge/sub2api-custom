@@ -984,11 +984,15 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						zap.Any("fallback_group_id", fallbackGroupID),
 						zap.Bool("fallback_used", fallbackUsed),
 					)
-					if !fallbackUsed && fallbackGroupID != nil && *fallbackGroupID > 0 {
+					if !fallbackUsed && fallbackGroupID != nil && *fallbackGroupID > 0 && (!apiKey.MultiGroupEnabled || apiKey.HasGroupID(*fallbackGroupID)) && !streamStarted {
 						fallbackGroup, err := h.gatewayService.ResolveGroupByID(c.Request.Context(), *fallbackGroupID)
 						if err != nil {
 							reqLog.Warn("gateway.resolve_fallback_group_failed", zap.Int64("fallback_group_id", *fallbackGroupID), zap.Error(err))
 							_ = h.antigravityGatewayService.WriteMappedClaudeError(c, account, promptTooLongErr.StatusCode, promptTooLongErr.RequestID, promptTooLongErr.Body)
+							return
+						}
+						if apiKey.MultiGroupEnabled && (!fallbackGroup.IsActive() || !apiKey.User.CanBindGroup(fallbackGroup.ID, fallbackGroup.IsExclusive)) {
+							h.errorResponse(c, http.StatusForbidden, "permission_error", "Fallback group is not available to this key")
 							return
 						}
 						if fallbackGroup.Platform != service.PlatformAnthropic ||
@@ -1002,6 +1006,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 							_ = h.antigravityGatewayService.WriteMappedClaudeError(c, account, promptTooLongErr.StatusCode, promptTooLongErr.RequestID, promptTooLongErr.Body)
 							return
 						}
+						if err := validateAPIKeyFallbackGroup(apiKey, fallbackGroup, reqModel, body, isClaudeCodeClient); err != nil {
+							h.errorResponse(c, http.StatusForbidden, "permission_error", err.Error())
+							return
+						}
 						fallbackAPIKey := cloneAPIKeyWithGroup(apiKey, fallbackGroup)
 						if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), fallbackAPIKey.User, fallbackAPIKey, fallbackGroup, nil, service.PlatformFromAPIKey(fallbackAPIKey)); err != nil {
 							status, code, message, retryAfter := billingErrorDetails(err)
@@ -1013,6 +1021,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						}
 						// 兜底重试按"直接请求兜底分组"处理：清除强制平台，允许按分组平台调度
 						ctx := context.WithValue(c.Request.Context(), ctxkey.ForcePlatform, "")
+						ctx = context.WithValue(ctx, ctxkey.Group, fallbackGroup)
+						if apiKey.MultiGroupEnabled {
+							ctx = service.WithAPIKeySelectedGroup(ctx, fallbackGroup.ID)
+						}
 						c.Request = c.Request.WithContext(ctx)
 						currentAPIKey = fallbackAPIKey
 						currentSubscription = nil
@@ -1121,6 +1133,9 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 // Returns models based on account configurations (model_mapping whitelist)
 // Falls back to default models if no whitelist is configured
 func (h *GatewayHandler) Models(c *gin.Context) {
+	if h.MultiGroupModels(c) {
+		return
+	}
 	apiKey, _ := middleware2.GetAPIKeyFromContext(c)
 
 	var groupID *int64
@@ -1498,6 +1513,9 @@ func mergeModelIDs(primary, secondary []string) []string {
 // GET /antigravity/models
 // 分组级模型白名单开启时按白名单过滤。
 func (h *GatewayHandler) AntigravityModels(c *gin.Context) {
+	if h.MultiGroupModels(c) {
+		return
+	}
 	models := antigravity.DefaultModels()
 	if apiKey, ok := middleware2.GetAPIKeyFromContext(c); ok && apiKey != nil && apiKey.Group != nil && apiKey.Group.ModelAllowlistEnabled() {
 		filtered := make([]antigravity.ClaudeModel, 0, len(models))
@@ -1518,11 +1536,7 @@ func cloneAPIKeyWithGroup(apiKey *service.APIKey, group *service.Group) *service
 	if apiKey == nil || group == nil {
 		return apiKey
 	}
-	cloned := *apiKey
-	groupID := group.ID
-	cloned.GroupID = &groupID
-	cloned.Group = group
-	return &cloned
+	return apiKey.ForGroup(group)
 }
 
 // Usage handles getting account balance and usage statistics for CC Switch integration
@@ -1739,6 +1753,20 @@ func (h *GatewayHandler) usageQuotaLimited(c *gin.Context, ctx context.Context, 
 
 // usageUnrestricted 处理 unrestricted 模式的响应（向后兼容）
 func (h *GatewayHandler) usageUnrestricted(c *gin.Context, ctx context.Context, apiKey *service.APIKey, subject middleware2.AuthSubject, usageData gin.H, dailyUsage any, modelStats any) {
+	if apiKey.MultiGroupEnabled || len(apiKey.GroupIDs) > 1 {
+		latestUser, err := h.userService.GetByID(ctx, subject.UserID)
+		if err != nil {
+			h.errorResponse(c, 503, "api_error", "Failed to get user info")
+			return
+		}
+		groups := make([]gin.H, 0, len(apiKey.Groups))
+		for _, group := range apiKey.Groups {
+			groups = append(groups, gin.H{"group_id": group.ID, "name": group.Name, "platform": group.Platform, "subscription_type": group.SubscriptionType})
+		}
+		c.JSON(http.StatusOK, gin.H{"mode": "unrestricted", "isValid": true, "planName": "多分组", "unit": "USD", "balance": latestUser.Balance, "groups": groups, "group_ids": apiKey.ConfiguredGroupIDs(), "key_limits_scope": "all_groups", "usage": usageData, "daily_usage": dailyUsage, "model_stats": modelStats})
+		return
+	}
+
 	// 订阅模式
 	if apiKey.Group != nil && apiKey.Group.IsSubscriptionType() {
 		resp := gin.H{

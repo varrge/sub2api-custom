@@ -404,6 +404,8 @@ func (r *fakeBatchImageRepository) CreateBatchImageJob(_ context.Context, params
 		BatchID:                 params.BatchID,
 		UserID:                  params.UserID,
 		APIKeyID:                params.APIKeyID,
+		GroupID:                 params.GroupID,
+		BillingSnapshot:         params.BillingSnapshot,
 		AccountID:               params.AccountID,
 		Status:                  params.Status,
 		Provider:                params.Provider,
@@ -831,11 +833,7 @@ func (r *fakeBatchImageRepository) ListStaleUnsubmittedBatchImageJobs(_ context.
 		if batchImageDerefString(job.ProviderJobName) != "" {
 			continue
 		}
-		holdAmount := job.EstimatedCost
-		if job.HoldAmount != nil {
-			holdAmount = *job.HoldAmount
-		}
-		if holdAmount <= 0 || job.UpdatedAt.After(cutoff) {
+		if job.UpdatedAt.After(cutoff) {
 			continue
 		}
 		jobs = append(jobs, job)

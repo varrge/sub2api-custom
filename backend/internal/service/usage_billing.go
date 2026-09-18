@@ -18,6 +18,10 @@ var ErrUsageBillingRequestConflict = errors.New("usage billing request fingerpri
 
 // UsageBillingCommand describes one billable request that must be applied at most once.
 type UsageBillingCommand struct {
+	// BatchImageID binds accepted asynchronous work to its persisted owner. It
+	// permits accounting against the original soft-deleted key/account only
+	// after the repository verifies that immutable job identity.
+	BatchImageID       string
 	MonthCardSnapshot  *monthcard.Snapshot
 	MonthCardCost      float64
 	RequestID          string
@@ -139,6 +143,9 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 	if c.MonthCardSnapshot != nil {
 		raw += fmt.Sprintf("|month_card:%0.10f|%s", c.MonthCardCost, c.MonthCardSnapshot.Fingerprint())
 	}
+	if c.BatchImageID != "" {
+		raw += "|batch_image:" + c.BatchImageID
+	}
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:])
 }
@@ -180,6 +187,8 @@ type UsageBillingApplyResult struct {
 
 // BatchImageBalanceHoldCommand describes an idempotent balance hold operation.
 type BatchImageBalanceHoldCommand struct {
+	// Usage is applied atomically with capture; balance has already been held.
+	Usage              *UsageBillingCommand
 	RequestID          string
 	APIKeyID           int64
 	RequestFingerprint string
@@ -199,6 +208,11 @@ func (c *BatchImageBalanceHoldCommand) Normalize() {
 	if strings.TrimSpace(c.RequestFingerprint) == "" {
 		c.RequestFingerprint = buildBatchImageBalanceHoldFingerprint(c)
 	}
+	c.HoldAmount = QuantizeUsageBillingAmount(c.HoldAmount)
+	c.ActualAmount = QuantizeUsageBillingAmount(c.ActualAmount)
+	if c.Usage != nil {
+		c.Usage.Normalize()
+	}
 }
 
 func buildBatchImageBalanceHoldFingerprint(c *BatchImageBalanceHoldCommand) string {
@@ -215,6 +229,9 @@ func buildBatchImageBalanceHoldFingerprint(c *BatchImageBalanceHoldCommand) stri
 	)
 	if payloadHash := strings.TrimSpace(c.RequestPayloadHash); payloadHash != "" {
 		raw += "|" + payloadHash
+	}
+	if c.Usage != nil {
+		raw += "|usage:" + buildUsageBillingFingerprint(c.Usage)
 	}
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:])

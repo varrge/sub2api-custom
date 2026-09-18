@@ -55,12 +55,14 @@ func (r *BatchImageModelPricingResolver) BatchImageUnitPrice(ctx context.Context
 }
 
 type BatchImageSettlementService struct {
-	Repo         BatchImageRepository
-	BillingRepo  UsageBillingRepository
-	UsageLogRepo UsageLogRepository
-	Pricing      BatchImagePricingResolver
-	AuthCache    APIKeyAuthCacheInvalidator
-	Config       *config.Config
+	Repo          BatchImageRepository
+	BillingRepo   UsageBillingRepository
+	UsageLogRepo  UsageLogRepository
+	Pricing       BatchImagePricingResolver
+	AuthCache     APIKeyAuthCacheInvalidator
+	BillingCache  *BillingCacheService
+	Subscriptions *SubscriptionService
+	Config        *config.Config
 }
 
 type BatchImageSettlementResult struct {
@@ -136,12 +138,15 @@ func (s *BatchImageSettlementService) Settle(ctx context.Context, batchID string
 		return nil, err
 	}
 	actualCost := float64(job.SuccessCount) * unitPrice
+	if job.BillingSnapshot != nil {
+		actualCost = QuantizeUsageBillingAmount(actualCost)
+	}
 	result.ActualCost = actualCost
 	holdAmount := job.EstimatedCost
 	if job.HoldAmount != nil {
 		holdAmount = *job.HoldAmount
 	}
-	if actualCost-holdAmount > batchImageCostEpsilon {
+	if !batchImageSubscriptionBilling(job) && actualCost-holdAmount > batchImageCostEpsilon {
 		msg := fmt.Sprintf("actual cost %.10f exceeds held amount %.10f", actualCost, holdAmount)
 		if failErr := s.recordSettlementFailure(ctx, job, "SETTLEMENT_COST_EXCEEDS_HOLD", msg); failErr != nil {
 			return nil, failErr
@@ -157,6 +162,16 @@ func (s *BatchImageSettlementService) Settle(ctx context.Context, batchID string
 		return nil, err
 	}
 	s.invalidateAuthCache(ctx, job.UserID)
+	if s.BillingCache != nil {
+		_ = s.BillingCache.InvalidateUserBalance(ctx, job.UserID)
+		_ = s.BillingCache.InvalidateAPIKeyRateLimit(ctx, *job.APIKeyID)
+		if batchImageSubscriptionBilling(job) && job.GroupID != nil {
+			_ = s.BillingCache.InvalidateSubscription(ctx, job.UserID, *job.GroupID)
+		}
+	}
+	if batchImageSubscriptionBilling(job) && job.GroupID != nil && s.Subscriptions != nil {
+		s.Subscriptions.InvalidateSubCacheSync(job.UserID, *job.GroupID)
+	}
 
 	now := time.Now()
 	outputExpiresAt := now.Add(s.outputRetentionAfterTerminal())
@@ -187,6 +202,7 @@ func (s *BatchImageSettlementService) Settle(ctx context.Context, batchID string
 // 否则 SETTLEMENT_COST_EXCEEDS_HOLD / SETTLEMENT_INVALID_COUNTS 等错误会无限 requeue。
 func isBatchImageSettlementRetryExhausted(job *BatchImageJob) bool {
 	return job != nil &&
+		!batchImageSubscriptionBilling(job) &&
 		job.Status == BatchImageJobStatusSettling &&
 		job.RetryCount >= batchImageSettlementMaxRetries &&
 		strings.HasPrefix(batchImageDerefString(job.LastErrorCode), "SETTLEMENT_")
@@ -207,7 +223,7 @@ func (s *BatchImageSettlementService) recordSettlementFailure(ctx context.Contex
 	}
 	job.RetryCount = retryCount
 	job.LastErrorCode = &code
-	if retryCount >= batchImageSettlementMaxRetries {
+	if retryCount >= batchImageSettlementMaxRetries && !batchImageSubscriptionBilling(job) {
 		return s.failExhaustedSettlement(ctx, job, message)
 	}
 	return nil
@@ -215,6 +231,12 @@ func (s *BatchImageSettlementService) recordSettlementFailure(ctx context.Contex
 
 func (s *BatchImageSettlementService) failExhaustedSettlement(ctx context.Context, job *BatchImageJob, message string) error {
 	if s == nil || s.Repo == nil {
+		return ErrBatchImageSettlementBillingFailed
+	}
+	// Subscription Apply persists a recoverable command before charging. The
+	// recovery worker may settle it later, so its job must remain reconcilable
+	// until the normal settlement retry records completion and the usage log.
+	if batchImageSubscriptionBilling(job) {
 		return ErrBatchImageSettlementBillingFailed
 	}
 	// 释放指纹必须与其余所有释放点（processor/Cancel/recovery）一致地使用 RequestHash：
@@ -261,6 +283,7 @@ func (s *BatchImageSettlementService) recordUsageLog(ctx context.Context, job *B
 	usageLog := &UsageLog{
 		UserID:                job.UserID,
 		APIKeyID:              *job.APIKeyID,
+		GroupID:               job.GroupID,
 		AccountID:             *job.AccountID,
 		RequestID:             strings.TrimSpace(requestID),
 		Model:                 job.Model,
@@ -279,6 +302,9 @@ func (s *BatchImageSettlementService) recordUsageLog(ctx context.Context, job *B
 		ImageSize:             &imageSize,
 		SessionID:             job.SessionID,
 		CreatedAt:             createdAt,
+	}
+	if job.BillingSnapshot != nil {
+		usageLog.BillingType = job.BillingSnapshot.BillingType
 	}
 	writeUsageLogBestEffort(ctx, s.UsageLogRepo, usageLog, "service.batch_image_settlement")
 }

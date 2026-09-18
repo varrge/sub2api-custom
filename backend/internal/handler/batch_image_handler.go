@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -42,6 +43,10 @@ func (h *BatchImageHandler) Submit(c *gin.Context) {
 	if !h.checkSecurityAuditBeforeSubmit(c, &req) {
 		return
 	}
+	if err := h.checkBillingBeforeSubmit(c); err != nil {
+		batchImageError(c, err)
+		return
+	}
 	if sessionID := service.ExtractClientSessionID(c); sessionID != "" {
 		req.SessionID = &sessionID
 	}
@@ -51,6 +56,20 @@ func (h *BatchImageHandler) Submit(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, got)
+}
+
+// The ordered candidate probe is read-only. Every submitted batch, including
+// legacy single-group keys, consumes one request's RPM and enforces key windows.
+func (h *BatchImageHandler) checkBillingBeforeSubmit(c *gin.Context) error {
+	key, ok := middleware.GetAPIKeyFromContext(c)
+	if !ok || key == nil || key.User == nil {
+		return infraerrors.New(http.StatusUnauthorized, "API_KEY_REQUIRED", "API key is required")
+	}
+	if h == nil || h.openAI == nil || h.openAI.billingCacheService == nil {
+		return service.ErrBillingServiceUnavailable
+	}
+	sub, _ := middleware.GetSubscriptionFromContext(c)
+	return h.openAI.billingCacheService.CheckBillingEligibility(c.Request.Context(), key.User, key, key.Group, sub, service.PlatformGemini)
 }
 
 func (h *BatchImageHandler) checkSecurityAuditBeforeSubmit(c *gin.Context, req *service.BatchImageSubmitRequest) bool {
@@ -134,7 +153,14 @@ func (h *BatchImageHandler) Models(c *gin.Context) {
 		batchImageError(c, infraerrors.New(http.StatusUnauthorized, "API_KEY_REQUIRED", "API key is required"))
 		return
 	}
-	got, err := h.service.ListModels(c.Request.Context(), owner)
+	var got *service.BatchImagePublicModelsResponse
+	var err error
+	key, _ := middleware.GetAPIKeyFromContext(c)
+	if key.MultiGroupEnabled || len(key.GroupIDs) > 1 {
+		got, err = h.service.ListModelsForGroups(c.Request.Context(), owner, key.Groups)
+	} else {
+		got, err = h.service.ListModels(c.Request.Context(), owner)
+	}
 	if err != nil {
 		batchImageError(c, err)
 		return
@@ -299,10 +325,12 @@ func batchImageOwnerFromContext(c *gin.Context) (service.BatchImageOwner, bool) 
 	if !ok || apiKey == nil || apiKey.ID <= 0 || apiKey.UserID <= 0 {
 		return service.BatchImageOwner{}, false
 	}
+	subscription, _ := middleware.GetSubscriptionFromContext(c)
 	return service.BatchImageOwner{
-		UserID:   apiKey.UserID,
-		APIKeyID: apiKey.ID,
-		GroupID:  apiKey.GroupID,
+		UserID:       apiKey.UserID,
+		APIKeyID:     apiKey.ID,
+		GroupID:      apiKey.GroupID,
+		Subscription: subscription,
 	}, true
 }
 
@@ -332,4 +360,30 @@ func batchImageError(c *gin.Context, err error) {
 			"message": message,
 		},
 	})
+}
+
+// ProbeAPIKeyGroup matches actual batch provider/model inputs without submission.
+func (h *BatchImageHandler) ProbeAPIKeyGroup(ctx context.Context, key *service.APIKey, req service.APIKeyGroupRequest, c *gin.Context, body []byte) (available, global bool, err error) {
+	if h == nil || h.service == nil || key == nil {
+		return false, false, service.ErrBatchImageDisabled
+	}
+	var input struct {
+		Provider string `json:"provider"`
+		Model    string `json:"model"`
+	}
+	if err := json.Unmarshal(body, &input); err != nil {
+		return false, true, service.ErrBatchImageInvalidItems
+	}
+	if h.openAI != nil && h.openAI.billingCacheService != nil {
+		global, err = h.openAI.billingCacheService.CheckAPIKeyGroupRoutingLimits(ctx, key, req.Platform)
+		if err != nil {
+			if global {
+				return false, true, err
+			}
+			return false, false, nil
+		}
+	}
+	available, err = h.service.ProbeGroup(ctx, service.BatchImageOwner{UserID: key.UserID, APIKeyID: key.ID, GroupID: key.GroupID}, input.Provider, input.Model)
+	global = errors.Is(err, service.ErrBatchImageDisabled) || errors.Is(err, service.ErrBatchImageInvalidModel) || errors.Is(err, service.ErrBatchImageUnsupportedProvider)
+	return available, global, err
 }

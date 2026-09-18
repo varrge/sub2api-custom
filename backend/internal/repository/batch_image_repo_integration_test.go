@@ -25,17 +25,26 @@ func TestBatchImageRepository_CreateJobAndDuplicates(t *testing.T) {
 	tx := testTx(t)
 	repo := newBatchImageRepositoryWithSQL(tx)
 	batchID := batchImageTestID(t, "create")
+	groupID := int64(88)
+	billingSnapshot := &service.BatchImageBillingSnapshot{Version: 1, BillingType: service.BillingTypeBalance, AccountType: service.AccountTypeAPIKey, AccountQuota: true}
 
 	job, err := repo.CreateBatchImageJob(ctx, service.CreateBatchImageJobParams{
-		BatchID:       batchID,
-		UserID:        1001,
-		Provider:      service.BatchImageProviderGeminiAPI,
-		Model:         "gemini-2.5-flash-image",
-		ItemCount:     2,
-		EstimatedCost: 0.02,
+		BatchID:         batchID,
+		GroupID:         &groupID,
+		BillingSnapshot: billingSnapshot,
+		UserID:          1001,
+		Provider:        service.BatchImageProviderGeminiAPI,
+		Model:           "gemini-2.5-flash-image",
+		ItemCount:       2,
+		EstimatedCost:   0.02,
 	})
 	require.NoError(t, err)
 	require.Equal(t, batchID, job.BatchID)
+	require.Equal(t, &groupID, job.GroupID)
+	loaded, err := repo.GetBatchImageJobByBatchID(ctx, batchID)
+	require.NoError(t, err)
+	require.Equal(t, &groupID, loaded.GroupID)
+	require.Equal(t, billingSnapshot, loaded.BillingSnapshot)
 	require.Equal(t, service.BatchImageJobStatusCreated, job.Status)
 	require.Equal(t, "USD", job.Currency)
 

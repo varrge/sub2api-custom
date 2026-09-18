@@ -28,14 +28,18 @@ func IsWindowExpired(windowStart *time.Time, duration time.Duration) bool {
 }
 
 type APIKey struct {
-	ID          int64
-	UserID      int64
-	Key         string
-	Name        string
-	GroupID     *int64
-	Status      string
-	IPWhitelist []string
-	IPBlacklist []string
+	ID                    int64
+	UserID                int64
+	Key                   string
+	Name                  string
+	GroupIDs              []int64
+	Groups                []*Group
+	MultiGroupEnabled     bool
+	UserGroupRPMOverrides map[int64]*int
+	GroupID               *int64
+	Status                string
+	IPWhitelist           []string
+	IPBlacklist           []string
 	// 预编译的 IP 规则，用于认证热路径避免重复 ParseIP/ParseCIDR。
 	CompiledIPWhitelist *ip.CompiledIPRules `json:"-"`
 	CompiledIPBlacklist *ip.CompiledIPRules `json:"-"`
@@ -142,4 +146,69 @@ type APIKeyListFilters struct {
 	Search  string
 	Status  string
 	GroupID *int64 // nil=不筛选, 0=无分组, >0=指定分组
+}
+
+// ConfiguredGroupIDs returns the ordered configuration, including legacy singleton keys.
+func (k *APIKey) ConfiguredGroupIDs() []int64 {
+	if k == nil {
+		return nil
+	}
+	if k.GroupIDs != nil {
+		return append([]int64{}, k.GroupIDs...)
+	}
+	if k.GroupID != nil {
+		return []int64{*k.GroupID}
+	}
+	return []int64{}
+}
+
+func (k *APIKey) HasGroupID(id int64) bool {
+	for _, configured := range k.ConfiguredGroupIDs() {
+		if configured == id {
+			return true
+		}
+	}
+	return false
+}
+
+// ForGroup creates a request-private selection and user RPM projection.
+// Configuration groups are immutable; the selected Group itself is copied.
+func (k *APIKey) ForGroup(group *Group) *APIKey {
+	if k == nil {
+		return nil
+	}
+	selected := *k
+	selected.GroupIDs = k.ConfiguredGroupIDs()
+	selected.Groups = append([]*Group{}, k.Groups...)
+	selected.UserGroupRPMOverrides = make(map[int64]*int, len(k.UserGroupRPMOverrides))
+	for id, rpm := range k.UserGroupRPMOverrides {
+		if rpm != nil {
+			value := *rpm
+			selected.UserGroupRPMOverrides[id] = &value
+		} else {
+			selected.UserGroupRPMOverrides[id] = nil
+		}
+	}
+	selected.GroupID, selected.Group = nil, nil
+	if group != nil {
+		g := *group
+		selected.Group = &g
+		id := g.ID
+		selected.GroupID = &id
+	}
+	if k.User != nil {
+		u := *k.User
+		u.UserGroupRPMOverride = nil
+		if group != nil {
+			if rpm := k.UserGroupRPMOverrides[group.ID]; rpm != nil {
+				value := *rpm
+				u.UserGroupRPMOverride = &value
+			} else if k.UserGroupRPMOverrides == nil && k.GroupID != nil && *k.GroupID == group.ID && k.User.UserGroupRPMOverride != nil {
+				value := *k.User.UserGroupRPMOverride
+				u.UserGroupRPMOverride = &value
+			}
+		}
+		selected.User = &u
+	}
+	return &selected
 }

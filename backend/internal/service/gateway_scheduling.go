@@ -944,6 +944,9 @@ func (s *GatewayService) resolveGatewayGroup(ctx context.Context, groupID *int64
 		if group.FallbackGroupID == nil {
 			return nil, nil, ErrClaudeCodeOnly
 		}
+		if _, scoped := ctx.Value(apiKeyGroupScopeKey{}).(int64); scoped {
+			return nil, nil, ErrClaudeCodeOnly
+		}
 		currentID = *group.FallbackGroupID
 	}
 }

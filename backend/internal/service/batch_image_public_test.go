@@ -122,6 +122,7 @@ func TestBatchImagePublicService_Submit(t *testing.T) {
 
 		job := repo.jobs[got.ID]
 		require.InDelta(t, 0.25, job.BaseUnitPrice, 1e-12)
+		require.Equal(t, &groupID, job.GroupID)
 		require.InDelta(t, 0.5, job.GroupRateMultiplier, 1e-12)
 		require.InDelta(t, 1.25, job.AccountRateMultiplier, 1e-12)
 		require.InDelta(t, 0.8, job.BatchDiscountMultiplier, 1e-12)

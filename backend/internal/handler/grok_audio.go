@@ -16,6 +16,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	coderws "github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
+	"github.com/tidwall/gjson"
 	"go.uber.org/zap"
 )
 
@@ -131,17 +132,24 @@ func (h *OpenAIGatewayHandler) GrokRealtime(c *gin.Context) {
 	defer func() { _ = conn.CloseNow() }()
 
 	started := time.Now()
-	audioObserved, proxyErr := h.gatewayService.ProxyGrokRealtimeConn(c.Request.Context(), c, conn, upstream)
+	audioObserved, proxyErr := h.gatewayService.ProxyGrokRealtimeConn(h.statefulAdmissionContext(c, apiKey), c, conn, upstream)
 	elapsed := time.Since(started)
+	// Revocation stops new input, but already consumed audio still belongs to
+	// the immutable connection snapshot and must be billed on every exit path.
+	if result := grokRealtimeBillingResult(model, elapsed, audioObserved); result != nil {
+		h.recordGrokVoiceUsage(c, apiKey, selection.Account, subscription, "realtime", nil, result, pricingAt)
+	}
 	if proxyErr != nil {
 		reqLog.Info("grok_realtime.proxy_failed", zap.Error(proxyErr))
+		var admissionErr *service.OpenAIWSClientCloseError
+		if errors.As(proxyErr, &admissionErr) {
+			closeOpenAIClientWS(conn, admissionErr.StatusCode(), admissionErr.Reason())
+			return
+		}
 		if !isExpectedGrokRealtimeClose(proxyErr) {
 			_ = conn.Close(coderws.StatusInternalError, "upstream realtime websocket failed")
 			return
 		}
-	}
-	if result := grokRealtimeBillingResult(model, elapsed, audioObserved); result != nil {
-		h.recordGrokVoiceUsage(c, apiKey, selection.Account, subscription, "realtime", nil, result, pricingAt)
 	}
 }
 
@@ -223,22 +231,59 @@ func (h *OpenAIGatewayHandler) GrokVoice(c *gin.Context, endpoint string) {
 	var last *service.UpstreamFailoverError
 	reqLog := requestLogger(c, "handler.openai_gateway.grok_voice", zap.String("endpoint", endpoint))
 	selectionModel := "grok-4.5"
+	voiceResourceID := ""
+	boundVoiceAccountID := int64(0)
+	if strings.HasPrefix(endpoint, "custom-voices") {
+		voiceResourceID = c.Param("voice_id")
+		if voiceResourceID == "" {
+			voiceResourceID = "collection"
+		}
+		_, boundVoiceAccountID, _, err = h.gatewayService.ResolveGrokVoiceResource(c.Request.Context(), apiKey, voiceResourceID)
+		if err != nil {
+			h.errorResponse(c, http.StatusServiceUnavailable, "resource_unavailable", "Custom voice ownership is unavailable")
+			return
+		}
+	}
+	if endpoint == "tts" {
+		voiceID := grokVoiceIDFromRequest(body)
+		if voiceID != "" {
+			_, boundVoiceAccountID, _, err = h.gatewayService.ResolveGrokVoiceResource(c.Request.Context(), apiKey, voiceID)
+			if err != nil {
+				h.errorResponse(c, http.StatusServiceUnavailable, "resource_unavailable", "Custom voice ownership is unavailable")
+				return
+			}
+		}
+	}
 
 	for attempts := 0; attempts < 4; attempts++ {
-		selection, _, selectErr := h.gatewayService.SelectAccountWithSchedulerForCapability(
-			c.Request.Context(),
-			apiKey.GroupID,
-			"",
-			"",
-			selectionModel,
-			failed,
-			service.OpenAIUpstreamTransportHTTPSSE,
-			service.OpenAIEndpointCapabilityChatCompletions,
-			false,
-			false,
-			false,
-			service.PlatformGrok,
-		)
+		var selection *service.AccountSelectionResult
+		var selectErr error
+		if boundVoiceAccountID > 0 {
+			if _, unavailable := failed[boundVoiceAccountID]; unavailable {
+				h.errorResponse(c, http.StatusServiceUnavailable, "resource_unavailable", "The custom voice's original account is unavailable")
+				return
+			}
+			var account *service.Account
+			account, selectErr = h.gatewayService.GetGrokVoiceAccount(c.Request.Context(), apiKey, boundVoiceAccountID)
+			if selectErr == nil {
+				selection = &service.AccountSelectionResult{Account: account, WaitPlan: &service.AccountWaitPlan{AccountID: account.ID, MaxConcurrency: account.Concurrency, Timeout: 30 * time.Second, MaxWaiting: 100}}
+			}
+		} else {
+			selection, _, selectErr = h.gatewayService.SelectAccountWithSchedulerForCapability(
+				c.Request.Context(),
+				apiKey.GroupID,
+				"",
+				"",
+				selectionModel,
+				failed,
+				service.OpenAIUpstreamTransportHTTPSSE,
+				service.OpenAIEndpointCapabilityChatCompletions,
+				false,
+				false,
+				false,
+				service.PlatformGrok,
+			)
+		}
 		if selectErr != nil || selection == nil || selection.Account == nil {
 			if last != nil {
 				h.handleFailoverExhausted(c, last, false)
@@ -268,6 +313,15 @@ func (h *OpenAIGatewayHandler) GrokVoice(c *gin.Context, endpoint string) {
 			return h.gatewayService.ForwardGrokVoice(c.Request.Context(), c, account, endpoint, body, contentType)
 		}()
 		if forwardErr == nil {
+			if voiceResourceID != "" {
+				resourceID := voiceResourceID
+				if result != nil && result.ResponseID != "" {
+					resourceID = result.ResponseID
+				}
+				if err := h.gatewayService.BindGrokVoiceResource(c.Request.Context(), apiKey, resourceID, account.ID); err != nil {
+					reqLog.Error("grok_voice.owner_bind_failed", zap.Error(err))
+				}
+			}
 			h.recordGrokVoiceUsage(c, apiKey, account, subscription, endpoint, body, result, pricingAt)
 			return
 		}
@@ -283,6 +337,16 @@ func (h *OpenAIGatewayHandler) GrokVoice(c *gin.Context, endpoint string) {
 	if last != nil {
 		h.handleFailoverExhausted(c, last, false)
 	}
+}
+
+func grokVoiceIDFromRequest(body []byte) string {
+	for _, path := range []string{"voice_id", "voice.voice_id", "voice.id", "voice"} {
+		value := gjson.GetBytes(body, path)
+		if value.Type == gjson.String && strings.TrimSpace(value.String()) != "" {
+			return strings.TrimSpace(value.String())
+		}
+	}
+	return ""
 }
 
 // recordGrokVoiceUsage bills TTS/STT/realtime via group audio prices when AudioUsage is set.

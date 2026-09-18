@@ -35,6 +35,7 @@ type ImageTaskRecord struct {
 	ID          string          `json:"id"`
 	UserID      int64           `json:"user_id"`
 	APIKeyID    int64           `json:"api_key_id"`
+	GroupID     *int64          `json:"group_id,omitempty"`
 	Status      string          `json:"status"`
 	HTTPStatus  int             `json:"http_status,omitempty"`
 	Result      json.RawMessage `json:"result,omitempty"`
@@ -62,6 +63,7 @@ type ImageTask struct {
 type ImageTaskOwner struct {
 	UserID   int64
 	APIKeyID int64
+	GroupID  *int64
 }
 
 type ImageTaskStore interface {
@@ -159,6 +161,7 @@ func (s *ImageTaskService) Create(ctx context.Context, owner ImageTaskOwner) (*I
 		ID:        "imgtask_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
 		UserID:    owner.UserID,
 		APIKeyID:  owner.APIKeyID,
+		GroupID:   liveOptionalID(derefGroupID(owner.GroupID)),
 		Status:    ImageTaskStatusProcessing,
 		CreatedAt: now.Unix(),
 		ExpiresAt: now.Add(s.ttl).Unix(),
@@ -170,6 +173,24 @@ func (s *ImageTaskService) Create(ctx context.Context, owner ImageTaskOwner) (*I
 }
 
 func (s *ImageTaskService) Get(ctx context.Context, owner ImageTaskOwner, id string) (*ImageTask, error) {
+	task, err := s.getOwnedRecord(ctx, owner, id)
+	if err != nil {
+		return nil, err
+	}
+	return imageTaskToPublic(task), nil
+}
+
+// GetGroupForOwner restores attribution without requiring the group to still
+// exist. Historical image results are independent of current group admission.
+func (s *ImageTaskService) GetGroupForOwner(ctx context.Context, owner ImageTaskOwner, id string) (*int64, error) {
+	task, err := s.getOwnedRecord(ctx, owner, id)
+	if err != nil {
+		return nil, err
+	}
+	return task.GroupID, nil
+}
+
+func (s *ImageTaskService) getOwnedRecord(ctx context.Context, owner ImageTaskOwner, id string) (*ImageTaskRecord, error) {
 	if s == nil || s.store == nil {
 		return nil, ErrImageTaskUnavailable
 	}
@@ -184,7 +205,7 @@ func (s *ImageTaskService) Get(ctx context.Context, owner ImageTaskOwner, id str
 		// Do not reveal whether a random task ID exists for another caller.
 		return nil, ErrImageTaskNotFound
 	}
-	return imageTaskToPublic(task), nil
+	return task, nil
 }
 
 func (s *ImageTaskService) Complete(ctx context.Context, id string, statusCode int, result json.RawMessage) error {

@@ -80,7 +80,7 @@ func TestUserRepository_RemoveGroupFromAllowedGroups_RemovesAllOccurrences(t *te
 	require.NotContains(t, u2After.AllowedGroups, targetGroup.ID)
 }
 
-func TestGroupRepository_DeleteCascade_PreservesApiKeyGroupID(t *testing.T) {
+func TestGroupRepository_DeleteCascade_RemovesDeletedAPIKeyBinding(t *testing.T) {
 	ctx := context.Background()
 	tx := testEntTx(t)
 	entClient := tx.Client()
@@ -138,10 +138,11 @@ func TestGroupRepository_DeleteCascade_PreservesApiKeyGroupID(t *testing.T) {
 	require.NotContains(t, uAfter.AllowedGroups, targetGroup.ID)
 	require.Contains(t, uAfter.AllowedGroups, otherGroup.ID)
 
-	// API keys keep their group_id so auth can reject keys bound to a deleted group.
+	// Deleted groups are removed from key selections; an empty key is governed by the ungrouped scheduling policy.
 	keyAfter, err := apiKeyRepo.GetByID(ctx, key.ID)
 	require.NoError(t, err)
-	require.NotNil(t, keyAfter.GroupID)
-	require.Equal(t, targetGroup.ID, *keyAfter.GroupID)
+	require.Nil(t, keyAfter.GroupID)
+	require.Empty(t, keyAfter.GroupIDs)
+	require.Empty(t, keyAfter.Groups)
 	require.Nil(t, keyAfter.Group)
 }

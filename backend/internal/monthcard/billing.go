@@ -218,9 +218,9 @@ func billingLegacyShare(ctx context.Context, tx *sql.Tx, snap *Snapshot, c Candi
 		}
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE user_subscriptions SET
- daily_usage_usd=daily_usage_usd+CASE WHEN daily_window_start=$2 AND $6 THEN $5 ELSE 0 END,
- weekly_usage_usd=weekly_usage_usd+CASE WHEN weekly_window_start=$3 AND $7 THEN $5 ELSE 0 END,
- monthly_usage_usd=monthly_usage_usd+CASE WHEN monthly_window_start=$4 AND $8 THEN $5 ELSE 0 END,updated_at=NOW() WHERE id=$1`, c.ID, *c.DailyWindowStart, c.WeeklyWindowStart, *c.MonthlyWindowStart, share, periods[0].generation == periods[0].currentGeneration, periods[1].generation == periods[1].currentGeneration, periods[2].generation == periods[2].currentGeneration)
+ daily_usage_usd=daily_usage_usd+CASE WHEN daily_window_start=$2 AND $6 THEN $5::numeric ELSE 0 END,
+ weekly_usage_usd=weekly_usage_usd+CASE WHEN weekly_window_start=$3 AND $7 THEN $5::numeric ELSE 0 END,
+ monthly_usage_usd=monthly_usage_usd+CASE WHEN monthly_window_start=$4 AND $8 THEN $5::numeric ELSE 0 END,updated_at=NOW() WHERE id=$1`, c.ID, *c.DailyWindowStart, c.WeeklyWindowStart, *c.MonthlyWindowStart, share, periods[0].generation == periods[0].currentGeneration, periods[1].generation == periods[1].currentGeneration, periods[2].generation == periods[2].currentGeneration)
 	if err != nil {
 		return decimal.Zero, err
 	}

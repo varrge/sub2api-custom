@@ -703,6 +703,13 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			return
 		}
 		if previousResponseID != "" && selection != nil && selection.Account != nil {
+			if !scheduleDecision.StickyPreviousHit {
+				if selection.ReleaseFunc != nil {
+					selection.ReleaseFunc()
+				}
+				h.handleStreamingAwareError(c, http.StatusConflict, "session_unavailable", "The response's original account is unavailable", streamStarted)
+				return
+			}
 			reqLog.Debug("openai.account_selected_with_previous_response_id", zap.Int64("account_id", selection.Account.ID))
 		}
 		reqLog.Debug("openai.account_schedule_decision",
@@ -2390,6 +2397,15 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "model is required in first response.create payload")
 		return
 	}
+	if middleware2.APIKeyGroupSelectionDeferred(c) {
+		selected, selectionErr := middleware2.ResolveDeferredAPIKeyGroup(c, apiKey, firstMessage)
+		if selectionErr != nil {
+			closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, selectionErr.Error())
+			return
+		}
+		apiKey = selected
+	}
+	service.SetOpenAIHTTPResponseOwner(c, subject.UserID, apiKey.ID)
 	// 分组级模型白名单：首帧校验客户端模型，不通过则关闭连接并标记运维原因。
 	// 必须在 ensureCompositeTargetPlatform（合成路由改写）之前执行。
 	// 与 HTTP 准入一致：帧内重复 model 键/大小写变体可能被上游按末值绑定，
@@ -2415,8 +2431,9 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "previous_response_id must be a response.id (resp_*), not a message id")
 		return
 	}
-	firstMessageToolCoverage := service.AnalyzeToolCallOutputContextCoverageBytes(firstMessage)
-	previousResponseCanMove := !firstMessageToolCoverage.HasFunctionCallOutput || firstMessageToolCoverage.ContextCoversAllCallIDs
+	// Explicit continuations retain their original upstream account even when
+	// the caller also supplies a complete copy of the conversation history.
+	previousResponseCanMove := false
 	reqLog = reqLog.With(
 		zap.Bool("ws_ingress", true),
 		zap.String("session_initial_model", reqModel),
@@ -2563,8 +2580,14 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			return true
 		}
 	}
+	var establishedWSAccount atomic.Bool
 	handleWSFailover := func(account *service.Account, failoverErr *service.UpstreamFailoverError) bool {
 		if ctx.Err() != nil {
+			return false
+		}
+		if establishedWSAccount.Load() {
+			releaseAccountSlot()
+			closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "The session's original account is unavailable; start a new session")
 			return false
 		}
 		if failoverErr.ShouldReportAccountScheduleFailure() {
@@ -2783,8 +2806,10 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		// turn 级定价：首轮回退到 TurnStarted 的所属 turn 时刻；后续 turn 由
 		// BeforeTurn 重新冻结 pricingAt 并按最新门复核当前账号。
 		var turnPricing openAIWSTurnPricing
-		var turnSubscription atomic.Pointer[service.UserSubscription]
-		turnSubscription.Store(subscription)
+		var turnAdmission atomic.Pointer[openAIWSTurnAdmission]
+		turnAdmission.Store(&openAIWSTurnAdmission{key: apiKey, subscription: subscription})
+		admissionContext := c.Copy()
+		admissionContext.Request = c.Request.Clone(ctx)
 		wsBillingSessionID := uuid.NewString()
 		hooks := &service.OpenAIWSIngressHooks{
 			ClientLifecycleContext:      clientLifecycleCtx,
@@ -2809,14 +2834,11 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				}
 				// Both native and passthrough ingress visit BeforeRequest. Each
 				// new turn gets its own immutable entitlement snapshot.
-				fresh, admissionErr := h.billingCacheService.RefreshMonthCardAdmission(ctx, apiKey.User.ID, apiKey.Group, turnSubscription.Load())
-				if admissionErr == nil {
-					admissionErr = h.billingCacheService.CheckBillingEligibility(ctx, apiKey.User, apiKey, apiKey.Group, fresh, service.QuotaPlatform(ctx, apiKey))
-				}
+				fresh, admissionErr := h.admitNextWSTurn(admissionContext, turnAdmission.Load())
 				if admissionErr != nil {
 					return service.NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, admissionErr.Error(), admissionErr)
 				}
-				turnSubscription.Store(fresh)
+				turnAdmission.Store(fresh)
 				if !gjson.ValidBytes(payload) {
 					return service.NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", errors.New("invalid json"))
 				}
@@ -2833,12 +2855,12 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				// 帧内重复 model 键/大小写变体/嵌套 session.model 额外逐一校验，
 				// 防止候选集非空时掩盖被轮换掉的禁用模型。
 				candidates := append([]string{model}, requestmodel.FromBodyCandidates("", "application/json", payload)...)
-				if blocked := blockedModelAllowlistCandidate(apiKey.Group, candidates); blocked != "" {
+				if blocked := blockedModelAllowlistCandidate(fresh.key.Group, candidates); blocked != "" {
 					service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalModelConfiguration)
 					middleware2.MarkIngressRejected(c, middleware2.IngressRejectModelNotAllowed)
 					return service.NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, fmt.Sprintf("Model %q is not available for this group", blocked), nil)
 				}
-				if decision := h.checkSecurityAuditStage(c, reqLog, apiKey, subject, service.ContentModerationProtocolOpenAIResponses, model, payload, "subsequent_turn"); decision != nil && !decision.AllowNextStage {
+				if decision := h.checkSecurityAuditStage(c, reqLog, fresh.key, subject, service.ContentModerationProtocolOpenAIResponses, model, payload, "subsequent_turn"); decision != nil && !decision.AllowNextStage {
 					writeSecurityAuditWSError(ctx, wsConn, decision)
 					return service.NewOpenAIWSClientCloseError(securityAuditWSCloseStatus(decision), securityAuditWSCloseReason(decision), nil)
 				}
@@ -2909,9 +2931,21 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				return nil
 			},
 			AfterTurn: func(turn int, result *service.OpenAIForwardResult, turnErr error) {
+				if turnErr == nil && result != nil {
+					establishedWSAccount.Store(true)
+				}
+				// Preserve the upstream ID before billing assigns a turn-specific ID.
+				responseID := ""
+				if result != nil {
+					responseID = strings.TrimSpace(result.ResponseID)
+					if responseID == "" && strings.HasPrefix(result.RequestID, "resp_") {
+						responseID = result.RequestID
+					}
+				}
 				// Capture before dispatch: the next turn must never overwrite
 				// the snapshot referenced by an asynchronous billing worker.
-				subscription := turnSubscription.Load()
+				admission := turnAdmission.Load()
+				apiKey, subscription := admission.key, admission.subscription
 				if result != nil && subscription != nil && subscription.MonthCardSnapshot != nil {
 					result.RequestID = fmt.Sprintf("ws-turn:%s:%d", wsBillingSessionID, turn)
 				}
@@ -2970,6 +3004,15 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				if result == nil {
 					return
 				}
+				if responseID != "" {
+					groupID := int64(0)
+					if apiKey.GroupID != nil {
+						groupID = *apiKey.GroupID
+					}
+					if err := h.gatewayService.BindOpenAIHTTPResponseOwner(ctx, groupID, responseID, apiKey.UserID, apiKey.ID); err != nil {
+						reqLog.Warn("openai.websocket_response_owner_bind_failed", zap.Error(err))
+					}
+				}
 				result.BillingModel = openAIWSTurnBillingModel(result, turnMapping, turnRequestedModel, turnUpstreamModel)
 				reqLog.Debug("openai.websocket_turn_billing",
 					zap.Int("turn", turn),
@@ -3022,16 +3065,10 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		}
 
 		wsFirstMessage := wsAttemptMessage
-		// 切组/会话失配防护：previous_response_id 未在当前分组命中粘连账号（StickyPreviousHit=false），
-		// 说明该会话链不属于本次调度到的账号，原样转发会触发上游会话链鉴权失败（“鉴权失败，请检查 API Key”）。
-		// 故剥离首包里的 previous_response_id，改用首包内 input 重建上下文；带 function_call_output 的
-		// 工具续链无法重建，保持原样。仅作用于首轮首包，后续 turn 的续链由 WS 转发层既有逻辑处理。
-		if previousResponseID != "" && !scheduleDecision.StickyPreviousHit && previousResponseCanMove {
-			wsFirstMessage = service.RemovePreviousResponseIDFromBody(wsFirstMessage)
-			reqLog.Debug("openai.websocket_previous_response_id_stripped_cross_group",
-				zap.Int64("account_id", account.ID),
-				zap.String("schedule_layer", scheduleDecision.Layer),
-			)
+		if previousResponseID != "" && !scheduleDecision.StickyPreviousHit {
+			releaseAccountSlot()
+			closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "The response's original account is unavailable")
+			return
 		}
 
 		// WebSocket 首包可能很大，hash 必须在 hooks 外算成字符串，避免 AfterTurn 闭包保活请求体。

@@ -42,6 +42,22 @@ func (h *GatewayHandler) KeyBillingInfo(c *gin.Context) {
 		h.errorResponse(c, http.StatusNotFound, "not_found_error", "Billing information is not supported in simple mode")
 		return
 	}
+	if apiKey.MultiGroupEnabled || len(apiKey.GroupIDs) > 1 {
+		now := timezone.Now()
+		groups := make([]gin.H, 0, len(apiKey.Groups))
+		for _, group := range apiKey.Groups {
+			selected := apiKey.ForGroup(group)
+			rate, available := h.resolveKeyBillingRate(c, selected, now)
+			if !available {
+				h.errorResponse(c, 503, "api_error", "Billing information is unavailable")
+				return
+			}
+			groups = append(groups, gin.H{"group_id": group.ID, "name": group.Name, "platform": group.Platform, "subscription_type": group.SubscriptionType, "billing": buildKeyBillingInfo(selected, rate, now)})
+		}
+		c.Header("Cache-Control", "no-store")
+		c.JSON(http.StatusOK, gin.H{"object": "sub2api.key_billing", "schema_version": 2, "billing_scope": "selected_group", "groups": groups, "group_ids": apiKey.ConfiguredGroupIDs(), "key_limits_scope": "all_groups", "observed_at": now.UTC()})
+		return
+	}
 	if apiKey.GroupID == nil {
 		h.errorResponse(c, http.StatusForbidden, "permission_error", "API key is not assigned to a group")
 		return

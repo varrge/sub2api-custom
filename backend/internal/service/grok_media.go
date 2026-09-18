@@ -314,7 +314,10 @@ func (s *OpenAIGatewayService) BindGrokMediaVideoRequestAccount(
 			ttl = sticky
 		}
 	}
-	return s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), cacheKey, accountID, ttl)
+	if err := s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), cacheKey, accountID, ttl); err != nil {
+		return err
+	}
+	return s.getOpenAIWSStateStore().BindResourceGroup(ctx, "grok_video", requestID, userID, apiKeyID, derefGroupID(groupID), ttl)
 }
 
 func (s *OpenAIGatewayService) ResolveGrokMediaVideoRequestAccount(
@@ -329,7 +332,7 @@ func (s *OpenAIGatewayService) ResolveGrokMediaVideoRequestAccount(
 			if err != nil {
 				return 0, err
 			}
-			if pending != nil {
+			if pending != nil && (pending.GroupID != nil || pending.AccountID > 0) {
 				if derefGroupID(pending.GroupID) != derefGroupID(groupID) {
 					return 0, fmt.Errorf("grok video group ownership changed")
 				}
@@ -383,17 +386,18 @@ func (s *OpenAIGatewayService) SelectGrokMediaVideoRequestAccount(
 // first observes a completed video URL. Status may omit model/duration; we fall
 // back to this snapshot, then defaults.
 type GrokVideoPendingBilling struct {
-	MonthCardSnapshot           *monthcard.Snapshot `json:"month_card_snapshot,omitempty"`
-	LegacySubscriptionID        *int64              `json:"legacy_subscription_id,omitempty"`
-	GroupID                     *int64              `json:"group_id,omitempty"`
-	AccountID                   int64               `json:"account_id,omitempty"`
-	Model                       string              `json:"model"`
-	BillingModel                string              `json:"billing_model,omitempty"`
-	UpstreamModel               string              `json:"upstream_model,omitempty"`
-	VideoResolution             string              `json:"video_resolution,omitempty"`
-	VideoDurationSeconds        int                 `json:"video_duration_seconds,omitempty"`
-	OriginalModel               string              `json:"original_model,omitempty"`
-	ResolvedVideoRateMultiplier *float64            `json:"resolved_video_rate_multiplier,omitempty"`
+	PricingSnapshot             *GrokVideoPricingSnapshot `json:"pricing_snapshot,omitempty"`
+	MonthCardSnapshot           *monthcard.Snapshot       `json:"month_card_snapshot,omitempty"`
+	LegacySubscriptionID        *int64                    `json:"legacy_subscription_id,omitempty"`
+	GroupID                     *int64                    `json:"group_id,omitempty"`
+	AccountID                   int64                     `json:"account_id,omitempty"`
+	Model                       string                    `json:"model"`
+	BillingModel                string                    `json:"billing_model,omitempty"`
+	UpstreamModel               string                    `json:"upstream_model,omitempty"`
+	VideoResolution             string                    `json:"video_resolution,omitempty"`
+	VideoDurationSeconds        int                       `json:"video_duration_seconds,omitempty"`
+	OriginalModel               string                    `json:"original_model,omitempty"`
+	ResolvedVideoRateMultiplier *float64                  `json:"resolved_video_rate_multiplier,omitempty"`
 	// CreatedAt is when the async create request entered the gateway (RFC3339Nano UTC).
 	// Deferred billing and duration_ms use this instant until the
 	// first official done+video.url observation (status poll or content download),

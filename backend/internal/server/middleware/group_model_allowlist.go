@@ -31,6 +31,11 @@ import (
 //     local_model_configuration 与 ingress 拒绝原因 model_not_allowed。
 func GroupModelAllowlist() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// The multi-group catalog applies each group's allowlist before merging.
+		if c.GetBool(groupCatalogKey) {
+			c.Next()
+			return
+		}
 		apiKey, ok := GetAPIKeyFromContext(c)
 		if !ok || apiKey == nil || apiKey.Group == nil || !apiKey.Group.ModelAllowlistEnabled() {
 			c.Next()

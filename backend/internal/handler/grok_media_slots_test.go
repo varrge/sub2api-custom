@@ -132,7 +132,10 @@ func (s *grokMediaSlotBindings) GetSessionAccountID(_ context.Context, groupID i
 	}
 	return s.owner, nil
 }
-func (s *grokMediaSlotBindings) SetSessionAccountID(_ context.Context, _ int64, key string, owner int64, _ time.Duration) error {
+func (s *grokMediaSlotBindings) SetSessionAccountID(_ context.Context, groupID int64, key string, owner int64, _ time.Duration) error {
+	if groupID != 24 {
+		return nil // Resource-group indexes use a separate cache namespace.
+	}
 	s.key, s.owner = key, owner
 	s.writes++
 	return nil
@@ -217,7 +220,7 @@ func newGrokMediaSlotHandler(t *testing.T, oauth, mismatch bool) (*OpenAIGateway
 		_, err := provider.GetAccessToken(context.Background(), &accounts[1])
 		require.NoError(t, err)
 	}
-	gateway := service.NewOpenAIGatewayService(repo, nil, nil, nil, nil, nil, bindings, cfg, nil, concurrency, nil, nil, nil, upstream, nil, nil, provider, nil, nil, nil, nil, nil)
+	gateway := service.NewOpenAIGatewayService(repo, nil, nil, nil, nil, nil, bindings, cfg, nil, concurrency, service.NewBillingService(cfg, nil), nil, nil, upstream, nil, nil, provider, nil, nil, nil, nil, nil)
 	groupID := int64(24)
 	require.NoError(t, gateway.BindGrokMediaVideoRequestAccount(context.Background(), &groupID, "task", 10, 20, 1))
 	bindings.writes = 0

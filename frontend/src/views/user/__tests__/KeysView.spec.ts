@@ -8,6 +8,7 @@ import KeysView from '../KeysView.vue'
 
 const {
   listKeys,
+  createKeyRequest,
   updateKey,
   getPublicSettings,
   getDashboardApiKeysUsage,
@@ -20,6 +21,7 @@ const {
   nextStep,
 } = vi.hoisted(() => ({
   listKeys: vi.fn(),
+  createKeyRequest: vi.fn(),
   updateKey: vi.fn(),
   getPublicSettings: vi.fn(),
   getDashboardApiKeysUsage: vi.fn(),
@@ -61,7 +63,7 @@ const messages: Record<string, string> = {
 vi.mock('@/api', () => ({
   keysAPI: {
     list: listKeys,
-    create: vi.fn(),
+    create: createKeyRequest,
     update: updateKey,
     delete: vi.fn(),
     toggleStatus: vi.fn(),
@@ -114,6 +116,9 @@ const createApiKey = (): ApiKey => ({
   key: 'sk-test-key',
   name: 'test-key',
   group_id: null,
+  group_ids: [],
+  groups: [],
+  multi_group_enabled: false,
   status: 'active',
   ip_whitelist: [],
   ip_blacklist: [],
@@ -173,6 +178,7 @@ const DataTableStub = {
           <slot name="cell-id" :value="row.id" :row="row" />
         </div>
         <slot name="cell-name" :value="row.name" :row="row" />
+        <slot name="cell-group" :row="row" />
         <slot name="cell-actions" :row="row" />
         <div data-test="current-concurrency">
           <slot name="cell-current_concurrency" :value="row.current_concurrency" :row="row" />
@@ -270,8 +276,8 @@ describe('user KeysView column settings', () => {
     localStorage.clear()
 
     listKeys.mockReset()
-    updateKey.mockReset()
-    vi.mocked(keysAPI.create).mockReset()
+    createKeyRequest.mockReset().mockResolvedValue({})
+    updateKey.mockReset().mockResolvedValue({})
     getPublicSettings.mockReset()
     getDashboardApiKeysUsage.mockReset()
     getAvailableGroups.mockReset()
@@ -302,7 +308,7 @@ describe('user KeysView column settings', () => {
     { initialStatus: 'active', status: 'active', formStatus: 'inactive' },
   ] as const)('syncs quota reset from $initialStatus to $status with form status $formStatus', async ({ initialStatus, status, formStatus }) => {
     const key: ApiKey = {
-      ...createApiKey(), group_id: 1, quota: 10, quota_used: 10,
+      ...createApiKey(), group_id: 1, group_ids: [1], quota: 10, quota_used: 10,
       status: initialStatus,
     }
     listKeys.mockResolvedValueOnce({ items: [key], total: 1, page: 1, page_size: 20, pages: 1 })
@@ -555,10 +561,11 @@ describe('user KeysView column settings', () => {
       name: `Shared group ${index + 1}`,
       platform,
       rate_multiplier: 1,
+      status: 'active',
       subscription_type: 'standard',
     }))
     const groupSelect = (wrapper: VueWrapper) => wrapper.findComponent('[data-tour="key-form-group"]')
-    const optionIds = (wrapper: VueWrapper) => groupSelect(wrapper).props('options').map((option: { value: number }) => option.value)
+    const optionIds = (wrapper: VueWrapper) => groupSelect(wrapper).findAll('[data-add-group]').map((button) => Number(button.attributes('data-add-group')))
     const chooseProvider = (wrapper: VueWrapper, value: string) => wrapper.get(`input[name="key-provider"][value="${value}"]`).setValue()
     const openCreate = async () => {
       const wrapper = await mountView()
@@ -583,22 +590,19 @@ describe('user KeysView column settings', () => {
       expect(wrapper.findAllComponents({ name: 'Select' })[0].props('options')).toHaveLength(13)
     })
 
-    it('clears the previous group on provider change and submits only the newly selected group', async () => {
+    it('retains ordered selections across provider filters and submits all selected groups', async () => {
       const wrapper = await openCreate()
       await wrapper.get('[data-tour="key-form-name"]').setValue('My key')
-      await groupSelect(wrapper).vm.$emit('update:modelValue', 1)
+      await groupSelect(wrapper).get('[data-add-group="1"]').trigger('click')
       await chooseProvider(wrapper, 'domestic')
-      expect(groupSelect(wrapper).props('modelValue')).toBeNull()
-      await wrapper.get('#key-form').trigger('submit')
-      expect(keysAPI.create).not.toHaveBeenCalled()
-      expect(showError).toHaveBeenCalledWith('keys.groupRequired')
-
-      await groupSelect(wrapper).vm.$emit('update:modelValue', 5)
+      expect(groupSelect(wrapper).props('modelValue')).toEqual([1])
+      expect(groupSelect(wrapper).text()).not.toContain('keys.multiGroup.ineligible')
+      await groupSelect(wrapper).get('[data-add-group="5"]').trigger('click')
       vi.mocked(keysAPI.create).mockResolvedValue({ ...createApiKey(), group_id: 5 })
       await wrapper.get('#key-form').trigger('submit')
       await flushPromises()
       expect(keysAPI.create).toHaveBeenCalledOnce()
-      expect(vi.mocked(keysAPI.create).mock.calls[0].slice(0, 2)).toEqual(['My key', 5])
+      expect(vi.mocked(keysAPI.create).mock.calls[0].slice(0, 2)).toEqual(['My key', [1, 5]])
     })
 
     it('defaults to a provider with available groups and disables empty categories', async () => {
@@ -630,15 +634,60 @@ describe('user KeysView column settings', () => {
     it('resets provider and group when reopening create, and preserves edit options', async () => {
       const wrapper = await openCreate()
       await chooseProvider(wrapper, 'domestic')
-      await groupSelect(wrapper).vm.$emit('update:modelValue', 5)
+      await groupSelect(wrapper).vm.$emit('update:modelValue', [5])
       await wrapper.get('[data-test="close-dialog"]').trigger('click')
       await wrapper.get('[data-tour="keys-create-btn"]').trigger('click')
       expect(optionIds(wrapper)).toEqual([1])
-      expect(groupSelect(wrapper).props('modelValue')).toBeNull()
+      expect(groupSelect(wrapper).props('modelValue')).toEqual([])
       await wrapper.get('[data-test="close-dialog"]').trigger('click')
       await getButtonByText(wrapper, 'common.edit').trigger('click')
       expect(wrapper.find('[data-tour="key-form-provider"]').exists()).toBe(false)
       expect(optionIds(wrapper)).toHaveLength(11)
     })
   })
+  it('creates ordered groups and rejects empty user selections', async () => {
+    const wrapper = await mountView()
+    await getButtonByText(wrapper, 'Create API Key').trigger('click')
+    await wrapper.get('form#key-form').trigger('submit')
+    expect(showError).toHaveBeenCalledWith('keys.groupRequired')
+    expect(createKeyRequest).not.toHaveBeenCalled()
+
+    await wrapper.get('[data-tour="key-form-name"]').setValue('mixed')
+    const selector = wrapper.findComponent({ name: 'OrderedKeyGroupSelector' })
+    await selector.vm.$emit('update:modelValue', [8, 3])
+    await wrapper.get('form#key-form').trigger('submit')
+    await flushPromises()
+    expect(createKeyRequest).toHaveBeenCalledWith('mixed', [8, 3], undefined, [], [], 0, undefined,
+      { rate_limit_5h: 0, rate_limit_1d: 0, rate_limit_7d: 0 })
+  })
+
+  it('retains unavailable groups when editing unrelated key settings', async () => {
+    const key = { ...createApiKey(), group_id: 8, group_ids: [8, 3], multi_group_enabled: true }
+    listKeys.mockResolvedValue({ items: [key], total: 1, page: 1, page_size: 20, pages: 1 })
+    const wrapper = await mountView()
+    await getButtonByText(wrapper, 'common.edit').trigger('click')
+    const selector = wrapper.findComponent({ name: 'OrderedKeyGroupSelector' })
+    expect(selector.props('modelValue')).toEqual([8, 3])
+    expect(selector.props('availableGroups')).toEqual([])
+    await wrapper.get('[data-tour="key-form-name"]').setValue('renamed')
+    await wrapper.get('form#key-form').trigger('submit')
+    await flushPromises()
+    expect(updateKey).toHaveBeenCalledWith(1, expect.objectContaining({ name: 'renamed', group_ids: [8, 3] }))
+    expect(updateKey.mock.calls[0][1]).not.toHaveProperty('group_id')
+  })
+
+  it('uses the same ordered editor from the list and prevents user unbinding', async () => {
+    const key = { ...createApiKey(), group_id: 8, group_ids: [8, 3], multi_group_enabled: true }
+    listKeys.mockResolvedValue({ items: [key], total: 1, page: 1, page_size: 20, pages: 1 })
+    const wrapper = await mountView()
+    await wrapper.get('button[title="keys.clickToChangeGroup"]').trigger('click')
+    const selector = wrapper.findComponent({ name: 'OrderedKeyGroupSelector' })
+    await selector.vm.$emit('update:modelValue', [])
+    expect(getButtonByText(wrapper, 'common.save').attributes('disabled')).toBeDefined()
+    await selector.vm.$emit('update:modelValue', [3, 8])
+    await getButtonByText(wrapper, 'common.save').trigger('click')
+    await flushPromises()
+    expect(updateKey).toHaveBeenCalledWith(1, { group_ids: [3, 8] })
+  })
+
 })

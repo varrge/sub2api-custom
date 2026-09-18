@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -213,10 +214,17 @@ func TestAPIContracts(t *testing.T) {
 			}`,
 		},
 		{
-			name:   "POST /api/v1/keys",
+			name: "POST /api/v1/keys",
+			setup: func(t *testing.T, deps *contractDeps) {
+				t.Helper()
+				deps.groupRepo.SetActive([]service.Group{
+					{ID: 10, Name: "Group One", Description: "desc", Platform: service.PlatformAnthropic, RateMultiplier: 1.5, PeakRateMultiplier: 1, Status: service.StatusActive, SubscriptionType: service.SubscriptionTypeStandard, CreatedAt: deps.now, UpdatedAt: deps.now},
+					{ID: 20, Name: "Group Two", Description: "desc", Platform: service.PlatformOpenAI, RateMultiplier: 1.5, PeakRateMultiplier: 1, Status: service.StatusActive, SubscriptionType: service.SubscriptionTypeStandard, CreatedAt: deps.now, UpdatedAt: deps.now},
+				})
+			},
 			method: http.MethodPost,
 			path:   "/api/v1/keys",
-			body:   `{"name":"Key One","custom_key":"sk_custom_1234567890"}`,
+			body:   `{"name":"Key One","custom_key":"sk_custom_1234567890","group_ids":[20,10]}`,
 			headers: map[string]string{
 				"Content-Type": "application/json",
 			},
@@ -229,7 +237,11 @@ func TestAPIContracts(t *testing.T) {
 					"user_id": 1,
 					"key": "sk_custom_1234567890",
 					"name": "Key One",
-					"group_id": null,
+					"group_id": 20,
+ "group_ids": [20,10],
+ "multi_group_enabled": true,
+ "group": ` + contractAPIKeyGroupJSON(20, "Group Two", "openai") + `,
+ "groups": [` + contractAPIKeyGroupJSON(20, "Group Two", "openai") + `,` + contractAPIKeyGroupJSON(10, "Group One", "anthropic") + `],
 					"status": "active",
 					"ip_whitelist": null,
 					"ip_blacklist": null,
@@ -281,6 +293,9 @@ func TestAPIContracts(t *testing.T) {
 							"key": "sk_custom_1234567890",
 							"name": "Key One",
 							"group_id": null,
+ "group_ids": [],
+ "groups": [],
+ "multi_group_enabled": false,
 							"status": "active",
 							"ip_whitelist": null,
 							"ip_blacklist": null,
@@ -1425,6 +1440,64 @@ func TestAPIContracts(t *testing.T) {
 	}
 }
 
+// contractAPIKeyGroupJSON fixes the public group shape independently of the DTO mapper.
+func contractAPIKeyGroupJSON(id int64, name, platform string) string {
+	return fmt.Sprintf(`{
+						"id": %d,
+						"name": %q,
+						"description": "desc",
+						"platform": %q,
+						"rate_multiplier": 1.5,
+						"temporary_rate_enabled": false,
+						"temporary_rate_multiplier": 0,
+						"temporary_rate_starts_at": null,
+						"temporary_rate_ends_at": null,
+						"peak_rate_enabled": false,
+						"peak_start": "",
+						"peak_end": "",
+						"peak_rate_multiplier": 1,
+						"is_exclusive": false,
+						"status": "active",
+						"subscription_type": "standard",
+						"daily_limit_usd": null,
+						"weekly_limit_usd": null,
+						"monthly_limit_usd": null,
+						"long_context_pricing_enabled": false,
+						"image_price_1k": null,
+						"image_price_2k": null,
+						"image_price_4k": null,
+						"video_price_480p": null,
+						"video_price_720p": null,
+						"video_price_1080p": null,
+						"web_search_price_per_call": null,
+						"search_price_per_1k": null,
+						"audio_tts_price_per_million_chars": null,
+						"audio_stt_price_per_hour": null,
+						"audio_realtime_price_per_min": null,
+						"allow_image_generation": false,
+						"allow_batch_image_generation": false,
+						"batch_image_discount_multiplier": 0,
+						"batch_image_hold_multiplier": 0,
+						"image_rate_independent": false,
+						"image_rate_multiplier": 0,
+						"video_rate_independent": false,
+						"video_rate_multiplier": 0,
+						"claude_code_only": false,
+						"allow_messages_dispatch": false,
+						"allow_live": false,
+						"fallback_group_id": null,
+						"fallback_group_id_on_invalid_request": null,
+						"require_oauth_only": false,
+						"require_privacy_set": false,
+						"max_reasoning_effort": "",
+						"max_reasoning_effort_over_limit": "",
+						"reasoning_effort_mappings": null,
+						"rpm_limit": 0,
+						"created_at": "2025-01-02T03:04:05Z",
+						"updated_at": "2025-01-02T03:04:05Z"
+					}`, id, name, platform)
+}
+
 type contractDeps struct {
 	now         time.Time
 	router      http.Handler
@@ -1783,7 +1856,13 @@ func (stubGroupRepo) Create(ctx context.Context, group *service.Group) error {
 	return errors.New("not implemented")
 }
 
-func (stubGroupRepo) GetByID(ctx context.Context, id int64) (*service.Group, error) {
+func (r *stubGroupRepo) GetByID(ctx context.Context, id int64) (*service.Group, error) {
+	for _, group := range r.active {
+		if group.ID == id {
+			copyGroup := group
+			return &copyGroup, nil
+		}
+	}
 	return nil, service.ErrGroupNotFound
 }
 

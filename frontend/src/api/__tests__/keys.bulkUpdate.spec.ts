@@ -16,7 +16,7 @@ describe('API key bulk updates', () => {
       ? Promise.reject(failure)
       : Promise.resolve({ data: { id: Number(url.split('/').pop()) } }))
 
-    const updates = { group_id: 12, quota: 0, expires_at: '', ip_whitelist: [] }
+    const updates = { group_ids: [12, 7], quota: 0, expires_at: '', ip_whitelist: [] }
     const result = await bulkUpdate([1, 2, 1, 3], updates)
 
     expect(put.mock.calls).toEqual([

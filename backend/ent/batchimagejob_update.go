@@ -4,12 +4,14 @@ package ent
 
 import (
 	"context"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/batchimagejob"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
@@ -73,6 +75,51 @@ func (_u *BatchImageJobUpdate) AddAPIKeyID(v int64) *BatchImageJobUpdate {
 // ClearAPIKeyID clears the value of the "api_key_id" field.
 func (_u *BatchImageJobUpdate) ClearAPIKeyID() *BatchImageJobUpdate {
 	_u.mutation.ClearAPIKeyID()
+	return _u
+}
+
+// SetGroupID sets the "group_id" field.
+func (_u *BatchImageJobUpdate) SetGroupID(v int64) *BatchImageJobUpdate {
+	_u.mutation.ResetGroupID()
+	_u.mutation.SetGroupID(v)
+	return _u
+}
+
+// SetNillableGroupID sets the "group_id" field if the given value is not nil.
+func (_u *BatchImageJobUpdate) SetNillableGroupID(v *int64) *BatchImageJobUpdate {
+	if v != nil {
+		_u.SetGroupID(*v)
+	}
+	return _u
+}
+
+// AddGroupID adds value to the "group_id" field.
+func (_u *BatchImageJobUpdate) AddGroupID(v int64) *BatchImageJobUpdate {
+	_u.mutation.AddGroupID(v)
+	return _u
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (_u *BatchImageJobUpdate) ClearGroupID() *BatchImageJobUpdate {
+	_u.mutation.ClearGroupID()
+	return _u
+}
+
+// SetBillingSnapshot sets the "billing_snapshot" field.
+func (_u *BatchImageJobUpdate) SetBillingSnapshot(v jsontext.Value) *BatchImageJobUpdate {
+	_u.mutation.SetBillingSnapshot(v)
+	return _u
+}
+
+// AppendBillingSnapshot appends value to the "billing_snapshot" field.
+func (_u *BatchImageJobUpdate) AppendBillingSnapshot(v jsontext.Value) *BatchImageJobUpdate {
+	_u.mutation.AppendBillingSnapshot(v)
+	return _u
+}
+
+// ClearBillingSnapshot clears the value of the "billing_snapshot" field.
+func (_u *BatchImageJobUpdate) ClearBillingSnapshot() *BatchImageJobUpdate {
+	_u.mutation.ClearBillingSnapshot()
 	return _u
 }
 
@@ -928,6 +975,26 @@ func (_u *BatchImageJobUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	if _u.mutation.APIKeyIDCleared() {
 		_spec.ClearField(batchimagejob.FieldAPIKeyID, field.TypeInt64)
 	}
+	if value, ok := _u.mutation.GroupID(); ok {
+		_spec.SetField(batchimagejob.FieldGroupID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedGroupID(); ok {
+		_spec.AddField(batchimagejob.FieldGroupID, field.TypeInt64, value)
+	}
+	if _u.mutation.GroupIDCleared() {
+		_spec.ClearField(batchimagejob.FieldGroupID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.BillingSnapshot(); ok {
+		_spec.SetField(batchimagejob.FieldBillingSnapshot, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedBillingSnapshot(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, batchimagejob.FieldBillingSnapshot, value)
+		})
+	}
+	if _u.mutation.BillingSnapshotCleared() {
+		_spec.ClearField(batchimagejob.FieldBillingSnapshot, field.TypeJSON)
+	}
 	if value, ok := _u.mutation.AccountID(); ok {
 		_spec.SetField(batchimagejob.FieldAccountID, field.TypeInt64, value)
 	}
@@ -1200,6 +1267,51 @@ func (_u *BatchImageJobUpdateOne) AddAPIKeyID(v int64) *BatchImageJobUpdateOne {
 // ClearAPIKeyID clears the value of the "api_key_id" field.
 func (_u *BatchImageJobUpdateOne) ClearAPIKeyID() *BatchImageJobUpdateOne {
 	_u.mutation.ClearAPIKeyID()
+	return _u
+}
+
+// SetGroupID sets the "group_id" field.
+func (_u *BatchImageJobUpdateOne) SetGroupID(v int64) *BatchImageJobUpdateOne {
+	_u.mutation.ResetGroupID()
+	_u.mutation.SetGroupID(v)
+	return _u
+}
+
+// SetNillableGroupID sets the "group_id" field if the given value is not nil.
+func (_u *BatchImageJobUpdateOne) SetNillableGroupID(v *int64) *BatchImageJobUpdateOne {
+	if v != nil {
+		_u.SetGroupID(*v)
+	}
+	return _u
+}
+
+// AddGroupID adds value to the "group_id" field.
+func (_u *BatchImageJobUpdateOne) AddGroupID(v int64) *BatchImageJobUpdateOne {
+	_u.mutation.AddGroupID(v)
+	return _u
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (_u *BatchImageJobUpdateOne) ClearGroupID() *BatchImageJobUpdateOne {
+	_u.mutation.ClearGroupID()
+	return _u
+}
+
+// SetBillingSnapshot sets the "billing_snapshot" field.
+func (_u *BatchImageJobUpdateOne) SetBillingSnapshot(v jsontext.Value) *BatchImageJobUpdateOne {
+	_u.mutation.SetBillingSnapshot(v)
+	return _u
+}
+
+// AppendBillingSnapshot appends value to the "billing_snapshot" field.
+func (_u *BatchImageJobUpdateOne) AppendBillingSnapshot(v jsontext.Value) *BatchImageJobUpdateOne {
+	_u.mutation.AppendBillingSnapshot(v)
+	return _u
+}
+
+// ClearBillingSnapshot clears the value of the "billing_snapshot" field.
+func (_u *BatchImageJobUpdateOne) ClearBillingSnapshot() *BatchImageJobUpdateOne {
+	_u.mutation.ClearBillingSnapshot()
 	return _u
 }
 
@@ -2084,6 +2196,26 @@ func (_u *BatchImageJobUpdateOne) sqlSave(ctx context.Context) (_node *BatchImag
 	}
 	if _u.mutation.APIKeyIDCleared() {
 		_spec.ClearField(batchimagejob.FieldAPIKeyID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.GroupID(); ok {
+		_spec.SetField(batchimagejob.FieldGroupID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedGroupID(); ok {
+		_spec.AddField(batchimagejob.FieldGroupID, field.TypeInt64, value)
+	}
+	if _u.mutation.GroupIDCleared() {
+		_spec.ClearField(batchimagejob.FieldGroupID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.BillingSnapshot(); ok {
+		_spec.SetField(batchimagejob.FieldBillingSnapshot, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedBillingSnapshot(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, batchimagejob.FieldBillingSnapshot, value)
+		})
+	}
+	if _u.mutation.BillingSnapshotCleared() {
+		_spec.ClearField(batchimagejob.FieldBillingSnapshot, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.AccountID(); ok {
 		_spec.SetField(batchimagejob.FieldAccountID, field.TypeInt64, value)

@@ -115,3 +115,23 @@ func TestBatchImageBillingRecoveryService_EnqueuesRetryWhenReleaseFails(t *testi
 	require.Equal(t, BatchImageJobStatusFailed, repo.jobs[stale.BatchID].Status)
 	require.Equal(t, []string{stale.BatchID}, queue.enqueued)
 }
+
+func TestBatchImageBillingRecoveryServiceFailsStaleSubscriptionWithoutRefund(t *testing.T) {
+	repo := newFakeBatchImageRepository()
+	job := testSettlingBatchImageJob("subscription-stale-submit")
+	job.Status = BatchImageJobStatusUploading
+	job.ProviderJobName = nil
+	job.UpdatedAt = time.Now().Add(-time.Hour)
+	zero := 0.0
+	job.HoldAmount = &zero
+	job.BillingSnapshot = &BatchImageBillingSnapshot{Version: 1, BillingType: BillingTypeSubscription}
+	repo.jobs[job.BatchID] = job
+	billing := &fakeBatchImageBillingRepo{}
+	recovery := &BatchImageBillingRecoveryService{Repo: repo, Billing: billing, StaleAfter: time.Minute}
+	n, err := recovery.ReleaseStaleUnsubmittedOnce(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+	require.Equal(t, BatchImageJobStatusFailed, job.Status)
+	require.Empty(t, billing.releases)
+	require.Empty(t, billing.commands)
+}

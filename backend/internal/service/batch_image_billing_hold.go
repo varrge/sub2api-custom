@@ -56,6 +56,9 @@ func buildBatchImageHoldCommand(job *BatchImageJob, requestID string, actualAmou
 }
 
 func reserveBatchImageBalanceHold(ctx context.Context, repo UsageBillingRepository, job *BatchImageJob, payloadHash string) error {
+	if batchImageSubscriptionBilling(job) {
+		return nil
+	}
 	if repo == nil {
 		return ErrBatchImageBillingHoldFailed.WithCause(errors.New("batch image billing repository is not configured"))
 	}
@@ -79,9 +82,24 @@ func captureBatchImageBalanceHold(ctx context.Context, repo UsageBillingReposito
 	if repo == nil {
 		return ErrBatchImageSettlementBillingFailed.WithCause(errors.New("batch image billing repository is not configured"))
 	}
+	usage, err := buildBatchImageUsageCommand(job, actualAmount, payloadHash)
+	if err != nil {
+		return err
+	}
+	if batchImageSubscriptionBilling(job) {
+		if _, err := repo.Apply(ctx, usage); err != nil {
+			return ErrBatchImageSettlementBillingFailed.WithCause(err)
+		}
+		return nil
+	}
 	cmd, err := buildBatchImageHoldCommand(job, BatchImageCaptureRequestID(job.BatchID), actualAmount, payloadHash)
 	if err != nil {
 		return err
+	}
+	// Historical jobs retain their existing fingerprint for safe replay after an
+	// upgrade. The repository still counts their actual key usage at capture.
+	if job.BillingSnapshot != nil {
+		cmd.Usage = usage
 	}
 	if _, err := repo.CaptureBatchImageBalance(ctx, cmd); err != nil {
 		return ErrBatchImageSettlementBillingFailed.WithCause(err)
@@ -90,6 +108,9 @@ func captureBatchImageBalanceHold(ctx context.Context, repo UsageBillingReposito
 }
 
 func releaseBatchImageBalanceHold(ctx context.Context, repo UsageBillingRepository, job *BatchImageJob, payloadHash string) error {
+	if batchImageSubscriptionBilling(job) {
+		return nil
+	}
 	if repo == nil || job == nil {
 		return nil
 	}

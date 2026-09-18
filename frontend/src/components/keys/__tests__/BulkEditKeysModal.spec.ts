@@ -16,7 +16,7 @@ const mountModal = () => mount(BulkEditKeysModal, {
   props: {
     show: true,
     selectedKeys: [{ id: 1, name: 'First' }, { id: 2, name: 'Second' }],
-    groups: [{ id: 7, name: 'Available group' }] as Group[]
+    groups: [7, 8].map((id) => ({ id, name: `Available group ${id}`, status: 'active', platform: 'openai' })) as Group[]
   },
   global: {
     stubs: {
@@ -26,6 +26,7 @@ const mountModal = () => mount(BulkEditKeysModal, {
         emits: ['close'],
         template: '<div v-if="show"><slot /><slot name="footer" /></div>'
       },
+      GroupOptionItem: true,
       Select: {
         props: ['modelValue', 'options', 'disabled'],
         emits: ['update:modelValue'],
@@ -82,9 +83,10 @@ describe('BulkEditKeysModal', () => {
     await wrapper.get('[data-test="enable-group"]').setValue(true)
     await wrapper.get('form').trigger('submit')
     expect(bulkUpdate).not.toHaveBeenCalled()
-    await wrapper.get('[data-test="group-input"]').setValue('7')
+    await wrapper.get('[data-add-group="8"]').trigger('click')
+    await wrapper.get('[data-add-group="7"]').trigger('click')
     await wrapper.get('form').trigger('submit')
-    expect(bulkUpdate).toHaveBeenCalledWith([1, 2], { group_id: 7 })
+    expect(bulkUpdate).toHaveBeenCalledWith([1, 2], { group_ids: [8, 7] })
   })
 
   it('clears only an explicitly selected IP list and expiration', async () => {

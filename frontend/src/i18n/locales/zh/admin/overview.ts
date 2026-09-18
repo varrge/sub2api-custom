@@ -635,7 +635,7 @@ export default {
       replaceGroup: '替换分组',
       clickToReplace: '点击替换分组',
       replaceGroupTitle: '替换专属分组',
-      replaceGroupHint: '选择新分组替换「{old}」，将自动迁移绑定的 Key 并更新分组权限',
+      replaceGroupHint: "选择该用户已有资格的分组，替换密钥中的「{old}」。",
       replaceGroupConfirm: '确认替换',
       replaceGroupSuccess: '分组替换成功，已迁移 {count} 个 Key',
       selectNewGroup: '请选择目标分组',

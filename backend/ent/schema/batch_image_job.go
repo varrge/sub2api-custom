@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"encoding/json"
 	"time"
 
 	"entgo.io/ent"
@@ -31,6 +32,8 @@ func (BatchImageJob) Fields() []ent.Field {
 		field.String("batch_id").MaxLen(64).Immutable(),
 		field.Int64("user_id"),
 		field.Int64("api_key_id").Optional().Nillable(),
+		field.Int64("group_id").Optional().Nillable(),
+		field.JSON("billing_snapshot", json.RawMessage{}).Optional(),
 		field.Int64("account_id").Optional().Nillable(),
 		field.String("provider").MaxLen(32),
 		field.String("model").MaxLen(128),

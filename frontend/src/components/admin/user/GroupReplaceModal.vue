@@ -6,6 +6,9 @@
         {{ t('admin.users.replaceGroupHint', { old: oldGroup.name }) }}
       </p>
 
+      <p class="text-xs text-gray-500">{{ t('keys.multiGroup.replaceHint') }}</p>
+      <p v-if="loadFailed" class="text-sm text-red-500" role="alert">{{ t('keys.multiGroup.loadFailed') }}</p>
+
       <!-- 当前分组 -->
       <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-600 dark:bg-dark-800">
         <div class="flex items-center gap-2">
@@ -61,7 +64,7 @@
         <button @click="$emit('close')" class="btn btn-secondary px-5">{{ t('common.cancel') }}</button>
         <button
           @click="handleReplace"
-          :disabled="!selectedGroupId || submitting"
+          :disabled="!selectedGroupId || submitting || loading || loadFailed"
           class="btn btn-primary px-6"
         >
           <svg v-if="submitting" class="-ml-1 mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -80,7 +83,7 @@ import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
-import type { AdminUser, AdminGroup } from '@/types'
+import type { AdminUser, AdminGroup, Group } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 
@@ -99,19 +102,28 @@ const appStore = useAppStore()
 const selectedGroupId = ref<number | null>(null)
 const submitting = ref(false)
 
-// 可选的专属标准分组（排除当前 oldGroup）
-const availableGroups = computed(() => {
-  if (!props.oldGroup) return []
-  return props.allGroups.filter(
-    g => g.status === 'active' && g.is_exclusive && g.subscription_type === 'standard' && g.id !== props.oldGroup!.id
-  )
-})
+const eligibleGroups = ref<Group[]>([])
+const loading = ref(false)
+const loadFailed = ref(false)
+const availableGroups = computed(() => eligibleGroups.value.filter(group =>
+  group.status === 'active' && group.id !== props.oldGroup?.id
+))
 
-watch(() => props.show, (v) => {
-  if (v) {
-    selectedGroupId.value = null
+watch(() => [props.show, props.user?.id] as const, async ([show, userId]) => {
+  selectedGroupId.value = null
+  eligibleGroups.value = []
+  loadFailed.value = false
+  if (!show || !userId) return
+  loading.value = true
+  try {
+    const groups = await adminAPI.users.getAvailableGroups(userId)
+    if (props.user?.id === userId) eligibleGroups.value = groups
+  } catch {
+    if (props.user?.id === userId) loadFailed.value = true
+  } finally {
+    if (props.user?.id === userId) loading.value = false
   }
-})
+}, { immediate: true })
 
 const handleReplace = async () => {
   if (!props.user || !props.oldGroup || !selectedGroupId.value) return
@@ -123,7 +135,7 @@ const handleReplace = async () => {
     emit('success')
     emit('close')
   } catch (error) {
-    console.error('Failed to replace group:', error)
+    appStore.showError(t('admin.users.groupChangeFailed'))
   } finally {
     submitting.value = false
   }

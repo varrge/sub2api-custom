@@ -230,6 +230,13 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if input.VideoRateMultiplierOverride != nil {
 		videoMultiplier = *input.VideoRateMultiplierOverride
 	}
+	if result.VideoPricingSnapshot != nil {
+		if result.VideoPricingSnapshot.TokenPricing != nil {
+			multiplier = result.VideoPricingSnapshot.RateMultiplier
+		} else {
+			videoMultiplier = result.VideoPricingSnapshot.RateMultiplier
+		}
+	}
 
 	var cost *CostBreakdown
 	billingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
@@ -600,6 +607,9 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 		return s.billingService.CalculateWebSearchCost(result.WebSearchCalls, webSearchPricePerCallFromAPIKey(apiKey), webSearchMultiplier), nil
 	}
 	if isGrokVideoUsageResult(result, billingModels) {
+		if result.VideoPricingSnapshot != nil {
+			return result.VideoPricingSnapshot.calculate(ctx, s.billingService, billingModel, result, tokens, serviceTier)
+		}
 		if resolved := s.resolveOpenAIChannelPricing(ctx, billingModel, apiKey); resolved == nil || resolved.Mode != BillingModeToken {
 			return s.calculateOpenAIVideoCost(ctx, billingModel, apiKey, result, videoMultiplier), nil
 		}

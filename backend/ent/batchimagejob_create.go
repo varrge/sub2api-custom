@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"time"
@@ -45,6 +46,26 @@ func (_c *BatchImageJobCreate) SetNillableAPIKeyID(v *int64) *BatchImageJobCreat
 	if v != nil {
 		_c.SetAPIKeyID(*v)
 	}
+	return _c
+}
+
+// SetGroupID sets the "group_id" field.
+func (_c *BatchImageJobCreate) SetGroupID(v int64) *BatchImageJobCreate {
+	_c.mutation.SetGroupID(v)
+	return _c
+}
+
+// SetNillableGroupID sets the "group_id" field if the given value is not nil.
+func (_c *BatchImageJobCreate) SetNillableGroupID(v *int64) *BatchImageJobCreate {
+	if v != nil {
+		_c.SetGroupID(*v)
+	}
+	return _c
+}
+
+// SetBillingSnapshot sets the "billing_snapshot" field.
+func (_c *BatchImageJobCreate) SetBillingSnapshot(v jsontext.Value) *BatchImageJobCreate {
+	_c.mutation.SetBillingSnapshot(v)
 	return _c
 }
 
@@ -792,6 +813,14 @@ func (_c *BatchImageJobCreate) createSpec() (*BatchImageJob, *sqlgraph.CreateSpe
 		_spec.SetField(batchimagejob.FieldAPIKeyID, field.TypeInt64, value)
 		_node.APIKeyID = &value
 	}
+	if value, ok := _c.mutation.GroupID(); ok {
+		_spec.SetField(batchimagejob.FieldGroupID, field.TypeInt64, value)
+		_node.GroupID = &value
+	}
+	if value, ok := _c.mutation.BillingSnapshot(); ok {
+		_spec.SetField(batchimagejob.FieldBillingSnapshot, field.TypeJSON, value)
+		_node.BillingSnapshot = value
+	}
 	if value, ok := _c.mutation.AccountID(); ok {
 		_spec.SetField(batchimagejob.FieldAccountID, field.TypeInt64, value)
 		_node.AccountID = &value
@@ -1031,6 +1060,48 @@ func (u *BatchImageJobUpsert) AddAPIKeyID(v int64) *BatchImageJobUpsert {
 // ClearAPIKeyID clears the value of the "api_key_id" field.
 func (u *BatchImageJobUpsert) ClearAPIKeyID() *BatchImageJobUpsert {
 	u.SetNull(batchimagejob.FieldAPIKeyID)
+	return u
+}
+
+// SetGroupID sets the "group_id" field.
+func (u *BatchImageJobUpsert) SetGroupID(v int64) *BatchImageJobUpsert {
+	u.Set(batchimagejob.FieldGroupID, v)
+	return u
+}
+
+// UpdateGroupID sets the "group_id" field to the value that was provided on create.
+func (u *BatchImageJobUpsert) UpdateGroupID() *BatchImageJobUpsert {
+	u.SetExcluded(batchimagejob.FieldGroupID)
+	return u
+}
+
+// AddGroupID adds v to the "group_id" field.
+func (u *BatchImageJobUpsert) AddGroupID(v int64) *BatchImageJobUpsert {
+	u.Add(batchimagejob.FieldGroupID, v)
+	return u
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (u *BatchImageJobUpsert) ClearGroupID() *BatchImageJobUpsert {
+	u.SetNull(batchimagejob.FieldGroupID)
+	return u
+}
+
+// SetBillingSnapshot sets the "billing_snapshot" field.
+func (u *BatchImageJobUpsert) SetBillingSnapshot(v jsontext.Value) *BatchImageJobUpsert {
+	u.Set(batchimagejob.FieldBillingSnapshot, v)
+	return u
+}
+
+// UpdateBillingSnapshot sets the "billing_snapshot" field to the value that was provided on create.
+func (u *BatchImageJobUpsert) UpdateBillingSnapshot() *BatchImageJobUpsert {
+	u.SetExcluded(batchimagejob.FieldBillingSnapshot)
+	return u
+}
+
+// ClearBillingSnapshot clears the value of the "billing_snapshot" field.
+func (u *BatchImageJobUpsert) ClearBillingSnapshot() *BatchImageJobUpsert {
+	u.SetNull(batchimagejob.FieldBillingSnapshot)
 	return u
 }
 
@@ -1758,6 +1829,55 @@ func (u *BatchImageJobUpsertOne) UpdateAPIKeyID() *BatchImageJobUpsertOne {
 func (u *BatchImageJobUpsertOne) ClearAPIKeyID() *BatchImageJobUpsertOne {
 	return u.Update(func(s *BatchImageJobUpsert) {
 		s.ClearAPIKeyID()
+	})
+}
+
+// SetGroupID sets the "group_id" field.
+func (u *BatchImageJobUpsertOne) SetGroupID(v int64) *BatchImageJobUpsertOne {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.SetGroupID(v)
+	})
+}
+
+// AddGroupID adds v to the "group_id" field.
+func (u *BatchImageJobUpsertOne) AddGroupID(v int64) *BatchImageJobUpsertOne {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.AddGroupID(v)
+	})
+}
+
+// UpdateGroupID sets the "group_id" field to the value that was provided on create.
+func (u *BatchImageJobUpsertOne) UpdateGroupID() *BatchImageJobUpsertOne {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.UpdateGroupID()
+	})
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (u *BatchImageJobUpsertOne) ClearGroupID() *BatchImageJobUpsertOne {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.ClearGroupID()
+	})
+}
+
+// SetBillingSnapshot sets the "billing_snapshot" field.
+func (u *BatchImageJobUpsertOne) SetBillingSnapshot(v jsontext.Value) *BatchImageJobUpsertOne {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.SetBillingSnapshot(v)
+	})
+}
+
+// UpdateBillingSnapshot sets the "billing_snapshot" field to the value that was provided on create.
+func (u *BatchImageJobUpsertOne) UpdateBillingSnapshot() *BatchImageJobUpsertOne {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.UpdateBillingSnapshot()
+	})
+}
+
+// ClearBillingSnapshot clears the value of the "billing_snapshot" field.
+func (u *BatchImageJobUpsertOne) ClearBillingSnapshot() *BatchImageJobUpsertOne {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.ClearBillingSnapshot()
 	})
 }
 
@@ -2756,6 +2876,55 @@ func (u *BatchImageJobUpsertBulk) UpdateAPIKeyID() *BatchImageJobUpsertBulk {
 func (u *BatchImageJobUpsertBulk) ClearAPIKeyID() *BatchImageJobUpsertBulk {
 	return u.Update(func(s *BatchImageJobUpsert) {
 		s.ClearAPIKeyID()
+	})
+}
+
+// SetGroupID sets the "group_id" field.
+func (u *BatchImageJobUpsertBulk) SetGroupID(v int64) *BatchImageJobUpsertBulk {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.SetGroupID(v)
+	})
+}
+
+// AddGroupID adds v to the "group_id" field.
+func (u *BatchImageJobUpsertBulk) AddGroupID(v int64) *BatchImageJobUpsertBulk {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.AddGroupID(v)
+	})
+}
+
+// UpdateGroupID sets the "group_id" field to the value that was provided on create.
+func (u *BatchImageJobUpsertBulk) UpdateGroupID() *BatchImageJobUpsertBulk {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.UpdateGroupID()
+	})
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (u *BatchImageJobUpsertBulk) ClearGroupID() *BatchImageJobUpsertBulk {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.ClearGroupID()
+	})
+}
+
+// SetBillingSnapshot sets the "billing_snapshot" field.
+func (u *BatchImageJobUpsertBulk) SetBillingSnapshot(v jsontext.Value) *BatchImageJobUpsertBulk {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.SetBillingSnapshot(v)
+	})
+}
+
+// UpdateBillingSnapshot sets the "billing_snapshot" field to the value that was provided on create.
+func (u *BatchImageJobUpsertBulk) UpdateBillingSnapshot() *BatchImageJobUpsertBulk {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.UpdateBillingSnapshot()
+	})
+}
+
+// ClearBillingSnapshot clears the value of the "billing_snapshot" field.
+func (u *BatchImageJobUpsertBulk) ClearBillingSnapshot() *BatchImageJobUpsertBulk {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.ClearBillingSnapshot()
 	})
 }
 

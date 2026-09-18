@@ -1357,106 +1357,15 @@ func (s *adminServiceImpl) UpdateGroupSortOrders(ctx context.Context, updates []
 // AdminUpdateAPIKeyGroupID 管理员修改 API Key 分组绑定
 // groupID: nil=不修改, 指向0=解绑, 指向正整数=绑定到目标分组
 func (s *adminServiceImpl) AdminUpdateAPIKeyGroupID(ctx context.Context, keyID int64, groupID *int64) (*AdminUpdateAPIKeyGroupIDResult, error) {
-	apiKey, err := s.apiKeyRepo.GetByID(ctx, keyID)
-	if err != nil {
-		return nil, err
-	}
-
 	if groupID == nil {
-		// nil 表示不修改，直接返回
-		return &AdminUpdateAPIKeyGroupIDResult{APIKey: apiKey}, nil
+		key, err := s.apiKeyRepo.GetByID(ctx, keyID)
+		return &AdminUpdateAPIKeyGroupIDResult{APIKey: key}, err
 	}
-
-	if *groupID < 0 {
-		return nil, infraerrors.BadRequest("INVALID_GROUP_ID", "group_id must be non-negative")
+	ids := []int64{}
+	if *groupID != 0 {
+		ids = append(ids, *groupID)
 	}
-
-	result := &AdminUpdateAPIKeyGroupIDResult{}
-
-	if *groupID == 0 {
-		// 0 表示解绑分组（不修改 user_allowed_groups，避免影响用户其他 Key）
-		apiKey.GroupID = nil
-		apiKey.Group = nil
-	} else {
-		// 验证目标分组存在且状态为 active
-		group, err := s.groupRepo.GetByID(ctx, *groupID)
-		if err != nil {
-			return nil, err
-		}
-		if group.Status != StatusActive {
-			return nil, infraerrors.BadRequest("GROUP_NOT_ACTIVE", "target group is not active")
-		}
-		// 订阅类型分组：用户须持有该分组的有效订阅才可绑定
-		if group.IsSubscriptionType() {
-			if s.userSubRepo == nil {
-				return nil, infraerrors.InternalServer("SUBSCRIPTION_REPOSITORY_UNAVAILABLE", "subscription repository is not configured")
-			}
-			if _, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, apiKey.UserID, *groupID); err != nil {
-				if errors.Is(err, ErrSubscriptionNotFound) {
-					return nil, infraerrors.BadRequest("SUBSCRIPTION_REQUIRED", "user does not have an active subscription for this group")
-				}
-				return nil, err
-			}
-		}
-
-		gid := *groupID
-		apiKey.GroupID = &gid
-		apiKey.Group = group
-
-		// 专属标准分组：使用事务保证「添加分组权限」与「更新 API Key」的原子性
-		if group.IsExclusive && !group.IsSubscriptionType() {
-			opCtx := ctx
-			var tx *dbent.Tx
-			if s.entClient == nil {
-				logger.LegacyPrintf("service.admin", "Warning: entClient is nil, skipping transaction protection for exclusive group binding")
-			} else {
-				var txErr error
-				tx, txErr = s.entClient.Tx(ctx)
-				if txErr != nil {
-					return nil, fmt.Errorf("begin transaction: %w", txErr)
-				}
-				defer func() { _ = tx.Rollback() }()
-				opCtx = dbent.NewTxContext(ctx, tx)
-			}
-
-			if addErr := s.userRepo.AddGroupToAllowedGroups(opCtx, apiKey.UserID, gid); addErr != nil {
-				return nil, fmt.Errorf("add group to user allowed groups: %w", addErr)
-			}
-			if err := s.apiKeyRepo.Update(opCtx, apiKey, APIKeyUpdateFields{GroupID: true}); err != nil {
-				return nil, fmt.Errorf("update api key: %w", err)
-			}
-			if tx != nil {
-				if err := tx.Commit(); err != nil {
-					return nil, fmt.Errorf("commit transaction: %w", err)
-				}
-			}
-
-			result.AutoGrantedGroupAccess = true
-			result.GrantedGroupID = &gid
-			result.GrantedGroupName = group.Name
-
-			// 失效认证缓存（在事务提交后执行）
-			if s.authCacheInvalidator != nil {
-				s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, apiKey.Key)
-			}
-
-			result.APIKey = apiKey
-			return result, nil
-		}
-	}
-
-	// 非专属分组 / 解绑：无需事务，单步更新即可
-	if err := s.apiKeyRepo.Update(ctx, apiKey, APIKeyUpdateFields{GroupID: true}); err != nil {
-		return nil, fmt.Errorf("update api key: %w", err)
-	}
-
-	// 失效认证缓存
-	if s.authCacheInvalidator != nil {
-		s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, apiKey.Key)
-	}
-
-	result.APIKey = apiKey
-	return result, nil
+	return s.AdminUpdateAPIKeyGroups(ctx, keyID, ids)
 }
 
 // AdminResetAPIKeyRateLimitUsage resets all API key rate-limit usage windows.
@@ -1497,12 +1406,6 @@ func (s *adminServiceImpl) ReplaceUserGroup(ctx context.Context, userID, oldGrou
 	if newGroup.Status != StatusActive {
 		return nil, infraerrors.BadRequest("GROUP_NOT_ACTIVE", "target group is not active")
 	}
-	if !newGroup.IsExclusive {
-		return nil, infraerrors.BadRequest("GROUP_NOT_EXCLUSIVE", "target group is not exclusive")
-	}
-	if newGroup.IsSubscriptionType() {
-		return nil, infraerrors.BadRequest("GROUP_IS_SUBSCRIPTION", "subscription groups are not supported for replacement")
-	}
 
 	// 事务保证原子性
 	if s.entClient == nil {
@@ -1515,20 +1418,19 @@ func (s *adminServiceImpl) ReplaceUserGroup(ctx context.Context, userID, oldGrou
 	defer func() { _ = tx.Rollback() }()
 	opCtx := dbent.NewTxContext(ctx, tx)
 
-	// 1. 授予新分组权限
-	if err := s.userRepo.AddGroupToAllowedGroups(opCtx, userID, newGroupID); err != nil {
-		return nil, fmt.Errorf("add new group to allowed groups: %w", err)
+	// Replacement changes key configuration only; it never grants access.
+	user, err := s.userRepo.GetByID(opCtx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !s.apiKeyGroupService().canUserBindGroup(opCtx, user, newGroup) {
+		return nil, ErrGroupNotAllowed
 	}
 
 	// 2. 迁移绑定旧分组的 Key 到新分组
 	migrated, err := s.apiKeyRepo.UpdateGroupIDByUserAndGroup(opCtx, userID, oldGroupID, newGroupID)
 	if err != nil {
 		return nil, fmt.Errorf("migrate api keys: %w", err)
-	}
-
-	// 3. 移除旧分组权限
-	if err := s.userRepo.RemoveGroupFromUserAllowedGroups(opCtx, userID, oldGroupID); err != nil {
-		return nil, fmt.Errorf("remove old group from allowed groups: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {

@@ -631,7 +631,7 @@ export default {
       replaceGroup: 'Replace Group',
       clickToReplace: 'Click to replace',
       replaceGroupTitle: 'Replace Exclusive Group',
-      replaceGroupHint: 'Select a new group to replace "{old}". Keys will be migrated and permissions updated automatically.',
+      replaceGroupHint: "Choose an eligible group to replace \"{old}\" in this user’s keys.",
       replaceGroupConfirm: 'Confirm Replace',
       replaceGroupSuccess: 'Group replaced successfully, {count} key(s) migrated',
       selectNewGroup: 'Select target group',

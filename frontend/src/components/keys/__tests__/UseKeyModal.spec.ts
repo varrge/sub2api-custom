@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
+import type { Group } from '@/types'
 
 const { copyToClipboardMock, saveAsMock } = vi.hoisted(() => ({
   copyToClipboardMock: vi.fn().mockResolvedValue(true),
@@ -38,6 +39,32 @@ describe('UseKeyModal', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     saveAsMock.mockClear()
+  })
+
+  it('shows each selected group’s client setup while retaining the same API key', async () => {
+    const wrapper = mount(UseKeyModal, {
+      props: {
+        show: true,
+        apiKey: 'sk-mixed-test',
+        baseUrl: 'https://example.com',
+        platform: 'anthropic',
+        groups: [
+          { id: 7, name: 'Claude', platform: 'anthropic' },
+          { id: 2, name: 'OpenAI', platform: 'openai' },
+        ] as Group[],
+      },
+      global: { stubs: {
+        BaseDialog: { template: '<div><slot /><slot name="footer" /></div>' },
+        Icon: { template: '<span />' },
+      } },
+    })
+    expect(wrapper.findAll('pre code').map(code => code.text()).join('\n')).toContain('ANTHROPIC_AUTH_TOKEN')
+    await wrapper.get('[data-testid="key-example-group"]').setValue('2')
+    const code = wrapper.findAll('pre code').map(block => block.text()).join('\n')
+    expect(code).toContain('sk-mixed-test')
+    expect(code).toContain('model_provider')
+    expect(wrapper.text()).toContain('keys.multiGroup.exampleHint')
+    expect(wrapper.get('[data-testid="codex-auth-mode-legacy"]').exists()).toBe(true)
   })
 
   it('omits the attribution override from every standard Claude Code setup form', async () => {

@@ -36,6 +36,7 @@ func (s *updateFieldsAPIKeyRepoStub) Update(_ context.Context, _ *APIKey, fields
 }
 
 func newUpdateFieldsAPIKeyService(key *APIKey) (*APIKeyService, *updateFieldsAPIKeyRepoStub) {
+	key.GroupIDs = []int64{1}
 	repo := &updateFieldsAPIKeyRepoStub{key: key}
 	return &APIKeyService{apiKeyRepo: repo}, repo
 }

@@ -4,16 +4,20 @@ import "time"
 
 // APIKeyAuthSnapshot API Key 认证缓存快照（仅包含认证所需字段）
 type APIKeyAuthSnapshot struct {
-	Version     int                      `json:"version"`
-	APIKeyID    int64                    `json:"api_key_id"`
-	UserID      int64                    `json:"user_id"`
-	GroupID     *int64                   `json:"group_id,omitempty"`
-	Name        string                   `json:"name"`
-	Status      string                   `json:"status"`
-	IPWhitelist []string                 `json:"ip_whitelist,omitempty"`
-	IPBlacklist []string                 `json:"ip_blacklist,omitempty"`
-	User        APIKeyAuthUserSnapshot   `json:"user"`
-	Group       *APIKeyAuthGroupSnapshot `json:"group,omitempty"`
+	Version               int                        `json:"version"`
+	APIKeyID              int64                      `json:"api_key_id"`
+	UserID                int64                      `json:"user_id"`
+	GroupIDs              []int64                    `json:"group_ids"`
+	Groups                []*APIKeyAuthGroupSnapshot `json:"groups"`
+	MultiGroupEnabled     bool                       `json:"multi_group_enabled"`
+	UserGroupRPMOverrides map[int64]*int             `json:"user_group_rpm_overrides"`
+	GroupID               *int64                     `json:"group_id,omitempty"`
+	Name                  string                     `json:"name"`
+	Status                string                     `json:"status"`
+	IPWhitelist           []string                   `json:"ip_whitelist,omitempty"`
+	IPBlacklist           []string                   `json:"ip_blacklist,omitempty"`
+	User                  APIKeyAuthUserSnapshot     `json:"user"`
+	Group                 *APIKeyAuthGroupSnapshot   `json:"group,omitempty"`
 
 	// Quota fields for API Key independent quota feature
 	Quota     float64 `json:"quota"`      // Quota limit in USD (0 = unlimited)
@@ -57,6 +61,8 @@ type APIKeyAuthUserSnapshot struct {
 
 // APIKeyAuthGroupSnapshot 分组快照
 type APIKeyAuthGroupSnapshot struct {
+	RequirePrivacySet               bool                          `json:"require_privacy_set"`
+	RequireOAuthOnly                bool                          `json:"require_oauth_only"`
 	ID                              int64                         `json:"id"`
 	Name                            string                        `json:"name"`
 	Platform                        string                        `json:"platform"`

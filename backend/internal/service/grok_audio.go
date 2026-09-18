@@ -117,7 +117,15 @@ func (s *OpenAIGatewayService) ForwardGrokVoice(ctx context.Context, c *gin.Cont
 		UpstreamModel:   baseEndpoint,
 		Duration:        time.Since(started),
 		AudioUsage:      audioUsage,
+		ResponseID:      grokCustomVoiceResponseID(baseEndpoint, method, data),
 	}, nil
+}
+
+func grokCustomVoiceResponseID(endpoint, method string, data []byte) string {
+	if endpoint != "custom-voices" || method != http.MethodPost {
+		return ""
+	}
+	return firstNonEmpty(gjson.GetBytes(data, "voice_id").String(), gjson.GetBytes(data, "id").String(), gjson.GetBytes(data, "voice.voice_id").String(), gjson.GetBytes(data, "voice.id").String())
 }
 
 // ProxyGrokRealtime relays JSON Realtime events to xAI's native Voice WS.
@@ -238,17 +246,21 @@ func (s *OpenAIGatewayService) ProxyGrokRealtimeConn(ctx context.Context, c *gin
 			if kind != coderws.MessageText && kind != coderws.MessageBinary {
 				continue
 			}
-			if grokRealtimeEventHasAudio(msg) {
-				audioObserved.Store(true)
-			}
 			var raw json.RawMessage
 			if unmarshalErr := json.Unmarshal(msg, &raw); unmarshalErr != nil {
 				errCh <- fmt.Errorf("invalid realtime event: %w", unmarshalErr)
 				return
 			}
+			if admissionErr := checkStatefulEventAdmission(ctx, msg); admissionErr != nil {
+				errCh <- admissionErr
+				return
+			}
 			if writeErr := conn.WriteJSON(ctx, raw); writeErr != nil {
 				errCh <- writeErr
 				return
+			}
+			if grokRealtimeEventHasAudio(msg) {
+				audioObserved.Store(true)
 			}
 		}
 	}()

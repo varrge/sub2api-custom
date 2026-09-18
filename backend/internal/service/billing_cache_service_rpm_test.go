@@ -53,6 +53,26 @@ func (s *userRPMCacheStub) GetUserRPM(_ context.Context, _ int64) (int, error) {
 	return 0, nil
 }
 
+func TestExistingAudioFramesCheckQuotaWithoutIncrementingRPM(t *testing.T) {
+	rpm := &userRPMCacheStub{}
+	cache := &balanceEligibilityCacheStub{balance: 10}
+	svc := NewBillingCacheService(cache, nil, nil, nil, rpm, nil, &config.Config{}, nil)
+	t.Cleanup(svc.Stop)
+	user := &User{ID: 1, RPMLimit: 1}
+	group := &Group{ID: 2, RPMLimit: 1}
+	key := &APIKey{ID: 3, UserID: 1, User: user, Group: group, GroupID: liveOptionalID(2)}
+	ctx := context.Background()
+	require.NoError(t, svc.CheckBillingEligibility(ctx, user, key, group, nil, ""))
+	for i := 0; i < 100; i++ {
+		require.NoError(t, svc.CheckBillingEligibilityReadOnly(ctx, user, key, group, nil, ""))
+	}
+	require.EqualValues(t, 1, atomic.LoadInt32(&rpm.userCalls))
+	require.EqualValues(t, 1, atomic.LoadInt32(&rpm.userGroupCalls))
+	cache.balance = 0
+	require.ErrorIs(t, svc.CheckBillingEligibilityReadOnly(ctx, user, key, group, nil, ""), ErrInsufficientBalance)
+	require.EqualValues(t, 1, atomic.LoadInt32(&rpm.userCalls))
+}
+
 // rpmOverrideRepoStub 专用于 checkRPM 分支测试，只实现必要方法。
 type rpmOverrideRepoStub struct {
 	UserGroupRateRepository

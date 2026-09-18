@@ -345,6 +345,22 @@ func TestGatewayRoutesNonGrokVideosAreRejectedAtPlatformGate(t *testing.T) {
 	}
 }
 
+func TestGatewayRoutesHistoricalUngroupedVideosReachResourceHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	RegisterGatewayRoutes(router, &handler.Handlers{Gateway: &handler.GatewayHandler{}, OpenAIGateway: &handler.OpenAIGatewayHandler{}, AsyncImage: handler.NewAsyncImageHandler(nil, nil)}, servermiddleware.APIKeyAuthMiddleware(func(c *gin.Context) {
+		c.Set(string(servermiddleware.ContextKeyAPIKey), &service.APIKey{ID: 2, UserID: 1})
+		servermiddleware.SetAPIKeyHistoricalResource(c)
+		c.Next()
+	}), nil, nil, nil, nil, nil, &config.Config{Gateway: config.GatewayConfig{MaxBodySize: 1024, TextMaxBodySize: 1024}})
+	for _, path := range []string{"/v1/videos/original", "/v1/videos/original/content", "/videos/original", "/videos/original/content"} {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		require.NotEqual(t, http.StatusNotFound, w.Code)
+		require.Contains(t, w.Body.String(), "User context not found")
+	}
+}
+
 func TestGatewayRoutesCompositeVideoGenerationAllowed(t *testing.T) {
 	router := newGatewayRoutesTestRouter(service.PlatformComposite)
 

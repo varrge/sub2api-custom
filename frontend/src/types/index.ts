@@ -746,7 +746,10 @@ export interface ApiKey {
   user_id: number
   key: string
   name: string
-  group_id: number | null
+  group_id: number | null // Compatibility projection of the first configured group
+  group_ids: number[]
+  groups: Group[]
+  multi_group_enabled: boolean
   status: 'active' | 'inactive' | 'quota_exhausted' | 'expired'
   ip_whitelist: string[]
   ip_blacklist: string[]
@@ -775,7 +778,7 @@ export interface ApiKey {
 
 export interface CreateApiKeyRequest {
   name: string
-  group_id?: number | null
+  group_ids?: number[]
   custom_key?: string // Optional custom API Key
   ip_whitelist?: string[]
   ip_blacklist?: string[]
@@ -788,7 +791,7 @@ export interface CreateApiKeyRequest {
 
 export interface UpdateApiKeyRequest {
   name?: string
-  group_id?: number | null
+  group_ids?: number[]
   status?: 'active' | 'inactive'
   ip_whitelist?: string[]
   ip_blacklist?: string[]

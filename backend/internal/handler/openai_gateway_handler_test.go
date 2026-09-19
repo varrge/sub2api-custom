@@ -1928,7 +1928,8 @@ type openAIResponsesWSUsageLogCase struct {
 	accountModelMapping       map[string]any
 	afterFirstUpstreamRequest func(channelSvc *service.ChannelService) error
 	// group 覆盖 apiKey.Group（分组级模型白名单测试用）；nil 保持原有无分组行为。
-	group *service.Group
+	group             *service.Group
+	keyModelAllowlist *service.GroupModelAllowlist
 	// firstFrameCloseExpected：首帧即被拒（连接被 1008 关闭），不期待任何响应帧。
 	firstFrameCloseExpected bool
 	// secondTurnCloseExpected：第二个 turn 被拒（连接被 1008 关闭）。
@@ -3012,6 +3013,9 @@ func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSU
 	if tc.group != nil {
 		apiKey.Group = tc.group
 	}
+	if tc.keyModelAllowlist != nil {
+		apiKey.ModelAllowlist = *tc.keyModelAllowlist
+	}
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
 		c.Set(string(middleware.ContextKeyAPIKey), apiKey)
@@ -3051,7 +3055,11 @@ func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSU
 		var closeErr coderws.CloseError
 		require.ErrorAs(t, readErr, &closeErr)
 		require.Equal(t, coderws.StatusPolicyViolation, closeErr.Code)
-		require.Contains(t, closeErr.Reason, "not available for this group")
+		if tc.keyModelAllowlist != nil {
+			require.Contains(t, closeErr.Reason, "not allowed for this API key")
+		} else {
+			require.Contains(t, closeErr.Reason, "not available for this group")
+		}
 		_ = clientConn.CloseNow()
 		return openAIResponsesWSUsageLogResult{}
 	}
@@ -3086,7 +3094,11 @@ func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSU
 			var closeErr coderws.CloseError
 			require.ErrorAs(t, readErr, &closeErr)
 			require.Equal(t, coderws.StatusPolicyViolation, closeErr.Code)
-			require.Contains(t, closeErr.Reason, "not available for this group")
+			if tc.keyModelAllowlist != nil {
+				require.Contains(t, closeErr.Reason, "not allowed for this API key")
+			} else {
+				require.Contains(t, closeErr.Reason, "not available for this group")
+			}
 			_ = clientConn.CloseNow()
 			return openAIResponsesWSUsageLogResult{}
 		}

@@ -51,12 +51,12 @@ func (h *GatewayHandler) GeminiV1BetaListModels(c *gin.Context) {
 
 	// 分组级模型白名单开启时过滤 models[].name（名字形如 models/xxx）。
 	filterGeminiModels := func(models []gemini.Model) []gemini.Model {
-		if apiKey.Group == nil || !apiKey.Group.ModelAllowlistEnabled() {
+		if (apiKey.Group == nil || !apiKey.Group.ModelAllowlistEnabled()) && !apiKey.ModelAllowlist.Enabled {
 			return models
 		}
 		filtered := make([]gemini.Model, 0, len(models))
 		for _, model := range models {
-			if apiKey.Group.ModelAllowlist.Allows(model.Name) {
+			if (apiKey.Group == nil || apiKey.Group.ModelAllowlist.Allows(model.Name)) && apiKey.AllowsModel(strings.TrimPrefix(model.Name, "models/")) {
 				filtered = append(filtered, model)
 			}
 		}
@@ -109,6 +109,15 @@ func (h *GatewayHandler) GeminiV1BetaListModels(c *gin.Context) {
 			// 统一经 writeUpstreamResponse 写出（保留全部上游响应头）。
 			res.Body = filtered
 		}
+	}
+	if res.StatusCode == http.StatusOK && apiKey.ModelAllowlist.Enabled {
+		filtered, err := filterAPIKeyModelCatalog(c, res.Body)
+		if err != nil {
+			googleError(c, http.StatusBadGateway, "Failed to filter API key model catalog")
+			return
+		}
+		c.JSON(http.StatusOK, json.RawMessage(filtered))
+		return
 	}
 	writeUpstreamResponse(c, res)
 }

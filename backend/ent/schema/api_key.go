@@ -46,6 +46,8 @@ func (APIKey) Fields() []ent.Field {
 			Nillable(),
 		field.JSON("group_ids", []int64{}).Default([]int64{}),
 		field.Bool("multi_group_enabled").Default(false),
+		field.JSON("model_allowlist", domain.GroupModelAllowlist{}).
+			Default(domain.GroupModelAllowlist{}),
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusActive),

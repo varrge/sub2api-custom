@@ -34,6 +34,7 @@ type APIKey struct {
 	Name                  string
 	GroupIDs              []int64
 	Groups                []*Group
+	ModelAllowlist        GroupModelAllowlist
 	MultiGroupEnabled     bool
 	UserGroupRPMOverrides map[int64]*int
 	GroupID               *int64
@@ -178,6 +179,7 @@ func (k *APIKey) ForGroup(group *Group) *APIKey {
 		return nil
 	}
 	selected := *k
+	selected.ModelAllowlist = cloneAPIKeyModelAllowlist(k.ModelAllowlist)
 	selected.GroupIDs = k.ConfiguredGroupIDs()
 	selected.Groups = append([]*Group{}, k.Groups...)
 	selected.UserGroupRPMOverrides = make(map[int64]*int, len(k.UserGroupRPMOverrides))

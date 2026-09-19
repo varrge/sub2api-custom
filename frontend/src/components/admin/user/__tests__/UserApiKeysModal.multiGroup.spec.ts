@@ -4,11 +4,11 @@ import type { AdminUser, ApiKey, Group } from '@/types'
 import UserApiKeysModal from '../UserApiKeysModal.vue'
 import GroupReplaceModal from '../GroupReplaceModal.vue'
 
-const { getKeys, getGroups, updateGroups, replaceGroup, showError } = vi.hoisted(() => ({
-  getKeys: vi.fn(), getGroups: vi.fn(), updateGroups: vi.fn(), replaceGroup: vi.fn(), showError: vi.fn()
+const { getKeys, getGroups, getModelOptions, updateGroups, replaceGroup, showError } = vi.hoisted(() => ({
+  getKeys: vi.fn(), getGroups: vi.fn(), getModelOptions: vi.fn(), updateGroups: vi.fn(), replaceGroup: vi.fn(), showError: vi.fn()
 }))
 vi.mock('@/api/admin', () => ({ adminAPI: {
-  users: { getUserApiKeys: getKeys, getAvailableGroups: getGroups, replaceGroup },
+  users: { getUserApiKeys: getKeys, getAvailableGroups: getGroups, getApiKeyModelOptions: getModelOptions, replaceGroup },
   apiKeys: { updateApiKeyGroups: updateGroups },
 } }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showError, showSuccess: vi.fn() }) }))
@@ -28,6 +28,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   getKeys.mockResolvedValue({ items: [key] })
   getGroups.mockResolvedValue([group(2), group(3)])
+  getModelOptions.mockResolvedValue({ models: [] })
   updateGroups.mockResolvedValue({ api_key: key, auto_granted_group_access: false })
   replaceGroup.mockResolvedValue({ migrated_keys: 1 })
 })
@@ -48,7 +49,30 @@ describe('admin API key group configuration', () => {
     expect(save.attributes('disabled')).toBeUndefined()
     await save.trigger('click')
     await flushPromises()
-    expect(updateGroups).toHaveBeenCalledWith(4, [])
+    expect(updateGroups).toHaveBeenCalledWith(4, [], { enabled: false, models: [] })
+  })
+
+  it('loads target-user models, validates the allowlist, and restores it after saving', async () => {
+    getModelOptions.mockResolvedValue({ models: [{ id: 'allowed', group_ids: [7, 2] }] })
+    const wrapper = mount(UserApiKeysModal, { props: { show: true, user }, global })
+    await flushPromises()
+    await wrapper.get('[aria-label="keys.multiGroup.editGroups"]').trigger('click')
+    await flushPromises()
+    expect(getModelOptions).toHaveBeenCalledWith(18, [7, 2])
+    await wrapper.get('[data-test="model-restriction-enabled"]').setValue(true)
+    const save = wrapper.findAll('button').find(button => button.text() === 'common.save')!
+    expect(save.attributes('disabled')).toBeDefined()
+    await wrapper.get('input[value="allowed"]').setValue(true)
+    const model_allowlist = { enabled: true, models: ['allowed'] }
+    updateGroups.mockResolvedValue({ api_key: { ...key, model_allowlist } })
+    await save.trigger('click')
+    await flushPromises()
+    expect(updateGroups).toHaveBeenCalledWith(4, [7, 2], model_allowlist)
+    await wrapper.get('[aria-label="keys.multiGroup.editGroups"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="model-restriction-enabled"]').element).toMatchObject({ checked: true })
+    expect(wrapper.get('input[value="allowed"]').element).toMatchObject({ checked: true })
+    wrapper.unmount()
   })
 
   it('blocks binding edits when eligibility cannot be loaded', async () => {

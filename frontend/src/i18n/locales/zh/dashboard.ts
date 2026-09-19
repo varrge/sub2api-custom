@@ -66,6 +66,24 @@ export default {
 
   // API Keys
   keys: {
+    modelRestriction: {
+      title: '模型限制',
+      enable: '仅允许勾选的模型',
+      allHint: '未启用限制，此密钥可使用所选分组中全部可用模型。',
+      allowedHint: '勾选表示允许，未勾选表示禁止；仍需所选分组支持该模型。分组以后新增的模型不会自动勾选。',
+      loading: '正在加载所选分组的模型…',
+      loadFailed: '模型加载失败，已有勾选已保留。请重试以查看可用模型。',
+      retry: '重试',
+      search: '搜索可用模型…',
+      selectAll: '全选可用模型',
+      clear: '清空勾选',
+      selectedCount: '已勾选 {count} 个模型',
+      noModels: '所选分组目前没有可用模型。',
+      noMatches: '没有匹配的模型。',
+      unavailableHint: '以下已勾选模型在所选分组中暂不可用，恢复可用后仍允许调用。取消勾选即可移除。',
+      retainedHint: '暂时无法确认模型是否可用，已有勾选已保留。取消勾选即可移除。',
+      required: '请至少勾选一个允许使用的模型，或关闭模型限制。'
+    },
     multiGroup: {
       bulkReplaceHint: '这会替换每把所选密钥的完整有序分组列表；其他字段仅在勾选时修改。',
       exampleGroup: '客户端配置示例',

@@ -2,12 +2,72 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 )
+
+type apiKeyCatalogPatternAccountRepo struct {
+	AccountRepository
+	accounts []Account
+}
+
+func (r apiKeyCatalogPatternAccountRepo) ListModelAvailabilityCandidates(context.Context, *int64, []string, bool) ([]Account, error) {
+	return r.accounts, nil
+}
+
+func TestAPIKeyGroupCatalogSelectionRetainsPatternsWithoutChangingGatewayDirectories(t *testing.T) {
+	for _, platform := range []string{PlatformOpenAI, PlatformGemini} {
+		t.Run(platform, func(t *testing.T) {
+			pattern := "gpt-*"
+			if platform == PlatformGemini {
+				pattern = "gemini-*"
+			}
+			svc := &GatewayService{accountRepo: apiKeyCatalogPatternAccountRepo{accounts: []Account{{
+				Platform: platform, Credentials: map[string]any{"model_mapping": map[string]any{
+					pattern: "upstream-only", "public-exact": "upstream-only",
+				}},
+			}}}}
+			listing := svc.APIKeyGroupModelCatalog
+			selection := svc.APIKeyGroupModelCatalogForSelection
+			if platform == PlatformGemini {
+				listing = svc.APIKeyGroupGeminiModelCatalog
+				selection = svc.APIKeyGroupGeminiModelCatalogForSelection
+			}
+			models, defaults, err := listing(t.Context(), 1, platform)
+			require.NoError(t, err)
+			require.False(t, defaults)
+			require.Equal(t, []string{"public-exact"}, models, "existing gateway directories retain their concrete-only contract")
+			models, defaults, err = selection(t.Context(), 1, platform)
+			require.NoError(t, err)
+			require.False(t, defaults, "a restricted wildcard must not enable every platform default")
+			require.ElementsMatch(t, []string{"public-exact", pattern}, models)
+		})
+	}
+}
+
+func TestAPIKeyGroupGeminiCatalogSelectionRestrictsBroadAntigravityPatterns(t *testing.T) {
+	for _, mixed := range []bool{false, true} {
+		svc := &GatewayService{accountRepo: apiKeyCatalogPatternAccountRepo{accounts: []Account{{
+			Platform: PlatformAntigravity, Extra: map[string]any{"mixed_scheduling": mixed},
+			Credentials: map[string]any{"model_mapping": map[string]any{"*": "upstream-only"}},
+		}}}}
+		models, defaults, err := svc.APIKeyGroupGeminiModelCatalogForSelection(t.Context(), 1, PlatformGemini)
+		require.NoError(t, err)
+		require.False(t, defaults)
+		if !mixed {
+			require.Empty(t, models)
+			continue
+		}
+		require.Contains(t, models, "gemini-*")
+		for _, model := range models {
+			require.True(t, strings.HasPrefix(model, "gemini-"), model)
+		}
+	}
+}
 
 func TestAPIKeyGroupProbeHonorsEndpointCapabilityWithoutAcquiringSlot(t *testing.T) {
 	group := &Group{ID: 101, Platform: PlatformOpenAI, Status: StatusActive}

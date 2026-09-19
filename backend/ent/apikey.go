@@ -13,6 +13,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/user"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
 // APIKey is the model entity for the APIKey schema.
@@ -38,6 +39,8 @@ type APIKey struct {
 	GroupIds []int64 `json:"group_ids,omitempty"`
 	// MultiGroupEnabled holds the value of the "multi_group_enabled" field.
 	MultiGroupEnabled bool `json:"multi_group_enabled,omitempty"`
+	// ModelAllowlist holds the value of the "model_allowlist" field.
+	ModelAllowlist domain.GroupModelAllowlist `json:"model_allowlist,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
 	// Last usage time of this API key
@@ -125,7 +128,7 @@ func (*APIKey) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case apikey.FieldGroupIds, apikey.FieldIPWhitelist, apikey.FieldIPBlacklist:
+		case apikey.FieldGroupIds, apikey.FieldModelAllowlist, apikey.FieldIPWhitelist, apikey.FieldIPBlacklist:
 			values[i] = new([]byte)
 		case apikey.FieldMultiGroupEnabled:
 			values[i] = new(sql.NullBool)
@@ -215,6 +218,14 @@ func (_m *APIKey) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field multi_group_enabled", values[i])
 			} else if value.Valid {
 				_m.MultiGroupEnabled = value.Bool
+			}
+		case apikey.FieldModelAllowlist:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field model_allowlist", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.ModelAllowlist); err != nil {
+					return fmt.Errorf("unmarshal field model_allowlist: %w", err)
+				}
 			}
 		case apikey.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -402,6 +413,9 @@ func (_m *APIKey) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("multi_group_enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.MultiGroupEnabled))
+	builder.WriteString(", ")
+	builder.WriteString("model_allowlist=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ModelAllowlist))
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)

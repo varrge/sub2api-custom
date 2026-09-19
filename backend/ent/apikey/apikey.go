@@ -8,6 +8,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
 const (
@@ -33,6 +34,8 @@ const (
 	FieldGroupIds = "group_ids"
 	// FieldMultiGroupEnabled holds the string denoting the multi_group_enabled field in the database.
 	FieldMultiGroupEnabled = "multi_group_enabled"
+	// FieldModelAllowlist holds the string denoting the model_allowlist field in the database.
+	FieldModelAllowlist = "model_allowlist"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldLastUsedAt holds the string denoting the last_used_at field in the database.
@@ -108,6 +111,7 @@ var Columns = []string{
 	FieldGroupID,
 	FieldGroupIds,
 	FieldMultiGroupEnabled,
+	FieldModelAllowlist,
 	FieldStatus,
 	FieldLastUsedAt,
 	FieldIPWhitelist,
@@ -158,6 +162,8 @@ var (
 	DefaultGroupIds []int64
 	// DefaultMultiGroupEnabled holds the default value on creation for the "multi_group_enabled" field.
 	DefaultMultiGroupEnabled bool
+	// DefaultModelAllowlist holds the default value on creation for the "model_allowlist" field.
+	DefaultModelAllowlist domain.GroupModelAllowlist
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.

@@ -156,7 +156,8 @@ func (h *BatchImageHandler) Models(c *gin.Context) {
 	var got *service.BatchImagePublicModelsResponse
 	var err error
 	key, _ := middleware.GetAPIKeyFromContext(c)
-	if key.MultiGroupEnabled || len(key.GroupIDs) > 1 {
+	multi := key.MultiGroupEnabled || len(key.GroupIDs) > 1
+	if multi {
 		got, err = h.service.ListModelsForGroups(c.Request.Context(), owner, key.Groups)
 	} else {
 		got, err = h.service.ListModels(c.Request.Context(), owner)
@@ -165,9 +166,18 @@ func (h *BatchImageHandler) Models(c *gin.Context) {
 		batchImageError(c, err)
 		return
 	}
-	// 分组级模型白名单：ListModels 已按分组账号枚举，这里再按白名单过滤一次。
-	if apiKey, ok := middleware.GetAPIKeyFromContext(c); ok && apiKey != nil && apiKey.Group != nil {
-		got.Data = filterBatchImageModelsByAllowlist(got.Data, apiKey.Group.ModelAllowlist)
+	// Multi-group catalogs already apply each source group's permissions.
+	if !multi && key.Group != nil {
+		got.Data = filterBatchImageModelsByAllowlist(got.Data, key.Group.ModelAllowlist)
+	}
+	if key.ModelAllowlist.Enabled {
+		filtered := make([]service.BatchImagePublicModel, 0, len(got.Data))
+		for _, model := range got.Data {
+			if key.AllowsModel(model.ID) {
+				filtered = append(filtered, model)
+			}
+		}
+		got.Data = filtered
 	}
 	c.JSON(http.StatusOK, got)
 }

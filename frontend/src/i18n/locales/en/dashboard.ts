@@ -66,6 +66,24 @@ export default {
 
   // API Keys
   keys: {
+    modelRestriction: {
+      title: 'Model restrictions',
+      enable: 'Only allow selected models',
+      allHint: 'Restrictions are off. This key can use all models available to its selected groups.',
+      allowedHint: 'Checked models are allowed; unchecked models are denied. Group availability still applies. Models added to a group later are not selected automatically.',
+      loading: 'Loading models for the selected groups…',
+      loadFailed: 'Could not load models. Your selections are kept. Retry to view available models.',
+      retry: 'Retry',
+      search: 'Search available models…',
+      selectAll: 'Select all available',
+      clear: 'Clear selection',
+      selectedCount: '{count} models selected',
+      noModels: 'No models are currently available in the selected groups.',
+      noMatches: 'No matching models.',
+      unavailableHint: 'These selected models are currently unavailable in the selected groups. They remain allowed if they become available again. Uncheck to remove them.',
+      retainedHint: 'Existing selections are kept while model availability is unknown. Uncheck to remove them.',
+      required: 'Select at least one allowed model, or turn off model restrictions.'
+    },
     multiGroup: {
       bulkReplaceHint: 'This replaces the complete ordered group list on each selected key. Other fields change only when checked.',
       exampleGroup: 'Client setup example',

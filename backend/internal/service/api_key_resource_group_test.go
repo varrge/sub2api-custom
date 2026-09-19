@@ -154,10 +154,27 @@ func TestVoiceResourcePinsGroupAndAccountAcrossInstances(t *testing.T) {
 func TestStatefulAdmissionRejectsBillableEventsAfterRevocation(t *testing.T) {
 	denied := errors.New("original group revoked")
 	calls := 0
-	ctx := WithStatefulAdmission(context.Background(), func(context.Context) error { calls++; return denied })
-	for _, event := range []string{"response.create", "input_audio_buffer.append", "input_audio_buffer.commit", "conversation.item.create"} {
-		require.ErrorIs(t, checkStatefulEventAdmission(ctx, []byte(`{"type":"`+event+`"}`)), denied)
+	var checked []byte
+	ctx := WithStatefulAdmission(context.Background(), func(_ context.Context, payload []byte) error {
+		calls++
+		checked = payload
+		return denied
+	})
+	for _, event := range []string{"response.create", "session.update", "input_audio_buffer.append", "input_audio_buffer.commit", "conversation.item.create"} {
+		payload := []byte(`{"type":"` + event + `","session":{"model":"denied"}}`)
+		require.ErrorIs(t, checkStatefulEventAdmission(ctx, payload), denied)
+		require.Equal(t, payload, checked)
 	}
+	for _, payload := range []string{
+		`{"type":"response.cancel","type":"session.update","session":{"model":"denied"}}`,
+		`{"type":"response.cancel","Type":"session.update","session":{"model":"denied"}}`,
+		`{"type":"response.cancel","TYPE":"response.create","response":{"model":"denied"}}`,
+	} {
+		require.ErrorIs(t, checkStatefulEventAdmission(ctx, []byte(payload)), denied)
+		require.Equal(t, payload, string(checked))
+	}
+	require.True(t, IsStatefulSessionUpdate([]byte(`{"type":"response.cancel","Type":"session.update"}`)))
+	require.False(t, IsStatefulSessionUpdate([]byte(`{"type":"response.cancel"}`)))
 	require.NoError(t, checkStatefulEventAdmission(ctx, []byte(`{"type":"response.cancel"}`)))
-	require.Equal(t, 4, calls)
+	require.Equal(t, 8, calls)
 }

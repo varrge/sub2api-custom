@@ -76,6 +76,10 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 	requestModel := parsed.Model
 	ensureCompositeTargetPlatform(c, apiKey, requestModel)
 	clientRequestModel := clientRequestedModel(c, requestModel)
+	if blocked := blockedAPIKeyModelCandidate(apiKey, []string{clientRequestModel}); blocked != "" {
+		h.errorResponse(c, http.StatusNotFound, "invalid_request_error", "Model is not allowed for this API key")
+		return
+	}
 	routingModel := requestModel
 	if resolvedModel, ok := service.ResolvedUpstreamModelFromContext(c.Request.Context()); ok {
 		routingModel = resolvedModel

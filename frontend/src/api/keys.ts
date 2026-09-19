@@ -4,7 +4,7 @@
  */
 
 import { apiClient } from './client'
-import type { ApiKey, CreateApiKeyRequest, UpdateApiKeyRequest, PaginatedResponse } from '@/types'
+import type { ApiKey, ApiKeyModelOptions, CreateApiKeyRequest, UpdateApiKeyRequest, PaginatedResponse } from '@/types'
 
 /**
  * List all API keys for current user
@@ -42,6 +42,13 @@ export async function list(
  */
 export async function getById(id: number): Promise<ApiKey> {
   const { data } = await apiClient.get<ApiKey>(`/keys/${id}`)
+  return data
+}
+
+export async function getModelOptions(groupIds: number[]): Promise<ApiKeyModelOptions> {
+  const { data } = await apiClient.post<ApiKeyModelOptions>('/keys/model-options', {
+    group_ids: [...groupIds]
+  })
   return data
 }
 
@@ -160,6 +167,7 @@ export async function toggleStatus(id: number, status: 'active' | 'inactive'): P
 export const keysAPI = {
   list,
   getById,
+  getModelOptions,
   create,
   update,
   bulkUpdate,

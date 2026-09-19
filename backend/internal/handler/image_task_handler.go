@@ -202,6 +202,10 @@ func (h *AsyncImageHandler) validateRequest(c *gin.Context, platform string, bod
 	if err != nil {
 		return err
 	}
+	key, _ := middleware2.GetAPIKeyFromContext(c)
+	if blocked := blockedAPIKeyModelCandidate(key, []string{clientRequestedModel(c, parsed.Model)}); blocked != "" {
+		return errors.New("model is not allowed for this API key")
+	}
 	if parsed.Stream {
 		return errors.New("streaming image requests cannot be submitted as asynchronous tasks")
 	}

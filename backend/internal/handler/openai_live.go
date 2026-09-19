@@ -44,6 +44,18 @@ func (h *OpenAIGatewayHandler) Live(c *gin.Context) {
 		return
 	}
 	model := strings.TrimSpace(gjson.GetBytes(request.Session, "model").String())
+	if model == "" {
+		model = "gpt-live"
+	}
+	requestedModel := clientRequestedModel(c, model)
+	if !apiKey.AllowsModel(requestedModel) {
+		h.errorResponse(c, http.StatusNotFound, "invalid_request_error", "Model is not allowed for this API key")
+		return
+	}
+	if !apiKey.Group.ModelAllowlist.Allows(requestedModel) {
+		h.errorResponse(c, http.StatusNotFound, "invalid_request_error", "Model is not available for this group")
+		return
+	}
 	if !compositeTargetPlatformAllowed(c, apiKey, model, service.PlatformOpenAI) {
 		h.errorResponse(c, http.StatusNotFound, "not_found_error", "Live only supports OpenAI models for Composite groups")
 		return
@@ -113,6 +125,7 @@ func (h *OpenAIGatewayHandler) Live(c *gin.Context) {
 	defer userRelease()
 
 	identity := liveCallIdentity(c, apiKey, subject.UserID, subscription)
+	identity.RequestedModel = requestedModel
 	created, err := h.gatewayService.CreateLiveCall(c.Request.Context(), request, identity, subject.Concurrency)
 	if err != nil {
 		h.writeLiveCreateError(c, err)
@@ -227,6 +240,18 @@ func (h *OpenAIGatewayHandler) LiveSideband(c *gin.Context) {
 		h.errorResponse(c, http.StatusNotFound, "not_found_error", "Live call not found")
 		return
 	}
+	model := strings.TrimSpace(record.RequestedModel)
+	if model == "" {
+		model = record.Model // Calls created before public-model persistence.
+	}
+	if !apiKey.AllowsModel(model) {
+		h.errorResponse(c, http.StatusNotFound, "invalid_request_error", "Model is not allowed for this API key")
+		return
+	}
+	if !apiKey.Group.ModelAllowlist.Allows(model) {
+		h.errorResponse(c, http.StatusNotFound, "invalid_request_error", "Model is not available for this group")
+		return
+	}
 	downstream, err := coderws.Accept(c.Writer, c.Request, &coderws.AcceptOptions{
 		InsecureSkipVerify: true,
 	})
@@ -234,7 +259,7 @@ func (h *OpenAIGatewayHandler) LiveSideband(c *gin.Context) {
 		return
 	}
 	defer func() { _ = downstream.CloseNow() }()
-	if err := h.gatewayService.ProxyLiveSideband(h.statefulAdmissionContext(c, apiKey), record, downstream); err != nil {
+	if err := h.gatewayService.ProxyLiveSideband(h.statefulAdmissionContext(c, apiKey, model), record, downstream); err != nil {
 		var admissionErr *service.OpenAIWSClientCloseError
 		if errors.As(err, &admissionErr) {
 			closeOpenAIClientWS(downstream, admissionErr.StatusCode(), admissionErr.Reason())

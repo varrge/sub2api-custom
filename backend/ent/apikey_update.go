@@ -17,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
 // APIKeyUpdate is the builder for updating APIKey entities.
@@ -142,6 +143,20 @@ func (_u *APIKeyUpdate) SetMultiGroupEnabled(v bool) *APIKeyUpdate {
 func (_u *APIKeyUpdate) SetNillableMultiGroupEnabled(v *bool) *APIKeyUpdate {
 	if v != nil {
 		_u.SetMultiGroupEnabled(*v)
+	}
+	return _u
+}
+
+// SetModelAllowlist sets the "model_allowlist" field.
+func (_u *APIKeyUpdate) SetModelAllowlist(v domain.GroupModelAllowlist) *APIKeyUpdate {
+	_u.mutation.SetModelAllowlist(v)
+	return _u
+}
+
+// SetNillableModelAllowlist sets the "model_allowlist" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableModelAllowlist(v *domain.GroupModelAllowlist) *APIKeyUpdate {
+	if v != nil {
+		_u.SetModelAllowlist(*v)
 	}
 	return _u
 }
@@ -630,6 +645,9 @@ func (_u *APIKeyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.MultiGroupEnabled(); ok {
 		_spec.SetField(apikey.FieldMultiGroupEnabled, field.TypeBool, value)
 	}
+	if value, ok := _u.mutation.ModelAllowlist(); ok {
+		_spec.SetField(apikey.FieldModelAllowlist, field.TypeJSON, value)
+	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(apikey.FieldStatus, field.TypeString, value)
 	}
@@ -966,6 +984,20 @@ func (_u *APIKeyUpdateOne) SetMultiGroupEnabled(v bool) *APIKeyUpdateOne {
 func (_u *APIKeyUpdateOne) SetNillableMultiGroupEnabled(v *bool) *APIKeyUpdateOne {
 	if v != nil {
 		_u.SetMultiGroupEnabled(*v)
+	}
+	return _u
+}
+
+// SetModelAllowlist sets the "model_allowlist" field.
+func (_u *APIKeyUpdateOne) SetModelAllowlist(v domain.GroupModelAllowlist) *APIKeyUpdateOne {
+	_u.mutation.SetModelAllowlist(v)
+	return _u
+}
+
+// SetNillableModelAllowlist sets the "model_allowlist" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableModelAllowlist(v *domain.GroupModelAllowlist) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetModelAllowlist(*v)
 	}
 	return _u
 }
@@ -1483,6 +1515,9 @@ func (_u *APIKeyUpdateOne) sqlSave(ctx context.Context) (_node *APIKey, err erro
 	}
 	if value, ok := _u.mutation.MultiGroupEnabled(); ok {
 		_spec.SetField(apikey.FieldMultiGroupEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.ModelAllowlist(); ok {
+		_spec.SetField(apikey.FieldModelAllowlist, field.TypeJSON, value)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(apikey.FieldStatus, field.TypeString, value)

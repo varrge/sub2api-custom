@@ -127,6 +127,7 @@ type APIKeyMutation struct {
 	group_ids           *[]int64
 	appendgroup_ids     []int64
 	multi_group_enabled *bool
+	model_allowlist     *domain.GroupModelAllowlist
 	status              *string
 	last_used_at        *time.Time
 	ip_whitelist        *[]string
@@ -627,6 +628,42 @@ func (m *APIKeyMutation) OldMultiGroupEnabled(ctx context.Context) (v bool, err 
 // ResetMultiGroupEnabled resets all changes to the "multi_group_enabled" field.
 func (m *APIKeyMutation) ResetMultiGroupEnabled() {
 	m.multi_group_enabled = nil
+}
+
+// SetModelAllowlist sets the "model_allowlist" field.
+func (m *APIKeyMutation) SetModelAllowlist(dma domain.GroupModelAllowlist) {
+	m.model_allowlist = &dma
+}
+
+// ModelAllowlist returns the value of the "model_allowlist" field in the mutation.
+func (m *APIKeyMutation) ModelAllowlist() (r domain.GroupModelAllowlist, exists bool) {
+	v := m.model_allowlist
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModelAllowlist returns the old "model_allowlist" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldModelAllowlist(ctx context.Context) (v domain.GroupModelAllowlist, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModelAllowlist is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModelAllowlist requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModelAllowlist: %w", err)
+	}
+	return oldValue.ModelAllowlist, nil
+}
+
+// ResetModelAllowlist resets all changes to the "model_allowlist" field.
+func (m *APIKeyMutation) ResetModelAllowlist() {
+	m.model_allowlist = nil
 }
 
 // SetStatus sets the "status" field.
@@ -1630,7 +1667,7 @@ func (m *APIKeyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *APIKeyMutation) Fields() []string {
-	fields := make([]string, 0, 25)
+	fields := make([]string, 0, 26)
 	if m.created_at != nil {
 		fields = append(fields, apikey.FieldCreatedAt)
 	}
@@ -1657,6 +1694,9 @@ func (m *APIKeyMutation) Fields() []string {
 	}
 	if m.multi_group_enabled != nil {
 		fields = append(fields, apikey.FieldMultiGroupEnabled)
+	}
+	if m.model_allowlist != nil {
+		fields = append(fields, apikey.FieldModelAllowlist)
 	}
 	if m.status != nil {
 		fields = append(fields, apikey.FieldStatus)
@@ -1732,6 +1772,8 @@ func (m *APIKeyMutation) Field(name string) (ent.Value, bool) {
 		return m.GroupIds()
 	case apikey.FieldMultiGroupEnabled:
 		return m.MultiGroupEnabled()
+	case apikey.FieldModelAllowlist:
+		return m.ModelAllowlist()
 	case apikey.FieldStatus:
 		return m.Status()
 	case apikey.FieldLastUsedAt:
@@ -1791,6 +1833,8 @@ func (m *APIKeyMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldGroupIds(ctx)
 	case apikey.FieldMultiGroupEnabled:
 		return m.OldMultiGroupEnabled(ctx)
+	case apikey.FieldModelAllowlist:
+		return m.OldModelAllowlist(ctx)
 	case apikey.FieldStatus:
 		return m.OldStatus(ctx)
 	case apikey.FieldLastUsedAt:
@@ -1894,6 +1938,13 @@ func (m *APIKeyMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetMultiGroupEnabled(v)
+		return nil
+	case apikey.FieldModelAllowlist:
+		v, ok := value.(domain.GroupModelAllowlist)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModelAllowlist(v)
 		return nil
 	case apikey.FieldStatus:
 		v, ok := value.(string)
@@ -2238,6 +2289,9 @@ func (m *APIKeyMutation) ResetField(name string) error {
 		return nil
 	case apikey.FieldMultiGroupEnabled:
 		m.ResetMultiGroupEnabled()
+		return nil
+	case apikey.FieldModelAllowlist:
+		m.ResetModelAllowlist()
 		return nil
 	case apikey.FieldStatus:
 		m.ResetStatus()

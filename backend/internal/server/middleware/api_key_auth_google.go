@@ -113,6 +113,9 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 			abortWithGoogleError(c, 401, "User account is not active")
 			return
 		}
+		if !enforceAPIKeyModelAllowlist(c, apiKey) {
+			return
+		}
 		var groupResolved bool
 		apiKey, groupResolved = resolveAPIKeyRequestGroup(c, apiKey, true)
 		if !groupResolved {

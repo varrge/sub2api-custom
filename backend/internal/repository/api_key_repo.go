@@ -55,6 +55,7 @@ func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) erro
 	builder := r.client.APIKey.Create().
 		SetGroupIds(key.GroupIDs).
 		SetMultiGroupEnabled(key.MultiGroupEnabled).
+		SetModelAllowlist(service.DomainGroupModelAllowlist(key.ModelAllowlist)).
 		SetUserID(key.UserID).
 		SetKey(key.Key).
 		SetName(key.Name).
@@ -155,6 +156,7 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 			apikey.FieldGroupID,
 			apikey.FieldGroupIds,
 			apikey.FieldMultiGroupEnabled,
+			apikey.FieldModelAllowlist,
 			apikey.FieldName,
 			apikey.FieldStatus,
 			apikey.FieldIPWhitelist,
@@ -289,6 +291,9 @@ func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey, fiel
 	builder := client.APIKey.Update().
 		Where(apikey.IDEQ(key.ID), apikey.DeletedAtIsNil()).
 		SetUpdatedAt(now)
+	if fields.ModelAllowlist {
+		builder.SetModelAllowlist(service.DomainGroupModelAllowlist(key.ModelAllowlist))
+	}
 	if fields.Name {
 		builder.SetName(key.Name)
 	}
@@ -948,6 +953,7 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 		GroupID:           m.GroupID,
 		GroupIDs:          append([]int64{}, m.GroupIds...),
 		MultiGroupEnabled: m.MultiGroupEnabled,
+		ModelAllowlist:    service.GroupModelAllowlistFromDomain(m.ModelAllowlist),
 		Quota:             m.Quota,
 		QuotaUsed:         m.QuotaUsed,
 		ExpiresAt:         m.ExpiresAt,

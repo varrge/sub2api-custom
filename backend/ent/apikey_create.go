@@ -15,6 +15,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
 // APIKeyCreate is the builder for creating a APIKey entity.
@@ -115,6 +116,20 @@ func (_c *APIKeyCreate) SetMultiGroupEnabled(v bool) *APIKeyCreate {
 func (_c *APIKeyCreate) SetNillableMultiGroupEnabled(v *bool) *APIKeyCreate {
 	if v != nil {
 		_c.SetMultiGroupEnabled(*v)
+	}
+	return _c
+}
+
+// SetModelAllowlist sets the "model_allowlist" field.
+func (_c *APIKeyCreate) SetModelAllowlist(v domain.GroupModelAllowlist) *APIKeyCreate {
+	_c.mutation.SetModelAllowlist(v)
+	return _c
+}
+
+// SetNillableModelAllowlist sets the "model_allowlist" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableModelAllowlist(v *domain.GroupModelAllowlist) *APIKeyCreate {
+	if v != nil {
+		_c.SetModelAllowlist(*v)
 	}
 	return _c
 }
@@ -411,6 +426,10 @@ func (_c *APIKeyCreate) defaults() error {
 		v := apikey.DefaultMultiGroupEnabled
 		_c.mutation.SetMultiGroupEnabled(v)
 	}
+	if _, ok := _c.mutation.ModelAllowlist(); !ok {
+		v := apikey.DefaultModelAllowlist
+		_c.mutation.SetModelAllowlist(v)
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := apikey.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -482,6 +501,9 @@ func (_c *APIKeyCreate) check() error {
 	}
 	if _, ok := _c.mutation.MultiGroupEnabled(); !ok {
 		return &ValidationError{Name: "multi_group_enabled", err: errors.New(`ent: missing required field "APIKey.multi_group_enabled"`)}
+	}
+	if _, ok := _c.mutation.ModelAllowlist(); !ok {
+		return &ValidationError{Name: "model_allowlist", err: errors.New(`ent: missing required field "APIKey.model_allowlist"`)}
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "APIKey.status"`)}
@@ -572,6 +594,10 @@ func (_c *APIKeyCreate) createSpec() (*APIKey, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.MultiGroupEnabled(); ok {
 		_spec.SetField(apikey.FieldMultiGroupEnabled, field.TypeBool, value)
 		_node.MultiGroupEnabled = value
+	}
+	if value, ok := _c.mutation.ModelAllowlist(); ok {
+		_spec.SetField(apikey.FieldModelAllowlist, field.TypeJSON, value)
+		_node.ModelAllowlist = value
 	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(apikey.FieldStatus, field.TypeString, value)
@@ -844,6 +870,18 @@ func (u *APIKeyUpsert) SetMultiGroupEnabled(v bool) *APIKeyUpsert {
 // UpdateMultiGroupEnabled sets the "multi_group_enabled" field to the value that was provided on create.
 func (u *APIKeyUpsert) UpdateMultiGroupEnabled() *APIKeyUpsert {
 	u.SetExcluded(apikey.FieldMultiGroupEnabled)
+	return u
+}
+
+// SetModelAllowlist sets the "model_allowlist" field.
+func (u *APIKeyUpsert) SetModelAllowlist(v domain.GroupModelAllowlist) *APIKeyUpsert {
+	u.Set(apikey.FieldModelAllowlist, v)
+	return u
+}
+
+// UpdateModelAllowlist sets the "model_allowlist" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateModelAllowlist() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldModelAllowlist)
 	return u
 }
 
@@ -1297,6 +1335,20 @@ func (u *APIKeyUpsertOne) SetMultiGroupEnabled(v bool) *APIKeyUpsertOne {
 func (u *APIKeyUpsertOne) UpdateMultiGroupEnabled() *APIKeyUpsertOne {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.UpdateMultiGroupEnabled()
+	})
+}
+
+// SetModelAllowlist sets the "model_allowlist" field.
+func (u *APIKeyUpsertOne) SetModelAllowlist(v domain.GroupModelAllowlist) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetModelAllowlist(v)
+	})
+}
+
+// UpdateModelAllowlist sets the "model_allowlist" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateModelAllowlist() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateModelAllowlist()
 	})
 }
 
@@ -1963,6 +2015,20 @@ func (u *APIKeyUpsertBulk) SetMultiGroupEnabled(v bool) *APIKeyUpsertBulk {
 func (u *APIKeyUpsertBulk) UpdateMultiGroupEnabled() *APIKeyUpsertBulk {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.UpdateMultiGroupEnabled()
+	})
+}
+
+// SetModelAllowlist sets the "model_allowlist" field.
+func (u *APIKeyUpsertBulk) SetModelAllowlist(v domain.GroupModelAllowlist) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetModelAllowlist(v)
+	})
+}
+
+// UpdateModelAllowlist sets the "model_allowlist" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateModelAllowlist() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateModelAllowlist()
 	})
 }
 

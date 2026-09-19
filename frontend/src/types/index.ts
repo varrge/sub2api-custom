@@ -741,6 +741,15 @@ export interface CompositeRouteDecision {
   reason?: string
 }
 
+export interface ApiKeyModelAllowlist {
+  enabled: boolean
+  models?: string[]
+}
+
+export interface ApiKeyModelOptions {
+  models: Array<{ id: string; group_ids: number[] }>
+}
+
 export interface ApiKey {
   id: number
   user_id: number
@@ -750,6 +759,7 @@ export interface ApiKey {
   group_ids: number[]
   groups: Group[]
   multi_group_enabled: boolean
+  model_allowlist?: ApiKeyModelAllowlist
   status: 'active' | 'inactive' | 'quota_exhausted' | 'expired'
   ip_whitelist: string[]
   ip_blacklist: string[]
@@ -792,6 +802,7 @@ export interface CreateApiKeyRequest {
 export interface UpdateApiKeyRequest {
   name?: string
   group_ids?: number[]
+  model_allowlist?: Required<ApiKeyModelAllowlist>
   status?: 'active' | 'inactive'
   ip_whitelist?: string[]
   ip_blacklist?: string[]

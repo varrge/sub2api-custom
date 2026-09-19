@@ -132,7 +132,7 @@ func (h *OpenAIGatewayHandler) GrokRealtime(c *gin.Context) {
 	defer func() { _ = conn.CloseNow() }()
 
 	started := time.Now()
-	audioObserved, proxyErr := h.gatewayService.ProxyGrokRealtimeConn(h.statefulAdmissionContext(c, apiKey), c, conn, upstream)
+	audioObserved, proxyErr := h.gatewayService.ProxyGrokRealtimeConn(h.statefulAdmissionContext(c, apiKey, model), c, conn, upstream)
 	elapsed := time.Since(started)
 	// Revocation stops new input, but already consumed audio still belongs to
 	// the immutable connection snapshot and must be billed on every exit path.

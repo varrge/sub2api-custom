@@ -142,6 +142,13 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 		}
 		key = fresh
 	}
+	if body, present := middleware.APIKeyGroupRequestBody(c); present && key.ModelAllowlist.Enabled {
+		for _, model := range requestmodel.FromBodyCandidates(c.Request.URL.Path, "application/json", body) {
+			if !key.AllowsModel(model) {
+				return nil, groupRoutingError(404, "MODEL_NOT_ALLOWED", fmt.Sprintf("Model %q is not allowed for this API key", model))
+			}
+		}
+	}
 	multi := key.MultiGroupEnabled || len(key.GroupIDs) > 1
 	// Resource lookups are ownership checks and must precede group/credit checks.
 	if r.handlers != nil {

@@ -10,6 +10,7 @@ const {
   listKeys,
   createKeyRequest,
   updateKey,
+  getModelOptions,
   getPublicSettings,
   getDashboardApiKeysUsage,
   getAvailableGroups,
@@ -23,6 +24,7 @@ const {
   listKeys: vi.fn(),
   createKeyRequest: vi.fn(),
   updateKey: vi.fn(),
+  getModelOptions: vi.fn(),
   getPublicSettings: vi.fn(),
   getDashboardApiKeysUsage: vi.fn(),
   getAvailableGroups: vi.fn(),
@@ -65,6 +67,7 @@ vi.mock('@/api', () => ({
     list: listKeys,
     create: createKeyRequest,
     update: updateKey,
+    getModelOptions,
     delete: vi.fn(),
     toggleStatus: vi.fn(),
   },
@@ -278,6 +281,7 @@ describe('user KeysView column settings', () => {
     listKeys.mockReset()
     createKeyRequest.mockReset().mockResolvedValue({})
     updateKey.mockReset().mockResolvedValue({})
+    getModelOptions.mockReset().mockResolvedValue({ models: [] })
     getPublicSettings.mockReset()
     getDashboardApiKeysUsage.mockReset()
     getAvailableGroups.mockReset()
@@ -300,6 +304,71 @@ describe('user KeysView column settings', () => {
     getAvailableGroups.mockResolvedValue([])
     getUserGroupRates.mockResolvedValue({})
     isCurrentStep.mockReturnValue(false)
+  })
+
+  it('places model restrictions last in editing and saves the selection for reopening', async () => {
+    const key = { ...createApiKey(), group_id: 1, group_ids: [1, 2], multi_group_enabled: true }
+    listKeys.mockResolvedValue({ items: [key], total: 1, pages: 1 })
+    getModelOptions.mockResolvedValue({ models: [{ id: 'allowed', group_ids: [1, 2] }, { id: 'denied', group_ids: [2] }] })
+    const wrapper = await mountView()
+    await getButtonByText(wrapper, 'common.edit').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('#key-form').element.lastElementChild?.getAttribute('data-test')).toBe('model-allowlist')
+    expect(getModelOptions).toHaveBeenCalledWith([1, 2])
+    expect(wrapper.get('[data-test="model-restriction-enabled"]').element).toMatchObject({ checked: false })
+    await wrapper.get('[data-test="model-restriction-enabled"]').setValue(true)
+    expect(wrapper.get('[data-tour="key-form-submit"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('#key-form').trigger('submit')
+    expect(updateKey).not.toHaveBeenCalled()
+    await wrapper.get('input[value="allowed"]').setValue(true)
+    expect(wrapper.get('[data-tour="key-form-submit"]').attributes('disabled')).toBeUndefined()
+    const saved = { ...key, model_allowlist: { enabled: true, models: ['allowed'] } }
+    updateKey.mockResolvedValue(saved)
+    listKeys.mockResolvedValue({ items: [saved], total: 1, pages: 1 })
+    await wrapper.get('#key-form').trigger('submit')
+    await flushPromises()
+    expect(updateKey).toHaveBeenCalledWith(1, expect.objectContaining({ group_ids: [1, 2], model_allowlist: { enabled: true, models: ['allowed'] } }))
+    await getButtonByText(wrapper, 'common.edit').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="model-restriction-enabled"]').element).toMatchObject({ checked: true })
+    expect(wrapper.get('input[value="allowed"]').element).toMatchObject({ checked: true })
+    expect(wrapper.get('input[value="denied"]').element).toMatchObject({ checked: false })
+    wrapper.unmount()
+  })
+
+  it.each([false, true])('saves unrelated fields with restrictions enabled=%s when the model catalog fails', async enabled => {
+    const model_allowlist = { enabled, models: enabled ? ['retained'] : [] }
+    const key = { ...createApiKey(), group_id: 1, group_ids: [1], model_allowlist }
+    listKeys.mockResolvedValue({ items: [key], total: 1, pages: 1 })
+    getModelOptions.mockRejectedValue(new Error('offline'))
+    const wrapper = await mountView()
+    await getButtonByText(wrapper, 'common.edit').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="model-allowlist"]').text()).toContain('keys.modelRestriction.loadFailed')
+    await wrapper.get('[data-tour="key-form-name"]').setValue('Changed name')
+    await wrapper.get('#key-form').trigger('submit')
+    await flushPromises()
+    expect(updateKey).toHaveBeenCalledWith(1, expect.objectContaining({ name: 'Changed name', model_allowlist }))
+    wrapper.unmount()
+  })
+
+  it('refreshes model choices after editing group selections without losing an allowed model', async () => {
+    const key = { ...createApiKey(), group_id: 1, group_ids: [1], multi_group_enabled: true, model_allowlist: { enabled: true, models: ['retained'] } }
+    listKeys.mockResolvedValue({ items: [key], total: 1, pages: 1 })
+    getModelOptions.mockResolvedValue({ models: [{ id: 'new-model', group_ids: [2] }] })
+    const wrapper = await mountView()
+    await getButtonByText(wrapper, 'common.edit').trigger('click')
+    await flushPromises()
+    const groupSelector = wrapper.findComponent({ name: 'OrderedKeyGroupSelector' })
+    groupSelector.vm.$emit('update:modelValue', [2, 3])
+    await flushPromises()
+    expect(getModelOptions).toHaveBeenLastCalledWith([2, 3])
+    expect(wrapper.get('input[value="retained"]').element).toMatchObject({ checked: true })
+    expect(wrapper.get('input[value="new-model"]').element).toMatchObject({ checked: false })
+    await wrapper.get('#key-form').trigger('submit')
+    await flushPromises()
+    expect(updateKey).toHaveBeenCalledWith(1, expect.objectContaining({ group_ids: [2, 3], model_allowlist: { enabled: true, models: ['retained'] } }))
+    wrapper.unmount()
   })
 
   it.each([

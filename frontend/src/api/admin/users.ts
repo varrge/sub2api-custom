@@ -4,7 +4,7 @@
  */
 
 import { apiClient } from '../client'
-import type { AdminUser, UpdateUserRequest, PaginatedResponse, ApiKey, Group } from '@/types'
+import type { AdminUser, UpdateUserRequest, PaginatedResponse, ApiKey, ApiKeyModelOptions, Group } from '@/types'
 
 export interface AdminBindAuthIdentityChannelRequest {
   channel: string
@@ -405,6 +405,13 @@ export async function getAvailableGroups(userId: number): Promise<Group[]> {
   return data
 }
 
+export async function getApiKeyModelOptions(userId: number, groupIds: number[]): Promise<ApiKeyModelOptions> {
+  const { data } = await apiClient.post<ApiKeyModelOptions>(`/admin/users/${userId}/api-key-model-options`, {
+    group_ids: [...groupIds]
+  })
+  return data
+}
+
 export const usersAPI = {
   list,
   getById,
@@ -417,6 +424,7 @@ export const usersAPI = {
   toggleStatus,
   getUserApiKeys,
   getAvailableGroups,
+  getApiKeyModelOptions,
   getUserUsageStats,
   getUserBalanceHistory,
   replaceGroup,

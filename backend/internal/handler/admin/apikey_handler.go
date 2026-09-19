@@ -25,9 +25,10 @@ func NewAdminAPIKeyHandler(adminService service.AdminService) *AdminAPIKeyHandle
 
 // AdminUpdateAPIKeyGroupRequest represents the request to update an API key.
 type AdminUpdateAPIKeyGroupRequest struct {
-	GroupIDs            *[]int64 `json:"group_ids"`
-	GroupID             *int64   `json:"group_id"`               // nil=不修改, 0=解绑, >0=绑定到目标分组
-	ResetRateLimitUsage *bool    `json:"reset_rate_limit_usage"` // true=重置 5h/1d/7d 限速用量
+	ModelAllowlist      *service.GroupModelAllowlist `json:"model_allowlist"`
+	GroupIDs            *[]int64                     `json:"group_ids"`
+	GroupID             *int64                       `json:"group_id"`               // nil=不修改, 0=解绑, >0=绑定到目标分组
+	ResetRateLimitUsage *bool                        `json:"reset_rate_limit_usage"` // true=重置 5h/1d/7d 限速用量
 }
 
 // UpdateGroup handles updating an API key's admin-managed fields.
@@ -45,32 +46,56 @@ func (h *AdminAPIKeyHandler) UpdateGroup(c *gin.Context) {
 		return
 	}
 
-	var resetKey *service.APIKey
-	if req.ResetRateLimitUsage != nil && *req.ResetRateLimitUsage {
-		resetKey, err = h.adminService.AdminResetAPIKeyRateLimitUsage(c.Request.Context(), keyID)
+	var result *service.AdminUpdateAPIKeyGroupIDResult
+	if req.ModelAllowlist != nil {
+		// Validate before any group or usage mutation, including optional services.
+		cfg, validationErr := service.NormalizeAPIKeyModelAllowlist(*req.ModelAllowlist)
+		if validationErr != nil {
+			response.ErrorFrom(c, validationErr)
+			return
+		}
+		limitService, ok := h.adminService.(service.AdminAPIKeyModelLimits)
+		if !ok {
+			response.InternalError(c, "Model limit management unavailable")
+			return
+		}
+		result, err = limitService.AdminUpdateAPIKeyModelLimits(c.Request.Context(), keyID, service.AdminUpdateAPIKeyModelLimitsRequest{
+			GroupID:             req.GroupID,
+			GroupIDs:            req.GroupIDs,
+			ModelAllowlist:      &cfg,
+			ResetRateLimitUsage: req.ResetRateLimitUsage != nil && *req.ResetRateLimitUsage,
+		})
 		if err != nil {
 			response.ErrorFrom(c, err)
 			return
 		}
-	}
+	} else {
+		var resetKey *service.APIKey
+		if req.ResetRateLimitUsage != nil && *req.ResetRateLimitUsage {
+			resetKey, err = h.adminService.AdminResetAPIKeyRateLimitUsage(c.Request.Context(), keyID)
+			if err != nil {
+				response.ErrorFrom(c, err)
+				return
+			}
+		}
 
-	var result *service.AdminUpdateAPIKeyGroupIDResult
-	if req.GroupIDs != nil {
-		groupService, ok := h.adminService.(service.AdminAPIKeyGroups)
-		if !ok {
-			response.InternalError(c, "Group management unavailable")
+		if req.GroupIDs != nil {
+			groupService, ok := h.adminService.(service.AdminAPIKeyGroups)
+			if !ok {
+				response.InternalError(c, "Group management unavailable")
+				return
+			}
+			result, err = groupService.AdminUpdateAPIKeyGroups(c.Request.Context(), keyID, *req.GroupIDs)
+		} else {
+			result, err = h.adminService.AdminUpdateAPIKeyGroupID(c.Request.Context(), keyID, req.GroupID)
+		}
+		if err != nil {
+			response.ErrorFrom(c, err)
 			return
 		}
-		result, err = groupService.AdminUpdateAPIKeyGroups(c.Request.Context(), keyID, *req.GroupIDs)
-	} else {
-		result, err = h.adminService.AdminUpdateAPIKeyGroupID(c.Request.Context(), keyID, req.GroupID)
-	}
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-	if resetKey != nil && req.GroupID == nil && req.GroupIDs == nil {
-		result.APIKey = resetKey
+		if resetKey != nil && req.GroupID == nil && req.GroupIDs == nil {
+			result.APIKey = resetKey
+		}
 	}
 
 	resp := struct {

@@ -1514,6 +1514,9 @@ func (s *BatchImagePublicService) ListModelsForGroups(ctx context.Context, owner
 			return nil, err
 		}
 		for _, model := range models.Data {
+			if !group.ModelAllowlist.Allows(model.ID) {
+				continue
+			}
 			identity := model.Provider + "\x00" + model.ID
 			if !seen[identity] {
 				seen[identity] = true

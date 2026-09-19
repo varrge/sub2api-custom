@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	middleware "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -30,6 +31,54 @@ func TestNextWSTurnCapturesFreshKeyAndLeavesPreviousBillingSnapshotUntouched(t *
 	require.Equal(t, float64(9), next.key.Group.RateMultiplier)
 	require.Same(t, old, previous.key)
 	require.Equal(t, float64(1), previous.key.Group.RateMultiplier)
+}
+
+func TestStatefulAdmissionRechecksPublicAndFrameModels(t *testing.T) {
+	for _, payload := range []string{
+		`{"type":"response.create","model":"denied"}`,
+		`{"type":"response.create","response":{"model":"denied"}}`,
+		`{"type":"session.update","session":{"model":"denied"}}`,
+		`{"type":"response.create","model":"public","response":{"Model":"denied"}}`,
+		`{"type":"session.update","session":{"model":"public","model":"denied"}}`,
+		`{"type":"session.update","session":{"model":"public"},"Session":{"model":"denied"}}`,
+	} {
+		t.Run(payload, func(t *testing.T) {
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest(http.MethodGet, "/v1/live/call", nil)
+			key := &service.APIKey{User: &service.User{ID: 1}, Group: &service.Group{ID: 3}}
+			fresh := *key
+			fresh.ModelAllowlist = service.GroupModelAllowlist{Enabled: true, Models: []string{"public"}}
+			middleware.InstallAPIKeyPinnedRevalidator(c, func(*gin.Context, *service.APIKey) (*service.APIKey, error) { return &fresh, nil })
+			check := (&OpenAIGatewayHandler{}).statefulAdmissionCheck(c, key, "public")
+			err := check(context.Background(), []byte(payload))
+			require.Error(t, err)
+			require.Contains(t, infraerrors.Message(err), `Model "denied" is not allowed`)
+		})
+	}
+}
+
+func TestStatefulAdmissionRetainsSessionModelAndUsesFreshRestrictions(t *testing.T) {
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodGet, "/v1/realtime", nil)
+	key := &service.APIKey{User: &service.User{ID: 1}, Group: &service.Group{ID: 3}}
+	fresh := *key
+	fresh.ModelAllowlist = service.GroupModelAllowlist{Enabled: true, Models: []string{"public", "next"}}
+	middleware.InstallAPIKeyPinnedRevalidator(c, func(*gin.Context, *service.APIKey) (*service.APIKey, error) { return &fresh, nil })
+	billing := service.NewBillingCacheService(nil, nil, nil, nil, nil, nil, &config.Config{RunMode: config.RunModeSimple}, nil)
+	t.Cleanup(billing.Stop)
+	h := &OpenAIGatewayHandler{billingCacheService: billing}
+	check := h.statefulAdmissionCheck(c, key, "public")
+	require.NoError(t, check(context.Background(), []byte(`{"type":"response.cancel","Type":"session.update","session":{"model":"next"}}`)))
+	fresh.ModelAllowlist.Models = []string{"public"}
+	err := check(context.Background(), []byte(`{"type":"input_audio_buffer.append","audio":"AA=="}`))
+	require.Error(t, err)
+	require.Contains(t, infraerrors.Message(err), `Model "next" is not allowed`)
+	// A model-less turn must also reject revocation of the original public model.
+	fresh.ModelAllowlist.Models = []string{"next"}
+	err = check(context.Background(), []byte(`{"type":"response.create"}`))
+	require.Error(t, err)
+	require.Contains(t, infraerrors.Message(err), `Model "public" is not allowed`)
+	require.False(t, key.ModelAllowlist.Enabled, "the connection's original snapshot must remain immutable")
 }
 
 func TestImageTaskPinnedLookupSurvivesUnboundGroupAndRejectsOtherKey(t *testing.T) {
@@ -79,4 +128,20 @@ func TestImageTaskMetadataKeepsCreationGroupAfterCompletion(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, id, *record.GroupID)
 	require.Greater(t, record.ExpiresAt, time.Now().Unix())
+}
+
+func TestStatefulAdmissionPinsLiveModelAcrossReconnects(t *testing.T) {
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodGet, "/v1/live/call", nil)
+	c.Params = gin.Params{{Key: "call_id", Value: "call"}}
+	key := &service.APIKey{User: &service.User{ID: 1}, Group: &service.Group{ID: 3}, ModelAllowlist: service.GroupModelAllowlist{Enabled: true, Models: []string{"public", "next"}}}
+	middleware.InstallAPIKeyPinnedRevalidator(c, func(*gin.Context, *service.APIKey) (*service.APIKey, error) { return key, nil })
+	for range 2 {
+		check := (&OpenAIGatewayHandler{}).statefulAdmissionCheck(c, key, "public")
+		for _, payload := range []string{`{"type":"session.update","session":{"model":"next"}}`, `{"type":"response.create","response":{"model":"next"}}`} {
+			err := check(context.Background(), []byte(payload))
+			require.Error(t, err)
+			require.Contains(t, infraerrors.Message(err), "Live call model cannot change")
+		}
+	}
 }

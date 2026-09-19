@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/requestmodel"
 	coderws "github.com/coder/websocket"
 	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
@@ -116,6 +117,15 @@ func ValidateLiveCallRequest(request *LiveCallRequest) error {
 	if sessionObject == nil {
 		return errors.New("session must be a JSON object")
 	}
+	model := strings.TrimSpace(gjson.GetBytes(request.Session, "model").String())
+	if model == "" {
+		model = "gpt-live"
+	}
+	for _, candidate := range requestmodel.FromBodyCandidates("", "application/json", request.Session) {
+		if candidate != model {
+			return errors.New("session must specify one unambiguous model")
+		}
+	}
 	return nil
 }
 
@@ -212,6 +222,10 @@ func (s *OpenAIGatewayService) CreateLiveCall(
 		if model == "" {
 			model = "gpt-live"
 		}
+		requestedModel := strings.TrimSpace(identity.RequestedModel)
+		if requestedModel == "" {
+			requestedModel = model
+		}
 		record := &LiveCallRecord{
 			CallID:                created.CallID,
 			CallHash:              hashLiveCallID(created.CallID),
@@ -222,6 +236,7 @@ func (s *OpenAIGatewayService) CreateLiveCall(
 			SubscriptionID:        liveGroupID(identity.SubscriptionID),
 			LeaseID:               leaseID,
 			Model:                 model,
+			RequestedModel:        requestedModel,
 			CreatedAt:             now,
 			ExpiresAt:             now.Add(s.liveMaxSessionDuration()),
 			Controller:            LiveControllerPending,
@@ -828,6 +843,10 @@ func (s *OpenAIGatewayService) finalizeLiveCall(record *LiveCallRecord) {
 	if record.SubscriptionID > 0 {
 		billingType = BillingTypeSubscription
 	}
+	requestedModel := strings.TrimSpace(record.RequestedModel)
+	if requestedModel == "" {
+		requestedModel = record.Model
+	}
 	// TODO(billing): Live 会话目前不计费：TotalCost/ActualCost 恒为 0，完全绕过
 	// recordUsageCore/applyUsageBilling，余额模式下极低余额也能反复开启最长
 	// liveMaxSessionDuration 的会话。若确认按时长计费，应在此接入计费管道；
@@ -842,7 +861,7 @@ func (s *OpenAIGatewayService) finalizeLiveCall(record *LiveCallRecord) {
 		AccountID:        record.AccountID,
 		RequestID:        record.CallHash,
 		Model:            record.Model,
-		RequestedModel:   record.Model,
+		RequestedModel:   requestedModel,
 		GroupID:          liveOptionalID(record.GroupID),
 		SubscriptionID:   liveOptionalID(record.SubscriptionID),
 		RateMultiplier:   1,

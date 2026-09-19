@@ -918,6 +918,13 @@
             </div>
           </div>
         </div>
+        <KeyModelAllowlist
+          v-if="showEditModal"
+          v-model="formModelAllowlist"
+          :group-ids="formData.group_ids"
+          :load-options="keysAPI.getModelOptions"
+          :disabled="submitting"
+        />
       </form>
       <template #footer>
         <div class="flex justify-end gap-3">
@@ -927,7 +934,7 @@
           <button
             form="key-form"
             type="submit"
-            :disabled="submitting"
+            :disabled="submitting || (showEditModal && formModelAllowlist.enabled && !formModelAllowlist.models?.length)"
             class="btn btn-primary"
             data-tour="key-form-submit"
           >
@@ -1114,9 +1121,10 @@ import BulkEditKeysModal from '@/components/keys/BulkEditKeysModal.vue'
 	import Icon from '@/components/icons/Icon.vue'
 	import UseKeyModal from '@/components/keys/UseKeyModal.vue'
 	import EndpointPopover from '@/components/keys/EndpointPopover.vue'
-	import type { ApiKey, Group, PublicSettings, UpdateApiKeyRequest } from '@/types'
+	import type { ApiKey, ApiKeyModelAllowlist, Group, PublicSettings, UpdateApiKeyRequest } from '@/types'
 import KeyGroupBadges from '@/components/keys/KeyGroupBadges.vue'
 import OrderedKeyGroupSelector from '@/components/keys/OrderedKeyGroupSelector.vue'
+import KeyModelAllowlist from '@/components/keys/KeyModelAllowlist.vue'
 import { keyGroupIds, keyGroups } from '@/components/keys/keyGroups'
 import type { Column } from '@/components/common/types'
 import type { BatchApiKeyUsageStats } from '@/api/usage'
@@ -1320,6 +1328,7 @@ const formData = ref({
   expiration_preset: '30' as '7' | '30' | '90' | 'custom',
   expiration_date: ''
 })
+const formModelAllowlist = ref<ApiKeyModelAllowlist>({ enabled: false, models: [] })
 
 // 自定义Key验证
 const customKeyError = computed(() => {
@@ -1533,6 +1542,10 @@ const handleSort = (key: string, order: 'asc' | 'desc') => {
 
 const editKey = (key: ApiKey) => {
   selectedKey.value = key
+  formModelAllowlist.value = {
+    enabled: key.model_allowlist?.enabled ?? false,
+    models: [...(key.model_allowlist?.models ?? [])]
+  }
   const hasIPRestriction = (key.ip_whitelist?.length > 0) || (key.ip_blacklist?.length > 0)
   const hasExpiration = !!key.expires_at
   formData.value = {
@@ -1607,6 +1620,10 @@ const confirmDelete = (key: ApiKey) => {
 }
 
 const handleSubmit = async () => {
+  if (showEditModal.value && formModelAllowlist.value.enabled && !formModelAllowlist.value.models?.length) {
+    appStore.showError(t('keys.modelRestriction.required'))
+    return
+  }
   // Ordinary users must retain at least one configured group.
   if (formData.value.group_ids.length === 0) {
     appStore.showError(t('keys.groupRequired'))
@@ -1666,6 +1683,7 @@ const handleSubmit = async () => {
       const updates: UpdateApiKeyRequest = {
         name: formData.value.name,
         group_ids: [...formData.value.group_ids],
+        model_allowlist: { enabled: formModelAllowlist.value.enabled, models: [...(formModelAllowlist.value.models ?? [])] },
         ip_whitelist: ipWhitelist,
         ip_blacklist: ipBlacklist,
         quota: quota,
@@ -1732,6 +1750,7 @@ const closeModals = () => {
   showCreateModal.value = false
   showEditModal.value = false
   selectedKey.value = null
+  formModelAllowlist.value = { enabled: false, models: [] }
   formData.value = {
     name: '',
     group_ids: [],

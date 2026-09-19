@@ -152,12 +152,18 @@ func (h *GatewayHandler) MultiGroupModels(c *gin.Context) bool {
 			h.errorResponse(c, 503, "api_error", "Failed to build model catalog")
 			return true
 		}
+		if writeAPIKeyLimitedCatalog(c, body) {
+			return true
+		}
 		c.Data(http.StatusOK, "application/json", body)
 		return true
 	}
 	if google {
 		models := make([]gin.H, 0, len(ids))
 		for _, id := range ids {
+			if !key.AllowsModel(id) {
+				continue
+			}
 			models = append(models, gin.H{"name": "models/" + strings.TrimPrefix(id, "models/"), "displayName": id, "supportedGenerationMethods": []string{"generateContent", "streamGenerateContent", "countTokens"}})
 		}
 		if requested := c.Param("model"); requested != "" {

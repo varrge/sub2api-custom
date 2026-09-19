@@ -2,12 +2,15 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	middleware "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -103,6 +106,81 @@ func TestLiveAttestationErrorIsExplicit(t *testing.T) {
 
 	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
 	require.Contains(t, recorder.Body.String(), "Sub2API runs on macOS")
+}
+
+func TestLiveModelLimitChecksDefaultAndOriginalPublicModel(t *testing.T) {
+	for _, tc := range []struct {
+		name, session, public, allowed string
+		status                         int
+	}{
+		{"missing model denied", `{}`, "", "other", http.StatusNotFound},
+		{"missing model allowed", `{}`, "", "gpt-live", http.StatusServiceUnavailable},
+		{"mapped public allowed", `{"model":"upstream-model"}`, "public-model", "public-model", http.StatusServiceUnavailable},
+		{"upstream permission cannot grant public alias", `{"model":"upstream-model"}`, "public-model", "upstream-model", http.StatusNotFound},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/live", bytes.NewBufferString(`{"sdp":"v=0","session":`+tc.session+`}`))
+			c.Request.Header.Set("Content-Type", "application/json")
+			if tc.public != "" {
+				c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), ctxkey.RequestedPublicModel, tc.public))
+			}
+			c.Set(string(middleware.ContextKeyAPIKey), &service.APIKey{
+				Group:          &service.Group{Platform: service.PlatformOpenAI, AllowLive: true},
+				ModelAllowlist: service.GroupModelAllowlist{Enabled: true, Models: []string{tc.allowed}},
+			})
+			c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 1})
+			(&OpenAIGatewayHandler{}).Live(c)
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			if tc.status == http.StatusNotFound {
+				require.Contains(t, w.Body.String(), "not allowed for this API key")
+			} else {
+				require.Contains(t, w.Body.String(), "Billing service unavailable")
+			}
+		})
+	}
+}
+
+type liveModelLimitStore struct {
+	service.GatewayCache
+	service.LiveCallStore
+	record *service.LiveCallRecord
+}
+
+func (s liveModelLimitStore) GetLiveCall(context.Context, string) (*service.LiveCallRecord, error) {
+	return s.record, nil
+}
+
+func TestLiveSidebandChecksPublicModelBeforeAccept(t *testing.T) {
+	for _, tc := range []struct {
+		name, public, allowed string
+		status                int
+	}{
+		{"public model allowed despite mapping", "public-model", "public-model", http.StatusUpgradeRequired},
+		{"mapped model does not grant alias", "public-model", "upstream-model", http.StatusNotFound},
+		{"old record falls back to model", "", "upstream-model", http.StatusUpgradeRequired},
+		{"old record model revoked", "", "other-model", http.StatusNotFound},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			record := &service.LiveCallRecord{CallID: "call-test", APIKeyID: 2, UserID: 1, Model: "upstream-model", RequestedModel: tc.public}
+			gateway := service.NewOpenAIGatewayService(nil, nil, nil, nil, nil, nil, liveModelLimitStore{record: record}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodGet, "/v1/live/call-test", nil)
+			c.Params = gin.Params{{Key: "call_id", Value: "call-test"}}
+			c.Set(string(middleware.ContextKeyAPIKey), &service.APIKey{
+				ID: 2, UserID: 1, Group: &service.Group{Platform: service.PlatformOpenAI, AllowLive: true},
+				ModelAllowlist: service.GroupModelAllowlist{Enabled: true, Models: []string{tc.allowed}},
+			})
+			c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 1})
+			(&OpenAIGatewayHandler{gatewayService: gateway}).LiveSideband(c)
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			if tc.status == http.StatusNotFound {
+				require.Contains(t, w.Body.String(), "not allowed for this API key")
+			}
+		})
+	}
 }
 
 func jsonPathString(t *testing.T, raw json.RawMessage, keys ...string) string {

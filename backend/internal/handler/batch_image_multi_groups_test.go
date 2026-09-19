@@ -89,6 +89,56 @@ func TestBatchImageProbeBridgeReadsBodyProviderAndModel(t *testing.T) {
 	require.True(t, global)
 }
 
+func TestAPIKeyModelLimitFiltersBatchImageCatalog(t *testing.T) {
+	for _, multi := range []bool{false, true} {
+		for _, selected := range []string{"gemini-2.5-flash-image", "unavailable"} {
+			h, key := newBatchMultiGroupHandler()
+			key.MultiGroupEnabled = multi
+			if !multi {
+				key.GroupIDs = key.GroupIDs[:1]
+				key.Groups = key.Groups[:1]
+			}
+			key.ModelAllowlist = service.GroupModelAllowlist{Enabled: true, Models: []string{selected}}
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodGet, "/v1/images/batches/models", nil)
+			c.Set(string(middleware.ContextKeyAPIKey), key)
+			h.Models(c)
+			require.Equal(t, http.StatusOK, rec.Code)
+			require.NotContains(t, rec.Body.String(), "gemini-3-pro-image-preview")
+			if selected == "unavailable" {
+				require.Contains(t, rec.Body.String(), `"data":[]`)
+			} else {
+				require.Contains(t, rec.Body.String(), selected)
+			}
+		}
+	}
+}
+
+func TestAPIKeyModelLimitBatchCatalogKeepsEachGroupsPermissions(t *testing.T) {
+	h, key := newBatchMultiGroupHandler()
+	key.Groups[0].ModelAllowlist = service.GroupModelAllowlist{Enabled: true, Models: []string{"gemini-2.5-flash-image"}}
+	key.Groups[1].ModelAllowlist = service.GroupModelAllowlist{Enabled: true, Models: []string{"gemini-3-pro-image-preview"}}
+	key.ModelAllowlist = key.Groups[1].ModelAllowlist
+	for _, denySource := range []bool{false, true} {
+		if denySource {
+			key.Groups[1].ModelAllowlist = service.GroupModelAllowlist{Enabled: true, Models: []string{"unavailable"}}
+		}
+		rec := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(rec)
+		c.Request = httptest.NewRequest(http.MethodGet, "/v1/images/batches/models", nil)
+		c.Set(string(middleware.ContextKeyAPIKey), key)
+		h.Models(c)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.NotContains(t, rec.Body.String(), "gemini-2.5-flash-image")
+		if denySource {
+			require.Contains(t, rec.Body.String(), `"data":[]`)
+		} else {
+			require.Contains(t, rec.Body.String(), "gemini-3-pro-image-preview")
+		}
+	}
+}
+
 type batchAdmissionCache struct {
 	service.BillingCache
 	usage float64

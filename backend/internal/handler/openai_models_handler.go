@@ -19,7 +19,7 @@ func (h *GatewayHandler) pinnedOpenAIModels(c *gin.Context, group *service.Group
 		writeOpenAIModelsError(c, http.StatusInternalServerError, "api_error", "OpenAI model discovery is not configured")
 		return
 	}
-	etag := c.GetHeader("If-None-Match")
+	etag := modelCatalogSourceETag(c)
 	if c.Param("model") != "" {
 		etag = "" // A collection ETag cannot validate a single-model representation.
 	}
@@ -46,6 +46,9 @@ func writeOpenAIModelsError(c *gin.Context, status int, errorType, message strin
 }
 
 func writeOpenAIModelsResponse(c *gin.Context, manifest *service.OpenAIModelsResponse) {
+	if writeAPIKeyLimitedCatalog(c, manifest.Body) {
+		return
+	}
 	if c.Param("model") != "" {
 		writeRetrievedModel(c, manifest.Body)
 		return
@@ -65,13 +68,16 @@ func writeOpenAIModelsResponse(c *gin.Context, manifest *service.OpenAIModelsRes
 // selection and allowlist filtering. Preserve every field on the selected entry.
 func writeModelsListResponse(c *gin.Context, models any) {
 	response := gin.H{"object": "list", "data": models}
-	if c.Param("model") == "" {
+	if c.Param("model") == "" && !apiKeyModelLimitEnabled(c) {
 		c.JSON(http.StatusOK, response)
 		return
 	}
 	body, err := json.Marshal(response)
 	if err != nil {
 		writeOpenAIModelsError(c, http.StatusInternalServerError, "api_error", "Failed to encode model catalogue")
+		return
+	}
+	if writeAPIKeyLimitedCatalog(c, body) {
 		return
 	}
 	writeRetrievedModel(c, body)

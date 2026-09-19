@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 26 // v26: ordered groups and per-group RPM, retaining v25 model admission and temporary rates
+const apiKeyAuthSnapshotVersion = 27 // v27: independent API key model allowlist
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -342,6 +342,7 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 		GroupID:               apiKey.GroupID,
 		GroupIDs:              apiKey.ConfiguredGroupIDs(),
 		MultiGroupEnabled:     apiKey.MultiGroupEnabled,
+		ModelAllowlist:        cloneAPIKeyModelAllowlist(apiKey.ModelAllowlist),
 		UserGroupRPMOverrides: make(map[int64]*int),
 		Name:                  apiKey.Name,
 		Status:                apiKey.Status,
@@ -403,6 +404,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 		GroupID:               snapshot.GroupID,
 		GroupIDs:              append([]int64{}, snapshot.GroupIDs...),
 		MultiGroupEnabled:     snapshot.MultiGroupEnabled,
+		ModelAllowlist:        cloneAPIKeyModelAllowlist(snapshot.ModelAllowlist),
 		UserGroupRPMOverrides: make(map[int64]*int),
 		Key:                   key,
 		Name:                  snapshot.Name,

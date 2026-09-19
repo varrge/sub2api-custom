@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -38,23 +39,80 @@ func (h *OpenAIGatewayHandler) admitNextWSTurn(c *gin.Context, current *openAIWS
 	return &openAIWSTurnAdmission{key: freshKey, subscription: freshSub}, nil
 }
 
-func (h *OpenAIGatewayHandler) statefulAdmissionContext(c *gin.Context, key *service.APIKey) context.Context {
+func (h *OpenAIGatewayHandler) statefulAdmissionContext(c *gin.Context, key *service.APIKey, requestedModel string) context.Context {
+	return service.WithStatefulAdmission(c.Request.Context(), h.statefulAdmissionCheck(c, key, requestedModel))
+}
+
+func (h *OpenAIGatewayHandler) statefulAdmissionCheck(c *gin.Context, key *service.APIKey, requestedModel string) func(context.Context, []byte) error {
 	// The relay invokes this from its downstream reader goroutine. A private Gin
 	// context keeps admission updates from racing the connection's usage context.
 	admission := c.Copy()
 	admission.Request = c.Request.Clone(c.Request.Context())
-	return service.WithStatefulAdmission(c.Request.Context(), func(ctx context.Context) error {
+	pinnedLive := c.Param("call_id") != ""
+	var sessionModels []string
+	return func(ctx context.Context, payload []byte) error {
 		admission.Request = admission.Request.WithContext(ctx)
 		fresh, err := middleware.RevalidateAPIKeyPinnedGroup(admission, key)
 		if err != nil {
 			return err
 		}
+		frameModels := statefulFrameModelCandidates(payload)
+		// Live calls survive a sideband reconnect. Keep their creation model
+		// immutable so reconnecting cannot discard a changed upstream model.
+		if pinnedLive {
+			for _, model := range frameModels {
+				if model != requestedModel {
+					return infraerrors.New(http.StatusBadRequest, "LIVE_MODEL_IMMUTABLE", "Live call model cannot change; start a new call to use another model")
+				}
+			}
+		}
+		models := append([]string{requestedModel}, sessionModels...)
+		models = append(models, frameModels...)
+		for _, model := range models {
+			if !fresh.AllowsModel(model) {
+				return infraerrors.New(http.StatusNotFound, "MODEL_NOT_ALLOWED", fmt.Sprintf("Model %q is not allowed for this API key", model))
+			}
+			if fresh.Group != nil && !fresh.Group.ModelAllowlist.Allows(model) {
+				return infraerrors.New(http.StatusNotFound, "MODEL_NOT_ALLOWED", fmt.Sprintf("Model %q is not available for this group", model))
+			}
+		}
 		subscription, _ := middleware.GetSubscriptionFromContext(admission)
 		if h.billingCacheService == nil {
 			return infraerrors.New(http.StatusServiceUnavailable, "BILLING_UNAVAILABLE", "billing service unavailable")
 		}
-		return h.billingCacheService.CheckBillingEligibilityReadOnly(ctx, fresh.User, fresh, fresh.Group, subscription, service.QuotaPlatform(ctx, fresh))
+		if err := h.billingCacheService.CheckBillingEligibilityReadOnly(ctx, fresh.User, fresh, fresh.Group, subscription, service.QuotaPlatform(ctx, fresh)); err != nil {
+			return err
+		}
+		// Remember a successful session model change for later model-less audio
+		// and response frames, including after the key's restrictions change.
+		if service.IsStatefulSessionUpdate(payload) && len(frameModels) > 0 {
+			sessionModels = frameModels
+		}
+		return nil
+	}
+}
+
+// Stateful protocols may put a model at the top level, in response, or in
+// session. Check every spelling/duplicate instead of relying on one parser's
+// precedence, since these frames are forwarded to the upstream unchanged.
+func statefulFrameModelCandidates(payload []byte) []string {
+	var models []string
+	collect := func(key, value gjson.Result) bool {
+		if strings.EqualFold(key.String(), "model") && value.Type == gjson.String {
+			if model := strings.TrimSpace(value.String()); model != "" {
+				models = append(models, model)
+			}
+		}
+		return true
+	}
+	gjson.ParseBytes(payload).ForEach(func(key, value gjson.Result) bool {
+		collect(key, value)
+		if strings.EqualFold(key.String(), "session") || strings.EqualFold(key.String(), "response") {
+			value.ForEach(collect)
+		}
+		return true
 	})
+	return models
 }
 
 // ResolveAPIKeyPinnedGroup returns nil for independent requests, or a private

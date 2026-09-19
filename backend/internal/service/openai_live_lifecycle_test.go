@@ -275,6 +275,7 @@ func TestFinalizeLiveCallIsIdempotentAndWritesZeroUsage(t *testing.T) {
 		GroupID:         44,
 		LeaseID:         "lease-1",
 		Model:           "gpt-live-test",
+		RequestedModel:  "public-live-alias",
 		CreatedAt:       time.Now().Add(-time.Second),
 		ExpiresAt:       time.Now().Add(time.Hour),
 		Controller:      LiveControllerPending,
@@ -301,6 +302,8 @@ func TestFinalizeLiveCallIsIdempotentAndWritesZeroUsage(t *testing.T) {
 	log := usageRepo.logs[0]
 	usageRepo.mu.Unlock()
 	require.Equal(t, RequestTypeLive, log.RequestType)
+	require.Equal(t, record.Model, log.Model)
+	require.Equal(t, record.RequestedModel, log.RequestedModel)
 	require.Equal(t, record.CallHash, log.RequestID)
 	require.NotEqual(t, record.CallID, log.RequestID)
 	require.NotNil(t, log.DurationMs)

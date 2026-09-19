@@ -38,10 +38,18 @@
       :disabled="saving"
       allow-empty
     />
+    <KeyModelAllowlist
+      v-if="selectedKey"
+      v-model="selectedModelAllowlist"
+      class="mt-4"
+      :group-ids="selectedGroupIds"
+      :load-options="loadModelOptions"
+      :disabled="saving"
+    />
     <template #footer>
       <div class="flex justify-end gap-3">
         <button class="btn btn-secondary" :disabled="saving" @click="selectedKey = null">{{ t('common.cancel') }}</button>
-        <button class="btn btn-primary" :disabled="saving" @click="saveGroups">{{ t(saving ? 'common.saving' : 'common.save') }}</button>
+        <button class="btn btn-primary" :disabled="saving || (selectedModelAllowlist.enabled && !selectedModelAllowlist.models?.length)" @click="saveGroups">{{ t(saving ? 'common.saving' : 'common.save') }}</button>
       </div>
     </template>
   </BaseDialog>
@@ -53,11 +61,12 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
 import { formatDateTime } from '@/utils/format'
-import type { AdminUser, Group, ApiKey } from '@/types'
+import type { AdminUser, Group, ApiKey, ApiKeyModelAllowlist } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 import KeyGroupBadges from '@/components/keys/KeyGroupBadges.vue'
 import OrderedKeyGroupSelector from '@/components/keys/OrderedKeyGroupSelector.vue'
+import KeyModelAllowlist from '@/components/keys/KeyModelAllowlist.vue'
 import { keyGroupIds, keyGroups } from '@/components/keys/keyGroups'
 
 const props = defineProps<{ show: boolean; user: AdminUser | null }>()
@@ -71,6 +80,7 @@ const groupsLoading = ref(false)
 const groupsFailed = ref(false)
 const selectedKey = ref<ApiKey | null>(null)
 const selectedGroupIds = ref<number[]>([])
+const selectedModelAllowlist = ref<ApiKeyModelAllowlist>({ enabled: false, models: [] })
 const saving = ref(false)
 let loadGeneration = 0
 
@@ -111,14 +121,27 @@ watch(() => [props.show, props.user?.id] as const, async ([show, userId]) => {
 const openGroupSelector = (key: ApiKey) => {
   selectedKey.value = key
   selectedGroupIds.value = keyGroupIds(key)
+  selectedModelAllowlist.value = {
+    enabled: key.model_allowlist?.enabled ?? false,
+    models: [...(key.model_allowlist?.models ?? [])]
+  }
 }
+
+const loadModelOptions = (groupIds: number[]) => adminAPI.users.getApiKeyModelOptions(props.user!.id, groupIds)
 
 const saveGroups = async () => {
   const key = selectedKey.value
   if (!key || saving.value) return
+  if (selectedModelAllowlist.value.enabled && !selectedModelAllowlist.value.models?.length) {
+    appStore.showError(t('keys.modelRestriction.required'))
+    return
+  }
   saving.value = true
   try {
-    const result = await adminAPI.apiKeys.updateApiKeyGroups(key.id, selectedGroupIds.value)
+    const result = await adminAPI.apiKeys.updateApiKeyGroups(key.id, selectedGroupIds.value, {
+      enabled: selectedModelAllowlist.value.enabled,
+      models: [...(selectedModelAllowlist.value.models ?? [])]
+    })
     const index = apiKeys.value.findIndex(item => item.id === key.id)
     if (index !== -1) apiKeys.value[index] = result.api_key
     selectedKey.value = null

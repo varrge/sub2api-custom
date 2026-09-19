@@ -1230,6 +1230,9 @@ func (h *GatewayHandler) CodexModels(c *gin.Context) {
 		h.errorResponse(c, http.StatusInternalServerError, "api_error", "Failed to build Codex models manifest")
 		return
 	}
+	if writeAPIKeyLimitedCatalog(c, body) {
+		return
+	}
 	etag := service.CodexModelsManifestETag(body)
 	c.Header("ETag", etag)
 	if service.CodexModelsManifestETagMatches(c.GetHeader("If-None-Match"), etag) {
@@ -1526,10 +1529,7 @@ func (h *GatewayHandler) AntigravityModels(c *gin.Context) {
 		}
 		models = filtered
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"object": "list",
-		"data":   models,
-	})
+	writeModelsListResponse(c, models)
 }
 
 func cloneAPIKeyWithGroup(apiKey *service.APIKey, group *service.Group) *service.APIKey {

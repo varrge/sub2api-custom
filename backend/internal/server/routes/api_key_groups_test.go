@@ -488,3 +488,55 @@ func TestMultiGroupWebSocketRejectionRecordsFirstFrameModel(t *testing.T) {
 	require.Equal(t, "frame-model", c.GetString("ops_model"))
 	require.True(t, c.GetBool("ops_stream"))
 }
+
+func TestAPIKeyModelLimitEnforcedBeforeGroupSelection(t *testing.T) {
+	for _, multi := range []bool{false, true} {
+		for _, google := range []bool{false, true} {
+			key := routingKey()
+			key.ModelAllowlist = service.GroupModelAllowlist{Enabled: true, Models: []string{"allowed"}}
+			if !multi {
+				key.MultiGroupEnabled = false
+				key.GroupIDs = []int64{1}
+				key.Groups = key.Groups[:1]
+			}
+			cfg := &config.Config{RunMode: config.RunModeStandard}
+			keys := service.NewAPIKeyService(&routingAuthRepository{key: key}, nil, nil, nil, nil, nil, cfg)
+			probe := &routingProbe{available: map[int64]bool{1: true}}
+			routing := &apiKeyGroupRouting{keys: keys, prober: probe, cfg: cfg}
+			auth := gin.HandlerFunc(middleware.NewAPIKeyAuthMiddleware(keys, nil, cfg))
+			if google {
+				auth = middleware.APIKeyAuthWithSubscriptionGoogle(keys, nil, cfg)
+			}
+			router := gin.New()
+			router.POST("/v1/responses", routing.wrap(auth), func(c *gin.Context) { c.Status(200) })
+			request := func(model string) *httptest.ResponseRecorder {
+				req := httptest.NewRequest("POST", "/v1/responses", strings.NewReader(`{"model":"`+model+`"}`))
+				req.Header.Set("Authorization", "Bearer "+key.Key)
+				req.Header.Set("Content-Type", "application/json")
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, req)
+				return w
+			}
+			w := request("denied")
+			require.Equal(t, 404, w.Code, w.Body.String())
+			require.Empty(t, probe.seen, "key restriction must reject before probing or switching groups")
+			w = request("allowed")
+			require.Equal(t, 200, w.Code, w.Body.String())
+		}
+	}
+}
+
+func TestAPIKeyModelLimitDeferredSelectionUsesFreshKey(t *testing.T) {
+	key := routingKey()
+	fresh := routingKey()
+	fresh.ModelAllowlist = service.GroupModelAllowlist{Enabled: true, Models: []string{"allowed"}}
+	probe := &routingProbe{available: map[int64]bool{1: true}}
+	routing := &apiKeyGroupRouting{keys: &routingKeys{key: fresh}, prober: probe}
+	c := routingContext("GET", "/v1/responses", "")
+	routing.wrap(func(*gin.Context) {})(c)
+	handshake, err := routing.resolve(c, key)
+	require.NoError(t, err)
+	_, err = middleware.ResolveDeferredAPIKeyGroup(c, handshake, []byte(`{"model":"denied"}`))
+	require.ErrorContains(t, err, "not allowed for this API key")
+	require.Empty(t, probe.seen)
+}

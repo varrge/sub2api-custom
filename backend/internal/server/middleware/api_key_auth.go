@@ -157,6 +157,9 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			AbortWithError(c, 401, "USER_INACTIVE", "User account is not active")
 			return
 		}
+		if !enforceAPIKeyModelAllowlist(c, apiKey) {
+			return
+		}
 		var groupResolved bool
 		apiKey, groupResolved = resolveAPIKeyRequestGroup(c, apiKey, false)
 		if !groupResolved {

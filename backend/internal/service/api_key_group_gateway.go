@@ -183,6 +183,17 @@ func (s *BillingCacheService) CheckAPIKeyGroupRoutingLimits(ctx context.Context,
 // APIKeyGroupModelCatalog ignores temporary scheduler state; account mappings
 // are a model-directory source only, never an authorization whitelist.
 func (s *GatewayService) APIKeyGroupModelCatalog(ctx context.Context, groupID int64, platform string) (models []string, useDefaults bool, err error) {
+	return s.apiKeyGroupModelCatalog(ctx, groupID, platform, false)
+}
+
+// APIKeyGroupModelCatalogForSelection preserves mapping patterns so management
+// choices can expand concrete group selections and platform defaults. Callers
+// must remove wildcard entries before returning selectable model IDs.
+func (s *GatewayService) APIKeyGroupModelCatalogForSelection(ctx context.Context, groupID int64, platform string) (models []string, useDefaults bool, err error) {
+	return s.apiKeyGroupModelCatalog(ctx, groupID, platform, true)
+}
+
+func (s *GatewayService) apiKeyGroupModelCatalog(ctx context.Context, groupID int64, platform string, preservePatterns bool) (models []string, useDefaults bool, err error) {
 	accounts, err := s.accountRepo.ListModelAvailabilityCandidates(ctx, &groupID, []string{platform}, false)
 	if err != nil {
 		return nil, false, err
@@ -195,7 +206,7 @@ func (s *GatewayService) APIKeyGroupModelCatalog(ctx context.Context, groupID in
 			useDefaults = true
 		}
 		for model := range mapping {
-			if strings.Contains(model, "*") || seen[model] {
+			if !preservePatterns && strings.Contains(model, "*") || seen[model] {
 				continue
 			}
 			seen[model] = true
@@ -210,6 +221,16 @@ func (s *GatewayService) APIKeyGroupModelCatalog(ctx context.Context, groupID in
 // Antigravity and Composite groups do not require the mixed-scheduling opt-in.
 // Only unrestricted native Gemini accounts contribute the Gemini defaults.
 func (s *GatewayService) APIKeyGroupGeminiModelCatalog(ctx context.Context, groupID int64, platform string) (models []string, useDefaults bool, err error) {
+	return s.apiKeyGroupGeminiModelCatalog(ctx, groupID, platform, false)
+}
+
+// APIKeyGroupGeminiModelCatalogForSelection retains eligible Gemini mapping
+// patterns for management choices, including opted-in Antigravity accounts.
+func (s *GatewayService) APIKeyGroupGeminiModelCatalogForSelection(ctx context.Context, groupID int64, platform string) (models []string, useDefaults bool, err error) {
+	return s.apiKeyGroupGeminiModelCatalog(ctx, groupID, platform, true)
+}
+
+func (s *GatewayService) apiKeyGroupGeminiModelCatalog(ctx context.Context, groupID int64, platform string, preservePatterns bool) (models []string, useDefaults bool, err error) {
 	platforms := []string{PlatformGemini, PlatformAntigravity}
 	switch platform {
 	case PlatformGemini, PlatformComposite:
@@ -235,7 +256,12 @@ func (s *GatewayService) APIKeyGroupGeminiModelCatalog(ctx context.Context, grou
 			useDefaults = true
 		}
 		for model := range mapping {
-			if strings.Contains(model, "*") || seen[model] || antigravity && !isAntigravityGeminiModel(model) {
+			if preservePatterns && antigravity && strings.HasSuffix(model, "*") && matchWildcard(model, "gemini-") {
+				// Broad Antigravity patterns only contribute their Gemini subset
+				// here; otherwise a '*' could advertise Claude in a Gemini group.
+				model = "gemini-*"
+			}
+			if !preservePatterns && strings.Contains(model, "*") || seen[model] || antigravity && !isAntigravityGeminiModel(model) {
 				continue
 			}
 			seen[model] = true

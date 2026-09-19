@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -37,4 +38,49 @@ func TestMultiGroupFallbackHonorsTargetPolicy(t *testing.T) {
 	require.NoError(t, validateAPIKeyFallbackGroup(key, group, "allowed", []byte(`{"model":"allowed"}`), true))
 	group.ClaudeCodeOnly = true
 	require.Error(t, validateAPIKeyFallbackGroup(key, group, "allowed", nil, false))
+}
+
+type groupProbeAccountRepo struct {
+	codexModelsFailoverAccountRepo
+}
+
+func (r groupProbeAccountRepo) ListSchedulableByGroupIDAndPlatform(ctx context.Context, _ int64, platform string) ([]service.Account, error) {
+	return r.ListSchedulableByPlatform(ctx, platform)
+}
+
+func TestAPIKeyGroupProbeAllowsPassiveCodexImageNamespace(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	group := &service.Group{ID: 3, Platform: service.PlatformOpenAI, Status: service.StatusActive, AllowImageGeneration: false}
+	key := &service.APIKey{UserID: 1, GroupID: &group.ID, Group: group, User: &service.User{ID: 1}}
+	repo := codexModelsFailoverAccountRepo{accounts: []service.Account{{
+		ID: 72, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey,
+		Status: service.StatusActive, Schedulable: true, Concurrency: 1,
+		Credentials: map[string]any{"model_mapping": map[string]any{"gpt-6-astra": "gpt-6-astra"}},
+		Extra:       map[string]any{"openai_responses_supported": true},
+	}}}
+	gateway := service.NewOpenAIGatewayService(groupProbeAccountRepo{repo},
+		nil, nil, nil, nil, nil, nil, &config.Config{}, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil,
+	)
+	h := &GatewayHandler{gatewayService: &service.GatewayService{}, openAIGatewayService: gateway}
+	for _, tc := range []struct {
+		name, body string
+		available  bool
+	}{
+		{"text only", `{"model":"gpt-6-astra"}`, true},
+		{"passive namespace", `{"model":"gpt-6-astra","tools":[{"type":"namespace","name":"image_gen","tools":[{"type":"function","name":"imagegen"}]}],"tool_choice":"auto"}`, true},
+		{"native image tool", `{"model":"gpt-6-astra","tools":[{"type":"image_generation"}]}`, false},
+		{"explicit image choice", `{"model":"gpt-6-astra","tool_choice":"image_generation"}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest("POST", "/v1/responses", nil)
+			available, global, err := h.ProbeAPIKeyGroup(c.Request.Context(), key, service.APIKeyGroupRequest{
+				Platform: group.Platform, Path: "/v1/responses", Model: "gpt-6-astra",
+			}, c, []byte(tc.body))
+			require.NoError(t, err)
+			require.False(t, global)
+			require.Equal(t, tc.available, available)
+		})
+	}
 }

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -388,4 +389,102 @@ func TestMultiGroupModelRetrievalUsesCatalogAuthority(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(2), *selected.GroupID)
 	require.True(t, middleware.SkipAPIKeyGroupEnforcement(c))
+}
+
+func TestMultiGroupRoutingRejectionKeepsRequestedModelForErrorLog(t *testing.T) {
+	key := routingKey()
+	probe := &routingProbe{available: map[int64]bool{}}
+	router := &apiKeyGroupRouting{prober: probe}
+	c := routingContext(http.MethodPost, "/v1/responses", `{"model":"gpt-5.4","stream":true,"input":"hello"}`)
+	_, err := router.resolve(c, key)
+	require.ErrorContains(t, err, "No selected group can serve this request")
+	require.Equal(t, []string{"gpt-5.4", "gpt-5.4"}, probe.models)
+	require.Equal(t, "gpt-5.4", c.GetString("ops_model"), "early routing rejection must retain the requested model used by the error logger")
+	require.True(t, c.GetBool("ops_stream"))
+}
+
+type routingOpsRepository struct {
+	service.OpsRepository
+	entries chan *service.OpsInsertErrorLogInput
+}
+
+func (r *routingOpsRepository) InsertErrorLog(_ context.Context, entry *service.OpsInsertErrorLogInput) (int64, error) {
+	r.entries <- entry
+	return 1, nil
+}
+
+func (r *routingOpsRepository) BatchInsertErrorLogs(_ context.Context, entries []*service.OpsInsertErrorLogInput) (int64, error) {
+	for _, entry := range entries {
+		r.entries <- entry
+	}
+	return int64(len(entries)), nil
+}
+
+func TestMultiGroupRoutingRejectionPersistsRequestedModel(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, tc := range []struct {
+		name, path, body, model string
+		stream                  bool
+	}{
+		{"responses streaming", "/v1/responses", `{"model":"gpt-5.4","stream":true}`, "gpt-5.4", true},
+		{"responses nonstreaming", "/v1/responses", `{"model":"gpt-5.4"}`, "gpt-5.4", false},
+		{"missing model remains empty", "/v1/responses", `{}`, "", false},
+		{"gemini streaming", "/v1beta/models/gemini-test:streamGenerateContent", `{}`, "gemini-test", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			key := routingKey()
+			if strings.Contains(tc.path, "/v1beta/") {
+				for _, group := range key.Groups {
+					group.Platform = service.PlatformGemini
+				}
+			}
+			cfg := &config.Config{RunMode: config.RunModeStandard}
+			keys := service.NewAPIKeyService(&routingAuthRepository{key: key}, nil, nil, nil, nil, nil, cfg)
+			probe := &routingProbe{available: map[int64]bool{}}
+			routing := &apiKeyGroupRouting{keys: keys, prober: probe, cfg: cfg}
+			repo := &routingOpsRepository{entries: make(chan *service.OpsInsertErrorLogInput, 1)}
+			ops := service.NewOpsService(repo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+			router := gin.New()
+			router.Use(handler.OpsErrorLoggerMiddleware(ops))
+			path := tc.path
+			if strings.Contains(path, "/v1beta/") {
+				path = "/v1beta/models/*modelAction"
+			}
+			router.POST(path, routing.wrap(gin.HandlerFunc(middleware.NewAPIKeyAuthMiddleware(keys, nil, cfg))), func(c *gin.Context) {
+				t.Error("rejected request must not reach forwarding handler")
+			})
+			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer "+key.Key)
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, req)
+			require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+			require.Contains(t, recorder.Body.String(), "No selected group can serve this request")
+			require.Equal(t, []string{tc.model, tc.model}, probe.models)
+			select {
+			case entry := <-repo.entries:
+				require.Equal(t, tc.model, entry.Model)
+				require.Equal(t, tc.model, entry.RequestedModel)
+				require.Equal(t, tc.stream, entry.Stream)
+				require.Empty(t, entry.UpstreamModel, "no upstream has been selected")
+			case <-time.After(5 * time.Second):
+				t.Fatal("routing rejection was not persisted to error logs")
+			}
+		})
+	}
+}
+
+func TestMultiGroupWebSocketRejectionRecordsFirstFrameModel(t *testing.T) {
+	key := routingKey()
+	probe := &routingProbe{available: map[int64]bool{}}
+	routing := &apiKeyGroupRouting{prober: probe}
+	c := routingContext(http.MethodGet, "/v1/responses?model=query-hint", "")
+	routing.wrap(func(*gin.Context) {})(c)
+	handshake, err := routing.resolve(c, key)
+	require.NoError(t, err)
+	require.Empty(t, c.GetString("ops_model"), "handshake hint is not an authoritative model")
+	_, err = middleware.ResolveDeferredAPIKeyGroup(c, handshake, []byte(`{"type":"response.create","model":"frame-model"}`))
+	require.ErrorContains(t, err, "No selected group can serve this request")
+	require.Equal(t, "frame-model", c.GetString("ops_model"))
+	require.True(t, c.GetBool("ops_stream"))
 }

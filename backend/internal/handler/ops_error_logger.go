@@ -439,7 +439,9 @@ func opsErrorLogConfig() (workerCount int, queueSize int) {
 	return workerCount, queueSize
 }
 
-func setOpsRequestContext(c *gin.Context, model string, stream bool) {
+// SetOpsRequestContext records parsed client metadata for errors that can occur
+// before a provider handler runs, such as API-key group admission failures.
+func SetOpsRequestContext(c *gin.Context, model string, stream bool) {
 	if c == nil {
 		return
 	}
@@ -450,6 +452,10 @@ func setOpsRequestContext(c *gin.Context, model string, stream bool) {
 		ctx := context.WithValue(c.Request.Context(), ctxkey.Model, model)
 		c.Request = c.Request.WithContext(ctx)
 	}
+}
+
+func setOpsRequestContext(c *gin.Context, model string, stream bool) {
+	SetOpsRequestContext(c, model, stream)
 }
 
 // setOpsEndpointContext stores upstream model and request type for ops error logging.

@@ -17,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
+	"github.com/tidwall/gjson"
 )
 
 type apiKeyGroupRouting struct {
@@ -225,6 +226,12 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 	if deferred {
 		middleware.DeferAPIKeyGroupSelection(c)
 		model = "" // Query hints cannot override the first response.create frame.
+	}
+	if !deferred {
+		// Admission may return before the provider handler can record these
+		// fields. Keep the client's model, before any per-group mapping.
+		stream := frame || gjson.GetBytes(body, "stream").Bool() || strings.HasSuffix(path, ":streamGenerateContent")
+		handler.SetOpsRequestContext(c, model, stream)
 	}
 	if !deferred && (r.cfg == nil || r.cfg.RunMode != config.RunModeSimple) {
 		if key.IsExpired() || key.Status == service.StatusAPIKeyExpired {

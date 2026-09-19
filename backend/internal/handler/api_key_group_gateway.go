@@ -3,9 +3,9 @@ package handler
 import (
 	"context"
 	"errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/requestmodel"
 	"strings"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/requestmodel"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 )
@@ -27,7 +27,13 @@ func (h *GatewayHandler) ProbeAPIKeyGroup(ctx context.Context, key *service.APIK
 		return false, false, nil
 	}
 	imageIntent := service.IsExplicitImageGenerationIntent(req.Path, req.Model, body)
-	if (service.IsImageGenerationIntentForPlatform(req.Path, req.Model, body, req.Platform) || strings.Contains(req.Path, "/videos") || strings.Contains(req.Path, "/images/")) && !service.GroupAllowsImageGeneration(key.Group) {
+	permissionImageIntent := service.IsImageGenerationIntentForPlatform(req.Path, req.Model, body, req.Platform)
+	if strings.Contains(req.Path, "/responses") && (req.Platform == service.PlatformOpenAI || req.Platform == service.PlatformGrok || service.IsMultiProtocolAPIKeyProvider(req.Platform)) {
+		// Match OpenAIGatewayHandler.Responses/ResponsesWebSocket: Codex's
+		// passive image_gen namespace must not exclude text-only groups.
+		permissionImageIntent = imageIntent
+	}
+	if (permissionImageIntent || strings.Contains(req.Path, "/videos") || strings.Contains(req.Path, "/images/")) && !service.GroupAllowsImageGeneration(key.Group) {
 		return false, false, nil
 	}
 	if strings.Contains(req.Path, "/images/batches") && !key.Group.AllowBatchImageGeneration {

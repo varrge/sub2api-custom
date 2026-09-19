@@ -22,7 +22,7 @@
 接口：
 
 - `POST /api/v1/keys/model-options`
-- `POST /api/v1/admin/users/:id/key-model-options`
+- `POST /api/v1/admin/users/:id/api-key-model-options`
 - 请求：`{"group_ids":[3,25]}`；结果：`{"models":[{"id":"model-name","group_ids":[3]}]}`（沿用面板响应包裹）。
 - 用户编辑与管理员编辑均接受可选的 `model_allowlist` 对象。
 
@@ -30,4 +30,4 @@
 
 前端：50 项定向测试、类型检查、变更文件 ESLint、生产构建通过。后端：真实 PostgreSQL/Redis 集成测试验证迁移、持久化、鉴权投影、旧值保留与并发计费不被覆盖；HTTP/WebSocket/默认图片模型和目录过滤有回归测试。中间件、路由、handler、service、repository 与迁移整组测试通过，随后 Live 固定模型与歧义字段回归通过；独立审查发现的别名匹配、通配符目录、批量生图分组过滤与长连接问题已修正。golangci-lint 通过。
 
-本功能与前一提交的模型日志、Codex 预检修复一起保留在 `feature/api-key-model-limits` 分支。本次未发布 tag 或修改中国/日本部署；日本生产切换继续遵循灾备手册的单独确认流程。
+本功能与前一提交的模型日志、Codex 预检修复一起保留在 `feature/api-key-model-limits` 分支。用户随后授权中国测试部署，已完成，见 [中国部署记录](key-model-limits-cn.md)。尚未推送分支或发布 tag，未修改日本生产。

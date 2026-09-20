@@ -142,7 +142,7 @@ func TestAPIKeyModelAllowlistCreateUpdatePreserveAndInvalidate(t *testing.T) {
 	require.Equal(t, 1, repo.authReads, "second request should use the cached restrictions")
 	cache.deleted, cache.published = 0, 0
 	ids := []int64{2, 1}
-	next := GroupModelAllowlist{Enabled: true, Models: []string{"gpt-5.5"}}
+	next := GroupModelAllowlist{Enabled: true, Mode: "deny", Models: []string{"gpt-5.5"}}
 	key, err = svc.Update(ctx, key.ID, 10, UpdateAPIKeyRequest{GroupIDs: &ids, ModelAllowlist: &next})
 	require.NoError(t, err)
 	require.True(t, repo.fields.GroupIDs)
@@ -162,7 +162,7 @@ func TestAPIKeyModelAllowlistCreateUpdatePreserveAndInvalidate(t *testing.T) {
 	require.Equal(t, next, key.ModelAllowlist)
 	require.False(t, repo.fields.ModelAllowlist)
 	require.Equal(t, []string{"gpt-*"}, a.ModelAllowlist.Models)
-	_, err = svc.Update(ctx, key.ID, 10, UpdateAPIKeyRequest{ModelAllowlist: &GroupModelAllowlist{}})
+	_, err = svc.Update(ctx, key.ID, 10, UpdateAPIKeyRequest{ModelAllowlist: &GroupModelAllowlist{Mode: "deny"}})
 	require.NoError(t, err)
 	require.False(t, repo.key.ModelAllowlist.Enabled)
 }
@@ -197,7 +197,7 @@ func TestAPIKeyModelAllowlistSnapshotIsolationAndVersion(t *testing.T) {
 	require.Equal(t, []string{"gpt-5.4"}, read.ModelAllowlist.Models)
 	read.ModelAllowlist.Models[0] = "read"
 	require.Equal(t, []string{"gpt-5.4"}, cached.ModelAllowlist.Models)
-	cached.Version = 26
+	cached.Version = 27
 	_, hit, err := svc.applyAuthCacheEntry("secret", &APIKeyAuthCacheEntry{Snapshot: &cached})
 	require.NoError(t, err)
 	require.False(t, hit)
@@ -230,4 +230,48 @@ func TestAdminAPIKeyModelAllowlistCombinedUpdate(t *testing.T) {
 	require.Equal(t, APIKeyUpdateFields{ModelAllowlist: true}, repo.fields)
 	require.Equal(t, ids, repo.key.GroupIDs)
 	require.False(t, repo.key.ModelAllowlist.Enabled)
+}
+
+func TestAPIKeyModelDenySelectionAndLegacyCompatibility(t *testing.T) {
+	for _, mode := range []string{"", "allow", "deny"} {
+		cfg, err := NormalizeAPIKeyModelAllowlist(GroupModelAllowlist{Enabled: true, Mode: mode, Models: []string{" blocked ", "blocked"}})
+		require.NoError(t, err)
+		key := &APIKey{ModelAllowlist: cfg}
+		require.Equal(t, mode != "deny", key.AllowsModel("blocked"))
+		require.Equal(t, mode == "deny", key.AllowsModel("other"))
+		require.Equal(t, mode == "deny", key.AllowsModel("BLOCKED"))
+		require.False(t, key.AllowsModel(""))
+		require.Equal(t, cfg, GroupModelAllowlistFromDomain(DomainGroupModelAllowlist(cfg)))
+	}
+	empty, err := NormalizeAPIKeyModelAllowlist(GroupModelAllowlist{Enabled: true, Mode: "deny"})
+	require.NoError(t, err)
+	require.True(t, (&APIKey{ModelAllowlist: empty}).AllowsModel("new-model"))
+	_, err = NormalizeAPIKeyModelAllowlist(GroupModelAllowlist{Enabled: true, Mode: "invalid", Models: []string{"model"}})
+	require.Error(t, err)
+	require.False(t, (&APIKey{ModelAllowlist: GroupModelAllowlist{Enabled: true, Mode: "invalid", Models: []string{"model"}}}).AllowsModel("model"))
+	_, err = normalizeGroupModelAllowlist(GroupModelAllowlist{Enabled: true, Mode: "deny", Models: []string{"model"}})
+	require.Error(t, err, "deny mode must not alter the group allow-list policy")
+}
+
+// Older editors omit mode when saving, which must not invert a deny policy.
+func TestAPIKeyModelDenyRejectsLegacyEditorWrites(t *testing.T) {
+	for _, admin := range []bool{false, true} {
+		t.Run(fmt.Sprintf("admin=%t", admin), func(t *testing.T) {
+			policy := GroupModelAllowlist{Enabled: true, Mode: "deny", Models: []string{"blocked"}}
+			repo := &modelLimitKeyRepo{key: &APIKey{ID: 7, UserID: 10, ModelAllowlist: policy, Usage5h: 3}}
+			legacy := GroupModelAllowlist{Enabled: true, Models: []string{"blocked"}}
+			var err error
+			if admin {
+				svc := &adminServiceImpl{apiKeyRepo: repo}
+				_, err = svc.AdminUpdateAPIKeyModelLimits(context.Background(), 7, AdminUpdateAPIKeyModelLimitsRequest{ModelAllowlist: &legacy, ResetRateLimitUsage: true})
+			} else {
+				svc := &APIKeyService{apiKeyRepo: repo}
+				_, err = svc.Update(context.Background(), 7, 10, UpdateAPIKeyRequest{ModelAllowlist: &legacy})
+			}
+			require.ErrorContains(t, err, "refresh")
+			require.Zero(t, repo.writes)
+			require.Equal(t, policy, repo.key.ModelAllowlist)
+			require.Equal(t, 3.0, repo.key.Usage5h)
+		})
+	}
 }

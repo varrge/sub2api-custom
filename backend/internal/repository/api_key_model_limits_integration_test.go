@@ -43,7 +43,7 @@ func (s *APIKeyRepoSuite) TestModelAllowlistCRUDProjectionAndPreserveUpdates() {
 	_, err := s.repo.IncrementQuotaUsed(s.ctx, key.ID, 2)
 	s.Require().NoError(err)
 	s.Require().NoError(s.repo.IncrementRateLimitUsage(s.ctx, key.ID, 3))
-	cfg = service.GroupModelAllowlist{Enabled: true, Models: []string{"gemini-2.5-pro"}}
+	cfg = service.GroupModelAllowlist{Enabled: true, Mode: "deny", Models: []string{"gemini-2.5-pro"}}
 	key.ModelAllowlist = cfg
 	s.Require().NoError(s.repo.Update(s.ctx, key, service.APIKeyUpdateFields{ModelAllowlist: true}))
 	assertReads(cfg)

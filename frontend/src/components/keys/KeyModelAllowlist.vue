@@ -12,7 +12,10 @@
       />
       {{ t('keys.modelRestriction.enable') }}
     </label>
-    <p class="input-hint">{{ t(modelValue.enabled ? 'keys.modelRestriction.allowedHint' : 'keys.modelRestriction.allHint') }}</p>
+    <div class="flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1 dark:bg-dark-700" role="group" :aria-label="t('keys.modelRestriction.mode')">
+      <button v-for="option in ['allow', 'deny'] as const" :key="option" type="button" class="min-w-0 flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50" :class="mode === option ? 'bg-white text-primary-700 shadow-sm dark:bg-dark-600 dark:text-primary-300' : 'text-gray-600 dark:text-gray-300'" :aria-pressed="mode === option" :disabled="disabled" :data-test="`model-mode-${option}`" @click="setMode(option)">{{ t(option === 'allow' ? 'keys.modelRestriction.allowMode' : 'keys.modelRestriction.denyMode') }}</button>
+    </div>
+    <p class="input-hint">{{ t(!modelValue.enabled ? 'keys.modelRestriction.allHint' : mode === 'deny' ? 'keys.modelRestriction.deniedHint' : 'keys.modelRestriction.allowedHint') }}</p>
 
     <p v-if="loading" class="text-sm text-gray-500" role="status">{{ t('keys.modelRestriction.loading') }}</p>
     <div v-else-if="failed" class="text-sm text-red-600 dark:text-red-400" role="alert">
@@ -32,7 +35,7 @@
             type="checkbox"
             class="mt-0.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
             :value="model.id"
-            :checked="!modelValue.enabled || selectedModels.includes(model.id)"
+            :checked="modelValue.enabled ? selectedModels.includes(model.id) : mode === 'allow'"
             :disabled="disabled || !modelValue.enabled"
             @change="toggleModel(model.id, ($event.target as HTMLInputElement).checked)"
           />
@@ -43,7 +46,7 @@
     </template>
 
     <div v-if="retainedModels.length" class="space-y-2 rounded-lg bg-amber-50 p-3 text-sm dark:bg-amber-900/10" data-test="retained-models">
-      <p>{{ t(loaded ? 'keys.modelRestriction.unavailableHint' : 'keys.modelRestriction.retainedHint') }}</p>
+      <p>{{ t(!loaded ? 'keys.modelRestriction.retainedHint' : mode === 'deny' ? 'keys.modelRestriction.unavailableDeniedHint' : 'keys.modelRestriction.unavailableHint') }}</p>
       <label v-for="model in retainedModels" :key="model" class="flex items-start gap-2">
         <input
           type="checkbox"
@@ -56,7 +59,7 @@
         <span class="break-all font-mono">{{ model }}</span>
       </label>
     </div>
-    <p v-if="modelValue.enabled && !selectedModels.length" class="text-sm text-red-600 dark:text-red-400" role="alert">{{ t('keys.modelRestriction.required') }}</p>
+    <p v-if="modelValue.enabled && mode !== 'deny' && !selectedModels.length" class="text-sm text-red-600 dark:text-red-400" role="alert">{{ t('keys.modelRestriction.required') }}</p>
   </section>
 </template>
 
@@ -80,12 +83,14 @@ const loaded = ref(false)
 const search = ref('')
 let generation = 0
 
+const mode = computed(() => props.modelValue.mode ?? 'allow')
+const setMode = (next: 'allow' | 'deny') => emit('update:modelValue', { ...props.modelValue, mode: next, models: [...selectedModels.value] })
 const selectedModels = computed(() => [...new Set(props.modelValue.models ?? [])])
 const filteredOptions = computed(() => options.value.filter(model => model.id.toLowerCase().includes(search.value.trim().toLowerCase())))
 const retainedModels = computed(() => selectedModels.value.filter(model => !options.value.some(option => option.id === model)))
 
-const setEnabled = (enabled: boolean) => emit('update:modelValue', { enabled, models: [...selectedModels.value] })
-const setModels = (models: string[]) => emit('update:modelValue', { enabled: props.modelValue.enabled, models: [...new Set(models)] })
+const setEnabled = (enabled: boolean) => emit('update:modelValue', { ...props.modelValue, enabled, models: [...selectedModels.value] })
+const setModels = (models: string[]) => emit('update:modelValue', { ...props.modelValue, enabled: props.modelValue.enabled, models: [...new Set(models)] })
 const toggleModel = (model: string, allowed: boolean) => setModels(allowed ? [...selectedModels.value, model] : selectedModels.value.filter(id => id !== model))
 const selectAll = () => setModels([...selectedModels.value, ...options.value.map(model => model.id)])
 

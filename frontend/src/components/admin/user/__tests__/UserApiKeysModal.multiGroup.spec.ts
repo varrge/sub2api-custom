@@ -98,3 +98,18 @@ describe('admin API key group configuration', () => {
     expect(replaceGroup).toHaveBeenCalledWith(18, 7, 3)
   })
 })
+
+it('admin saves an empty deny list and restores the selected mode', async () => {
+  const model_allowlist = { enabled: true, mode: 'deny' as const, models: [] }
+  getKeys.mockResolvedValue({ items: [{ ...key, model_allowlist }] })
+  const wrapper = mount(UserApiKeysModal, { props: { show: true, user }, global })
+  await flushPromises()
+  await wrapper.get('[aria-label="keys.multiGroup.editGroups"]').trigger('click')
+  await flushPromises()
+  expect(wrapper.get('[data-test="model-mode-deny"]').attributes('aria-pressed')).toBe('true')
+  const save = wrapper.findAll('button').find(button => button.text() === 'common.save')!
+  expect(save.attributes('disabled')).toBeUndefined()
+  await save.trigger('click')
+  await flushPromises()
+  expect(updateGroups).toHaveBeenCalledWith(4, [7, 2], model_allowlist)
+})

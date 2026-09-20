@@ -743,6 +743,7 @@ export interface CompositeRouteDecision {
 
 export interface ApiKeyModelAllowlist {
   enabled: boolean
+  mode?: 'allow' | 'deny'
   models?: string[]
 }
 
@@ -802,7 +803,7 @@ export interface CreateApiKeyRequest {
 export interface UpdateApiKeyRequest {
   name?: string
   group_ids?: number[]
-  model_allowlist?: Required<ApiKeyModelAllowlist>
+  model_allowlist?: ApiKeyModelAllowlist & { models: string[] }
   status?: 'active' | 'inactive'
   ip_whitelist?: string[]
   ip_blacklist?: string[]

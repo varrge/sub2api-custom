@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 27 // v27: independent API key model allowlist
+const apiKeyAuthSnapshotVersion = 28 // v28: API key allow/deny model selection
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int

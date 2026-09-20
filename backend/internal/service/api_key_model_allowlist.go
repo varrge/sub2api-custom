@@ -11,9 +11,12 @@ import (
 // NormalizeAPIKeyModelAllowlist accepts concrete, case-sensitive model IDs only.
 // A key's list narrows group permissions, so catalog membership is not required.
 func NormalizeAPIKeyModelAllowlist(cfg GroupModelAllowlist) (GroupModelAllowlist, error) {
-	out := GroupModelAllowlist{Enabled: cfg.Enabled, Models: []string{}}
+	out := GroupModelAllowlist{Enabled: cfg.Enabled, Models: []string{}, Mode: cfg.Mode}
 	invalid := func(message string) (GroupModelAllowlist, error) {
 		return GroupModelAllowlist{}, infraerrors.BadRequest("INVALID_MODEL_ALLOWLIST", message)
+	}
+	if cfg.Mode != "" && cfg.Mode != "allow" && cfg.Mode != "deny" {
+		return invalid("model restriction mode must be allow or deny")
 	}
 	if len(cfg.Models) > 512 {
 		return invalid("model allowlist cannot contain more than 512 models")
@@ -38,7 +41,7 @@ func NormalizeAPIKeyModelAllowlist(cfg GroupModelAllowlist) (GroupModelAllowlist
 			out.Models = append(out.Models, model)
 		}
 	}
-	if out.Enabled && len(out.Models) == 0 {
+	if out.Enabled && out.Mode != "deny" && len(out.Models) == 0 {
 		return invalid("model allowlist cannot be enabled with an empty model list")
 	}
 	return out, nil
@@ -58,14 +61,26 @@ func (k *APIKey) AllowsModel(model string) bool {
 	if model == "" {
 		return false
 	}
+	if mode := k.ModelAllowlist.Mode; mode != "" && mode != "allow" && mode != "deny" {
+		return false
+	}
+	deny := k.ModelAllowlist.Mode == "deny"
 	for _, allowed := range k.ModelAllowlist.Models {
 		if strings.TrimSpace(allowed) == model {
-			return true
+			return !deny
 		}
 	}
-	return false
+	return deny
 }
 
 func cloneAPIKeyModelAllowlist(cfg GroupModelAllowlist) GroupModelAllowlist {
-	return GroupModelAllowlist{Enabled: cfg.Enabled, Models: append([]string{}, cfg.Models...)}
+	return GroupModelAllowlist{Enabled: cfg.Enabled, Models: append([]string{}, cfg.Models...), Mode: cfg.Mode}
+}
+
+// Legacy editors omit mode and cannot safely edit an existing deny selection.
+func validateAPIKeyModelModeUpdate(current GroupModelAllowlist, next *GroupModelAllowlist) error {
+	if next != nil && current.Mode == "deny" && next.Mode == "" {
+		return infraerrors.BadRequest("MODEL_MODE_REQUIRED", "refresh the page and explicitly select a model restriction mode")
+	}
+	return nil
 }

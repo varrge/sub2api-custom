@@ -67,8 +67,13 @@ export default {
   // API Keys
   keys: {
     modelRestriction: {
+      mode: '限制方式',
+      allowMode: '仅允许勾选',
+      denyMode: '勾选禁用',
+      deniedHint: '勾选表示禁止，未勾选模型按所选分组权限正常使用。分组以后新增的模型默认允许；不勾选任何模型表示不额外禁用。',
+      unavailableDeniedHint: '以下已勾选模型当前在所选分组中不可用，恢复后仍禁止调用。取消勾选即可解除禁止。',
       title: '模型限制',
-      enable: '仅允许勾选的模型',
+      enable: '启用模型限制',
       allHint: '未启用限制，此密钥可使用所选分组中全部可用模型。',
       allowedHint: '勾选表示允许，未勾选表示禁止；仍需所选分组支持该模型。分组以后新增的模型不会自动勾选。',
       loading: '正在加载所选分组的模型…',

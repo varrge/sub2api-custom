@@ -36,6 +36,9 @@ func (s *adminServiceImpl) AdminUpdateAPIKeyModelLimits(ctx context.Context, key
 	if err != nil {
 		return nil, err
 	}
+	if err := validateAPIKeyModelModeUpdate(key.ModelAllowlist, req.ModelAllowlist); err != nil {
+		return nil, err
+	}
 	var groups []*Group
 	if selected {
 		var user *User

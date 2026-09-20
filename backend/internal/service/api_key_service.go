@@ -828,6 +828,9 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 	if apiKey.UserID != userID {
 		return nil, ErrInsufficientPerms
 	}
+	if err := validateAPIKeyModelModeUpdate(apiKey.ModelAllowlist, req.ModelAllowlist); err != nil {
+		return nil, err
+	}
 
 	// 验证 IP 白名单格式
 	if req.IPWhitelist != nil && len(*req.IPWhitelist) > 0 {

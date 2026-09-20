@@ -5,4 +5,6 @@ package domain
 type GroupModelAllowlist struct {
 	Enabled bool     `json:"enabled"`
 	Models  []string `json:"models,omitempty"`
+	// Mode is used by API keys only; group policies remain allow lists.
+	Mode string `json:"mode,omitempty"`
 }

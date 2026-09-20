@@ -934,7 +934,7 @@
           <button
             form="key-form"
             type="submit"
-            :disabled="submitting || (showEditModal && formModelAllowlist.enabled && !formModelAllowlist.models?.length)"
+            :disabled="submitting || (showEditModal && formModelAllowlist.enabled && formModelAllowlist.mode !== 'deny' && !formModelAllowlist.models?.length)"
             class="btn btn-primary"
             data-tour="key-form-submit"
           >
@@ -1543,6 +1543,7 @@ const handleSort = (key: string, order: 'asc' | 'desc') => {
 const editKey = (key: ApiKey) => {
   selectedKey.value = key
   formModelAllowlist.value = {
+    ...key.model_allowlist,
     enabled: key.model_allowlist?.enabled ?? false,
     models: [...(key.model_allowlist?.models ?? [])]
   }
@@ -1620,7 +1621,7 @@ const confirmDelete = (key: ApiKey) => {
 }
 
 const handleSubmit = async () => {
-  if (showEditModal.value && formModelAllowlist.value.enabled && !formModelAllowlist.value.models?.length) {
+  if (showEditModal.value && formModelAllowlist.value.enabled && formModelAllowlist.value.mode !== 'deny' && !formModelAllowlist.value.models?.length) {
     appStore.showError(t('keys.modelRestriction.required'))
     return
   }
@@ -1683,7 +1684,7 @@ const handleSubmit = async () => {
       const updates: UpdateApiKeyRequest = {
         name: formData.value.name,
         group_ids: [...formData.value.group_ids],
-        model_allowlist: { enabled: formModelAllowlist.value.enabled, models: [...(formModelAllowlist.value.models ?? [])] },
+        model_allowlist: { ...formModelAllowlist.value, enabled: formModelAllowlist.value.enabled, models: [...(formModelAllowlist.value.models ?? [])] },
         ip_whitelist: ipWhitelist,
         ip_blacklist: ipBlacklist,
         quota: quota,

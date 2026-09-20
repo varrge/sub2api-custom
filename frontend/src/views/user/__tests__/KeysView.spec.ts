@@ -730,6 +730,17 @@ describe('user KeysView column settings', () => {
       { rate_limit_5h: 0, rate_limit_1d: 0, rate_limit_7d: 0 })
   })
 
+  it('preserves deny mode and permits saving no blocked models', async () => {
+    const model_allowlist = { enabled: true, mode: 'deny' as const, models: [] }
+    const key = { ...createApiKey(), group_id: 8, group_ids: [8], model_allowlist }
+    listKeys.mockResolvedValue({ items: [key], total: 1, page: 1, page_size: 20, pages: 1 })
+    const wrapper = await mountView()
+    await getButtonByText(wrapper, 'common.edit').trigger('click')
+    await wrapper.get('form#key-form').trigger('submit')
+    await flushPromises()
+    expect(updateKey).toHaveBeenCalledWith(1, expect.objectContaining({ model_allowlist }))
+  })
+
   it('retains unavailable groups when editing unrelated key settings', async () => {
     const key = { ...createApiKey(), group_id: 8, group_ids: [8, 3], multi_group_enabled: true }
     listKeys.mockResolvedValue({ items: [key], total: 1, page: 1, page_size: 20, pages: 1 })

@@ -16,16 +16,17 @@ import (
 type GroupModelAllowlist struct {
 	Enabled bool     `json:"enabled"`
 	Models  []string `json:"models,omitempty"`
+	Mode    string   `json:"mode,omitempty"`
 }
 
 // DomainGroupModelAllowlist 把 service 白名单转换为 ent 持久化使用的 domain 类型。
 func DomainGroupModelAllowlist(cfg GroupModelAllowlist) domain.GroupModelAllowlist {
-	return domain.GroupModelAllowlist{Enabled: cfg.Enabled, Models: cfg.Models}
+	return domain.GroupModelAllowlist{Enabled: cfg.Enabled, Models: cfg.Models, Mode: cfg.Mode}
 }
 
 // GroupModelAllowlistFromDomain 把 ent 读出的 domain 白名单转换为 service 类型。
 func GroupModelAllowlistFromDomain(cfg domain.GroupModelAllowlist) GroupModelAllowlist {
-	return GroupModelAllowlist{Enabled: cfg.Enabled, Models: cfg.Models}
+	return GroupModelAllowlist{Enabled: cfg.Enabled, Models: cfg.Models, Mode: cfg.Mode}
 }
 
 // supplementUnmappedOpenAIModels ensures a partial mapping catalog does not
@@ -49,6 +50,9 @@ func supplementUnmappedOpenAIModels(accounts []Account, models []string) []strin
 // enabled=true 且列表为空视为配置错误，返回 400 而不是运行时静默放行/拒绝。
 func normalizeGroupModelAllowlist(cfg GroupModelAllowlist) (GroupModelAllowlist, error) {
 	out := GroupModelAllowlist{Enabled: cfg.Enabled}
+	if cfg.Mode != "" && cfg.Mode != "allow" {
+		return out, infraerrors.New(http.StatusBadRequest, "INVALID_MODEL_ALLOWLIST", "group model policy only supports allow mode")
+	}
 	if len(cfg.Models) == 0 {
 		if out.Enabled {
 			return out, infraerrors.New(http.StatusBadRequest, "INVALID_MODEL_ALLOWLIST", "model allowlist cannot be enabled with an empty model list")

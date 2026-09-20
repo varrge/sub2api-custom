@@ -54,6 +54,7 @@ type AdminUser struct {
 }
 
 type APIKeyModelAllowlist struct {
+	Mode    string   `json:"mode,omitempty"`
 	Enabled bool     `json:"enabled"`
 	Models  []string `json:"models"`
 }

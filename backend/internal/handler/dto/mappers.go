@@ -90,7 +90,7 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 		GroupIDs:           k.ConfiguredGroupIDs(),
 		Groups:             []*Group{},
 		MultiGroupEnabled:  k.MultiGroupEnabled,
-		ModelAllowlist:     APIKeyModelAllowlist{Enabled: k.ModelAllowlist.Enabled, Models: append([]string{}, k.ModelAllowlist.Models...)},
+		ModelAllowlist:     APIKeyModelAllowlist{Mode: k.ModelAllowlist.Mode, Enabled: k.ModelAllowlist.Enabled, Models: append([]string{}, k.ModelAllowlist.Models...)},
 		Status:             k.Status,
 		IPWhitelist:        k.IPWhitelist,
 		IPBlacklist:        k.IPBlacklist,

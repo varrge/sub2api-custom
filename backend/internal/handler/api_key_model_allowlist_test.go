@@ -141,3 +141,39 @@ func TestAPIKeyModelLimitChecksDefaultImageModel(t *testing.T) {
 	async := &AsyncImageHandler{openAI: h}
 	require.ErrorContains(t, async.validateRequest(c, service.PlatformOpenAI, []byte(`{"prompt":"draw"}`)), "not allowed for this API key")
 }
+
+func TestAPIKeyModelDenyCatalogAndCandidates(t *testing.T) {
+	for _, body := range []string{
+		`{"data":[{"id":"allowed"},{"id":"denied"}]}`,
+		`{"models":[{"slug":"allowed"},{"slug":"denied"}]}`,
+		`{"models":[{"name":"models/allowed"},{"name":"models/denied"}]}`,
+	} {
+		c, w := modelLimitedContext(t)
+		key, _ := middleware.GetAPIKeyFromContext(c)
+		key.ModelAllowlist = service.GroupModelAllowlist{Enabled: true, Mode: "deny", Models: []string{"denied"}}
+		require.True(t, writeAPIKeyLimitedCatalog(c, []byte(body)))
+		require.Contains(t, w.Body.String(), "allowed")
+		require.NotContains(t, w.Body.String(), "denied")
+		require.Equal(t, "denied", blockedAPIKeyModelCandidate(key, []string{"allowed", "denied"}))
+		require.Empty(t, blockedAPIKeyModelCandidate(key, []string{"allowed"}))
+	}
+}
+
+func TestAPIKeyModelDenyWebSocketFirstAndLaterTurns(t *testing.T) {
+	deny := service.GroupModelAllowlist{Enabled: true, Mode: "deny", Models: []string{"gpt-4.1"}}
+	for _, mode := range []string{service.OpenAIWSIngressModePassthrough, service.OpenAIWSIngressModeDedicated} {
+		t.Run(mode+" first frame", func(t *testing.T) {
+			runOpenAIResponsesWebSocketUsageLogCase(t, openAIResponsesWSUsageLogCase{
+				firstPayload:      `{"type":"response.create","model":"gpt-4.1"}`,
+				keyModelAllowlist: &deny, ingressMode: mode, firstFrameCloseExpected: true,
+			})
+		})
+		t.Run(mode+" later turn", func(t *testing.T) {
+			runOpenAIResponsesWebSocketUsageLogCase(t, openAIResponsesWSUsageLogCase{
+				firstPayload:      `{"type":"response.create","model":"gpt-5.4"}`,
+				secondPayload:     `{"type":"response.create","model":"gpt-4.1"}`,
+				keyModelAllowlist: &deny, ingressMode: mode, secondTurnCloseExpected: true,
+			})
+		})
+	}
+}

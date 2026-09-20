@@ -67,8 +67,13 @@ export default {
   // API Keys
   keys: {
     modelRestriction: {
+      mode: 'Restriction mode',
+      allowMode: 'Allow selected only',
+      denyMode: 'Block selected',
+      deniedHint: 'Checked models are blocked. Other models still require group access. New group models are allowed by default; an empty selection blocks no additional models.',
+      unavailableDeniedHint: 'These selected models are currently unavailable. They remain blocked if they return. Uncheck to remove the block.',
       title: 'Model restrictions',
-      enable: 'Only allow selected models',
+      enable: 'Enable model restrictions',
       allHint: 'Restrictions are off. This key can use all models available to its selected groups.',
       allowedHint: 'Checked models are allowed; unchecked models are denied. Group availability still applies. Models added to a group later are not selected automatically.',
       loading: 'Loading models for the selected groups…',

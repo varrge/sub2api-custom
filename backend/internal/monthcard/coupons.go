@@ -101,7 +101,7 @@ func loadCoupon(ctx context.Context, db CouponDB, code string, lock bool) (*Coup
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	if !rows.Next() {
 		if err := rows.Err(); err != nil {
 			return nil, err
@@ -132,7 +132,7 @@ func checkCouponCapacity(ctx context.Context, db CouponDB, c *Coupon, userID, ex
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var total, own int
 	if !rows.Next() {
 		return rows.Err()
@@ -189,13 +189,13 @@ func ReserveCoupon(ctx context.Context, db CouponDB, userID, orderID int64, purc
 	}
 	if !rows.Next() {
 		err := rows.Err()
-		rows.Close()
+		_ = rows.Close()
 		if err != nil {
 			return err
 		}
 		return ErrNotFound
 	}
-	rows.Close()
+	_ = rows.Close()
 	quote, err := QuoteCoupon(ctx, db, userID, purchase.Product, purchase.Discount.Code, true, now)
 	if err != nil {
 		return err
@@ -251,7 +251,7 @@ func (s *Store) ListCoupons(ctx context.Context) ([]Coupon, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := make([]Coupon, 0)
 	for rows.Next() {
 		c, err := scanCoupon(rows)
@@ -263,7 +263,7 @@ func (s *Store) ListCoupons(ctx context.Context) ([]Coupon, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	rows.Close()
+	_ = rows.Close()
 	for i := range items {
 		if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM month_card_coupon_uses WHERE coupon_id=$1 AND redeemed`, items[i].ID).Scan(&items[i].UsedCount); err != nil {
 			return nil, err

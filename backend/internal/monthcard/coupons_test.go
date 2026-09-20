@@ -84,7 +84,7 @@ func reserveCouponOrder(ctx context.Context, db *sql.DB, uid int64, purchase *Pu
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var oid int64
 	if err = tx.QueryRowContext(ctx, `INSERT INTO payment_orders(user_id,status) VALUES($1,'PENDING') RETURNING id`, uid).Scan(&oid); err != nil {
 		return 0, err
@@ -239,7 +239,7 @@ func TestCouponPostgresCancellationBetweenReleaseAndCount(t *testing.T) {
 	require.NoError(t, err)
 	tx, err := db.BeginTx(ctx, nil)
 	require.NoError(t, err)
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var orderID int64
 	require.NoError(t, tx.QueryRowContext(ctx, `INSERT INTO payment_orders(user_id,status) VALUES(2,'PENDING') RETURNING id`).Scan(&orderID))
 	hook := couponQueryHook{CouponDB: tx, beforeCount: func() {
@@ -274,7 +274,7 @@ func TestCouponPostgresEntTransactionAndFulfillmentLockOrder(t *testing.T) {
 	// Hold the same first lock as Fulfill while a new Ent order starts.
 	fulfillment, err := db.BeginTx(ctx, nil)
 	require.NoError(t, err)
-	defer fulfillment.Rollback()
+	defer func() { _ = fulfillment.Rollback() }()
 	require.NoError(t, lockUser(ctx, fulfillment, 1))
 	client := dbent.NewClient(dbent.Driver(entsql.OpenDB(dialect.Postgres, db)))
 	result := make(chan error, 1)
@@ -284,7 +284,7 @@ func TestCouponPostgresEntTransactionAndFulfillmentLockOrder(t *testing.T) {
 			result <- err
 			return
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 		rows, err := tx.Client().QueryContext(ctx, `INSERT INTO payment_orders(user_id,status) VALUES(1,'PENDING') RETURNING id`)
 		if err != nil {
 			result <- err
@@ -293,7 +293,7 @@ func TestCouponPostgresEntTransactionAndFulfillmentLockOrder(t *testing.T) {
 		var oid int64
 		rows.Next()
 		err = rows.Scan(&oid)
-		rows.Close()
+		_ = rows.Close()
 		if err != nil {
 			result <- err
 			return

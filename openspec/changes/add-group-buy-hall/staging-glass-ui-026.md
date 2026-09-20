@@ -61,3 +61,13 @@ Date: 2026-09-20 (Asia/Shanghai). Scope: deploy completed session 260 UI to the 
 - Use the existing China test login; no password changes.
 - SSH local tunnel: `127.0.0.1:18081 -> 172.26.0.4:8080`; control socket `/tmp/sub2api-cn-glass-20260920.sock` on this Mac.
 - To roll back, change only the private Compose app image to `sub2api-restore:glass-ui-20260920t062904z`, retain `pull_policy: never`, validate Compose, and recreate only `sub2api` with `--no-deps`. Keep additive coupon tables; do not restore the database for an app rollback.
+
+## Follow-up: restore missing month-card entry points
+
+The first deployment smoke checked SPA HTTP responses and mocked browser settings, which missed the China environment's real `payment_enabled=false` setting. With a real authenticated admin session, `/group-buy` and `/purchase?tab=group-buy` redirected to the dashboard. `/my-group-buy` and direct `/admin/group-buy` remained available, but payment-gated navigation was hidden.
+
+Restored only the China payment `enabled` setting through `PUT /api/v1/admin/payment/config` with `{"enabled":true}`. The prior payment configuration was saved privately as `artifacts/payment-config-before-ui-access.json`; all other payment configuration fields were verified unchanged. The payment-config endpoint does not invalidate the embedded HTML settings cache, so the public API returned true while `window.__APP_CONFIG__` still contained false. Restarted only the application (healthy after 6.7 seconds); HTML and API settings now both return true. All other container IDs and the internal network stayed unchanged.
+
+A real authenticated browser check now passes for `/my-group-buy`, `/group-buy`, `/purchase?tab=group-buy`, and `/admin/group-buy`. It also asserts that month-card purchase buttons, the coupon-management tab, and the admin menu entry render. Reusable local diagnostic: `/tmp/sub2api-cn-monthcard-routes.cjs`; sanitized results: `/tmp/sub2api-glass-deploy-20260920T062904Z/monthcard-route-check.json`. Credentials remain only in memory and are not printed or recorded.
+
+Future staging checks must exercise authenticated browser routes using actual public settings, in addition to mocked interaction tests and SPA HTTP status checks. Current candidate code and version were not changed by this configuration fix.

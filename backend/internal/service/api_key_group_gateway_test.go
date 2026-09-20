@@ -173,3 +173,22 @@ func TestAPIKeyGroupTokenCountingDoesNotEnableProfitGate(t *testing.T) {
 	}
 	require.True(t, apiKeyGroupTokenRequest(APIKeyGroupRequest{Path: "/v1/responses"}))
 }
+
+func TestSeedanceGroupProbeRequiresSeedanceCapability(t *testing.T) {
+	for _, prefix := range []string{"/api/v3", "/v3", "/v1", ""} {
+		for _, eligible := range []bool{false, true} {
+			group := &Group{ID: 101, Platform: PlatformOpenAI, Status: StatusActive}
+			key := &APIKey{ID: 1, UserID: 2, GroupID: &group.ID, Group: group, User: &User{ID: 2}}
+			account := Account{ID: 3, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1}
+			if eligible {
+				account.Credentials = map[string]any{"base_url": "https://ark.cn-beijing.volces.com/api/v3", "openai_capabilities": []string{"seedance"}}
+			}
+			acquired := []int64{}
+			svc := &OpenAIGatewayService{accountRepo: schedulerTestOpenAIAccountRepo{accounts: []Account{account}}, cache: &schedulerTestGatewayCache{}, cfg: &config.Config{}, concurrencyService: NewConcurrencyService(schedulerTestConcurrencyCache{acquiredIDs: &acquired})}
+			available, err := svc.ProbeAPIKeyGroup(t.Context(), key, APIKeyGroupRequest{Model: "doubao-seedance", Platform: PlatformOpenAI, Path: prefix + "/contents/generations/tasks"})
+			require.NoError(t, err)
+			require.Equal(t, eligible, available)
+			require.Empty(t, acquired)
+		}
+	}
+}

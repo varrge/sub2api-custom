@@ -77,15 +77,29 @@
           <span class="hidden sm:inline">{{ t('nav.docs') }}</span>
         </a>
 
-        <!-- Model Plaza Entry -->
+        <!-- Model Plaza Entry (icon only below sm) -->
         <router-link
           v-if="user && modelPlazaEnabled && !modelPlazaInQuickMenu"
           :to="{ path: '/model-plaza', query: { embedded: '1' } }"
           data-testid="model-plaza-legacy-entry"
-          class="header-model-plaza hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white sm:flex"
+          :title="t('nav.modelPlaza')"
+          :aria-label="t('nav.modelPlaza')"
+          class="header-model-plaza flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
         >
           <Icon name="grid" size="sm" />
           <span class="hidden sm:inline">{{ t('nav.modelPlaza') }}</span>
+        </router-link>
+
+        <!-- The configured quick menu is hidden on phones; retain its model entry. -->
+        <router-link
+          v-if="user && modelPlazaEnabled && modelPlazaInQuickMenu"
+          :to="{ path: '/model-plaza', query: { embedded: '1' } }"
+          :title="t('nav.modelPlaza')"
+          :aria-label="t('nav.modelPlaza')"
+          data-testid="model-plaza-mobile-entry"
+          class="flex shrink-0 items-center rounded-lg px-2 py-1.5 text-gray-600 hover:bg-gray-100 dark:text-dark-400 dark:hover:bg-dark-800 sm:hidden"
+        >
+          <Icon name="grid" size="sm" />
         </router-link>
 
         <div class="flex min-w-0 items-center gap-1 rounded-2xl border border-gray-200/70 bg-white/70 p-0.5 shadow-sm shadow-slate-900/5 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.06] dark:shadow-black/20 sm:gap-1.5">
@@ -307,16 +321,9 @@ function openPurchase() {
   container: app-header / inline-size;
 }
 
-.header-model-plaza,
 .header-docs,
 .header-subscription {
   display: none;
-}
-
-@container app-header (min-width: 48rem) {
-  .header-model-plaza {
-    display: flex;
-  }
 }
 
 @container app-header (min-width: 56rem) {

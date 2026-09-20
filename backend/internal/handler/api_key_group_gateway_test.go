@@ -12,7 +12,7 @@ import (
 )
 
 func TestAPIKeyGroupProbeAppliesEndpointPolicyBeforeScheduling(t *testing.T) {
-	for _, path := range []string{"/v1/messages", "/v1/messages/count_tokens", "/v1/videos", "/v1/live", "/v1/realtime/calls", "/v1/images/generations", "/v1/images/generations/async", "/v1/images/edits/async", "/v1/images/batches"} {
+	for _, path := range []string{"/contents/generations/tasks", "/api/v3/contents/generations/tasks", "/v3/contents/generations/tasks", "/v1/contents/generations/tasks", "/v1/messages", "/v1/messages/count_tokens", "/v1/videos", "/v1/live", "/v1/realtime/calls", "/v1/images/generations", "/v1/images/generations/async", "/v1/images/edits/async", "/v1/images/batches"} {
 		t.Run(path, func(t *testing.T) {
 			group := &service.Group{ID: 1, Platform: service.PlatformOpenAI, Status: service.StatusActive}
 			key := &service.APIKey{GroupID: &group.ID, Group: group, User: &service.User{ID: 1}}

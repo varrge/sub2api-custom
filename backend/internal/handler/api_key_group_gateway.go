@@ -33,7 +33,7 @@ func (h *GatewayHandler) ProbeAPIKeyGroup(ctx context.Context, key *service.APIK
 		// passive image_gen namespace must not exclude text-only groups.
 		permissionImageIntent = imageIntent
 	}
-	if (permissionImageIntent || strings.Contains(req.Path, "/videos") || strings.Contains(req.Path, "/images/")) && !service.GroupAllowsImageGeneration(key.Group) {
+	if (permissionImageIntent || strings.Contains(req.Path, "/contents/generations/tasks") || strings.Contains(req.Path, "/videos") || strings.Contains(req.Path, "/images/")) && !service.GroupAllowsImageGeneration(key.Group) {
 		return false, false, nil
 	}
 	if strings.Contains(req.Path, "/images/batches") && !key.Group.AllowBatchImageGeneration {

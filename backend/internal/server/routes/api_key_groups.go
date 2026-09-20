@@ -261,6 +261,11 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 	if len(body) > 0 {
 		modelCandidates = append(modelCandidates, requestmodel.FromBodyCandidates(path, c.GetHeader("Content-Type"), body)...)
 	}
+	for _, requested := range modelCandidates {
+		if !key.AllowsModel(requested) {
+			return nil, groupRoutingError(404, "MODEL_NOT_ALLOWED", fmt.Sprintf("Model %q is not allowed for this API key", requested))
+		}
+	}
 	forcedPlatform, _ := middleware.GetForcePlatformFromContext(c)
 	pinnedID := c.GetInt64("api_key_pinned_group_id")
 	reasons := make([]string, 0, len(key.GroupIDs))
@@ -448,7 +453,7 @@ func apiKeyGroupSupportsPath(platform, path, method string) bool {
 		return platform == service.PlatformGemini || platform == service.PlatformAntigravity
 	}
 	switch {
-	case strings.Contains(path, "/live"), strings.Contains(path, "/realtime/calls"), strings.Contains(path, "/alpha/search"), strings.Contains(path, "/embeddings"):
+	case strings.Contains(path, "/contents/generations/tasks"), strings.Contains(path, "/live"), strings.Contains(path, "/realtime/calls"), strings.Contains(path, "/alpha/search"), strings.Contains(path, "/embeddings"):
 		return platform == service.PlatformOpenAI
 	case strings.Contains(path, "/videos"), strings.HasSuffix(path, "/realtime"), strings.Contains(path, "/custom-voices"), strings.HasSuffix(path, "/tts"), strings.HasSuffix(path, "/stt"), strings.HasSuffix(path, "/web_search"), strings.HasSuffix(path, "/x_search"):
 		return platform == service.PlatformGrok

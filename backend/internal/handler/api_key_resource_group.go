@@ -166,6 +166,12 @@ func (h *OpenAIGatewayHandler) ResolveAPIKeyPinnedGroup(c *gin.Context, key *ser
 		}
 	case c.Param("call_id") != "":
 		groupID, err = h.gatewayService.ResolveLiveCallGroup(c.Request.Context(), key, c.Param("call_id"))
+	case (c.Request.Method == http.MethodGet || c.Request.Method == http.MethodDelete) && c.Param("task_id") != "" && strings.Contains(path, "/contents/generations/tasks/"):
+		// Like batch-image deletion, deleting an owned task is resource cleanup:
+		// ownership survives group removal, expiry and quota exhaustion. Both
+		// methods remain bound to the original account; they never schedule anew.
+		historical = true
+		groupID, err = h.gatewayService.ResolveGrokVideoGroup(c.Request.Context(), key, service.SeedanceTaskKey(c.Param("task_id")))
 	case c.Request.Method == http.MethodGet && c.Param("request_id") != "" && strings.Contains(path, "/videos/"):
 		historical = true
 		groupID, err = h.gatewayService.ResolveGrokVideoGroup(c.Request.Context(), key, c.Param("request_id"))

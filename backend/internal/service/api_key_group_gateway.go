@@ -107,6 +107,8 @@ func (s *OpenAIGatewayService) ProbeAPIKeyGroup(ctx context.Context, key *APIKey
 		schedule.RequiredTransport = OpenAIUpstreamTransportResponsesWebsocketV2Ingress
 	}
 	switch {
+	case strings.Contains(req.Path, "/contents/generations/tasks"):
+		schedule.RequiredCapability = OpenAIEndpointCapabilitySeedance
 	case strings.Contains(req.Path, "/chat/completions"):
 		schedule.RequiredCapability = OpenAIEndpointCapabilityChatCompletions
 	case strings.Contains(req.Path, "/embeddings"):

@@ -278,7 +278,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		pricingAt,
 	)
 	if err != nil {
-		if !isUsagePricingUnavailableError(err) {
+		if strings.HasPrefix(result.ResponseID, "seedance:") || !isUsagePricingUnavailableError(err) {
 			return err
 		}
 		logger.L().With(
@@ -368,7 +368,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	// Async Grok video: always use the stable task id for dedup (status + content polls
 	// share one bill). Context-local client/local IDs would otherwise create a new row
 	// per poll if Redis claim is lost.
-	if result.VideoCount > 0 {
+	if result.VideoCount > 0 || strings.HasPrefix(result.ResponseID, "seedance:") {
 		if stable := StableGrokVideoBillingRequestID(firstNonEmpty(
 			strings.TrimPrefix(strings.TrimSpace(result.RequestID), "grok-video:"),
 			strings.TrimSpace(result.ResponseID),
@@ -605,6 +605,12 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 		// 倍率与 image/video 按次口径一致：使用不含高峰因子的基础倍率
 		//（用户专属 > 分组 rate_multiplier > 系统默认），与分组表单的价格预览承诺一致。
 		return s.billingService.CalculateWebSearchCost(result.WebSearchCalls, webSearchPricePerCallFromAPIKey(apiKey), webSearchMultiplier), nil
+	}
+	if result != nil && strings.HasPrefix(result.ResponseID, "seedance:") {
+		if result.VideoPricingSnapshot == nil || result.VideoPricingSnapshot.TokenPricing == nil {
+			return nil, fmt.Errorf("seedance create-time token pricing is unavailable")
+		}
+		return result.VideoPricingSnapshot.calculate(ctx, s.billingService, billingModel, result, tokens, serviceTier)
 	}
 	if isGrokVideoUsageResult(result, billingModels) {
 		if result.VideoPricingSnapshot != nil {

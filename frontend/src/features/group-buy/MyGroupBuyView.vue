@@ -12,13 +12,13 @@
           <button class="btn btn-secondary" :disabled="loading" @click="refresh">{{ t('common.refresh') }}</button>
         </div>
       </div>
-      <p v-if="(authStore.user?.balance ?? 0) < 0" class="rounded-xl bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950" role="alert">
+      <p v-if="(authStore.user?.balance ?? 0) < 0" class="gb-notice gb-notice-error p-4" role="alert">
         {{ t('groupBuy.debt', { amount: usd(authStore.user?.balance ?? 0) }) }}
         <RouterLink v-if="paymentEnabled" to="/purchase?tab=recharge" class="underline">{{ t('payment.tabTopUp') }}</RouterLink>
       </p>
       <p v-if="error" class="text-sm text-red-600" role="alert">{{ error }}</p>
       <div v-if="loading && !monthCards.length" class="py-12 text-center text-gray-500">{{ t('common.loading') }}</div>
-      <div v-else-if="!monthCards.length && !error" class="card p-12 text-center text-gray-500">{{ t('groupBuy.noCards') }}</div>
+      <div v-else-if="!monthCards.length && !error" class="gb-panel p-12 text-center text-gray-500">{{ t('groupBuy.noCards') }}</div>
       <div v-if="monthCards.length" class="grid gap-6 lg:grid-cols-2">
         <MonthCardCard v-for="card in monthCards" :key="card.id" :card="card" manageable @changed="cardChanged" />
       </div>
@@ -32,6 +32,7 @@
 </template>
 
 <script setup lang="ts">
+import './glass.css'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'

@@ -1,29 +1,29 @@
 <template>
-  <div class="space-y-3">
+  <div class="key-group-selector min-w-0 space-y-3">
     <p class="text-sm text-gray-600 dark:text-gray-400">{{ t('keys.multiGroup.orderHint') }}</p>
-    <ol class="space-y-2" :aria-label="t('keys.multiGroup.selectedGroups')">
-      <li v-for="(id, index) in modelValue" :key="id" :data-group-id="id" class="rounded-lg border border-gray-200 p-3 dark:border-dark-600">
+    <ol class="key-group-grid" :aria-label="t('keys.multiGroup.selectedGroups')">
+      <li v-for="(id, index) in modelValue" :key="id" :data-group-id="id" class="flex min-w-0 flex-col rounded-xl border border-gray-200/80 bg-gray-50/60 p-3 dark:border-dark-600 dark:bg-dark-800/60">
         <div class="flex items-start gap-2">
-          <span class="pt-1 text-sm tabular-nums text-gray-500">{{ index + 1 }}.</span>
+          <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-semibold tabular-nums text-gray-500 shadow-sm dark:bg-dark-700 dark:text-gray-300">{{ index + 1 }}</span>
           <div class="min-w-0 flex-1">
-            <GroupOptionItem v-if="groupsById.get(id)" v-bind="groupDisplayProps(groupsById.get(id)!)" :user-rate-multiplier="userRates[id]" :show-checkmark="false" />
+            <GroupOptionItem v-if="groupsById.get(id)" class="key-group-option" v-bind="groupDisplayProps(groupsById.get(id)!)" :user-rate-multiplier="userRates[id]" :show-checkmark="false" />
             <span v-else class="text-sm">#{{ id }}</span>
             <p v-if="groupsById.get(id)" class="mt-1 text-xs text-gray-500">{{ chargingLabel(groupsById.get(id)!) }}</p>
             <p v-if="unavailableReason(id)" class="mt-1 text-xs text-amber-700 dark:text-amber-400">{{ unavailableReason(id) }}</p>
           </div>
         </div>
-        <div class="mt-2 flex justify-end gap-2">
-          <button type="button" class="btn btn-secondary px-2 py-1 text-xs" :disabled="disabled || index === 0" :aria-label="t('keys.multiGroup.moveUp', { name: groupName(id) })" @click="move(index, -1)">↑</button>
-          <button type="button" class="btn btn-secondary px-2 py-1 text-xs" :disabled="disabled || index === modelValue.length - 1" :aria-label="t('keys.multiGroup.moveDown', { name: groupName(id) })" @click="move(index, 1)">↓</button>
-          <button type="button" class="btn btn-secondary px-2 py-1 text-xs" :disabled="disabled" :aria-label="t('keys.multiGroup.remove', { name: groupName(id) })" @click="remove(id)">{{ t('common.remove') }}</button>
+        <div class="mt-auto flex justify-end gap-1 pt-2">
+          <button type="button" class="btn btn-secondary min-h-8 min-w-8 px-2 py-1 text-xs" :disabled="disabled || index === 0" :aria-label="t('keys.multiGroup.moveUp', { name: groupName(id) })" @click="move(index, -1)">↑</button>
+          <button type="button" class="btn btn-secondary min-h-8 min-w-8 px-2 py-1 text-xs" :disabled="disabled || index === modelValue.length - 1" :aria-label="t('keys.multiGroup.moveDown', { name: groupName(id) })" @click="move(index, 1)">↓</button>
+          <button type="button" class="btn btn-secondary min-h-8 px-2 py-1 text-xs" :disabled="disabled" :aria-label="t('keys.multiGroup.remove', { name: groupName(id) })" @click="remove(id)">{{ t('common.remove') }}</button>
         </div>
       </li>
     </ol>
     <p v-if="modelValue.length === 0" :class="allowEmpty ? 'text-sm text-gray-500' : 'text-sm text-red-500'" role="status">{{ t(allowEmpty ? 'keys.multiGroup.adminEmpty' : 'keys.groupRequired') }}</p>
     <input v-model="search" type="search" class="input" :placeholder="t('keys.searchGroup')" :aria-label="t('keys.searchGroup')" :disabled="disabled" />
-    <div class="max-h-56 space-y-1 overflow-y-auto">
-      <button v-for="group in choices" :key="group.id" type="button" :data-add-group="group.id" :disabled="disabled" class="w-full rounded-lg border border-gray-200 p-3 text-left hover:bg-gray-50 dark:border-dark-600 dark:hover:bg-dark-700" :aria-label="t('keys.multiGroup.add', { name: group.name })" @click="add(group.id)">
-        <GroupOptionItem v-bind="groupDisplayProps(group)" :user-rate-multiplier="userRates[group.id]" :description="group.description" :show-checkmark="false" />
+    <div class="key-group-grid max-h-64 overflow-y-auto p-0.5">
+      <button v-for="group in choices" :key="group.id" type="button" :data-add-group="group.id" :disabled="disabled" class="min-w-0 rounded-xl border border-gray-200 p-3 text-left transition-colors hover:border-primary-300 hover:bg-primary-50/40 dark:border-dark-600 dark:hover:border-primary-700 dark:hover:bg-dark-700" :aria-label="t('keys.multiGroup.add', { name: group.name })" @click="add(group.id)">
+        <GroupOptionItem class="key-group-option" v-bind="groupDisplayProps(group)" :user-rate-multiplier="userRates[group.id]" :description="group.description" :show-checkmark="false" />
         <p class="mt-1 text-xs text-gray-500">{{ chargingLabel(group) }}</p>
       </button>
       <p v-if="choices.length === 0" class="py-2 text-sm text-gray-500">{{ t('keys.noGroupFound') }}</p>
@@ -87,3 +87,48 @@ const move = (index: number, direction: number) => {
   emit('update:modelValue', next)
 }
 </script>
+
+<style scoped>
+.key-group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12.5rem), 1fr));
+  gap: 0.5rem;
+}
+
+.key-group-option {
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.key-group-option :deep(> div) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.key-group-option :deep(> div:first-child) {
+  flex-basis: 100%;
+}
+
+.key-group-option :deep(> div:last-child),
+.key-group-option :deep(> div:last-child > div) {
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.key-group-option :deep(.groupOptionItemBadge),
+.key-group-option :deep(.whitespace-nowrap) {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.key-group-option :deep(.groupOptionItemBadge .truncate) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+</style>

@@ -6,6 +6,7 @@ import { formatPaymentAmount } from '@/components/payment/currency'
 import AmountInput from '@/components/payment/AmountInput.vue'
 import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
 import ProductCatalog from '@/features/group-buy/ProductCatalog.vue'
+import CouponEntry from '@/features/group-buy/CouponEntry.vue'
 import type { GroupBuyProduct, GroupBuyTeam } from '@/types/groupBuy'
 import en from '@/i18n/locales/en'
 import zh from '@/i18n/locales/zh'
@@ -871,6 +872,25 @@ describe('independent month-card checkout', () => {
     await wrapper.get('button.btn-primary.w-full').trigger('click')
     expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ order_type: 'month_card', product_id: 41, mode, amount: 198 }))
     expect(createOrder.mock.calls[0][0]).not.toHaveProperty('plan_id')
+    wrapper.unmount()
+  })
+
+  it('charges the applied discounted amount and blocks payment while verifying the code', async () => {
+    const wrapper = await mountSubscriptionPlanList(0, {}, 'group-buy')
+    createOrder.mockReset().mockResolvedValue({ order_id: 92, amount: 178.2, pay_amount: 178.2, currency: 'CNY', qr_code: 'pay:92', expires_at: '2099-01-01T00:00:00Z' })
+    wrapper.getComponent(ProductCatalog).vm.$emit('select', { product, mode: 'create' })
+    await flushPromises()
+    const coupon = wrapper.getComponent(CouponEntry)
+    coupon.vm.$emit('busy', true)
+    await flushPromises()
+    expect(wrapper.get('button.btn-primary.w-full').attributes('disabled')).toBeDefined()
+    coupon.vm.$emit('update:modelValue', { coupon_id: 1, code: 'SAVE10', original_cny: 198, discount_cny: 19.8, amount_cny: 178.2 })
+    coupon.vm.$emit('busy', false)
+    await flushPromises()
+    expect(wrapper.text()).toContain('¥178.20')
+    expect(wrapper.get('span.line-through').text()).toBe('¥198.00')
+    await wrapper.get('button.btn-primary.w-full').trigger('click')
+    expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ amount: 178.2, coupon_code: 'SAVE10', order_type: 'month_card', product_id: 41, mode: 'create' }))
     wrapper.unmount()
   })
 

@@ -3,9 +3,11 @@ import type { UserSubscription } from '@/types'
 import type {
   EntitlementOrder,
   EntitlementRef,
+  GroupBuyProduct,
   GroupBuyTeam,
   MonthCard,
-  MonthCardMode
+  MonthCardMode,
+  MonthCardSelection
 } from '@/types/groupBuy'
 
 export const usd = (amount: number) =>
@@ -18,6 +20,37 @@ export const cny = (amount: number) =>
   new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' }).format(
     amount
   )
+
+// Tier quotas are whole-card totals. Only the difference from the previous
+// total is added when a team reaches another threshold.
+export function quotaSteps(product: GroupBuyProduct) {
+  return [
+    { members: 1, quota_usd: product.base_quota_usd, increase: 0 },
+    ...product.tiers.map((tier, index) => ({
+      ...tier,
+      increase: Number((tier.quota_usd - (product.tiers[index - 1]?.quota_usd ?? product.base_quota_usd)).toFixed(8))
+    }))
+  ]
+}
+
+export function purchaseQuota(selection: MonthCardSelection): number {
+  if (selection.mode !== 'join' || !selection.team) return selection.product.base_quota_usd
+  const team = selection.team
+  return Math.max(
+    team.current_quota_usd,
+    team.product.base_quota_usd,
+    ...team.product.tiers.filter((tier) => tier.members <= team.member_count + 1).map((tier) => tier.quota_usd)
+  )
+}
+
+// Prices have two decimals; the payment settings accept at most two decimal
+// places for the fee percentage. Integer arithmetic matches backend RoundUp.
+export function monthCardFeeCNY(amount: number, rate: number): number {
+  if (amount <= 0 || rate <= 0) return 0
+  const cents = BigInt(Math.round(amount * 100))
+  const basisPoints = BigInt(Math.round(rate * 100))
+  return Number((cents * basisPoints + 9999n) / 10000n) / 100
+}
 export const exactDate = (value: string) =>
   new Date(value).toLocaleString(undefined, {
     year: 'numeric',

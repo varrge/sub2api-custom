@@ -14,9 +14,9 @@
             <span :class="['badge text-xs', key.status === 'active' ? 'badge-success' : 'badge-danger']">{{ key.status }}</span>
           </div>
           <p class="truncate font-mono text-sm text-gray-500">{{ key.key.substring(0, 20) }}...{{ key.key.substring(key.key.length - 8) }}</p>
-          <button class="mt-3 flex items-center gap-2 rounded-lg p-1 text-left hover:bg-gray-100 dark:hover:bg-dark-700" :aria-label="t('keys.multiGroup.editGroups', { name: key.name })" :disabled="groupsLoading || groupsFailed" @click="openGroupSelector(key)">
-            <KeyGroupBadges :api-key="key" :user-rates="user.group_rates ?? {}" />
-            <Icon name="edit" size="sm" class="shrink-0 text-gray-400" />
+          <button class="mt-3 flex w-full min-w-0 max-w-full items-start gap-2 whitespace-normal rounded-lg p-1 text-left hover:bg-gray-100 dark:hover:bg-dark-700" :aria-label="t('keys.multiGroup.editGroups', { name: key.name })" :disabled="groupsLoading || groupsFailed" @click="openGroupSelector(key)">
+            <KeyGroupBadges class="flex-1" :api-key="key" :user-rates="user.group_rates ?? {}" />
+            <Icon name="edit" size="sm" class="mt-1 shrink-0 text-gray-400" />
           </button>
           <p class="mt-2 text-xs text-gray-500">{{ t('admin.users.columns.created') }}: {{ formatDateTime(key.created_at) }}</p>
         </div>

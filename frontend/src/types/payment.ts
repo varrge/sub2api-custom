@@ -182,6 +182,7 @@ export interface CreateOrderRequest {
   product_id?: number
   mode?: 'solo' | 'create' | 'join'
   team_code?: string
+  coupon_code?: string
   return_url?: string
   payment_source?: string
   openid?: string

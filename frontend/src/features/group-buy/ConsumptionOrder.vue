@@ -1,39 +1,39 @@
 <template>
-  <section v-if="items.length" class="card space-y-4 p-5">
+  <section v-if="items.length" class="gb-panel space-y-4 p-5 sm:p-6">
     <button
-      class="flex w-full items-center justify-between text-left font-semibold"
+      class="flex w-full items-center justify-between text-left font-semibold text-gray-900 dark:text-white"
       :aria-expanded="open"
       @click="open = !open"
     >
       {{ t('groupBuy.sort') }}
-      <span aria-hidden="true">{{ open ? '−' : '+' }}</span>
+      <span aria-hidden="true" class="gb-accent text-lg leading-none">{{ open ? '−' : '+' }}</span>
     </button>
     <template v-if="open">
-      <p class="text-sm leading-6 text-gray-500">
+      <p class="text-sm leading-6 text-gray-500 dark:text-gray-400">
         {{ t('groupBuy.sortHint') }}
       </p>
       <div v-for="group in groups" :key="group.id" class="space-y-2">
-        <h3 class="text-sm font-semibold">{{ group.name }}</h3>
+        <h3 class="gb-label">{{ group.name }}</h3>
         <ol class="space-y-2">
           <li
             v-for="(item, index) in group.items"
             :key="refKey(item)"
-            class="flex items-center gap-3 rounded-xl border border-gray-100 p-3 dark:border-dark-700"
+            class="gb-sort-row flex items-center gap-3 p-3"
             :draggable="!saving"
             @dragstart="dragging = { group: group.id, key: refKey(item) }"
             @dragover.prevent
             @drop.prevent="drop(group.id, index)"
           >
-            <span class="text-sm text-gray-400">{{ index + 1 }}</span>
+            <span class="text-sm text-gray-400 dark:text-gray-500">{{ index + 1 }}</span>
             <div class="min-w-0 flex-1">
-              <p class="break-all text-sm">
+              <p class="break-all text-sm text-gray-900 dark:text-gray-100">
                 {{ item.name }}
                 <span v-if="item.kind === 'legacy'" class="badge badge-gray">
                   {{ t('groupBuy.legacy') }}
                 </span>
                 <span v-if="item.card?.status === 'frozen'" class="badge bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-200">{{ t('groupBuy.frozenInOrder') }}</span>
               </p>
-              <p v-if="index === 0 && item.card?.status !== 'frozen'" class="text-xs text-primary-600">
+              <p v-if="index === 0 && item.card?.status !== 'frozen'" class="gb-accent text-xs font-medium">
                 {{ t('groupBuy.first') }}
               </p>
             </div>
@@ -72,7 +72,7 @@
       >
         {{ t('common.cancel') }}
       </button>
-      <p v-if="error" class="text-sm text-red-600" role="alert">{{ error }}</p>
+      <p v-if="error" class="gb-notice gb-notice-error p-3" role="alert">{{ error }}</p>
     </template>
   </section>
 </template>
@@ -82,6 +82,7 @@ import { useI18n } from 'vue-i18n'
 import { groupBuyAPI } from '@/api/groupBuy'
 import { useAppStore } from '@/stores/app'
 import { refKey, type EntitlementItem } from './model'
+import './glass.css'
 const props = defineProps<{ items: EntitlementItem[] }>()
 const emit = defineEmits<{ saved: [] }>()
 const { t } = useI18n()

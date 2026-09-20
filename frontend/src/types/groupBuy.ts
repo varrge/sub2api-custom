@@ -71,6 +71,25 @@ export interface MonthCardSelection {
   mode: MonthCardMode
   team?: GroupBuyTeam
 }
+export interface CouponQuote {
+  coupon_id: number
+  code: string
+  original_cny: number
+  discount_cny: number
+  amount_cny: number
+}
+export interface MonthCardCoupon {
+  id: number
+  code: string
+  kind: 'fixed' | 'percent'
+  value: number
+  product_id: number | null
+  active: boolean
+  expires_at: string | null
+  max_uses: number
+  per_user_limit: number
+  used_count: number
+}
 export interface ChargeAllocation {
   id: number
   request_id: string

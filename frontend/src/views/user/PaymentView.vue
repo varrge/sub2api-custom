@@ -100,18 +100,51 @@
           <!-- Group-buy Tab -->
           <template v-else-if="activeTab === 'group-buy'">
             <template v-if="selectedMonthCard">
-              <div class="card space-y-4 p-5">
-                <h2 class="text-xl font-bold">{{ t('groupBuy.confirm') }}</h2>
-                <h3 class="font-semibold">{{ selectedMonthCard.product.name }} · {{ selectedMonthCard.product.group_name }}</h3>
-                <dl class="space-y-2 text-sm"><div class="flex justify-between"><dt>{{ t('groupBuy.mode') }}</dt><dd>{{ t(`groupBuy.${selectedMonthCard.mode}`) }}</dd></div><div v-if="selectedMonthCard.team" class="flex justify-between"><dt>{{ t('groupBuy.teamCode') }}</dt><dd class="font-mono">{{ selectedMonthCard.team.code }}</dd></div><div class="flex justify-between"><dt>{{ t('payment.paymentAmount') }}</dt><dd class="text-xl font-bold">{{ cny(selectedMonthCard.product.price_cny) }}</dd></div><div class="flex justify-between"><dt>{{ t('groupBuy.perCard') }}</dt><dd>{{ usd(selectedMonthCard.team?.current_quota_usd ?? selectedMonthCard.product.base_quota_usd) }}</dd></div></dl>
-                <div v-if="selectedMonthCard.mode !== 'solo'" class="space-y-1 text-sm"><p>{{ t('groupBuy.maxMembers') }}: {{ selectedMonthCard.product.max_members }} · {{ t('groupBuy.recruitmentHours') }}: {{ selectedMonthCard.product.recruitment_hours }}</p><p v-for="tier in selectedMonthCard.product.tiers" :key="tier.members">{{ t('groupBuy.tier', { members: tier.members, amount: usd(tier.quota_usd) }) }}</p><p v-if="selectedMonthCard.team">{{ t('groupBuy.closes') }}: {{ exactDate(selectedMonthCard.team.closes_at) }}</p></div>
-                <p class="text-sm text-gray-500">{{ t('groupBuy.rules') }}</p><p class="text-sm text-gray-500">{{ t('groupBuy.billingRules') }}</p>
-                <p class="text-sm text-gray-500">{{ t(selectedMonthCard.mode === 'solo' ? 'groupBuy.soloHint' : selectedMonthCard.mode === 'join' ? 'groupBuy.joinHint' : 'groupBuy.createHint') }}</p>
-                <p class="text-sm font-medium">{{ t('groupBuy.independent') }}</p>
+              <div class="gb-panel space-y-4 p-5 sm:p-6">
+                <h2 class="text-xl font-bold text-gray-900 dark:text-white">{{ t('groupBuy.confirm') }}</h2>
+                <h3 class="font-semibold text-gray-900 dark:text-white">{{ selectedMonthCard.product.name }} · {{ selectedMonthCard.product.group_name }}</h3>
+                <dl class="space-y-2 text-sm">
+                  <div class="flex justify-between">
+                    <dt class="text-gray-500 dark:text-gray-400">{{ t('groupBuy.mode') }}</dt>
+                    <dd>{{ t(`groupBuy.${selectedMonthCard.mode}`) }}</dd>
+                  </div>
+                  <div v-if="selectedMonthCard.team" class="flex justify-between">
+                    <dt class="text-gray-500 dark:text-gray-400">{{ t('groupBuy.teamCode') }}</dt>
+                    <dd><span class="gb-code">{{ selectedMonthCard.team.code }}</span></dd>
+                  </div>
+                  <div class="flex justify-between">
+                    <dt class="text-gray-500 dark:text-gray-400">{{ t('payment.paymentAmount') }}</dt>
+                    <dd class="gb-accent text-xl font-bold">
+                      <span v-if="appliedCoupon" class="mr-2 text-sm font-normal text-gray-400 line-through">{{ cny(appliedCoupon.original_cny) }}</span>{{ cny(monthCardAmount) }}
+                    </dd>
+                  </div>
+                  <div class="flex justify-between">
+                    <dt class="text-gray-500 dark:text-gray-400">{{ t('groupBuy.baseQuota') }}</dt>
+                    <dd>{{ usd(selectedMonthCard.product.base_quota_usd) }}</dd>
+                  </div>
+                  <div v-if="selectedMonthCard.mode === 'join'" class="flex justify-between">
+                    <dt class="text-gray-500 dark:text-gray-400">{{ t('groupBuy.purchaseQuota') }}</dt>
+                    <dd>{{ usd(purchaseQuota(selectedMonthCard)) }}</dd>
+                  </div>
+                  <div class="flex justify-between">
+                    <dt class="text-gray-500 dark:text-gray-400">{{ t('groupBuy.weeklyQuota') }}</dt>
+                    <dd>{{ usd(purchaseQuota(selectedMonthCard) / 4) }}</dd>
+                  </div>
+                </dl>
+                <template v-if="selectedMonthCard.mode !== 'solo'">
+                  <QuotaLadder :product="selectedMonthCard.product" />
+                  <div class="gb-strip space-y-1 p-3 text-sm text-gray-700 dark:text-gray-300">
+                    <p>{{ t('groupBuy.maxMembers') }}: {{ selectedMonthCard.product.max_members }} · {{ t('groupBuy.recruitmentHours') }}: {{ selectedMonthCard.product.recruitment_hours }}</p>
+                    <p v-if="selectedMonthCard.team">{{ t('groupBuy.closes') }}: {{ exactDate(selectedMonthCard.team.closes_at) }}</p>
+                  </div>
+                </template>
+                <div class="gb-notice gb-notice-info space-y-1 p-3"><p>{{ t('groupBuy.rules') }}</p><p>{{ t('groupBuy.billingRules') }}</p>
+                <p>{{ t(selectedMonthCard.mode === 'solo' ? 'groupBuy.soloHint' : selectedMonthCard.mode === 'join' ? 'groupBuy.joinHint' : 'groupBuy.createHint') }}</p></div>
+                <p class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('groupBuy.independent') }}</p>
               </div>
-              <div class="card p-5"><PaymentMethodSelector :methods="monthCardMethods" :selected="selectedMethod" @select="selectedMethod = $event" /><p class="mt-3 text-sm text-amber-700">{{ t('groupBuy.cnyOnly') }}</p></div>
-              <p v-if="feeRate > 0" class="text-sm">{{ t('payment.fee') }} ({{ feeRate }}%): {{ cny(monthCardFee) }}</p>
-              <p v-if="selectedMonthCard.team && !canJoin(selectedMonthCard.team, monthCardNow)" class="text-sm text-red-600" role="alert">{{ t('groupBuy.joinUnavailable') }}</p>
+              <div class="gb-panel p-5 sm:p-6"><CouponEntry v-model="appliedCoupon" class="mb-4" :selection="selectedMonthCard" :disabled="submitting" @busy="couponBusy = $event" /><PaymentMethodSelector :methods="monthCardMethods" :selected="selectedMethod" @select="selectedMethod = $event" /><p class="mt-3 text-sm text-amber-700 dark:text-amber-300">{{ t('groupBuy.cnyOnly') }}</p></div>
+              <p v-if="feeRate > 0" class="text-sm text-gray-600 dark:text-gray-400">{{ t('payment.fee') }} ({{ feeRate }}%): {{ cny(monthCardFee) }}</p>
+              <p v-if="selectedMonthCard.team && !canJoin(selectedMonthCard.team, monthCardNow)" class="gb-notice gb-notice-error p-3" role="alert">{{ t('groupBuy.joinUnavailable') }}</p>
               <button class="btn btn-primary w-full" :disabled="!canSubmitMonthCard || submitting" @click="confirmMonthCard">{{ submitting ? t('common.processing') : t('groupBuy.pay', { amount: cny(monthCardTotal) }) }}</button>
               <button class="btn btn-secondary w-full" :disabled="submitting" @click="selectedMonthCard = null">{{ t('common.cancel') }}</button>
             </template>
@@ -288,7 +321,11 @@
 <script setup lang="ts">
 import { useGroupBuyStore } from '@/stores/groupBuy'
 import ProductCatalog from '@/features/group-buy/ProductCatalog.vue'
-import { canJoin, cny, usd, exactDate, purchaseQuery } from '@/features/group-buy/model'
+import QuotaLadder from '@/features/group-buy/QuotaLadder.vue'
+import CouponEntry from '@/features/group-buy/CouponEntry.vue'
+import '@/features/group-buy/glass.css'
+import type { CouponQuote } from '@/types/groupBuy'
+import { canJoin, cny, usd, exactDate, purchaseQuery, purchaseQuota, monthCardFeeCNY } from '@/features/group-buy/model'
 import { groupBuyAPI } from '@/api/groupBuy'
 import type { MonthCardSelection } from '@/types/groupBuy'
 
@@ -413,13 +450,17 @@ const amount = ref<number | null>(null)
 const selectedMethod = ref('')
 const selectedPlan = ref<SubscriptionPlan | null>(null)
 const selectedMonthCard = ref<MonthCardSelection | null>(null)
+const appliedCoupon = ref<CouponQuote | null>(null)
+const couponBusy = ref(false)
+const monthCardAmount = computed(() => appliedCoupon.value?.amount_cny ?? selectedMonthCard.value?.product.price_cny ?? 0)
+watch(selectedMonthCard, () => { appliedCoupon.value = null }, { flush: 'sync' })
 const monthCardNow = ref(Date.now())
 const monthCardTimer = setInterval(() => { monthCardNow.value = Date.now() }, 1000)
 onUnmounted(() => clearInterval(monthCardTimer))
 const monthCardMethods = computed<PaymentMethodOption[]>(() => enabledMethods.value.map(type => ({ type, display_name: visibleMethods.value[type]?.display_name, fee_rate: visibleMethods.value[type]?.fee_rate ?? 0, available: normalizePaymentCurrency(visibleMethods.value[type]?.currency) === 'CNY' && visibleMethods.value[type]?.available !== false && amountFitsMethod(monthCardTotal.value, type) })))
-const monthCardFee = computed(() => Math.ceil((selectedMonthCard.value?.product.price_cny ?? 0) * feeRate.value) / 100)
-const monthCardTotal = computed(() => (selectedMonthCard.value?.product.price_cny ?? 0) + monthCardFee.value)
-const canSubmitMonthCard = computed(() => !!selectedMonthCard.value && monthCardMethods.value.some(method => method.type === selectedMethod.value && method.available) && (!selectedMonthCard.value.team || canJoin(selectedMonthCard.value.team, monthCardNow.value)))
+const monthCardFee = computed(() => monthCardFeeCNY(monthCardAmount.value, feeRate.value))
+const monthCardTotal = computed(() => Math.round((monthCardAmount.value + monthCardFee.value) * 100) / 100)
+const canSubmitMonthCard = computed(() => !couponBusy.value && !!selectedMonthCard.value && monthCardMethods.value.some(method => method.type === selectedMethod.value && method.available) && (!selectedMonthCard.value.team || canJoin(selectedMonthCard.value.team, monthCardNow.value)))
 function selectMonthCard(selection: MonthCardSelection) {
   selectedPlan.value = null
   selectedMonthCard.value = selection
@@ -429,7 +470,7 @@ function selectMonthCard(selection: MonthCardSelection) {
 }
 async function confirmMonthCard() {
   if (!canSubmitMonthCard.value || !selectedMonthCard.value || submitting.value) return
-  await createOrder(selectedMonthCard.value.product.price_cny, 'month_card')
+  await createOrder(monthCardAmount.value, 'month_card')
 }
 async function loadMonthCardQuery() {
   const query = purchaseQuery(route.query)
@@ -934,6 +975,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
       payload.product_id = selectedMonthCard.value.product.id
       payload.mode = selectedMonthCard.value.mode
       payload.team_code = selectedMonthCard.value.team?.code
+      payload.coupon_code = appliedCoupon.value?.code
     }
     if (options.openid) {
       payload.openid = options.openid

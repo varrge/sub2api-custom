@@ -13,6 +13,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
+	"github.com/Wei-Shaw/sub2api/internal/monthcard"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -35,6 +36,9 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	}
 	if !cfg.Enabled {
 		return nil, infraerrors.Forbidden("PAYMENT_DISABLED", "payment system is disabled")
+	}
+	if req.CouponCode != "" && req.OrderType != payment.OrderTypeMonthCard {
+		return nil, infraerrors.BadRequest("COUPON_ORDER_TYPE", "优惠码仅适用于月卡购买")
 	}
 	if req.OrderType == payment.OrderTypeMonthCard {
 		if err := s.prepareMonthCardOrder(ctx, &req); err != nil {
@@ -241,6 +245,11 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 	order, err := b.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create order: %w", err)
+	}
+	if req.monthCardPurchase != nil {
+		if err := monthcard.ReserveCoupon(ctx, tx.Client(), req.UserID, order.ID, req.monthCardPurchase, time.Now()); err != nil {
+			return nil, paymentCouponError(err)
+		}
 	}
 	code := fmt.Sprintf("PAY-%d-%d", order.ID, time.Now().UnixNano()%100000)
 	order, err = tx.PaymentOrder.UpdateOneID(order.ID).SetRechargeCode(code).Save(ctx)
@@ -803,6 +812,7 @@ func buildWeChatPaymentOAuthStartURL(req CreateOrderRequest, scope string) (stri
 		q.Set("product_id", strconv.FormatInt(req.ProductID, 10))
 		q.Set("mode", req.Mode)
 		q.Set("team_code", req.TeamCode)
+		q.Set("coupon_code", req.CouponCode)
 	}
 	if scope = strings.TrimSpace(scope); scope != "" {
 		q.Set("scope", scope)

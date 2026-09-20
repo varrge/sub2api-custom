@@ -1,18 +1,18 @@
 <template>
   <BaseDialog :show="!!order" :title="t('groupBuy.confirmRefund')" @close="close">
     <form v-if="order" id="month-card-refund-confirm" class="space-y-4" @submit.prevent="submit">
-      <div class="rounded-xl bg-gray-50 p-4 text-sm dark:bg-dark-800">
+      <div class="gb-strip p-4 text-sm text-gray-700 dark:text-gray-300">
         <p>{{ t('payment.orders.orderId') }} #{{ order.id }} · {{ order.out_trade_no }}</p>
-        <p class="mt-2">{{ t('payment.orders.payAmount') }}: {{ cny(order.pay_amount) }}</p>
+        <p class="mt-2">{{ t('payment.orders.payAmount') }}: <strong class="gb-accent">{{ cny(order.pay_amount) }}</strong></p>
         <p class="mt-2">{{ t('payment.admin.refundReason') }}: {{ order.refund_reason }}</p>
       </div>
-      <p class="rounded-xl bg-amber-50 p-4 text-sm leading-6 text-amber-800 dark:bg-amber-950 dark:text-amber-200">{{ t('groupBuy.confirmRefundHint') }}</p>
-      <label class="block text-sm" for="month-card-refund-reference">{{ t('groupBuy.refundReference') }}</label>
+      <p class="gb-notice gb-notice-warn p-4">{{ t('groupBuy.confirmRefundHint') }}</p>
+      <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="month-card-refund-reference">{{ t('groupBuy.refundReference') }}</label>
       <textarea id="month-card-refund-reference" v-model="reference" rows="3" class="input w-full" required :disabled="submitting" :aria-invalid="reference.length > 0 && !validRefundReference(reference)" aria-describedby="month-card-refund-reference-help" />
-      <p id="month-card-refund-reference-help" class="text-xs text-gray-500">{{ t('groupBuy.refundReferenceHelp', { count: refundReferenceBytes(reference) }) }}</p>
-      <label class="flex items-start gap-2 text-sm leading-6"><input v-model="verified" type="checkbox" class="mt-1" :disabled="submitting" required />{{ t('groupBuy.refundVerified') }}</label>
-      <p v-if="!eligible" class="text-sm text-red-600" role="alert">{{ t('groupBuy.refundConfirmationUnavailable') }}</p>
-      <p v-if="error" class="text-sm text-red-600" role="alert">{{ error }}</p>
+      <p id="month-card-refund-reference-help" class="text-xs text-gray-500 dark:text-gray-400">{{ t('groupBuy.refundReferenceHelp', { count: refundReferenceBytes(reference) }) }}</p>
+      <label class="flex items-start gap-2 text-sm leading-6 text-gray-700 dark:text-gray-300"><input v-model="verified" type="checkbox" class="mt-1" :disabled="submitting" required />{{ t('groupBuy.refundVerified') }}</label>
+      <p v-if="!eligible" class="gb-notice gb-notice-error p-3" role="alert">{{ t('groupBuy.refundConfirmationUnavailable') }}</p>
+      <p v-if="error" class="gb-notice gb-notice-error p-3" role="alert">{{ error }}</p>
     </form>
     <template #footer>
       <button class="btn btn-secondary" :disabled="submitting" @click="close">{{ t('common.cancel') }}</button>
@@ -31,6 +31,7 @@ import { extractApiErrorMessage } from '@/utils/apiError'
 import type { PaymentOrder } from '@/types/payment'
 import { cny } from './model'
 import { canConfirmMonthCardRefund, refundReferenceBytes, validRefundReference } from './refundConfirmation'
+import './glass.css'
 
 const props = defineProps<{ order: PaymentOrder | null }>()
 const emit = defineEmits<{ close: []; confirmed: [] }>()

@@ -88,6 +88,7 @@ type CreateOrderRequest struct {
 	ProductID         int64
 	Mode              string
 	TeamCode          string
+	CouponCode        string
 	monthCardPurchase *monthcard.Purchase
 	Locale            string
 }

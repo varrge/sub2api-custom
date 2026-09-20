@@ -133,6 +133,11 @@ func (s *Store) Fulfill(ctx context.Context, orderID, userID int64, paidAt time.
 		}
 		return nil, err
 	}
+	// Resolve team cancellation before coupon expiry so manual cancellation
+	// never falls through to an automatic coupon refund.
+	if err := redeemCoupon(ctx, tx, userID, orderID, purchase.Discount, s.now()); err != nil {
+		return nil, err
+	}
 	// Preserve the pre-purchase order, then append the new entitlement.
 	priority, err := materializeOrder(ctx, tx, userID, p.GroupID, s.now())
 	if err != nil {

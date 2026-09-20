@@ -3,8 +3,10 @@
     <div class="mx-auto max-w-6xl space-y-5">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 class="text-2xl font-bold">{{ t('groupBuy.hall') }}</h1>
-          <p class="mt-1 text-sm text-gray-500">
+          <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+            {{ t('groupBuy.hall') }}
+          </h1>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {{ t('groupBuy.activeTeams', { count: activeTeams.length }) }}
           </p>
         </div>
@@ -15,16 +17,14 @@
         </button>
         </div>
       </div>
-      <div
-        class="rounded-xl border border-sky-100 bg-sky-50 p-4 text-sm leading-6 text-sky-800 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-200"
-      >
+      <div class="gb-notice gb-notice-info p-4">
         <p>{{ t('groupBuy.subtitle') }}</p>
         <p>{{ t('groupBuy.rules') }}</p>
       </div>
-      <form class="flex flex-wrap gap-3" @submit.prevent="lookup()">
+      <form class="gb-panel grid grid-cols-[minmax(0,1fr)_auto] gap-3 p-3 sm:grid-cols-[minmax(0,16rem)_minmax(0,1fr)_auto] sm:p-4" @submit.prevent="lookup()">
         <select
           v-model="groupId"
-          class="input min-w-40"
+          class="input col-span-2 min-w-0 sm:col-span-1"
           :aria-label="t('groupBuy.group')"
         >
           <option :value="0">{{ t('groupBuy.allGroups') }}</option>
@@ -34,7 +34,7 @@
         </select>
         <input
           v-model="code"
-          class="input min-w-0 flex-1"
+          class="input min-w-0"
           :placeholder="t('groupBuy.teamCode')"
           :aria-label="t('groupBuy.teamCode')"
         />
@@ -42,11 +42,7 @@
           {{ t('groupBuy.lookup') }}
         </button>
       </form>
-      <p
-        v-if="error"
-        class="rounded-xl bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950"
-        role="alert"
-      >
+      <p v-if="error" class="gb-notice gb-notice-error p-4" role="alert">
         {{ error }}
       </p>
       <div v-if="loading" class="py-12 text-center" role="status">
@@ -54,7 +50,10 @@
       </div>
       <template v-else>
         <div v-if="detail" class="space-y-3">
-          <button class="text-sm text-primary-600" @click="clearDetail">
+          <button
+            class="gb-accent text-sm font-medium hover:underline"
+            @click="clearDetail"
+          >
             {{ t('groupBuy.browse') }}
           </button>
           <div class="grid gap-5 md:grid-cols-2">
@@ -70,9 +69,11 @@
             @join="join"
           />
         </div>
-        <div v-else-if="!error" class="card p-12 text-center">
-          <h2 class="text-lg font-semibold">{{ t('groupBuy.noTeams') }}</h2>
-          <p class="my-3 text-sm text-gray-500">
+        <div v-else-if="!error" class="gb-panel p-12 text-center">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+            {{ t('groupBuy.noTeams') }}
+          </h2>
+          <p class="my-3 text-sm text-gray-500 dark:text-gray-400">
             {{ t('groupBuy.noTeamsHint') }}
           </p>
           <RouterLink to="/purchase?tab=group-buy" class="btn btn-primary">
@@ -91,6 +92,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import { groupBuyAPI } from '@/api/groupBuy'
 import type { GroupBuyTeam } from '@/types/groupBuy'
 import TeamCard from './TeamCard.vue'
+import './glass.css'
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()

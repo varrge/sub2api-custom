@@ -1,6 +1,9 @@
 import { apiClient } from './client'
 import type {
   ChargeAllocation,
+  CouponQuote,
+  MonthCardCoupon,
+  MonthCardSelection,
   EntitlementOrder,
   GroupBuyProduct,
   GroupBuyTeam,
@@ -8,6 +11,14 @@ import type {
 } from '@/types/groupBuy'
 
 export const groupBuyAPI = {
+  async previewCoupon(selection: MonthCardSelection, code: string) {
+    return (await apiClient.post<CouponQuote>('/group-buy/coupons/preview', {
+      product_id: selection.product.id,
+      mode: selection.mode,
+      team_code: selection.team?.code,
+      code
+    })).data
+  },
   async allocations() {
     return (await apiClient.get<ChargeAllocation[]>('/group-buy/allocations'))
       .data
@@ -51,6 +62,14 @@ export const adminGroupBuyAPI = {
   },
   async setFreezePolicy(policy: { enabled: boolean; starts_at?: string | null; ends_at?: string | null }) {
     return (await apiClient.put('/admin/group-buy/freeze-policy', policy)).data
+  },
+  async coupons() {
+    return (await apiClient.get<MonthCardCoupon[]>('/admin/group-buy/coupons')).data
+  },
+  async saveCoupon(coupon: MonthCardCoupon) {
+    return (await (coupon.id
+      ? apiClient.put<MonthCardCoupon>(`/admin/group-buy/coupons/${coupon.id}`, coupon)
+      : apiClient.post<MonthCardCoupon>('/admin/group-buy/coupons', coupon))).data
   },
   async allocations(user_id?: number) {
     return (

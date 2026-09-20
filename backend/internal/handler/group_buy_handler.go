@@ -30,7 +30,7 @@ func groupBuyResponse(c *gin.Context, value any, err error) {
 	switch {
 	case errors.Is(err, monthcard.ErrNotFound):
 		response.NotFound(c, "商品、拼团或月卡不存在")
-	case errors.Is(err, monthcard.ErrCannotJoin), errors.Is(err, monthcard.ErrInvalid):
+	case errors.Is(err, monthcard.ErrCannotJoin), errors.Is(err, monthcard.ErrInvalid), errors.Is(err, monthcard.ErrCoupon):
 		response.BadRequest(c, err.Error())
 	default:
 		response.ErrorFrom(c, err)
@@ -235,4 +235,47 @@ func (h *GroupBuyHandler) AdminAllocations(c *gin.Context) {
 	}
 	items, err := h.store.ListAllocations(c.Request.Context(), userID)
 	groupBuyResponse(c, items, err)
+}
+
+func (h *GroupBuyHandler) PreviewCoupon(c *gin.Context) {
+	user, ok := requireAuth(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		ProductID int64  `json:"product_id" binding:"required,gt=0"`
+		Mode      string `json:"mode" binding:"required,oneof=solo create join"`
+		TeamCode  string `json:"team_code" binding:"max=100"`
+		Code      string `json:"code" binding:"required,max=64"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "优惠码参数无效")
+		return
+	}
+	quote, err := h.store.PreviewCoupon(c.Request.Context(), user.UserID, req.ProductID, req.Mode, req.TeamCode, req.Code)
+	groupBuyResponse(c, quote, err)
+}
+
+func (h *GroupBuyHandler) AdminCoupons(c *gin.Context) {
+	items, err := h.store.ListCoupons(c.Request.Context())
+	groupBuyResponse(c, items, err)
+}
+
+func (h *GroupBuyHandler) SaveCoupon(c *gin.Context) {
+	var coupon monthcard.Coupon
+	if err := c.ShouldBindJSON(&coupon); err != nil {
+		response.BadRequest(c, "优惠码参数无效")
+		return
+	}
+	coupon.ID = 0
+	if raw := c.Param("id"); raw != "" {
+		id, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || id <= 0 {
+			response.BadRequest(c, "优惠码编号无效")
+			return
+		}
+		coupon.ID = id
+	}
+	err := h.store.SaveCoupon(c.Request.Context(), &coupon)
+	groupBuyResponse(c, coupon, err)
 }

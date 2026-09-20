@@ -2,7 +2,7 @@
   <AppLayout>
     <div class="space-y-5">
       <div class="flex flex-wrap justify-between gap-3">
-        <h1 class="text-2xl font-bold">{{ t('groupBuy.admin') }}</h1>
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ t('groupBuy.admin') }}</h1>
         <div class="flex gap-2">
           <RouterLink
             to="/admin/orders?order_type=month_card"
@@ -15,22 +15,20 @@
           </button>
         </div>
       </div>
-      <div class="flex flex-wrap gap-2">
+      <div class="gb-tabs" role="tablist">
         <button
-          v-for="key in ['products', 'teams', 'cards'] as const"
+          v-for="key in ['products', 'teams', 'cards', 'coupons'] as const"
           :key="key"
-          class="btn"
-          :class="tab === key ? 'btn-primary' : 'btn-secondary'"
+          class="gb-tab"
+          :class="{ 'gb-tab-active': tab === key }"
+          role="tab"
+          :aria-selected="tab === key"
           @click="tab = key"
         >
           {{ t(`groupBuy.${key}`) }}
         </button>
       </div>
-      <p
-        v-if="error"
-        class="rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-950"
-        role="alert"
-      >
+      <p v-if="error" class="gb-notice gb-notice-error p-3" role="alert">
         {{ error }}
       </p>
       <section class="card space-y-3 p-4">
@@ -61,37 +59,35 @@
             {{ t('groupBuy.newProduct') }}
           </button>
         </div>
-        <p
-          class="rounded-xl bg-sky-50 p-4 text-sm text-sky-800 dark:bg-sky-950 dark:text-sky-200"
-        >
+        <p class="gb-notice gb-notice-info p-4">
           {{ t('groupBuy.productHint') }}
         </p>
-        <div class="card overflow-x-auto">
-          <table class="w-full text-left text-sm">
+        <div class="gb-panel overflow-x-auto">
+          <table class="gb-table w-full text-left text-sm text-gray-700 dark:text-gray-300">
             <thead>
               <tr>
-                <th class="p-4">{{ t('groupBuy.name') }}</th>
-                <th class="p-4">{{ t('groupBuy.group') }}</th>
-                <th class="p-4">{{ t('groupBuy.price') }}</th>
-                <th class="p-4">{{ t('groupBuy.forSale') }}</th>
-                <th class="p-4">{{ t('common.actions') }}</th>
+                <th>{{ t('groupBuy.name') }}</th>
+                <th>{{ t('groupBuy.group') }}</th>
+                <th>{{ t('groupBuy.price') }}</th>
+                <th>{{ t('groupBuy.baseQuota') }}</th>
+                <th>{{ t('groupBuy.forSale') }}</th>
+                <th>{{ t('common.actions') }}</th>
               </tr>
             </thead>
             <tbody>
-              <tr
-                v-for="product in products"
-                :key="product.id"
-                class="border-t border-gray-100 dark:border-dark-700"
-              >
-                <td class="p-4">{{ product.name }}</td>
-                <td class="p-4">{{ product.group_name }}</td>
-                <td class="p-4">{{ cny(product.price_cny) }}</td>
-                <td class="p-4">
-                  {{ product.for_sale ? t('common.yes') : t('common.no') }}
+              <tr v-for="product in products" :key="product.id">
+                <td class="font-medium text-gray-900 dark:text-white">{{ product.name }}</td>
+                <td>{{ product.group_name }}</td>
+                <td>{{ cny(product.price_cny) }}</td>
+                <td>{{ usd(product.base_quota_usd) }}</td>
+                <td>
+                  <span class="gb-pill" :class="product.for_sale ? 'gb-pill-teal' : 'gb-pill-gray'">
+                    {{ product.for_sale ? t('common.yes') : t('common.no') }}
+                  </span>
                 </td>
-                <td class="p-4">
+                <td>
                   <button
-                    class="btn btn-secondary"
+                    class="btn btn-secondary btn-sm"
                     @click="editProduct(product)"
                   >
                     {{ t('common.edit') }}
@@ -100,37 +96,41 @@
               </tr>
             </tbody>
           </table>
-          <p v-if="!products.length" class="p-8 text-center text-gray-500">
+          <p v-if="!products.length" class="p-8 text-center text-gray-500 dark:text-gray-400">
             {{ t('groupBuy.noProducts') }}
           </p>
         </div>
       </template>
+      <AdminCoupons v-else-if="tab === 'coupons'" :products="products" />
       <template v-else-if="tab === 'teams'">
         <form class="flex gap-2" @submit.prevent="inspectTeam(teamCode)">
           <input
             v-model="teamCode"
-            class="input"
+            class="input min-w-0 flex-1"
             :placeholder="t('groupBuy.teamCode')"
             :aria-label="t('groupBuy.teamCode')"
           />
-          <button class="btn btn-primary" :disabled="!teamCode.trim()">
+          <button class="btn btn-primary shrink-0" :disabled="!teamCode.trim()">
             {{ t('groupBuy.lookup') }}
           </button>
         </form>
         <div class="grid gap-4 md:grid-cols-2">
-          <article v-for="team in teams" :key="team.id" class="card p-4">
-            <h2 class="font-semibold">
-              {{ team.product.name }} · {{ team.code }}
-            </h2>
-            <p class="my-2 text-sm">
+          <article v-for="team in teams" :key="team.id" class="gb-panel p-4 sm:p-5">
+            <div class="flex flex-col items-start justify-between gap-2 sm:flex-row">
+              <h2 class="min-w-0 font-semibold text-gray-900 dark:text-white">
+                {{ team.product.name }}
+              </h2>
+              <span class="gb-code">{{ team.code }}</span>
+            </div>
+            <p class="my-2 text-sm text-gray-700 dark:text-gray-300">
               {{ t(`groupBuy.${team.status}`) }} · {{ team.member_count }} /
               {{ team.product.max_members }} · {{ usd(team.current_quota_usd) }}
             </p>
-            <p class="text-xs text-gray-500">
+            <p class="text-xs text-gray-500 dark:text-gray-400">
               {{ t('groupBuy.closes') }} {{ exactDate(team.closes_at) }}
             </p>
             <button
-              class="btn btn-secondary mt-3"
+              class="btn btn-secondary btn-sm mt-3"
               @click="inspectTeam(team.code)"
             >
               {{ t('groupBuy.inspect') }}
@@ -152,29 +152,29 @@
             v-model.number="userId"
             type="number"
             min="1"
-            class="input"
+            class="input min-w-0 flex-1"
             :placeholder="t('groupBuy.userId')"
             :aria-label="t('groupBuy.userId')"
           />
-          <button class="btn btn-primary" :disabled="cardsLoading || !userId">
+          <button class="btn btn-primary shrink-0" :disabled="cardsLoading || !userId">
             {{ t('common.search') }}
           </button>
         </form>
-        <p class="text-sm text-amber-700 dark:text-amber-300">
+        <p class="gb-notice gb-notice-warn p-3">
           {{ t('groupBuy.refundHint') }}
         </p>
         <div class="grid gap-4 lg:grid-cols-2">
           <MonthCardCard v-for="card in cards" :key="card.id" :card="card">
             <div
-              class="mt-4 border-t border-gray-100 pt-3 text-sm dark:border-dark-700"
+              class="mt-4 border-t border-gray-200/60 pt-3 text-sm dark:border-dark-600/60"
             >
-              <p>{{ t('groupBuy.userId') }}: {{ card.user_id }}</p>
+              <p class="text-gray-700 dark:text-gray-300">{{ t('groupBuy.userId') }}: {{ card.user_id }}</p>
               <RouterLink
                 :to="{
                   path: '/admin/orders',
                   query: { order_id: card.order_id, order_type: 'month_card' }
                 }"
-                class="text-primary-600"
+                class="gb-accent font-medium hover:underline"
               >
                 {{ t('groupBuy.order') }} #{{ card.order_id }} ·
                 {{ t('groupBuy.ordersLink') }}
@@ -182,7 +182,7 @@
             </div>
           </MonthCardCard>
         </div>
-        <p v-if="!userId" class="text-sm text-gray-500">{{ t('groupBuy.selectUserHint') }}</p>
+        <p v-if="!userId" class="text-sm text-gray-500 dark:text-gray-400">{{ t('groupBuy.selectUserHint') }}</p>
       <AllocationTable v-if="userId" :allocations="allocations" :cards="cards" />
       </template>
       <BaseDialog
@@ -249,8 +249,23 @@
               />
             </label>
           </div>
+          <div class="gb-strip space-y-2 p-3">
+            <label class="block text-sm font-medium">
+              {{ t('groupBuy.base') }}
+              <input
+                v-model.number="draft.base_quota_usd"
+                type="number"
+                min="0.00000001"
+                step="0.00000001"
+                class="input mt-1 w-full"
+                required
+              />
+            </label>
+            <p class="text-xs leading-5 text-gray-500 dark:text-gray-400">{{ t('groupBuy.initialQuotaHint') }}</p>
+          </div>
           <div class="space-y-2">
             <p class="text-sm font-medium">{{ t('groupBuy.tiers') }}</p>
+            <p class="text-xs leading-5 text-gray-500 dark:text-gray-400">{{ t('groupBuy.tierConfigHint') }}</p>
             <div
               v-for="(tier, index) in draft.tiers"
               :key="index"
@@ -301,14 +316,15 @@
               {{ t('groupBuy.addTier') }}
             </button>
           </div>
+          <QuotaLadder v-if="validQuotaPreview" :product="draft" />
           <label class="flex gap-2 text-sm">
             <input v-model="draft.for_sale" type="checkbox" />
             {{ t('groupBuy.forSale') }}
           </label>
-          <p class="text-xs leading-5 text-gray-500">
+          <p class="text-xs leading-5 text-gray-500 dark:text-gray-400">
             {{ t('groupBuy.rules') }} {{ t('groupBuy.productHint') }}
           </p>
-          <p v-if="formError" class="text-sm text-red-600" role="alert">
+          <p v-if="formError" class="gb-notice gb-notice-error p-3" role="alert">
             {{ formError }}
           </p>
         </form>
@@ -335,8 +351,8 @@
         :title="`${t('groupBuy.teamCode')} ${teamDetail?.code || ''}`"
         @close="teamDetail = null"
       >
-        <div v-if="teamDetail" class="space-y-4 text-sm">
-          <h3 class="font-semibold">
+        <div v-if="teamDetail" class="space-y-4 text-sm text-gray-700 [overflow-wrap:anywhere] dark:text-gray-300">
+          <h3 class="font-semibold text-gray-900 dark:text-white">
             {{ t('groupBuy.frozenRules') }} · {{ teamDetail.product.name }}
           </h3>
           <p>
@@ -345,14 +361,7 @@
             {{ t('groupBuy.baseQuota') }}
             {{ usd(teamDetail.product.base_quota_usd) }}
           </p>
-          <p v-for="tier in teamDetail.product.tiers" :key="tier.members">
-            {{
-              t('groupBuy.tier', {
-                members: tier.members,
-                amount: usd(tier.quota_usd)
-              })
-            }}
-          </p>
+          <QuotaLadder :product="teamDetail.product" />
           <p>
             {{ t('groupBuy.members') }} {{ teamDetail.member_count }} /
             {{ teamDetail.product.max_members }}
@@ -370,7 +379,7 @@
           <div
             v-for="card in teamDetail.cards || []"
             :key="card.id"
-            class="rounded-lg border border-gray-100 p-3 dark:border-dark-700"
+            class="gb-strip p-3"
           >
             <p>
               {{ t('groupBuy.userId') }} {{ card.user_id }} · {{ card.code }} ·
@@ -381,7 +390,7 @@
                 path: '/admin/orders',
                 query: { order_id: card.order_id, order_type: 'month_card' }
               }"
-              class="text-primary-600"
+              class="gb-accent font-medium hover:underline"
             >
               {{ t('groupBuy.order') }} #{{ card.order_id }}
             </RouterLink>
@@ -400,12 +409,14 @@
   </AppLayout>
 </template>
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import MonthCardCard from './MonthCardCard.vue'
+import AdminCoupons from './AdminCoupons.vue'
 import AllocationTable from './AllocationTable.vue'
+import QuotaLadder from './QuotaLadder.vue'
 import { adminGroupBuyAPI } from '@/api/groupBuy'
 import adminAPI from '@/api/admin'
 import { useAppStore } from '@/stores/app'
@@ -418,9 +429,10 @@ import type {
 import type { AdminGroup } from '@/types'
 import { exactDate, cny, usd } from './model'
 import { extractApiErrorMessage } from '@/utils/apiError'
+import './glass.css'
 const { t } = useI18n()
 const app = useAppStore()
-const tab = ref<'products' | 'teams' | 'cards'>('products')
+const tab = ref<'products' | 'teams' | 'cards' | 'coupons'>('products')
 const loading = ref(true)
 const error = ref('')
 const formError = ref('')
@@ -442,9 +454,14 @@ const freezePolicyStarts = ref('')
 const freezePolicyEnds = ref('')
 const freezePolicySaving = ref(false)
 const draft = ref<GroupBuyProduct | null>(null)
+const validQuotaPreview = computed(() => {
+  const product = draft.value
+  return product && product.price_cny > 0 && product.base_quota_usd > 0 && product.tiers.every(
+    (tier, index) => Number.isFinite(tier.quota_usd) && tier.quota_usd > (product.tiers[index - 1]?.quota_usd ?? product.base_quota_usd)
+  )
+})
 const productFields = [
   { key: 'price_cny', label: 'price', min: 0.01, step: 0.01 },
-  { key: 'base_quota_usd', label: 'base', min: 0.00000001, step: 0.00000001 },
   { key: 'max_members', label: 'maxMembers', min: 2, step: 1 },
   { key: 'recruitment_hours', label: 'recruitmentHours', min: 1, step: 1 },
   { key: 'sort_order', label: 'sortOrder', min: 0, step: 1 }

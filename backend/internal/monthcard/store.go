@@ -83,10 +83,11 @@ type Card struct {
 }
 
 type Purchase struct {
-	Mode     string  `json:"mode"`
-	Product  Product `json:"product"`
-	TeamID   *int64  `json:"team_id"`
-	TeamCode string  `json:"team_code"`
+	Mode     string       `json:"mode"`
+	Product  Product      `json:"product"`
+	TeamID   *int64       `json:"team_id"`
+	TeamCode string       `json:"team_code"`
+	Discount *CouponQuote `json:"discount,omitempty"`
 }
 
 type Store struct {

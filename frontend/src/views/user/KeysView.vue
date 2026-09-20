@@ -157,12 +157,12 @@
           <template #cell-group="{ row }">
             <button
               @click="openGroupSelector(row)"
-              class="flex items-center gap-2 rounded-lg px-2 py-1 text-left hover:bg-gray-100 dark:hover:bg-dark-700"
+              class="flex w-full min-w-0 max-w-full items-start gap-2 whitespace-normal rounded-lg px-2 py-1 text-left hover:bg-gray-100 dark:hover:bg-dark-700 lg:w-72"
               :title="t('keys.clickToChangeGroup')"
               :aria-label="t('keys.multiGroup.editGroups', { name: row.name })"
             >
-              <KeyGroupBadges :api-key="row" :user-rates="userGroupRates" />
-              <Icon name="edit" size="sm" class="shrink-0 text-gray-400" />
+              <KeyGroupBadges class="flex-1" :api-key="row" :user-rates="userGroupRates" />
+              <Icon name="edit" size="sm" class="mt-1 shrink-0 text-gray-400" />
             </button>
           </template>
 

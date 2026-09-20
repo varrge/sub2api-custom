@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 
 const monthCardAutomaticRefundReason = "拼团已结束或名额已满，未能发卡，自动原路退款"
 const monthCardManualRefundReason = "month card team recruitment was cancelled; manual refund required"
+const monthCardCouponRefundReason = "优惠码名额已失效，未能发卡，自动原路退款"
 
 // Only metadata produced by an authenticated provider callback is accepted.
 // Providers without a payment timestamp use the first verified confirmation,
@@ -59,7 +61,19 @@ func (s *PaymentService) prepareMonthCardOrder(ctx context.Context, req *CreateO
 			return err
 		}
 	}
-	req.Amount = purchase.Product.PriceCNY
+	if strings.TrimSpace(req.CouponCode) != "" {
+		quote, err := monthcard.QuoteCoupon(ctx, s.entClient, req.UserID, purchase.Product, req.CouponCode, false, time.Now())
+		if err != nil {
+			return paymentCouponError(err)
+		}
+		if req.Amount != quote.AmountCNY {
+			return infraerrors.BadRequest("COUPON_PRICE_CHANGED", "优惠价格已变更，请重新应用优惠码")
+		}
+		purchase.Discount = quote
+		req.Amount = quote.AmountCNY
+	} else {
+		req.Amount = purchase.Product.PriceCNY
+	}
 	req.monthCardPurchase = purchase
 	return nil
 }
@@ -80,7 +94,14 @@ func paymentMonthCardPurchase(order *dbent.PaymentOrder) (*monthcard.Purchase, e
 	if err := json.Unmarshal(data, &purchase); err != nil {
 		return nil, fmt.Errorf("decode month card snapshot: %w", err)
 	}
-	if purchase.Product.ID <= 0 || purchase.Product.GroupID <= 0 || purchase.Product.PriceCNY != order.Amount {
+	expectedAmount := purchase.Product.PriceCNY
+	if discount := purchase.Discount; discount != nil {
+		if discount.CouponID <= 0 || discount.Code == "" || discount.OriginalCNY != expectedAmount || discount.AmountCNY <= 0 || discount.DiscountCNY <= 0 || math.Abs(discount.AmountCNY+discount.DiscountCNY-expectedAmount) > 0.000001 {
+			return nil, errors.New("invalid month card discount snapshot")
+		}
+		expectedAmount = discount.AmountCNY
+	}
+	if purchase.Product.ID <= 0 || purchase.Product.GroupID <= 0 || expectedAmount != order.Amount {
 		return nil, errors.New("month card snapshot does not match paid order")
 	}
 	if purchase.Mode != "solo" && purchase.Mode != "create" && purchase.Mode != "join" {
@@ -131,12 +152,16 @@ func (s *PaymentService) ExecuteMonthCardFulfillment(ctx context.Context, oid in
 		s.writeAuditLog(ctx, o.ID, "MONTH_CARD_MANUAL_REFUND_REQUIRED", "system", map[string]any{"reason": monthCardManualRefundReason})
 		return err
 	}
-	if errors.Is(err, monthcard.ErrCannotJoin) {
+	if errors.Is(err, monthcard.ErrCannotJoin) || errors.Is(err, monthcard.ErrCoupon) {
+		refundReason := monthCardAutomaticRefundReason
+		if errors.Is(err, monthcard.ErrCoupon) {
+			refundReason = monthCardCouponRefundReason
+		}
 		// Preserve the paid order as a durable refund job, never silently turn it
 		// into a balance recharge or a different product.
 		claimed, markErr := s.entClient.PaymentOrder.Update().Where(
 			paymentorder.IDEQ(o.ID), paymentorder.StatusEQ(OrderStatusRecharging), paymentorder.UpdatedAtEQ(lease.version),
-		).SetStatus(OrderStatusCompleted).SetCompletedAt(time.Now()).SetRefundReason(monthCardAutomaticRefundReason).SetRefundAmount(o.Amount).Save(ctx)
+		).SetStatus(OrderStatusCompleted).SetCompletedAt(time.Now()).SetRefundReason(refundReason).SetRefundAmount(o.Amount).Save(ctx)
 		err = markErr
 		if err != nil {
 			return err
@@ -144,7 +169,7 @@ func (s *PaymentService) ExecuteMonthCardFulfillment(ctx context.Context, oid in
 		if claimed == 0 {
 			return infraerrors.Conflict("FULFILLMENT_LEASE_LOST", "month card refund lease changed")
 		}
-		s.writeAuditLog(ctx, o.ID, "MONTH_CARD_REFUND_REQUIRED", "system", map[string]any{"reason": monthCardAutomaticRefundReason})
+		s.writeAuditLog(ctx, o.ID, "MONTH_CARD_REFUND_REQUIRED", "system", map[string]any{"reason": refundReason})
 		return s.refundUnfulfilledMonthCard(ctx, o.ID)
 	}
 	if err != nil {
@@ -166,7 +191,7 @@ func (s *PaymentService) refundUnfulfilledMonthCard(ctx context.Context, oid int
 	if err != nil {
 		return err
 	}
-	if o.OrderType != payment.OrderTypeMonthCard || o.RefundReason == nil || *o.RefundReason != monthCardAutomaticRefundReason {
+	if o.OrderType != payment.OrderTypeMonthCard || o.RefundReason == nil || !isMonthCardAutomaticRefund(*o.RefundReason) {
 		return nil
 	}
 	if o.Status == OrderStatusRefunded {
@@ -179,7 +204,7 @@ func (s *PaymentService) refundUnfulfilledMonthCard(ctx context.Context, oid int
 	if o.Status != OrderStatusCompleted && o.Status != OrderStatusRefundFailed {
 		return nil
 	}
-	p := &RefundPlan{OrderID: oid, Order: o, RefundAmount: o.Amount, GatewayAmount: o.PayAmount, Reason: monthCardAutomaticRefundReason, DeductionType: payment.DeductionTypeNone}
+	p := &RefundPlan{OrderID: oid, Order: o, RefundAmount: o.Amount, GatewayAmount: o.PayAmount, Reason: *o.RefundReason, DeductionType: payment.DeductionTypeNone}
 	result, err := s.ExecuteRefund(ctx, p)
 	if err != nil {
 		return err
@@ -273,7 +298,7 @@ func (s *PaymentService) RecoverMonthCardOrders(ctx context.Context) error {
 			),
 			paymentorder.StatusEQ(OrderStatusRefundPending),
 			paymentorder.And(paymentorder.StatusEQ(OrderStatusRefunding), paymentorder.UpdatedAtLT(time.Now().Add(-5*time.Minute))),
-			paymentorder.And(paymentorder.RefundReasonEQ(monthCardAutomaticRefundReason), paymentorder.StatusIn(OrderStatusCompleted, OrderStatusRefundFailed, OrderStatusRefundPending)),
+			paymentorder.And(paymentorder.RefundReasonIn(monthCardAutomaticRefundReason, monthCardCouponRefundReason), paymentorder.StatusIn(OrderStatusCompleted, OrderStatusRefundFailed, OrderStatusRefundPending)),
 		),
 	).Order(paymentorder.ByUpdatedAt()).Limit(100).All(ctx)
 	if err != nil {
@@ -288,7 +313,7 @@ func (s *PaymentService) RecoverMonthCardOrders(ctx context.Context) error {
 			recoverErr = s.recoverInterruptedMonthCardRefund(ctx, order)
 		} else if order.Status == OrderStatusRefundPending {
 			_, recoverErr = s.QueryAndFinalizeRefund(ctx, order.ID)
-		} else if order.RefundReason != nil && *order.RefundReason == monthCardAutomaticRefundReason {
+		} else if order.RefundReason != nil && isMonthCardAutomaticRefund(*order.RefundReason) {
 			recoverErr = s.refundUnfulfilledMonthCard(ctx, order.ID)
 		} else {
 			recoverErr = s.ExecuteMonthCardFulfillment(ctx, order.ID)
@@ -345,4 +370,15 @@ func (s *PaymentService) recoverInterruptedMonthCardRefund(ctx context.Context, 
 	order.Status = status
 	_, err = s.ExecuteRefund(ctx, plan)
 	return err
+}
+
+func paymentCouponError(err error) error {
+	if errors.Is(err, monthcard.ErrCoupon) {
+		return infraerrors.BadRequest("COUPON_INVALID", err.Error())
+	}
+	return err
+}
+
+func isMonthCardAutomaticRefund(reason string) bool {
+	return reason == monthCardAutomaticRefundReason || reason == monthCardCouponRefundReason
 }

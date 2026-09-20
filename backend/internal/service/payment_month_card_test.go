@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -110,7 +111,7 @@ func TestMonthCardUnpaidOrderCannotFulfill(t *testing.T) {
 
 func TestMonthCardWeChatResumePreservesSignedPurchase(t *testing.T) {
 	svc := NewPaymentResumeService([]byte("month-card-test-signing-key-32-bytes"))
-	claims := WeChatPaymentResumeClaims{OpenID: "test-openid", OrderType: payment.OrderTypeMonthCard, ProductID: 7, Mode: "join", TeamCode: "TEAMCODE"}
+	claims := WeChatPaymentResumeClaims{OpenID: "test-openid", OrderType: payment.OrderTypeMonthCard, ProductID: 7, Mode: "join", TeamCode: "TEAMCODE", CouponCode: "SAVE10"}
 	token, err := svc.CreateWeChatPaymentResumeToken(claims)
 	require.NoError(t, err)
 	parsed, err := svc.ParseWeChatPaymentResumeToken(token)
@@ -118,6 +119,7 @@ func TestMonthCardWeChatResumePreservesSignedPurchase(t *testing.T) {
 	require.Equal(t, claims.ProductID, parsed.ProductID)
 	require.Equal(t, claims.Mode, parsed.Mode)
 	require.Equal(t, claims.TeamCode, parsed.TeamCode)
+	require.Equal(t, claims.CouponCode, parsed.CouponCode)
 	parts := strings.Split(token, ".")
 	require.Len(t, parts, 2)
 	parsed.TeamCode = "DIFFERENT-TEAM"
@@ -202,4 +204,33 @@ func TestMonthCardRecoveryQueriesExistingRefundBeforeAnyResend(t *testing.T) {
 	saved, err := client.PaymentOrder.Get(ctx, o.ID)
 	require.NoError(t, err)
 	require.Equal(t, OrderStatusRefundPending, saved.Status)
+}
+
+func TestMonthCardDiscountSnapshotPreservesProductPrice(t *testing.T) {
+	groupID := int64(3)
+	purchase := monthcard.Purchase{Mode: "create", Product: monthcard.Product{ID: 7, GroupID: groupID, PriceCNY: 198}, Discount: &monthcard.CouponQuote{CouponID: 1, Code: "SAVE10", OriginalCNY: 198, DiscountCNY: 19.8, AmountCNY: 178.2}}
+	order := &dbent.PaymentOrder{OrderType: payment.OrderTypeMonthCard, Amount: 178.2, SubscriptionGroupID: &groupID, ProviderSnapshot: map[string]any{"month_card_purchase": purchase}}
+	got, err := paymentMonthCardPurchase(order)
+	require.NoError(t, err)
+	require.Equal(t, 198.0, got.Product.PriceCNY)
+	order.Amount = 198
+	_, err = paymentMonthCardPurchase(order)
+	require.Error(t, err)
+	order.Amount = 178.2
+	purchase.Discount.DiscountCNY = 100
+	order.ProviderSnapshot["month_card_purchase"] = purchase
+	_, err = paymentMonthCardPurchase(order)
+	require.Error(t, err)
+}
+
+func TestMonthCardCouponForwardedToWeChatOAuth(t *testing.T) {
+	start, err := buildWeChatPaymentOAuthStartURL(CreateOrderRequest{
+		PaymentType: payment.TypeWxpay, OrderType: payment.OrderTypeMonthCard,
+		ProductID: 7, Mode: "create", Amount: 178.2, CouponCode: "SAVE10",
+	}, "snsapi_base")
+	require.NoError(t, err)
+	parsed, err := url.Parse(start)
+	require.NoError(t, err)
+	require.Equal(t, "SAVE10", parsed.Query().Get("coupon_code"))
+	require.Equal(t, "178.2", parsed.Query().Get("amount"))
 }

@@ -253,6 +253,7 @@ type CreateOrderRequest struct {
 	ProductID         int64   `json:"product_id"`
 	Mode              string  `json:"mode"`
 	TeamCode          string  `json:"team_code"`
+	CouponCode        string  `json:"coupon_code,omitempty"`
 	// IsMobile lets the frontend declare its mobile status directly. When
 	// nil we fall back to User-Agent heuristics (which miss iPadOS / some
 	// embedded browsers that strip the "Mobile" keyword).
@@ -305,6 +306,7 @@ func (h *PaymentHandler) CreateOrder(c *gin.Context) {
 		ProductID:       req.ProductID,
 		Mode:            req.Mode,
 		TeamCode:        req.TeamCode,
+		CouponCode:      req.CouponCode,
 		Locale:          c.GetHeader("Accept-Language"),
 	})
 	if err != nil {
@@ -351,6 +353,7 @@ func applyWeChatPaymentResumeClaims(req *CreateOrderRequest, claims *service.WeC
 	}
 	if claims.OrderType == payment.OrderTypeMonthCard {
 		req.ProductID, req.Mode, req.TeamCode = claims.ProductID, claims.Mode, claims.TeamCode
+		req.CouponCode = claims.CouponCode
 	}
 	return nil
 }

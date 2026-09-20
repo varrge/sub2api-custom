@@ -1,54 +1,55 @@
 <template>
   <article
-    class="rounded-2xl border-2 border-violet-200 bg-white p-5 shadow-sm dark:border-violet-900 dark:bg-dark-800"
+    class="gb-panel gb-panel-hover flex flex-col p-5 sm:p-6"
     data-testid="team-card"
   >
     <div class="flex items-start justify-between gap-3">
-      <div>
-        <h2 class="text-lg font-semibold">{{ team.product.name }}</h2>
-        <p class="mt-1 text-sm text-gray-500">
+      <div class="min-w-0">
+        <h2 class="truncate text-lg font-semibold text-gray-900 dark:text-white">
+          {{ team.product.name }}
+        </h2>
+        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
           {{ team.product.group_name }} · {{ team.product.platform }}
         </p>
       </div>
       <span
-        class="rounded-full bg-violet-50 px-3 py-1 text-xs text-violet-700 dark:bg-violet-950 dark:text-violet-200"
+        class="gb-pill"
+        :class="status === 'recruiting' ? 'gb-pill-teal' : 'gb-pill-gray'"
       >
         {{ t(`groupBuy.${status}`) }}
       </span>
     </div>
     <div class="mt-4 flex flex-wrap items-center justify-between gap-2">
-      <strong class="text-2xl text-violet-600 dark:text-violet-300">
+      <strong class="gb-accent text-2xl font-bold">
         {{ cny(team.product.price_cny) }}
       </strong>
       <button
-        class="font-mono text-sm text-gray-500 hover:underline"
+        class="gb-code"
         :title="t('groupBuy.copyCode')"
         @click="copy(team.code)"
       >
         {{ t('groupBuy.teamCode') }} {{ team.code }}
       </button>
     </div>
-    <div class="mt-4 rounded-xl bg-violet-50 p-3 dark:bg-violet-950/40">
-      <div class="text-sm font-medium">
+    <div class="gb-strip mt-4 p-3">
+      <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
         {{
           status === 'recruiting'
             ? t('groupBuy.remaining', { time: countdown })
             : t('groupBuy.closedHint')
         }}
       </div>
-      <p class="mt-1 text-xs text-gray-500">
+      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
         {{ t('groupBuy.closes') }} {{ exactDate(team.closes_at) }}
       </p>
     </div>
     <div class="mt-4 flex justify-between text-sm">
-      <span>{{ t('groupBuy.members') }}</span>
-      <strong>{{ team.member_count }} / {{ team.product.max_members }}</strong>
+      <span class="text-gray-500 dark:text-gray-400">{{ t('groupBuy.members') }}</span>
+      <strong class="text-gray-900 dark:text-white">{{ team.member_count }} / {{ team.product.max_members }}</strong>
     </div>
-    <div
-      class="mt-2 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-dark-700"
-    >
+    <div class="gb-progress mt-2">
       <div
-        class="h-full rounded-full bg-violet-500"
+        class="gb-progress-fill"
         :style="{
           width: `${progress(team.member_count, team.product.max_members)}%`
         }"
@@ -56,10 +57,10 @@
     </div>
     <div class="mt-5 flex justify-between gap-3">
       <div>
-        <p class="text-xs text-gray-500">{{ t('groupBuy.perCard') }}</p>
-        <strong class="text-2xl">{{ usd(team.current_quota_usd) }}</strong>
+        <p class="gb-label">{{ t('groupBuy.perCard') }}</p>
+        <strong class="text-2xl font-bold text-gray-900 dark:text-white">{{ usd(team.current_quota_usd) }}</strong>
       </div>
-      <p class="self-end text-xs text-emerald-600">
+      <p class="self-end text-xs text-emerald-600 dark:text-emerald-400">
         {{
           t('groupBuy.bonus', {
             amount: usd(
@@ -69,7 +70,7 @@
         }}
       </p>
     </div>
-    <p class="mt-3 text-sm font-medium text-violet-700 dark:text-violet-300">
+    <p class="gb-accent mt-3 text-sm font-medium">
       {{
         team.next_members > 0
           ? t('groupBuy.nextTier', {
@@ -79,9 +80,10 @@
           : t('groupBuy.maxTier')
       }}
     </p>
-    <p class="mt-1 text-xs text-gray-500">
+    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
       {{ t('groupBuy.toFull', { count: remainingMembers(team).full }) }}
     </p>
+    <QuotaLadder class="mt-4" :product="team.product" />
     <div class="mt-5 flex flex-wrap gap-2">
       <button
         class="btn btn-primary flex-1"
@@ -97,7 +99,7 @@
     <RouterLink
       v-if="team.joined"
       to="/my-group-buy"
-      class="mt-3 block text-center text-sm text-primary-600"
+      class="gb-accent mt-3 block text-center text-sm font-medium hover:underline"
     >
       {{ t('groupBuy.viewCards') }}
     </RouterLink>
@@ -108,6 +110,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import type { GroupBuyTeam } from '@/types/groupBuy'
+import QuotaLadder from './QuotaLadder.vue'
 import {
   canJoin,
   cny,
@@ -116,6 +119,7 @@ import {
   progress,
   remainingMembers
 } from './model'
+import './glass.css'
 const props = defineProps<{ team: GroupBuyTeam; now: number }>()
 defineEmits<{ join: [team: GroupBuyTeam] }>()
 const { t } = useI18n()

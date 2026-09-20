@@ -71,3 +71,7 @@ Restored only the China payment `enabled` setting through `PUT /api/v1/admin/pay
 A real authenticated browser check now passes for `/my-group-buy`, `/group-buy`, `/purchase?tab=group-buy`, and `/admin/group-buy`. It also asserts that month-card purchase buttons, the coupon-management tab, and the admin menu entry render. Reusable local diagnostic: `/tmp/sub2api-cn-monthcard-routes.cjs`; sanitized results: `/tmp/sub2api-glass-deploy-20260920T062904Z/monthcard-route-check.json`. Credentials remain only in memory and are not printed or recorded.
 
 Future staging checks must exercise authenticated browser routes using actual public settings, in addition to mocked interaction tests and SPA HTTP status checks. Current candidate code and version were not changed by this configuration fix.
+
+## Subsequent model-mode candidate
+
+The later API-key allow/deny candidate and validation are recorded in [staging-model-mode.md](../multi-group-api-keys/staging-model-mode.md). Its rollback compatibility requirements supersede the image-only rollback instructions above whenever deny policies have been saved.

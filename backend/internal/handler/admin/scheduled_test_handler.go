@@ -20,20 +20,22 @@ func NewScheduledTestHandler(scheduledTestSvc *service.ScheduledTestService) *Sc
 }
 
 type createScheduledTestPlanRequest struct {
-	AccountID      int64  `json:"account_id" binding:"required"`
-	ModelID        string `json:"model_id"`
-	CronExpression string `json:"cron_expression" binding:"required"`
-	Enabled        *bool  `json:"enabled"`
-	MaxResults     int    `json:"max_results"`
-	AutoRecover    *bool  `json:"auto_recover"`
+	AccountID            int64  `json:"account_id" binding:"required"`
+	ModelID              string `json:"model_id"`
+	CronExpression       string `json:"cron_expression" binding:"required"`
+	Enabled              *bool  `json:"enabled"`
+	MaxResults           int    `json:"max_results"`
+	AutoRecover          *bool  `json:"auto_recover"`
+	OnlyWhenModelLimited *bool  `json:"only_when_model_limited"`
 }
 
 type updateScheduledTestPlanRequest struct {
-	ModelID        string `json:"model_id"`
-	CronExpression string `json:"cron_expression"`
-	Enabled        *bool  `json:"enabled"`
-	MaxResults     int    `json:"max_results"`
-	AutoRecover    *bool  `json:"auto_recover"`
+	ModelID              string `json:"model_id"`
+	CronExpression       string `json:"cron_expression"`
+	Enabled              *bool  `json:"enabled"`
+	MaxResults           int    `json:"max_results"`
+	AutoRecover          *bool  `json:"auto_recover"`
+	OnlyWhenModelLimited *bool  `json:"only_when_model_limited"`
 }
 
 // ListByAccount GET /admin/accounts/:id/scheduled-test-plans
@@ -72,6 +74,10 @@ func (h *ScheduledTestHandler) Create(c *gin.Context) {
 	}
 	if req.AutoRecover != nil {
 		plan.AutoRecover = *req.AutoRecover
+	}
+
+	if req.OnlyWhenModelLimited != nil {
+		plan.OnlyWhenModelLimited = *req.OnlyWhenModelLimited
 	}
 
 	created, err := h.scheduledTestSvc.CreatePlan(c.Request.Context(), plan)
@@ -116,6 +122,10 @@ func (h *ScheduledTestHandler) Update(c *gin.Context) {
 	}
 	if req.AutoRecover != nil {
 		existing.AutoRecover = *req.AutoRecover
+	}
+
+	if req.OnlyWhenModelLimited != nil {
+		existing.OnlyWhenModelLimited = *req.OnlyWhenModelLimited
 	}
 
 	updated, err := h.scheduledTestSvc.UpdatePlan(c.Request.Context(), existing)

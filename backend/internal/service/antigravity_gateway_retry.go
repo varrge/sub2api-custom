@@ -23,6 +23,8 @@ import (
 
 // antigravityRetryLoopParams 重试循环的参数
 type antigravityRetryLoopParams struct {
+	recoveryProbe bool // conditional health probe: no local cooldown gate or paid fallback
+
 	ctx             context.Context
 	prefix          string
 	account         *Account
@@ -467,7 +469,7 @@ func (s *AntigravityGatewayService) handleSingleAccountRetryInPlace(
 func (s *AntigravityGatewayService) antigravityRetryLoop(p antigravityRetryLoopParams) (*antigravityRetryLoopResult, error) {
 	// 预检查：模型限流 + overages 启用 + 积分未耗尽 → 直接注入 AI Credits
 	overagesInjected := false
-	if p.requestedModel != "" && p.account.Platform == PlatformAntigravity &&
+	if !p.recoveryProbe && p.requestedModel != "" && p.account.Platform == PlatformAntigravity &&
 		p.account.IsOveragesEnabled() && !p.account.isCreditsExhausted() &&
 		p.account.isModelRateLimitedWithContext(p.ctx, p.requestedModel) {
 		if creditsBody := injectEnabledCreditTypes(p.body); creditsBody != nil {
@@ -479,7 +481,7 @@ func (s *AntigravityGatewayService) antigravityRetryLoop(p antigravityRetryLoopP
 	}
 
 	// 预检查：如果账号已限流，直接返回切换信号
-	if p.requestedModel != "" {
+	if !p.recoveryProbe && p.requestedModel != "" {
 		if remaining := p.account.GetRateLimitRemainingTimeWithContext(p.ctx, p.requestedModel); remaining > 0 {
 			// 已注入积分的请求不再受普通模型限流预检查阻断。
 			if overagesInjected {
@@ -573,6 +575,12 @@ urlFallbackLoop:
 				logger.LegacyPrintf("service.antigravity_gateway", "%s status=request_failed retries_exhausted error=%v", p.prefix, err)
 				setOpsUpstreamError(p.c, 0, safeErr, "")
 				return nil, fmt.Errorf("upstream request failed after retries: %w", err)
+			}
+
+			// A recovery probe reports this attempt directly. Credits/fallback
+			// retries would not prove that the originally limited model recovered.
+			if p.recoveryProbe {
+				return &antigravityRetryLoopResult{resp: resp}, nil
 			}
 
 			// 统一处理错误响应

@@ -383,6 +383,7 @@ func (s *AntigravityGatewayService) TestConnection(ctx context.Context, account 
 	// 复用 antigravityRetryLoop：完整的重试 / credits overages / 智能重试
 	prefix := fmt.Sprintf("[antigravity-Test] account=%d(%s)", account.ID, account.Name)
 	p := antigravityRetryLoopParams{
+		recoveryProbe:  isScheduledRecoveryProbe(ctx),
 		ctx:            ctx,
 		prefix:         prefix,
 		account:        account,

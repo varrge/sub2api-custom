@@ -99,11 +99,20 @@
           <div class="flex items-end">
             <div>
               <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <Toggle v-model="newPlan.only_when_model_limited" data-test="newPlan-only-when-limited" />
+                {{ t('admin.scheduledTests.onlyWhenModelLimited') }}
+              </label>
+              <p class="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{{ t('admin.scheduledTests.onlyWhenModelLimitedHelp') }}</p>
+            </div>
+          </div>
+          <div class="flex items-end">
+            <div>
+              <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                 <Toggle v-model="newPlan.auto_recover" />
                 {{ t('admin.scheduledTests.autoRecover') }}
               </label>
               <p class="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
-                {{ t('admin.scheduledTests.autoRecoverHelp') }}
+                {{ t(newPlan.only_when_model_limited ? 'admin.scheduledTests.modelRecoverHelp' : 'admin.scheduledTests.autoRecoverHelp') }}
               </p>
             </div>
           </div>
@@ -152,22 +161,22 @@
         >
           <!-- Plan Header -->
           <div
-            class="flex cursor-pointer items-center justify-between px-4 py-3"
+            class="flex cursor-pointer items-start justify-between gap-2 px-4 py-3 sm:items-center"
             @click="toggleExpand(plan.id)"
           >
-            <div class="flex flex-1 items-center gap-4">
+            <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2 sm:gap-4">
               <!-- Model -->
-              <div class="min-w-0">
-                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+              <div class="min-w-0 max-w-full">
+                <div class="break-all text-sm font-medium text-gray-900 dark:text-gray-100">
                   {{ plan.model_id }}
                 </div>
-                <div class="mt-0.5 font-mono text-xs text-gray-500 dark:text-gray-400">
+                <div class="mt-0.5 whitespace-nowrap font-mono text-xs text-gray-500 dark:text-gray-400">
                   {{ plan.cron_expression }}
                 </div>
               </div>
 
               <!-- Enabled Toggle -->
-              <div class="flex items-center gap-1.5" @click.stop>
+              <div class="flex shrink-0 items-center gap-1.5" @click.stop>
                 <Toggle
                   :model-value="plan.enabled"
                   @update:model-value="(val: boolean) => handleToggleEnabled(plan, val)"
@@ -177,16 +186,17 @@
                 </span>
               </div>
 
+              <span v-if="plan.only_when_model_limited" class="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">{{ t('admin.scheduledTests.onlyWhenModelLimited') }}</span>
               <!-- Auto Recover Badge -->
               <span
                 v-if="plan.auto_recover"
-                class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
+                class="inline-flex shrink-0 items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
               >
                 {{ t('admin.scheduledTests.autoRecover') }}
               </span>
             </div>
 
-            <div class="flex items-center gap-3">
+            <div class="flex shrink-0 items-center gap-3">
               <!-- Last Run -->
               <div v-if="plan.last_run_at" class="hidden text-right text-xs text-gray-500 dark:text-gray-400 sm:block">
                 <div>{{ t('admin.scheduledTests.lastRun') }}</div>
@@ -309,11 +319,20 @@
               <div class="flex items-end">
                 <div>
                   <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <Toggle v-model="editForm.only_when_model_limited" data-test="editForm-only-when-limited" />
+                    {{ t('admin.scheduledTests.onlyWhenModelLimited') }}
+                  </label>
+                  <p class="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{{ t('admin.scheduledTests.onlyWhenModelLimitedHelp') }}</p>
+                </div>
+              </div>
+              <div class="flex items-end">
+                <div>
+                  <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                     <Toggle v-model="editForm.auto_recover" />
                     {{ t('admin.scheduledTests.autoRecover') }}
                   </label>
                   <p class="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
-                    {{ t('admin.scheduledTests.autoRecoverHelp') }}
+                    {{ t(editForm.only_when_model_limited ? 'admin.scheduledTests.modelRecoverHelp' : 'admin.scheduledTests.autoRecoverHelp') }}
                   </p>
                 </div>
               </div>
@@ -508,7 +527,8 @@ const editForm = reactive({
   cron_expression: '' as string,
   max_results: '100' as string,
   enabled: true,
-  auto_recover: false
+  auto_recover: false,
+  only_when_model_limited: false
 })
 
 const newPlan = reactive({
@@ -516,7 +536,8 @@ const newPlan = reactive({
   cron_expression: '' as string,
   max_results: '100' as string,
   enabled: true,
-  auto_recover: false
+  auto_recover: false,
+  only_when_model_limited: false
 })
 
 const resetNewPlan = () => {
@@ -525,6 +546,7 @@ const resetNewPlan = () => {
   newPlan.max_results = '100'
   newPlan.enabled = true
   newPlan.auto_recover = false
+  newPlan.only_when_model_limited = false
 }
 
 // Load plans when dialog opens
@@ -567,7 +589,8 @@ const handleCreate = async () => {
       cron_expression: newPlan.cron_expression,
       enabled: newPlan.enabled,
       max_results: maxResults,
-      auto_recover: newPlan.auto_recover
+      auto_recover: newPlan.auto_recover,
+      only_when_model_limited: newPlan.only_when_model_limited
     })
     appStore.showSuccess(t('admin.scheduledTests.createSuccess'))
     showAddForm.value = false
@@ -600,6 +623,7 @@ const startEdit = (plan: ScheduledTestPlan) => {
   editForm.max_results = String(plan.max_results)
   editForm.enabled = plan.enabled
   editForm.auto_recover = plan.auto_recover
+  editForm.only_when_model_limited = plan.only_when_model_limited ?? false
 }
 
 const cancelEdit = () => {
@@ -615,7 +639,8 @@ const handleEdit = async () => {
       cron_expression: editForm.cron_expression,
       max_results: Number(editForm.max_results) || 100,
       enabled: editForm.enabled,
-      auto_recover: editForm.auto_recover
+      auto_recover: editForm.auto_recover,
+      only_when_model_limited: editForm.only_when_model_limited
     })
     const index = plans.value.findIndex((p) => p.id === editingPlanId.value)
     if (index !== -1) {

@@ -466,8 +466,8 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 		testModelID = claude.DefaultTestModel
 	}
 
-	// API Key 账号测试连接时也需要应用通配符模型映射。
-	if account.Type == "apikey" {
+	// Apply normal mappings once; Bedrock and Vertex resolve their own targets.
+	if !account.IsBedrock() && account.Type != AccountTypeServiceAccount {
 		testModelID = account.GetMappedModel(testModelID)
 	}
 
@@ -852,7 +852,11 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	// Send test_start event once. A task-invalid Agent Identity response may
 	// restart this probe after registering a replacement task.
 	if !agentIdentityTaskRecoveryWasTried(ctx) {
-		s.sendEvent(c, TestEvent{Type: "test_start", Model: testModelID})
+		eventModel := testModelID
+		if isScheduledRecoveryProbe(ctx) {
+			eventModel = upstreamTestModelID
+		}
+		s.sendEvent(c, TestEvent{Type: "test_start", Model: eventModel})
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(payloadBytes))
@@ -2345,15 +2349,8 @@ func (s *AccountTestService) testGeminiAccountConnection(c *gin.Context, account
 		testModelID = geminicli.DefaultTestModel
 	}
 
-	// For static upstream credentials with model mapping, map the model
-	if account.Type == AccountTypeAPIKey || account.Type == AccountTypeServiceAccount {
-		mapping := account.GetModelMapping()
-		if len(mapping) > 0 {
-			if mappedModel, exists := mapping[testModelID]; exists {
-				testModelID = mappedModel
-			}
-		}
-	}
+	// Use the same wildcard mapping as routing and recovery snapshots.
+	testModelID = account.GetMappedModel(testModelID)
 
 	// Set SSE headers
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
@@ -2452,7 +2449,7 @@ func (s *AccountTestService) testAntigravityAccountConnection(c *gin.Context, ac
 		s.sendEvent(c, TestEvent{Type: "content", Text: result.Text})
 	}
 
-	s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
+	s.sendEvent(c, TestEvent{Type: "test_complete", Success: true, Model: result.MappedModel})
 	return nil
 }
 
@@ -3102,7 +3099,8 @@ func (s *AccountTestService) testOpenAIImageOAuth(c *gin.Context, ctx context.Co
 	}
 	applyOpenAIImagesDefaults(parsed)
 
-	upstreamModel := account.GetMappedModel(parsed.Model)
+	// The caller has already applied the account mapping.
+	upstreamModel := parsed.Model
 	responsesBody, targetURL, err := buildOpenAIImagesOAuthPayload(parsed, upstreamModel)
 	if err != nil {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Failed to build image request: %s", err.Error()))
@@ -3267,6 +3265,7 @@ func (s *AccountTestService) RunTestBackground(ctx context.Context, accountID in
 
 	return &ScheduledTestResult{
 		Status:       status,
+		TestedModel:  parseTestSSEModel(body),
 		ResponseText: responseText,
 		ErrorMessage: errMsg,
 		LatencyMs:    finishedAt.Sub(startedAt).Milliseconds(),
@@ -3299,4 +3298,20 @@ func parseTestSSEOutput(body string) (responseText, errMsg string) {
 	}
 	responseText = strings.Join(texts, "")
 	return
+}
+
+// The last explicit model identifies the actual probe target after mappings.
+func parseTestSSEModel(body string) string {
+	model := ""
+	for _, line := range strings.Split(body, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		var event TestEvent
+		if json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &event) == nil && event.Model != "" {
+			model = event.Model
+		}
+	}
+	return model
 }

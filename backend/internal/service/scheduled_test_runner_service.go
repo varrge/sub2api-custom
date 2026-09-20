@@ -12,11 +12,16 @@ import (
 
 const scheduledTestDefaultMaxWorkers = 10
 
+type scheduledAccountTester interface {
+	RunTestBackground(context.Context, int64, string) (*ScheduledTestResult, error)
+}
+
 // ScheduledTestRunnerService periodically scans due test plans and executes them.
 type ScheduledTestRunnerService struct {
 	planRepo       ScheduledTestPlanRepository
 	scheduledSvc   *ScheduledTestService
-	accountTestSvc *AccountTestService
+	accountTestSvc scheduledAccountTester
+	accountRepo    AccountRepository
 	rateLimitSvc   *RateLimitService
 	cfg            *config.Config
 
@@ -37,6 +42,7 @@ func NewScheduledTestRunnerService(
 		planRepo:       planRepo,
 		scheduledSvc:   scheduledSvc,
 		accountTestSvc: accountTestSvc,
+		accountRepo:    accountTestSvc.accountRepo,
 		rateLimitSvc:   rateLimitSvc,
 		cfg:            cfg,
 	}
@@ -55,7 +61,7 @@ func (s *ScheduledTestRunnerService) Start() {
 			}
 		}
 
-		c := cron.New(cron.WithParser(scheduledTestCronParser), cron.WithLocation(loc))
+		c := cron.New(cron.WithParser(scheduledTestCronParser), cron.WithLocation(loc), cron.WithChain(cron.SkipIfStillRunning(cron.DefaultLogger)))
 		_, err := c.AddFunc("* * * * *", func() { s.runScheduled() })
 		if err != nil {
 			logger.LegacyPrintf("service.scheduled_test_runner", "[ScheduledTestRunner] not started (invalid schedule): %v", err)
@@ -120,29 +126,55 @@ func (s *ScheduledTestRunnerService) runScheduled() {
 }
 
 func (s *ScheduledTestRunnerService) runOnePlan(ctx context.Context, plan *ScheduledTestPlan) {
+	var lastRun *time.Time
+	// Skips preserve last_run_at/results and advance the check to the next cron slot.
+	// Errors also advance, avoiding a retry storm every scheduler tick.
+	defer func() {
+		nextRun, err := computeNextRun(plan.CronExpression, time.Now())
+		if err == nil {
+			scheduleCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			defer cancel()
+			err = s.planRepo.UpdateAfterRun(scheduleCtx, plan.ID, lastRun, nextRun)
+		}
+		if err != nil {
+			logger.LegacyPrintf("service.scheduled_test_runner", "[ScheduledTestRunner] plan=%d update schedule failed: %v", plan.ID, err)
+		}
+	}()
+	var limits ScheduledModelLimitSnapshot
+	if plan.OnlyWhenModelLimited {
+		account, err := s.accountRepo.GetByID(ctx, plan.AccountID)
+		if err != nil {
+			logger.LegacyPrintf("service.scheduled_test_runner", "[ScheduledTestRunner] plan=%d load account failed: %v", plan.ID, err)
+			return
+		}
+		limits = scheduledModelLimitSnapshot(ctx, account, plan.ModelID, time.Now())
+		if !limits.limited() {
+			return
+		}
+		ctx = context.WithValue(ctx, scheduledRecoveryProbeKey{}, true)
+	}
 	result, err := s.accountTestSvc.RunTestBackground(ctx, plan.AccountID, plan.ModelID)
 	if err != nil {
 		logger.LegacyPrintf("service.scheduled_test_runner", "[ScheduledTestRunner] plan=%d RunTestBackground error: %v", plan.ID, err)
 		return
 	}
-
+	if plan.OnlyWhenModelLimited && result.Status == "success" && result.TestedModel != limits.modelID {
+		result.Status = "failed"
+		result.ErrorMessage = "Probe model differs from the observed limited model; restriction preserved"
+	}
+	now := time.Now()
+	lastRun = &now
 	if err := s.scheduledSvc.SaveResult(ctx, plan.ID, plan.MaxResults, result); err != nil {
 		logger.LegacyPrintf("service.scheduled_test_runner", "[ScheduledTestRunner] plan=%d SaveResult error: %v", plan.ID, err)
 	}
-
-	// Auto-recover account if test succeeded and auto_recover is enabled.
 	if result.Status == "success" && plan.AutoRecover {
-		s.tryRecoverAccount(ctx, plan.AccountID, plan.ID)
-	}
-
-	nextRun, err := computeNextRun(plan.CronExpression, time.Now())
-	if err != nil {
-		logger.LegacyPrintf("service.scheduled_test_runner", "[ScheduledTestRunner] plan=%d computeNextRun error: %v", plan.ID, err)
-		return
-	}
-
-	if err := s.planRepo.UpdateAfterRun(ctx, plan.ID, time.Now(), nextRun); err != nil {
-		logger.LegacyPrintf("service.scheduled_test_runner", "[ScheduledTestRunner] plan=%d UpdateAfterRun error: %v", plan.ID, err)
+		if plan.OnlyWhenModelLimited {
+			if err := s.rateLimitSvc.recoverTestedModelLimits(ctx, plan.AccountID, limits); err != nil {
+				logger.LegacyPrintf("service.scheduled_test_runner", "[ScheduledTestRunner] plan=%d model recovery failed: %v", plan.ID, err)
+			}
+		} else {
+			s.tryRecoverAccount(ctx, plan.AccountID, plan.ID)
+		}
 	}
 }
 

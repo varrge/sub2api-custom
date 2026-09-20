@@ -2443,6 +2443,7 @@ export interface ScheduledTestPlan {
   enabled: boolean
   max_results: number
   auto_recover: boolean
+  only_when_model_limited: boolean
   last_run_at: string | null
   next_run_at: string | null
   created_at: string
@@ -2468,6 +2469,7 @@ export interface CreateScheduledTestPlanRequest {
   enabled?: boolean
   max_results?: number
   auto_recover?: boolean
+  only_when_model_limited?: boolean
 }
 
 export interface UpdateScheduledTestPlanRequest {
@@ -2476,6 +2478,7 @@ export interface UpdateScheduledTestPlanRequest {
   enabled?: boolean
   max_results?: number
   auto_recover?: boolean
+  only_when_model_limited?: boolean
 }
 
 // Payment types

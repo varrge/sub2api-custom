@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import type { ModelPlazaGroup, PlazaModel } from '@/api/modelPlaza'
 import { aggregatePlazaModels, formatUsdPerMillion, inferModelBrand, modelPriceCells, plazaModelType, selectPriceVariant, variantKey } from '../plaza-models'
-import ModelPlazaContent from '../ModelPlazaContent.vue'
 import PlazaModelCard from '../PlazaModelCard.vue'
 import PlazaModelPricingTable from '../PlazaModelPricingTable.vue'
 
@@ -28,13 +27,6 @@ function group(overrides: Partial<ModelPlazaGroup> = {}): ModelPlazaGroup {
     models: [model()], ...overrides
   }
 }
-function mountCatalog(groups: ModelPlazaGroup[]) {
-  return mount(ModelPlazaContent, {
-    props: { loading: false, response: { description: '## Billing\n<img src="x" onerror="alert(1)">', groups } },
-    global: { stubs: { BaseDialog: true, PlazaGroupSection: true } }
-  })
-}
-
 describe('catalog prices', () => {
   it('retains the upstream max reasoning notice while showing normal base prices', () => {
     const m = model({ pricing: { ...model().pricing!, max_reasoning_effort_multiplier: 3 } })
@@ -159,86 +151,6 @@ describe('catalog selection and interactions', () => {
     await wrapper.findAll('button[aria-pressed]').find(button => button.text().includes('Balance'))!.trigger('click')
     await wrapper.findAll('button').find(button => button.text() === 'modelPlaza.pricingDetail')!.trigger('click')
     expect(wrapper.emitted('open-group-detail')?.[0][0]).toMatchObject({ group: { id: 1 } })
-    wrapper.unmount()
-  })
-  it('reference selector changes prices without filtering; group selector narrows models', async () => {
-    const extra = model({ name: 'gpt-5-codex', platform: 'openai' })
-    const wrapper = mountCatalog([group(), group({ id: 2, name: 'Other', rate_multiplier: 0.2, models: [model(), extra] })])
-    expect(wrapper.findAllComponents(PlazaModelCard)).toHaveLength(2)
-    expect(wrapper.findAllComponents(PlazaModelCard)[0].findAll('[data-price-group]')).toHaveLength(2)
-    await wrapper.get('#catalog-desktop-reference-1').setValue(false)
-    expect(wrapper.findAllComponents(PlazaModelCard)).toHaveLength(2)
-    expect(wrapper.findAllComponents(PlazaModelCard)[1].find('[data-price="input_price"]').text()).toBe('$0.4')
-    await wrapper.get('#catalog-desktop-group').setValue('1')
-    expect(wrapper.findAllComponents(PlazaModelCard)).toHaveLength(1)
-    expect(wrapper.find('#catalog-desktop-reference-1').exists()).toBe(false)
-    await wrapper.get('#catalog-desktop-group').setValue('')
-    expect(wrapper.findAllComponents(PlazaModelCard)).toHaveLength(2)
-    expect(wrapper.get('#catalog-desktop-reference-2').element).toHaveProperty('checked', true)
-    expect(wrapper.get('#catalog-desktop-reference-1').element).toHaveProperty('checked', false)
-    wrapper.unmount()
-  })
-  it('handles removed reference groups, supplier filters, search and sanitized Markdown', async () => {
-    const groups = [group({ platform: 'composite', models: [model(), model({ name: 'gpt-5-codex', platform: 'openai' })] })]
-    const wrapper = mountCatalog(groups)
-    expect(wrapper.find('.plaza-description img').attributes('onerror')).toBeUndefined()
-    await wrapper.findAll('button').find(button => button.text().startsWith('OpenAI'))!.trigger('click')
-    expect(wrapper.findAllComponents(PlazaModelCard)).toHaveLength(1)
-    await wrapper.get('input[type="search"]').setValue('missing')
-    expect(wrapper.findAllComponents(PlazaModelCard)).toHaveLength(0)
-    expect(wrapper.text()).toContain('modelPlaza.noSearchResult')
-    await wrapper.setProps({ response: { groups: [], description: '' } })
-    expect(wrapper.find('#catalog-desktop-reference-1').exists()).toBe(false)
-    expect(wrapper.text()).toContain('modelPlaza.catalog.noGroups')
-    wrapper.unmount()
-  })
-  it('compares every selected group using its own prices and opens the corresponding detail', async () => {
-    const first = group()
-    const second = group({ id: 2, name: 'Other', subscription_type: 'subscription', rate_multiplier: 0.2, models: [model({ pricing: { ...model().pricing!, input_price: 36e-6 } })] })
-    const wrapper = mountCatalog([first, second])
-    const card = wrapper.findComponent(PlazaModelCard)
-    expect(card.get('[data-price-group="1"] [data-price="input_price"]').text()).toBe('$1')
-    expect(card.get('[data-price-group="2"] [data-price="input_price"]').text()).toBe('$7.2')
-    expect(card.get('[data-price-group="2"]').text()).toContain('modelPlaza.badges.subscription')
-    expect(card.get('[data-price-group="1"]').text()).not.toContain('modelPlaza.badges.subscription')
-    await card.get('[data-price-group="2"] button').trigger('click')
-    expect(card.emitted('open-group-detail')?.[0][0]).toMatchObject({ group: { id: 2 } })
-    await wrapper.get('#catalog-desktop-reference-1').setValue(false)
-    expect(wrapper.findAllComponents(PlazaModelCard)).toHaveLength(1)
-    expect(wrapper.findAll('[data-price-group="1"]')).toHaveLength(0)
-    expect(wrapper.findAll('[data-price-group="2"]')).toHaveLength(1)
-    wrapper.unmount()
-  })
-  it('clears, reselects multiple references, and resets to all without hiding models', async () => {
-    const wrapper = mountCatalog([group(), group({ id: 2, name: 'Other' }), group({ id: 3, name: 'Third' })])
-    const action = (key: string) => wrapper.findAll('aside button').find(button => button.text() === `modelPlaza.catalog.${key}`)!
-    await action('referenceClear').trigger('click')
-    expect(wrapper.findAllComponents(PlazaModelCard)).toHaveLength(1)
-    expect(wrapper.findAll('[data-price-group]')).toHaveLength(0)
-    expect(wrapper.text()).toContain('modelPlaza.catalog.chooseReferenceGroups')
-    await wrapper.get('#catalog-desktop-reference-1').setValue(true)
-    await wrapper.get('#catalog-desktop-reference-3').setValue(true)
-    expect(wrapper.findAll('[data-price-group]').map(node => node.attributes('data-price-group'))).toEqual(['1', '3'])
-    expect(wrapper.get('#catalog-mobile-reference-3').element).toHaveProperty('checked', true)
-    await action('referenceSelectAll').trigger('click')
-    expect(wrapper.findAll('[data-price-group]')).toHaveLength(3)
-    await wrapper.get('#catalog-desktop-reference-1').setValue(false)
-    await action('reset').trigger('click')
-    expect(wrapper.findAll('[data-price-group]')).toHaveLength(3)
-    wrapper.unmount()
-  })
-  it('preserves remaining choices after refresh, includes new groups in all, and preserves intentional empty selections', async () => {
-    const wrapper = mountCatalog([group(), group({ id: 2, name: 'Other' })])
-    await wrapper.get('#catalog-desktop-reference-1').setValue(false)
-    await wrapper.setProps({ response: { description: '', groups: [group({ id: 2, name: 'Other' }), group({ id: 3, name: 'Third' })] } })
-    expect(wrapper.findAll('[data-price-group]').map(node => node.attributes('data-price-group'))).toEqual(['2'])
-    await wrapper.setProps({ response: { description: '', groups: [group({ id: 3, name: 'Third' })] } })
-    expect(wrapper.findAll('[data-price-group]')).toHaveLength(1)
-    await wrapper.setProps({ response: { description: '', groups: [group({ id: 3, name: 'Third' }), group({ id: 4, name: 'Fourth' })] } })
-    expect(wrapper.findAll('[data-price-group]')).toHaveLength(2)
-    await wrapper.findAll('aside button').find(button => button.text() === 'modelPlaza.catalog.referenceClear')!.trigger('click')
-    await wrapper.setProps({ response: { description: '', groups: [group()] } })
-    expect(wrapper.findAll('[data-price-group]')).toHaveLength(0)
     wrapper.unmount()
   })
   it('keeps composite platform prices separate even when only one reference group is selected', () => {

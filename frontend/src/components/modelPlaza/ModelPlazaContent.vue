@@ -1,186 +1,208 @@
 <template>
-  <section class="catalog-shell overflow-hidden rounded-3xl border border-gray-200/80 bg-white shadow-sm dark:border-dark-700 dark:bg-dark-900" data-testid="model-catalog">
-    <header class="flex flex-wrap items-center justify-between gap-5 border-b border-gray-100 px-5 py-6 dark:border-dark-700 md:px-7">
-      <div class="flex flex-wrap items-center gap-3">
-        <h2 class="text-2xl font-bold tracking-tight text-gray-950 dark:text-white">{{ t('modelPlaza.title') }}</h2>
-        <span class="rounded-xl bg-gradient-to-r from-amber-400 to-orange-400 px-3 py-1.5 text-sm font-bold text-white" :title="t('modelPlaza.catalog.creditHint')">{{ t('modelPlaza.catalog.creditBadge') }}</span>
-      </div>
-      <div class="flex gap-3">
-        <div class="min-w-24 rounded-2xl border border-gray-200 px-4 py-3 dark:border-dark-700">
-          <p class="text-xs text-gray-500 dark:text-dark-400">{{ t('modelPlaza.catalog.totalModels') }}</p>
-          <p class="mt-1 text-2xl font-semibold tabular-nums text-gray-950 dark:text-white">{{ allModels.length }}</p>
-        </div>
-        <div class="min-w-24 rounded-2xl border border-gray-200 px-4 py-3 dark:border-dark-700">
-          <p class="text-xs text-gray-500 dark:text-dark-400">{{ t('modelPlaza.catalog.suppliers') }}</p>
-          <p class="mt-1 text-2xl font-semibold tabular-nums text-gray-950 dark:text-white">{{ allSupplierCount }}</p>
-        </div>
-      </div>
-    </header>
-
-    <details v-if="descriptionHtml" class="border-b border-gray-100 px-5 py-3 dark:border-dark-700 md:px-7">
-      <summary class="cursor-pointer text-sm font-medium text-gray-600 dark:text-dark-300">{{ t('modelPlaza.catalog.billingNotes') }}</summary>
-      <div class="plaza-description mt-3 text-sm" v-html="descriptionHtml"></div>
-    </details>
-    <p v-if="!isAuthenticated" class="px-5 pt-4 text-xs text-gray-500 dark:text-dark-400">{{ t('modelPlaza.anonymousHint') }}</p>
-
-    <div class="catalog-workspace">
-      <aside class="catalog-filter-rail hidden border-r border-gray-100 p-5 dark:border-dark-700 xl:block">
-        <PlazaFilters v-bind="filterProps" id-prefix="catalog-desktop" v-on="filterEvents" />
-      </aside>
-      <div class="min-w-0">
-        <div class="flex items-center gap-3 border-b border-gray-100 p-5 dark:border-dark-700">
-          <button type="button" class="btn btn-secondary shrink-0 xl:hidden" :aria-label="t('modelPlaza.catalog.filters')" @click="openFilters">
-            <Icon name="menu" size="sm" /><span class="hidden sm:inline">{{ t('modelPlaza.catalog.filters') }}</span>
-          </button>
-          <div class="relative min-w-0 flex-1">
-            <Icon name="search" size="md" class="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input v-model="searchQuery" type="search" class="input w-full rounded-2xl pl-10 text-sm" :aria-label="t('modelPlaza.searchPlaceholder')" :placeholder="t('modelPlaza.searchPlaceholder')" />
-          </div>
-          <span class="hidden shrink-0 text-xs tabular-nums text-gray-400 sm:block" aria-live="polite">{{ t('modelPlaza.catalog.results', { count: filteredModels.length, total: allModels.length }) }}</span>
-        </div>
-        <p class="flex flex-wrap items-center justify-between gap-2 px-5 pt-4 text-xs text-gray-500 dark:text-dark-400">
-          <span>{{ t('modelPlaza.catalog.priceSource', { group: priceGroupLabel }) }}</span>
-          <span class="sm:hidden" aria-live="polite">{{ t('modelPlaza.catalog.results', { count: filteredModels.length, total: allModels.length }) }}</span>
-        </p>
-        <div v-if="loading" class="flex min-h-64 items-center justify-center" role="status" :aria-label="t('modelPlaza.loading')">
-          <div class="h-8 w-8 animate-spin rounded-full border-2 border-primary-500/20 border-t-primary-500"></div>
-        </div>
-        <p v-else-if="error" role="alert" class="m-5 rounded-2xl bg-red-50 p-8 text-center text-sm text-red-600 dark:bg-red-900/20 dark:text-red-300">{{ t('modelPlaza.loadFailed') }}</p>
-        <div v-else-if="filteredModels.length" class="catalog-grid p-5">
-          <PlazaModelCard v-for="model in filteredModels" :key="`${selectionRevision}:${model.id}`" :model="model" :price-group-id="priceGroupIds[0] ?? null" :price-group-ids="priceGroupIds" @open-group-detail="activeDetail = $event" />
-        </div>
-        <p v-else class="m-5 rounded-2xl border border-dashed border-gray-200 px-5 py-14 text-center text-sm text-gray-500 dark:border-dark-700 dark:text-dark-400">{{ searchActive ? t('modelPlaza.noSearchResult') : t('modelPlaza.empty') }}</p>
-      </div>
+  <div class="space-y-5">
+    <!-- 页头(独立形态下展示标题;后台形态 AppHeader 已有页面标题) -->
+    <div v-if="!embedded">
+      <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">{{ t('modelPlaza.title') }}</h1>
+      <p class="mt-1.5 text-sm text-gray-500 dark:text-dark-400">{{ t('modelPlaza.description') }}</p>
     </div>
 
-    <dialog ref="filterDrawer" class="catalog-drawer m-0 h-dvh max-h-none w-[min(88vw,340px)] max-w-none border-r border-gray-200 bg-white p-0 text-gray-900 shadow-2xl dark:border-dark-700 dark:bg-dark-900 dark:text-white" :aria-label="t('modelPlaza.catalog.filters')" @click="onDrawerBackdrop">
-      <div class="flex h-full flex-col">
-        <div class="flex justify-end border-b border-gray-100 px-4 py-3 dark:border-dark-700">
-          <button type="button" class="btn-ghost btn-icon" :aria-label="t('common.close')" @click="closeFilters"><Icon name="x" size="md" /></button>
-        </div>
-        <div class="flex-1 overflow-y-auto p-5"><PlazaFilters v-bind="filterProps" id-prefix="catalog-mobile" v-on="filterEvents" /></div>
-        <div class="border-t border-gray-100 p-4 dark:border-dark-700"><button type="button" class="btn btn-primary w-full" @click="closeFilters">{{ t('modelPlaza.catalog.showResults', { count: filteredModels.length }) }}</button></div>
+    <!-- 全局价格说明(管理员配置,Markdown) -->
+    <div
+      v-if="descriptionHtml"
+      class="plaza-description rounded-2xl border border-gray-100 bg-white px-5 py-4 text-sm shadow-card dark:border-dark-700/50 dark:bg-dark-800/50"
+      v-html="descriptionHtml"
+    ></div>
+
+    <!-- 未登录提示 -->
+    <p
+      v-if="!isAuthenticated"
+      class="flex items-center gap-1.5 text-xs text-gray-400 dark:text-dark-500"
+    >
+      <Icon name="infoCircle" size="xs" class="h-3.5 w-3.5" />
+      {{ t('modelPlaza.anonymousHint') }}
+    </p>
+
+    <!-- 加载/错误/空 -->
+    <div v-if="loading" class="flex min-h-[240px] items-center justify-center">
+      <div class="h-8 w-8 animate-spin rounded-full border-2 border-primary-600/25 border-t-primary-600 dark:border-primary-400/25 dark:border-t-primary-400"></div>
+    </div>
+    <div
+      v-else-if="error"
+      class="rounded-2xl border border-red-200 bg-red-50 px-5 py-8 text-center text-sm text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
+    >
+      {{ t('modelPlaza.loadFailed') }}
+    </div>
+    <template v-else>
+      <!-- 筛选区:平台 → 分组 → 倍率 -->
+      <PlazaFilterBar
+        :platforms="platforms"
+        :groups="groupOptions"
+        :rates="rates"
+        :platform="selectedPlatform"
+        :group-ids="selectedGroupIds"
+        :rate="selectedRate"
+        :search="searchQuery"
+        @update:platform="selectedPlatform = $event"
+        @update:group-ids="selectedGroupIds = $event"
+        @update:rate="selectedRate = $event"
+        @update:search="searchQuery = $event"
+      />
+
+      <!-- 分组分节的模型清单(默认按生效倍率升序) -->
+      <div v-if="filteredGroups.length > 0" class="space-y-5">
+        <PlazaGroupSection v-for="g in filteredGroups" :key="g.id" :group="g" />
       </div>
-    </dialog>
-    <BaseDialog :show="activeDetail !== null" :title="activeDetail ? `${activeDetail.group.name} · ${activeDetail.model.name}` : t('modelPlaza.pricingDetail')" width="extra-wide" @close="activeDetail = null">
-      <PlazaGroupSection v-if="activeDetail" :group="{ ...activeDetail.group, models: [activeDetail.model] }" />
-    </BaseDialog>
-  </section>
+      <div
+        v-else
+        class="rounded-2xl border border-dashed border-gray-300 px-5 py-12 text-center text-sm text-gray-500 dark:border-dark-600 dark:text-dark-400"
+      >
+        {{ noGroupsSelected ? t('modelPlaza.selectGroupsHint') : searchActive ? t('modelPlaza.noSearchResult') : t('modelPlaza.empty') }}
+      </div>
+    </template>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import Icon from '@/components/icons/Icon.vue'
-import BaseDialog from '@/components/common/BaseDialog.vue'
+import PlazaFilterBar from './PlazaFilterBar.vue'
+import PlazaGroupSection from './PlazaGroupSection.vue'
+import type { ModelPlazaGroup, ModelPlazaResponse } from '@/api/modelPlaza'
 import { useAuthStore } from '@/stores/auth'
 import { effectiveGroupRate, useTemporaryRateNow } from '@/utils/temporary-rate'
-import type { ModelPlazaResponse } from '@/api/modelPlaza'
-import { aggregatePlazaModels, plazaModelType, type PlazaModelType, type PlazaBrandInfo, type GroupModelVariant } from './plaza-models'
-import PlazaModelCard from './PlazaModelCard.vue'
-import PlazaFilters from './PlazaFilters.vue'
-import PlazaGroupSection from './PlazaGroupSection.vue'
 
-const props = defineProps<{ response: ModelPlazaResponse | null; loading: boolean; error?: boolean; embedded?: boolean }>()
+const props = defineProps<{
+  response: ModelPlazaResponse | null
+  loading: boolean
+  error?: boolean
+  /** 后台内嵌形态(AppLayout 内):隐藏页头。 */
+  embedded?: boolean
+}>()
+
 const { t } = useI18n()
 const authStore = useAuthStore()
+const temporaryRateNow = useTemporaryRateNow()
 const isAuthenticated = computed(() => authStore.isAuthenticated)
-const now = useTemporaryRateNow()
-const groupId = ref<number | null>(null)
-const referenceGroupIds = ref<number[] | 'all'>('all')
-const supplierId = ref('all')
-const modelType = ref<PlazaModelType | 'all'>('all')
+
+const selectedPlatform = ref<string>('all')
+const selectedGroupIds = ref<number[] | 'all'>('all')
+const selectedRate = ref<number | 'all'>('all')
 const searchQuery = ref('')
-const activeDetail = ref<GroupModelVariant | null>(null)
-const filterDrawer = ref<HTMLDialogElement | null>(null)
-const selectionRevision = ref(0)
 
-const groups = computed(() => [...(props.response?.groups ?? [])].sort((a, b) => a.id - b.id))
-const groupOptions = computed(() => groups.value.map(group => ({ id: group.id, name: group.name, rate: effectiveGroupRate(group, group.user_rate_multiplier, now.value) })))
-watch(groups, list => {
-  if (!list.some(group => group.id === groupId.value)) groupId.value = null
-  if (referenceGroupIds.value !== 'all') {
-    const previous = referenceGroupIds.value
-    const remaining = previous.filter(id => list.some(group => group.id === id))
-    referenceGroupIds.value = previous.length && !remaining.length ? 'all' : remaining
-  }
-}, { immediate: true })
-watch([groupId, referenceGroupIds], () => { selectionRevision.value++ })
-const priceGroupIds = computed(() => groupId.value !== null ? [groupId.value] : referenceGroupIds.value === 'all' ? groups.value.map(group => group.id) : referenceGroupIds.value)
-const priceGroupLabel = computed(() => {
-  const selected = groups.value.filter(group => priceGroupIds.value.includes(group.id))
-  if (!selected.length) return t('modelPlaza.catalog.noReferenceSelected')
-  if (selected.length === groups.value.length && selected.length > 1) return t('modelPlaza.catalog.allGroups')
-  return selected.map(group => group.name).join(' · ')
-})
-const allModels = computed(() => aggregatePlazaModels(groups.value, now.value))
-const allSupplierCount = computed(() => new Set(allModels.value.map(model => model.brand.id)).size)
+const searchActive = computed(() => searchQuery.value.trim() !== '')
+const noGroupsSelected = computed(() => selectedGroupIds.value !== 'all' && selectedGroupIds.value.length === 0)
 
-const matchingModels = computed(() => allModels.value.filter(model => {
-  const variants = groupId.value === null ? model.variants : model.variants.filter(variant => variant.group.id === groupId.value)
-  return variants.length > 0 &&
-    (modelType.value === 'all' || variants.some(variant => plazaModelType(variant.model) === modelType.value)) &&
-    model.name.toLowerCase().includes(searchQuery.value.trim().toLowerCase())
-}))
-const suppliers = computed(() => {
-  const counts = new Map<string, PlazaBrandInfo & { count: number }>()
-  for (const model of matchingModels.value) {
-    const supplier = counts.get(model.brand.id) ?? { ...model.brand, count: 0 }
-    supplier.count++
-    counts.set(supplier.id, supplier)
+const descriptionHtml = computed(() => {
+  const md = props.response?.description?.trim()
+  if (!md) return ''
+  return DOMPurify.sanitize(marked.parse(md) as string)
+})
+
+/** 生效倍率 = 用户专属倍率 ?? 分组默认倍率。 */
+function effectiveRate(g: ModelPlazaGroup): number {
+  return effectiveGroupRate(g, g.user_rate_multiplier, temporaryRateNow.value)
+}
+
+const platforms = computed(() =>
+  [...new Set((props.response?.groups ?? []).map((g) => g.platform).filter(Boolean))].sort()
+)
+
+const groupOptions = computed(() =>
+  (props.response?.groups ?? []).map((g) => ({
+    id: g.id,
+    name: g.name,
+    platform: g.platform,
+    rate: effectiveRate(g)
+  }))
+)
+
+/** 全量生效倍率;当前组合下不可用的项由 FilterBar 置灰而非隐藏。 */
+const rates = computed(() =>
+  [...new Set((props.response?.groups ?? []).map(effectiveRate))].sort((a, b) => a - b)
+)
+
+/** 刷新后保留仍可用的已选分组;选择全部时自动包含新分组。 */
+watch(() => props.response?.groups, (groups) => {
+  const selected = selectedGroupIds.value
+  if (!groups || selected === 'all' || selected.length === 0) return
+  const availableIds = new Set(groups.map((g) => g.id))
+  const remaining = selected.filter((id) => availableIds.has(id))
+  selectedGroupIds.value = remaining.length > 0 ? remaining : 'all'
+})
+
+/** 数据刷新后选中的倍率可能不复存在,重置为全部。 */
+watch(rates, (list) => {
+  if (selectedRate.value !== 'all' && !list.includes(selectedRate.value)) {
+    selectedRate.value = 'all'
   }
-  return [...counts.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
 })
-// Keep a selected supplier visible when other filters reduce its matching count to zero.
-const supplierOptions = computed(() => {
-  if (supplierId.value === 'all' || suppliers.value.some(supplier => supplier.id === supplierId.value)) return suppliers.value
-  const brand = allModels.value.find(model => model.brand.id === supplierId.value)?.brand
-  return brand ? [...suppliers.value, { ...brand, count: 0 }] : suppliers.value
+
+const filteredGroups = computed(() => {
+  let groups = props.response?.groups ?? []
+  if (selectedPlatform.value !== 'all') {
+    groups = groups.filter((g) => g.platform === selectedPlatform.value)
+  }
+  const groupIds = selectedGroupIds.value
+  if (groupIds !== 'all') {
+    groups = groups.filter((g) => groupIds.includes(g.id))
+  }
+  if (selectedRate.value !== 'all') {
+    groups = groups.filter((g) => effectiveRate(g) === selectedRate.value)
+  }
+  // 模型名搜索:分组内只留命中的模型,整组无命中则隐藏该分组。
+  const q = searchQuery.value.trim().toLowerCase()
+  if (q) {
+    groups = groups
+      .map((g) => ({ ...g, models: g.models.filter((m) => m.name.toLowerCase().includes(q)) }))
+      .filter((g) => g.models.length > 0)
+  }
+  // 专属倍率会改变生效值,不能只依赖后端按默认倍率的排序。
+  return [...groups].sort(
+    (a, b) => effectiveRate(a) - effectiveRate(b) || a.name.localeCompare(b.name)
+  )
 })
-watch(allModels, list => {
-  if (!list.some(model => model.brand.id === supplierId.value)) supplierId.value = 'all'
-})
-const filteredModels = computed(() => matchingModels.value.filter(model => supplierId.value === 'all' || model.brand.id === supplierId.value))
-const searchActive = computed(() => !!searchQuery.value.trim() || groupId.value !== null || supplierId.value !== 'all' || modelType.value !== 'all')
-const descriptionHtml = computed(() => DOMPurify.sanitize(marked.parse(props.response?.description?.trim() ?? '') as string))
-const filterProps = computed(() => ({
-  groups: groupOptions.value, groupId: groupId.value, referenceGroupIds: referenceGroupIds.value,
-  modelType: modelType.value, suppliers: supplierOptions.value, supplierTotal: matchingModels.value.length, supplierId: supplierId.value
-}))
-const filterEvents = {
-  'update:groupId': (value: number | null) => { groupId.value = value },
-  'update:referenceGroupIds': (value: number[] | 'all') => { referenceGroupIds.value = value },
-  'update:modelType': (value: PlazaModelType | 'all') => { modelType.value = value },
-  'update:supplierId': (value: string) => { supplierId.value = value },
-  reset: () => { referenceGroupIds.value = 'all'; groupId.value = null; supplierId.value = 'all'; modelType.value = 'all'; searchQuery.value = ''; selectionRevision.value++ }
-}
-function openFilters() {
-  if (!filterDrawer.value || filterDrawer.value.open) return
-  filterDrawer.value.showModal()
-}
-function closeFilters() {
-  if (filterDrawer.value?.open) filterDrawer.value.close()
-}
-function onDrawerBackdrop(event: MouseEvent) {
-  if (event.target === filterDrawer.value) closeFilters()
-}
-onBeforeUnmount(closeFilters)
 </script>
 
 <style scoped>
-.catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 285px), 1fr)); gap: 18px; align-items: stretch; }
-.catalog-workspace { display: grid; grid-template-columns: minmax(0, 1fr); }
-@media (min-width: 1280px) { .catalog-workspace { grid-template-columns: 230px minmax(0, 1fr); } }
-.catalog-drawer::backdrop { background: rgb(15 23 42 / 40%); backdrop-filter: blur(3px); }
-:global(body:has(.catalog-drawer[open])) { overflow: hidden; }
-.plaza-description { line-height: 1.7; overflow-wrap: anywhere; }
-.plaza-description :deep(h1), .plaza-description :deep(h2), .plaza-description :deep(h3) { @apply mb-2 mt-3 font-semibold text-gray-900 first:mt-0 dark:text-white; }
-.plaza-description :deep(p), .plaza-description :deep(li) { @apply mb-2 text-gray-700 last:mb-0 dark:text-dark-200; }
-.plaza-description :deep(a) { @apply text-primary-600 underline underline-offset-4 dark:text-primary-300; }
-.plaza-description :deep(ul) { @apply mb-2 list-disc pl-5; }
-.plaza-description :deep(ol) { @apply mb-2 list-decimal pl-5; }
-.plaza-description :deep(code) { @apply rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs dark:bg-dark-800; }
-.plaza-description :deep(blockquote) { @apply my-2 border-l-4 border-gray-300 pl-3 text-gray-600 dark:border-dark-600 dark:text-dark-300; }
+.plaza-description {
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.plaza-description :deep(h1),
+.plaza-description :deep(h2),
+.plaza-description :deep(h3) {
+  @apply mb-2 mt-3 font-semibold text-gray-900 first:mt-0 dark:text-white;
+}
+
+.plaza-description :deep(p) {
+  @apply mb-2 text-gray-700 last:mb-0 dark:text-dark-200;
+}
+
+.plaza-description :deep(a) {
+  @apply text-primary-600 underline underline-offset-4 hover:text-primary-700 dark:text-primary-300;
+}
+
+.plaza-description :deep(ul) {
+  @apply mb-2 list-disc pl-5;
+}
+
+.plaza-description :deep(ol) {
+  @apply mb-2 list-decimal pl-5;
+}
+
+.plaza-description :deep(li) {
+  @apply mb-0.5 text-gray-700 dark:text-dark-200;
+}
+
+.plaza-description :deep(code) {
+  @apply rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs dark:bg-dark-800;
+}
+
+.plaza-description :deep(blockquote) {
+  @apply my-2 border-l-4 border-gray-300 pl-3 text-gray-600 dark:border-dark-600 dark:text-dark-300;
+}
 </style>

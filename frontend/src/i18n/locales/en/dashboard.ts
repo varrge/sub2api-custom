@@ -772,7 +772,13 @@ export default {
     loadFailed: 'Failed to load model plaza',
     noSearchResult: 'No matching models',
     anonymousHint: 'Sign in to see your exclusive groups and personal rates',
+    selectGroupsHint: 'Choose groups, or select all to view pricing for every group',
     filters: {
+      selectedGroups: '{selected}/{total} groups selected',
+      multiSelectHint: 'Select multiple groups; select all includes every group matching the current platform and rate',
+      clearSearch: 'Clear search',
+      clearGroups: 'Clear',
+      selectAll: 'Select all',
       platformLabel: 'Platform',
       groupLabel: 'Group',
       rateLabel: 'Rate',

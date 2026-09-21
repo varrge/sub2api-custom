@@ -420,4 +420,9 @@ function openPurchase() {
   .quick-menu-optional { display: none; }
 }
 
+/* Keep the authenticated header inside very narrow phone viewports. */
+@media (max-width: 359px) {
+  .header-balance { display: none; }
+}
+
 </style>

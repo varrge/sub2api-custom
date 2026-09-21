@@ -110,6 +110,12 @@ const platforms = computed(() =>
   [...new Set((props.response?.groups ?? []).map((g) => g.platform).filter(Boolean))].sort()
 )
 
+watch(platforms, (list) => {
+  if (selectedPlatform.value !== 'all' && !list.includes(selectedPlatform.value)) {
+    selectedPlatform.value = 'all'
+  }
+})
+
 const groupOptions = computed(() =>
   (props.response?.groups ?? []).map((g) => ({
     id: g.id,

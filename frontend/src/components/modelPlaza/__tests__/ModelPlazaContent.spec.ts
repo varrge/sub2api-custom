@@ -222,4 +222,14 @@ describe('ModelPlazaContent group multi-selection', () => {
     expect(shownGroups()).toHaveLength(0)
     expect(wrapper.text()).toContain('modelPlaza.selectGroupsHint')
   })
+
+  it('resets a platform filter when its last group disappears after refresh', async () => {
+    mountPlaza()
+    await button('openai').trigger('click')
+    const data = response()
+    data.groups = data.groups.filter((g) => g.platform === 'anthropic')
+    await wrapper.setProps({ response: data })
+    expect(shownGroups().map((g) => g.id)).toEqual([3, 4])
+    expect(button('anthropic').attributes('disabled')).toBeUndefined()
+  })
 })

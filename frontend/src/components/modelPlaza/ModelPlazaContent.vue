@@ -39,7 +39,7 @@
           <span class="hidden shrink-0 text-xs tabular-nums text-gray-400 sm:block" aria-live="polite">{{ t('modelPlaza.catalog.results', { count: filteredModels.length, total: allModels.length }) }}</span>
         </div>
         <p class="flex flex-wrap items-center justify-between gap-2 px-5 pt-4 text-xs text-gray-500 dark:text-dark-400">
-          <span>{{ t('modelPlaza.catalog.priceSource', { group: priceGroup?.name ?? t('modelPlaza.catalog.noGroups') }) }}</span>
+          <span>{{ t('modelPlaza.catalog.priceSource', { group: priceGroupLabel }) }}</span>
           <span class="sm:hidden" aria-live="polite">{{ t('modelPlaza.catalog.results', { count: filteredModels.length, total: allModels.length }) }}</span>
         </p>
         <div v-if="loading" class="flex min-h-64 items-center justify-center" role="status" :aria-label="t('modelPlaza.loading')">
@@ -47,7 +47,7 @@
         </div>
         <p v-else-if="error" role="alert" class="m-5 rounded-2xl bg-red-50 p-8 text-center text-sm text-red-600 dark:bg-red-900/20 dark:text-red-300">{{ t('modelPlaza.loadFailed') }}</p>
         <div v-else-if="filteredModels.length" class="catalog-grid p-5">
-          <PlazaModelCard v-for="model in filteredModels" :key="`${selectionRevision}:${model.id}`" :model="model" :price-group-id="priceGroupId" @open-group-detail="activeDetail = $event" />
+          <PlazaModelCard v-for="model in filteredModels" :key="`${selectionRevision}:${model.id}`" :model="model" :price-group-id="priceGroupIds[0] ?? null" :price-group-ids="priceGroupIds" @open-group-detail="activeDetail = $event" />
         </div>
         <p v-else class="m-5 rounded-2xl border border-dashed border-gray-200 px-5 py-14 text-center text-sm text-gray-500 dark:border-dark-700 dark:text-dark-400">{{ searchActive ? t('modelPlaza.noSearchResult') : t('modelPlaza.empty') }}</p>
       </div>
@@ -89,7 +89,7 @@ const authStore = useAuthStore()
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 const now = useTemporaryRateNow()
 const groupId = ref<number | null>(null)
-const referenceGroupId = ref<number | null>(null)
+const referenceGroupIds = ref<number[] | 'all'>('all')
 const supplierId = ref('all')
 const modelType = ref<PlazaModelType | 'all'>('all')
 const searchQuery = ref('')
@@ -101,11 +101,20 @@ const groups = computed(() => [...(props.response?.groups ?? [])].sort((a, b) =>
 const groupOptions = computed(() => groups.value.map(group => ({ id: group.id, name: group.name, rate: effectiveGroupRate(group, group.user_rate_multiplier, now.value) })))
 watch(groups, list => {
   if (!list.some(group => group.id === groupId.value)) groupId.value = null
-  if (!list.some(group => group.id === referenceGroupId.value)) referenceGroupId.value = list[0]?.id ?? null
+  if (referenceGroupIds.value !== 'all') {
+    const previous = referenceGroupIds.value
+    const remaining = previous.filter(id => list.some(group => group.id === id))
+    referenceGroupIds.value = previous.length && !remaining.length ? 'all' : remaining
+  }
 }, { immediate: true })
-watch([groupId, referenceGroupId], () => { selectionRevision.value++ })
-const priceGroupId = computed(() => groupId.value ?? referenceGroupId.value)
-const priceGroup = computed(() => groups.value.find(group => group.id === priceGroupId.value))
+watch([groupId, referenceGroupIds], () => { selectionRevision.value++ })
+const priceGroupIds = computed(() => groupId.value !== null ? [groupId.value] : referenceGroupIds.value === 'all' ? groups.value.map(group => group.id) : referenceGroupIds.value)
+const priceGroupLabel = computed(() => {
+  const selected = groups.value.filter(group => priceGroupIds.value.includes(group.id))
+  if (!selected.length) return t('modelPlaza.catalog.noReferenceSelected')
+  if (selected.length === groups.value.length && selected.length > 1) return t('modelPlaza.catalog.allGroups')
+  return selected.map(group => group.name).join(' · ')
+})
 const allModels = computed(() => aggregatePlazaModels(groups.value, now.value))
 const allSupplierCount = computed(() => new Set(allModels.value.map(model => model.brand.id)).size)
 
@@ -137,15 +146,15 @@ const filteredModels = computed(() => matchingModels.value.filter(model => suppl
 const searchActive = computed(() => !!searchQuery.value.trim() || groupId.value !== null || supplierId.value !== 'all' || modelType.value !== 'all')
 const descriptionHtml = computed(() => DOMPurify.sanitize(marked.parse(props.response?.description?.trim() ?? '') as string))
 const filterProps = computed(() => ({
-  groups: groupOptions.value, groupId: groupId.value, referenceGroupId: referenceGroupId.value,
+  groups: groupOptions.value, groupId: groupId.value, referenceGroupIds: referenceGroupIds.value,
   modelType: modelType.value, suppliers: supplierOptions.value, supplierTotal: matchingModels.value.length, supplierId: supplierId.value
 }))
 const filterEvents = {
   'update:groupId': (value: number | null) => { groupId.value = value },
-  'update:referenceGroupId': (value: number | null) => { referenceGroupId.value = value },
+  'update:referenceGroupIds': (value: number[] | 'all') => { referenceGroupIds.value = value },
   'update:modelType': (value: PlazaModelType | 'all') => { modelType.value = value },
   'update:supplierId': (value: string) => { supplierId.value = value },
-  reset: () => { groupId.value = null; supplierId.value = 'all'; modelType.value = 'all'; searchQuery.value = ''; selectionRevision.value++ }
+  reset: () => { referenceGroupIds.value = 'all'; groupId.value = null; supplierId.value = 'all'; modelType.value = 'all'; searchQuery.value = ''; selectionRevision.value++ }
 }
 function openFilters() {
   if (!filterDrawer.value || filterDrawer.value.open) return

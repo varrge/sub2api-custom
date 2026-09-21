@@ -19,14 +19,7 @@
         <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }} ×{{ group.rate }}</option>
       </select>
     </div>
-    <div v-if="groupId === null">
-      <label :for="`${idPrefix}-reference`" class="mb-3 block text-sm font-semibold text-gray-700 dark:text-dark-200">{{ t('modelPlaza.catalog.referenceGroup') }}</label>
-      <select :id="`${idPrefix}-reference`" :value="referenceGroupId ?? ''" class="input w-full text-sm" :disabled="!groups.length" @change="$emit('update:referenceGroupId', selectedId($event))">
-        <option v-if="!groups.length" value="">{{ t('modelPlaza.catalog.noGroups') }}</option>
-        <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }} ×{{ group.rate }}</option>
-      </select>
-      <p class="mt-2 text-xs leading-5 text-gray-400 dark:text-dark-400">{{ t('modelPlaza.catalog.referenceHint') }}</p>
-    </div>
+    <PlazaReferenceGroups v-if="groupId === null" :id-prefix="idPrefix" :groups="groups" :model-value="referenceGroupIds" @update:model-value="$emit('update:referenceGroupIds', $event)" />
     <fieldset>
       <legend class="mb-3 text-sm font-semibold text-gray-700 dark:text-dark-200">{{ t('modelPlaza.catalog.suppliers') }}</legend>
       <div class="space-y-2">
@@ -46,13 +39,14 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
+import PlazaReferenceGroups from './PlazaReferenceGroups.vue'
 import type { PlazaBrandInfo, PlazaModelType } from './plaza-models'
 
 defineProps<{
   idPrefix: string
   groups: { id: number; name: string; rate: number }[]
   groupId: number | null
-  referenceGroupId: number | null
+  referenceGroupIds: number[] | 'all'
   modelType: PlazaModelType | 'all'
   suppliers: (PlazaBrandInfo & { count: number })[]
   supplierTotal: number
@@ -60,7 +54,7 @@ defineProps<{
 }>()
 defineEmits<{
   'update:groupId': [number | null]
-  'update:referenceGroupId': [number | null]
+  'update:referenceGroupIds': [number[] | 'all']
   'update:modelType': [PlazaModelType | 'all']
   'update:supplierId': [string]
   reset: []

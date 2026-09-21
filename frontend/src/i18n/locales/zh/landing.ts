@@ -5,6 +5,43 @@ export default {
   },
   // Home Page
   home: {
+    marketing: {
+      skip: '跳至主要内容', navigation: '首页导航',
+      nav: { highlights: '亮点', start: '如何接入', pricing: '费用' },
+      eyebrow: '多模型 API · 编程与应用开发', heroFirst: '让灵感，', heroSecond: '接上强大的 AI。',
+      description: '在一个平台接入所需模型，让每一次调用清晰可查。', browseModels: '查看支持模型', discover: '向下探索，了解更多',
+      demo: {
+        title: '接入场景演示', choose: '选择演示场景', application: '你的应用', connection: 'API 连接', model: '模型能力',
+        caption: '场景示意。可用模型与能力以实际服务及账户权限为准。',
+        code: { label: '编程辅助', prompt: '从一个问题开始', result: '梳理思路，完善代码' },
+        write: { label: '内容创作', prompt: '从一个灵感开始', result: '展开想法，打磨表达' },
+        build: { label: '应用开发', prompt: '从一个需求开始', result: '将 AI 接入你的应用' }
+      },
+      highlights: { eyebrow: '为下一次创造，准备就绪', title: '把复杂留在背后。', description: '把时间，用在下一次创造。' },
+      models: { label: '模型选择', title: '找到适合任务的 AI。', description: '根据任务选择模型，按账户授权接入所需能力。' },
+      tools: { label: '接入体验', title: '接着用，你熟悉的工具。', description: '按工具的接入方式配置服务地址、密钥和模型，将 AI 带入工作流。' },
+      usage: { label: '用量管理', title: '每一次调用，心中有数。', description: '在控制台查看使用量与消费明细，让花费有迹可循。', caption: '用量趋势示意' },
+      start: {
+        eyebrow: '开始，只需清楚的几步', title: '从想用，到用上。', description: '跟随接入指引，为你的工具和应用配置 AI。',
+        account: { title: '登录账户', description: '了解可用服务与开通方式，确认账户已有相应权益。' },
+        key: { title: '创建密钥', description: '在控制台创建 API Key，选择已获授权的服务。' },
+        app: { title: '配置应用', description: '按工具指引填入服务地址、密钥和模型，完成首次调用。' }
+      },
+      pricing: {
+        eyebrow: '了解费用，再开始', title: '用得清楚，选得从容。', description: '模型、计费单位和额度规则，都是选择服务时值得了解的细节。',
+        models: '查看模型计费', plans: '查看可购方案',
+        model: { title: '按模型，了解计费', description: '不同模型与服务分组可能采用不同价格，调用前查看对应的计费说明。' },
+        quota: { title: '按需求，选择权益', description: '选择方案时核对模型范围、有效期、额度及使用限制，以实际商品说明为准。' },
+        records: { title: '用过多少，随时可查', description: '登录控制台查看调用记录和消费明细，了解自己的使用情况。' }
+      },
+      faq: {
+        title: '你可能想知道。',
+        models: { question: '我可以使用哪些模型？', answer: '可用模型取决于站点配置、服务分组及账户权限。模型广场开放时，可在其中查看目录；实际调用以账户获授权的模型为准。' },
+        tools: { question: '如何连接我的工具或应用？', answer: '通常需要配置服务地址、API Key 和模型名称。不同工具使用的协议与配置方式可能不同，请按站点文档或控制台中的密钥使用指引完成接入。' },
+        billing: { question: '费用和额度如何计算？', answer: '费用取决于使用的模型、服务分组及计费规则。购买方案前，请查看有效期、额度与使用限制；使用后可在控制台查看明细。' }
+      },
+      closing: { title: '下一个想法，从这里开始。', description: '为你的工具和应用，找到合适的 AI 能力。' }
+    },
     viewOnGithub: '在 GitHub 上查看',
     viewDocs: '查看文档',
     docs: '文档',

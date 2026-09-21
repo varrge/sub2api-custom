@@ -15,6 +15,7 @@ const { appStore, authStore } = vi.hoisted(() => ({
   authStore: {
     isAuthenticated: false,
     isAdmin: false,
+    isSimpleMode: false,
     user: null as { email?: string } | null,
     checkAuth: vi.fn(),
   },
@@ -70,6 +71,8 @@ describe('HomeView compact mode', () => {
   beforeEach(() => {
     authStore.isAuthenticated = false
     authStore.isAdmin = false
+    authStore.isSimpleMode = false
+    document.documentElement.classList.remove('dark')
     authStore.user = null
     authStore.checkAuth.mockClear()
     appStore.fetchPublicSettings.mockClear()
@@ -108,7 +111,7 @@ describe('HomeView compact mode', () => {
     const wrapper = mountHome(settings)
 
     expect(wrapper.find('[data-testid="compact-home"]').exists()).toBe(false)
-    expect(wrapper.find('.terminal-container').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="marketing-home"]').exists()).toBe(true)
   })
 
   it('links unauthenticated visitors to login', () => {
@@ -131,9 +134,9 @@ describe('HomeView compact mode', () => {
     expect(appStore.fetchPublicSettings).not.toHaveBeenCalled()
   })
 
-  it('shows the model plaza link to anonymous visitors when public access is enabled', () => {
+  it.each([true, false])('shows the public model plaza in compact=%s', (compact) => {
     const wrapper = mountHome({
-      compact_home_enabled: true,
+      compact_home_enabled: compact,
       model_plaza_enabled: true,
       model_plaza_require_auth: false,
     })
@@ -141,9 +144,9 @@ describe('HomeView compact mode', () => {
     expect(modelPlazaDestination(wrapper)).toBe('/model-plaza')
   })
 
-  it('hides the model plaza link from anonymous visitors when sign-in is required', () => {
+  it.each([true, false])('hides the private model plaza from visitors in compact=%s', (compact) => {
     const wrapper = mountHome({
-      compact_home_enabled: true,
+      compact_home_enabled: compact,
       model_plaza_enabled: true,
       model_plaza_require_auth: true,
     })
@@ -151,11 +154,11 @@ describe('HomeView compact mode', () => {
     expect(modelPlazaDestination(wrapper)).toBeUndefined()
   })
 
-  it('shows the model plaza link to authenticated visitors when sign-in is required', () => {
+  it.each([true, false])('shows the private model plaza to signed-in users in compact=%s', (compact) => {
     authStore.isAuthenticated = true
 
     const wrapper = mountHome({
-      compact_home_enabled: true,
+      compact_home_enabled: compact,
       model_plaza_enabled: true,
       model_plaza_require_auth: true,
     })
@@ -172,13 +175,65 @@ describe('HomeView compact mode', () => {
     expect(modelPlazaDestination(wrapper)).toBe('/model-plaza')
   })
 
-  it('hides the model plaza link when the feature is disabled', () => {
+  it.each([true, false])('hides the disabled model plaza in compact=%s', (compact) => {
     const wrapper = mountHome({
-      compact_home_enabled: true,
+      compact_home_enabled: compact,
       model_plaza_enabled: false,
       model_plaza_require_auth: false,
     })
 
     expect(modelPlazaDestination(wrapper)).toBeUndefined()
+  })
+
+  it.each([
+    [false, false, '/login'],
+    [true, false, '/dashboard'],
+    [true, true, '/admin/dashboard'],
+  ])('routes marketing CTA for authenticated=%s admin=%s', (authenticated, admin, destination) => {
+    authStore.isAuthenticated = authenticated as boolean
+    authStore.isAdmin = admin as boolean
+    const wrapper = mountHome()
+    expect(wrapper.getComponent('[data-testid="home-primary-cta"]').props('to')).toBe(destination)
+  })
+
+  it('offers the existing purchase route when payments are enabled', () => {
+    const wrapper = mountHome({ payment_enabled: true, registration_enabled: false })
+    expect(wrapper.getComponent('[data-testid="home-purchase-cta"]').props('to')).toBe('/purchase')
+    expect(wrapper.findAllComponents(RouterLinkStub).some((link) => link.props('to') === '/register')).toBe(false)
+  })
+
+  it.each(['disabled', 'admin', 'simple'])('hides the purchase CTA for %s', (reason) => {
+    authStore.isAdmin = reason === 'admin'
+    authStore.isSimpleMode = reason === 'simple'
+    const wrapper = mountHome({ payment_enabled: reason !== 'disabled' })
+    expect(wrapper.find('[data-testid="home-purchase-cta"]').exists()).toBe(false)
+  })
+
+  it('preserves site branding and only renders safe documentation links', () => {
+    const wrapper = mountHome({ doc_url: 'https://example.com/docs', site_logo: '/brand.svg' })
+    expect(wrapper.get('.brand').text()).toContain('Test site')
+    expect(wrapper.get('.brand img').attributes('src')).toBe('/brand.svg')
+    expect(wrapper.get('.hero .eyebrow').text()).toBe('Test subtitle')
+    expect(wrapper.findAll('a[href="https://example.com/docs"]').length).toBeGreaterThan(0)
+    const unsafe = mountHome({ doc_url: 'javascript:alert(1)' })
+    expect(unsafe.find('a[href^="javascript:"]').exists()).toBe(false)
+  })
+
+  it('switches illustrative scenarios without making a model request', async () => {
+    const wrapper = mountHome()
+    const buttons = wrapper.findAll('.scenarios button')
+    await buttons[1].trigger('click')
+    expect(buttons[0].attributes('aria-pressed')).toBe('false')
+    expect(buttons[1].attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('#home-demo-content').text()).toContain('home.marketing.demo.write.result')
+    expect(appStore.fetchPublicSettings).not.toHaveBeenCalled()
+  })
+
+  it('applies and persists the theme preference from the marketing header', async () => {
+    const wrapper = mountHome()
+    await wrapper.get('.theme-button').trigger('click')
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
+    expect(localStorage.getItem('theme')).toBe('dark')
+    expect(wrapper.get('[data-testid="marketing-home"]').classes()).toContain('is-dark')
   })
 })

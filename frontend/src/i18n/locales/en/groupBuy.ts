@@ -1,5 +1,10 @@
 export default {
   groupBuy: {
+    "cardValidity": "30 days",
+    "cardDetails": "Quota tiers and rules",
+    "previewMembers": "{members} members",
+    "previewInitial": "Initial",
+    "quotaPreview": "Team quota preview",
     sharedBillingHint: 'The shared billing history keeps month-card, same-group subscription, and balance charges together so request totals can be verified. In-flight requests may settle entirely against the balance.',
     myGroupBuy: 'My Group Buy',
     myGroupBuyDescription: 'Manage group-buy and solo month cards, quotas, freezes, and charges.',

@@ -5,6 +5,43 @@ export default {
   },
   // Home Page
   home: {
+    marketing: {
+      skip: 'Skip to main content', navigation: 'Home navigation',
+      nav: { highlights: 'Highlights', start: 'Get connected', pricing: 'Pricing' },
+      eyebrow: 'Multi-model API · Built for your ideas', heroFirst: 'Your next idea.', heroSecond: 'Powered by AI.',
+      description: 'Connect to the models you need, with a clear view of every call.', browseModels: 'Explore models', discover: 'Scroll to explore',
+      demo: {
+        title: 'Connection preview', choose: 'Choose a demo scenario', application: 'Your application', connection: 'API connection', model: 'Model capabilities',
+        caption: 'Illustrative scenarios. Available models and capabilities depend on the service and your account permissions.',
+        code: { label: 'Coding', prompt: 'Start with a problem', result: 'Explore solutions. Refine your code.' },
+        write: { label: 'Writing', prompt: 'Start with an idea', result: 'Develop your thoughts. Find your words.' },
+        build: { label: 'Building', prompt: 'Start with a need', result: 'Bring AI into your application.' }
+      },
+      highlights: { eyebrow: 'Ready for what comes next', title: 'Less to manage. More to create.', description: 'Make room for your next great idea.' },
+      models: { label: 'Model choice', title: 'The right AI for the task.', description: 'Choose a model for your task and connect to the capabilities available to your account.' },
+      tools: { label: 'Getting connected', title: 'Keep the tools you know.', description: 'Configure the endpoint, key and model for your tool to bring AI into your workflow.' },
+      usage: { label: 'Usage visibility', title: 'Every call. In clear view.', description: 'See usage and spending details in your dashboard, so you know where it goes.', caption: 'Illustrative usage trend' },
+      start: {
+        eyebrow: 'A clear path to your first call', title: 'From curious to connected.', description: 'Follow the setup guide to connect your tools and applications.',
+        account: { title: 'Sign in', description: 'Explore available services and make sure your account has the access you need.' },
+        key: { title: 'Create a key', description: 'Create an API key in the dashboard and choose services you have access to.' },
+        app: { title: 'Connect your app', description: 'Follow your tool’s guide to set the endpoint, key and model, then make your first call.' }
+      },
+      pricing: {
+        eyebrow: 'Understand the cost. Then create.', title: 'Choose with clarity.', description: 'Know the model, billing units and quota rules before you choose a service.',
+        models: 'View model pricing', plans: 'Explore available plans',
+        model: { title: 'Understand each model’s price', description: 'Prices can vary by model and service group. Check the applicable rates before making calls.' },
+        quota: { title: 'Find the access you need', description: 'Review model access, validity, quotas and usage limits in the actual plan details.' },
+        records: { title: 'Keep track as you go', description: 'Sign in to view call records and spending details in your dashboard.' }
+      },
+      faq: {
+        title: 'A few things to know.',
+        models: { question: 'Which models can I use?', answer: 'Available models depend on the site configuration, service groups and your account permissions. Browse the model catalog when it is enabled; actual access is determined by your account.' },
+        tools: { question: 'How do I connect my tool or application?', answer: 'You generally need an endpoint, API key and model name. Protocols and setup steps vary between tools. Follow the site documentation or the key usage guide in your dashboard.' },
+        billing: { question: 'How do billing and quotas work?', answer: 'Charges depend on the model, service group and billing rules. Review validity, quotas and limits before choosing a plan. Your dashboard shows usage details after you make calls.' }
+      },
+      closing: { title: 'Your next idea starts here.', description: 'Find the AI capabilities for your tools and applications.' }
+    },
     viewOnGithub: 'View on GitHub',
     viewDocs: 'View Documentation',
     docs: 'Docs',

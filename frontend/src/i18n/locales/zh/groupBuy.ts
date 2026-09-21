@@ -1,5 +1,10 @@
 export default {
   groupBuy: {
+    "cardValidity": "30 天",
+    "cardDetails": "额度阶梯与规则说明",
+    "previewMembers": "{members}人",
+    "previewInitial": "初始",
+    "quotaPreview": "拼团额度预览",
     sharedBillingHint: '扣费明细保留月卡、同组订阅与余额补扣的完整记录，方便核对调用总费用；已开始的调用也可能只产生余额补扣。',
     myGroupBuy: '我的拼团',
     myGroupBuyDescription: '管理拼团月卡与独购月卡，查看额度、冻结状态和扣费记录。',

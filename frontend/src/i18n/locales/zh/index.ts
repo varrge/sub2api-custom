@@ -1,3 +1,4 @@
+import activityLeaderboard from './activityLeaderboard'
 import groupBuy from './groupBuy'
 import landing from './landing'
 import common from './common'
@@ -10,6 +11,7 @@ import admin from './admin'
 import misc from './misc'
 
 export default {
+  ...activityLeaderboard,
   ...groupBuy,
   ...landing,
   ...common,

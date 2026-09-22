@@ -26,6 +26,8 @@ const state = vi.hoisted(() => ({
   },
 }))
 
+vi.mock('@/api/activityLeaderboard', () => ({ getActivityLeaderboard: vi.fn() }))
+
 const routerPush = vi.hoisted(() => vi.fn())
 
 vi.mock('vue-router', () => ({
@@ -40,7 +42,7 @@ vi.mock('vue-router', () => ({
 
 vi.mock('vue-i18n', async (importOriginal) => ({
   ...await importOriginal<typeof import('vue-i18n')>(),
-  useI18n: () => ({ t: (key: string) => key }),
+  useI18n: () => ({ t: (key: string) => key, locale: { value: 'zh' } }),
 }))
 
 vi.mock('@/stores', () => ({
@@ -140,6 +142,13 @@ describe('AppHeader top quick menu', () => {
     document.documentElement.classList.remove('dark')
   })
 
+  it('places the leaderboard directly between theme and balance', () => {
+    const view = mountHeader()
+    const ids = view.findAll('[data-testid]').map((node) => node.attributes('data-testid'))
+    const theme = ids.indexOf('header-theme-toggle')
+    expect(ids.slice(theme, theme + 3)).toEqual(['header-theme-toggle', 'header-activity-leaderboard', 'header-balance'])
+  })
+
   it.each([
     [false, false, 'nav.recharge', 'purchase.rechargeDescription'],
     [true, true, 'nav.subscribe', 'purchase.subscriptionDescription'],
@@ -218,12 +227,12 @@ describe('AppHeader top quick menu', () => {
     expect(view.get(`[data-testid="top-quick-menu-${itemID}"]`).attributes('aria-current')).toBe('page')
   })
 
-  it('ends the header actions with announcement, theme, and available balance', async () => {
+  it('ends the header actions with announcement, theme, leaderboard, and available balance', async () => {
     const view = mountHeader()
 
     expect(
-      view.findAll('[data-testid^="header-"]').slice(0, 3).map((node) => node.attributes('data-testid')),
-    ).toEqual(['header-announcement', 'header-theme-toggle', 'header-balance'])
+      view.findAll('[data-testid^="header-"]').slice(0, 4).map((node) => node.attributes('data-testid')),
+    ).toEqual(['header-announcement', 'header-theme-toggle', 'header-activity-leaderboard', 'header-balance'])
     expect(view.get('[data-testid="header-balance"]').classes()).not.toContain('hidden')
     expect(view.get('[data-testid="header-balance"]').text()).toContain('$42.50')
 

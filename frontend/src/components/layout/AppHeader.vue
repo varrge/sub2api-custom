@@ -63,7 +63,7 @@
         </div>
       </nav>
 
-      <!-- Right: Docs + Language + Subscriptions + Announcements + Theme + Balance -->
+      <!-- Right: Docs + Language + Subscriptions + Announcements + Theme + Leaderboard + Balance -->
       <div class="flex min-w-0 items-center gap-1 sm:gap-3">
         <!-- Docs Link -->
         <a
@@ -104,7 +104,7 @@
 
         <div class="flex min-w-0 items-center gap-1 rounded-2xl border border-gray-200/70 bg-white/70 p-0.5 shadow-sm shadow-slate-900/5 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.06] dark:shadow-black/20 sm:gap-1.5">
           <!-- Language Switcher -->
-          <LocaleSwitcher />
+          <LocaleSwitcher class="header-locale" />
 
           <!-- Subscription Progress (for users with active subscriptions) -->
           <SubscriptionProgressMini v-if="user && subscriptionFeatureEnabled" class="header-subscription" />
@@ -125,6 +125,8 @@
             <Icon :name="isDark ? 'sun' : 'moon'" size="md" :class="isDark ? 'text-amber-500' : ''" />
           </button>
 
+          <ActivityLeaderboard v-if="user" :key="user.id" />
+
           <!-- Balance Display -->
           <div
             v-if="user"
@@ -142,13 +144,13 @@
               data-testid="header-balance"
               @click="openPurchase"
             >
-              <Icon name="dollar" size="sm" class="shrink-0" />
+              <Icon name="dollar" size="sm" class="header-balance-icon shrink-0" />
               <span
                 v-if="balanceLoading"
                 class="h-4 w-14 animate-pulse rounded bg-gray-200 dark:bg-dark-700"
                 aria-hidden="true"
               ></span>
-              <span v-else class="max-w-28 truncate text-sm font-semibold tabular-nums">
+              <span v-else class="header-balance-value max-w-28 truncate text-sm font-semibold tabular-nums">
                 {{ balanceDisplay }}
               </span>
             </button>
@@ -189,6 +191,7 @@ import { useSupportTicketStore } from '@/stores/supportTickets'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMini.vue'
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
+import ActivityLeaderboard from '@/components/common/ActivityLeaderboard.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeUrl } from '@/utils/url'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
@@ -339,11 +342,9 @@ function openPurchase() {
 }
 
 .quick-menu-slot {
-  position: absolute;
-  left: 50%;
   display: flex;
-  width: clamp(2.5rem, calc(100% - 28rem), 35rem);
-  transform: translateX(-50%);
+  flex: 1 1 0;
+  min-width: 0;
   justify-content: center;
   container-type: inline-size;
 }
@@ -404,15 +405,16 @@ function openPurchase() {
 }
 
 @media (max-width: 639px) {
+  /* Keep every action reachable, including at 320px with a long balance. */
+  .app-header :deep(.btn-icon) { width: 2rem; }
+  .header-locale :deep(button > svg) { display: none; }
+  .header-balance-icon { display: none; }
+  .header-balance-value { max-width: clamp(2.5rem, calc(100vw - 18rem), 7rem); }
+
   .quick-menu-slot { display: none; }
 
   .quick-menu-dashboard-label,
   .quick-menu-optional { display: none; }
-}
-
-/* Keep the authenticated header inside very narrow phone viewports. */
-@media (max-width: 359px) {
-  .header-balance { display: none; }
 }
 
 </style>

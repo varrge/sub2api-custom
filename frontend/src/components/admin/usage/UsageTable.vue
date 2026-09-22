@@ -9,7 +9,7 @@
       </span>
       <button
         type="button"
-        class="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-primary-600 transition-colors hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-primary-400 dark:hover:bg-primary-900/30"
+        class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-primary-600 transition-colors hover:bg-primary-500/10 disabled:cursor-not-allowed disabled:opacity-50 dark:text-primary-400 dark:hover:bg-primary-500/10"
         :disabled="ipGeoBatchLoading || pendingIpCount === 0"
         @click="handleBatchFetchIpGeo"
       >
@@ -198,8 +198,8 @@
               @mouseenter="showTokenTooltip($event, row)"
               @mouseleave="hideTokenTooltip"
             >
-              <div class="flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-gray-100 transition-colors group-hover:bg-blue-100 dark:bg-gray-700 dark:group-hover:bg-blue-900/50">
-                <Icon name="infoCircle" size="xs" class="text-gray-400 group-hover:text-blue-500 dark:text-gray-500 dark:group-hover:text-blue-400" />
+              <div class="info-trigger">
+                <Icon name="infoCircle" size="xs" />
               </div>
             </div>
           </div>
@@ -220,8 +220,8 @@
                 @mouseenter="showTooltip($event, row)"
                 @mouseleave="hideTooltip"
               >
-                <div class="flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-gray-100 transition-colors group-hover:bg-blue-100 dark:bg-gray-700 dark:group-hover:bg-blue-900/50">
-                  <Icon name="infoCircle" size="xs" class="text-gray-400 group-hover:text-blue-500 dark:text-gray-500 dark:group-hover:text-blue-400" />
+                <div class="info-trigger">
+                  <Icon name="infoCircle" size="xs" />
                 </div>
               </div>
             </div>
@@ -764,3 +764,14 @@ const hideTokenTooltip = () => {
   tokenTooltipData.value = null
 }
 </script>
+
+<style scoped>
+/* Subdued info trigger: a quiet inset chip that surfaces copper on hover. */
+.info-trigger {
+  @apply flex h-4 w-4 cursor-help items-center justify-center rounded-full;
+  @apply bg-gray-100 text-gray-400 transition-colors;
+  @apply group-hover:bg-primary-500/15 group-hover:text-primary-500;
+  @apply dark:bg-dark-700 dark:text-dark-400;
+  @apply dark:group-hover:bg-primary-500/15 dark:group-hover:text-primary-400;
+}
+</style>

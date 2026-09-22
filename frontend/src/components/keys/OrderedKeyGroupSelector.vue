@@ -259,6 +259,24 @@ const move = (index: number, direction: number) => {
   overflow-wrap: anywhere;
 }
 
+/* Narrow component width (e.g. 320px phone modals): the rate pill / peak-rate
+   window column is shrink-0 while the name column is flex-1 min-w-0, so the
+   name can be squeezed to a few pixels without flex-wrap ever kicking in.
+   Force the name and rate columns onto their own full-width lines, above the
+   point where the rate column can consume most of the row. Applies to both
+   candidate and selected rows (same .key-group-option wrapper). */
+@container (max-width: 24rem) {
+  .key-group-option :deep(> div:first-child),
+  .key-group-option :deep(> div:nth-child(2)) {
+    flex-basis: 100%;
+    width: 100%;
+  }
+
+  .key-group-option :deep(> div:nth-child(2)) {
+    justify-content: flex-end;
+  }
+}
+
 /* Compact icon buttons inside selected rows */
 .key-group-row .btn-icon {
   display: inline-flex;

@@ -44,12 +44,12 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="model in models" :key="model.model" class="border-t border-gray-100 dark:border-dark-700">
-                  <td class="max-w-[100px] truncate py-1.5 font-medium text-gray-900 dark:text-white" :title="model.model">{{ model.model }}</td>
+                <tr v-for="(model, index) in models" :key="model.model" class="border-t border-gray-100 dark:border-dark-700">
+                  <td class="max-w-[100px] truncate py-1.5 font-medium text-gray-900 dark:text-white" :title="model.model"><span class="mr-1.5 inline-block h-2 w-2 rounded-full" :style="{ backgroundColor: chartPalette[index % chartPalette.length] }" aria-hidden="true"></span>{{ model.model }}</td>
                   <td class="py-1.5 text-right text-gray-600 dark:text-gray-400">{{ formatNumber(model.requests) }}</td>
                   <td class="py-1.5 text-right text-gray-600 dark:text-gray-400">{{ formatTokens(model.total_tokens) }}</td>
-                  <td class="py-1.5 text-right text-green-600 dark:text-green-400">${{ formatCost(model.actual_cost) }}</td>
-                  <td class="py-1.5 text-right text-gray-400 dark:text-gray-500">${{ formatCost(model.cost) }}</td>
+                  <td class="py-1.5 text-right text-primary-600 dark:text-primary-400">${{ formatCost(model.actual_cost) }}</td>
+                  <td class="py-1.5 text-right text-gray-500 dark:text-dark-400">${{ formatCost(model.cost) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -65,6 +65,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { chartPalette } from '@/components/charts/palette'
 import { useI18n } from 'vue-i18n'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
@@ -84,11 +85,15 @@ const modelData = computed(() => !props.models?.length ? null : {
   labels: props.models.map((m: ModelStat) => m.model),
   datasets: [{
     data: props.models.map((m: ModelStat) => m.total_tokens),
-    backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
+    backgroundColor: props.models.map((_, index) => chartPalette[index % chartPalette.length]),
+    borderWidth: 0
   }]
 })
 
 const doughnutOptions = {
+  cutout: '72%',
+  spacing: 2,
+  borderRadius: 3,
   responsive: true,
   maintainAspectRatio: false,
   plugins: {

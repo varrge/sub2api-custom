@@ -20,6 +20,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { chartPalette, useChartDarkMode } from '@/components/charts/palette'
 import { useI18n } from 'vue-i18n'
 import {
   Chart as ChartJS,
@@ -44,12 +45,10 @@ const props = defineProps<{
   loading?: boolean
 }>()
 
-const colors = [
-  ['rgb(59, 130, 246)', 'rgba(59, 130, 246, 0.1)'],
-  ['rgb(168, 85, 247)', 'rgba(168, 85, 247, 0.1)'],
-  ['rgb(245, 158, 11)', 'rgba(245, 158, 11, 0.1)'],
-  ['rgb(239, 68, 68)', 'rgba(239, 68, 68, 0.1)'],
-]
+const isDark = useChartDarkMode()
+const colors = chartPalette.map(color => [color, `${color}18`])
+const textColor = computed(() => isDark.value ? '#b0b0bb' : '#6b6b75')
+const gridColor = computed(() => isDark.value ? '#ffffff0d' : '#1d1d1f0b')
 
 const chartData = computed(() => {
   if (!props.data || props.data.length === 0) return null
@@ -66,18 +65,22 @@ const chartData = computed(() => {
           backgroundColor,
           fill: true,
           tension: 0.3,
-          pointRadius: 3,
+          borderWidth: 2,
+          pointRadius: 2,
           pointHoverRadius: 5,
         }
       }),
       {
         label: t('payment.admin.orderCount'),
         data: props.data.map(d => d.count),
-        borderColor: 'rgb(16, 185, 129)',
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        borderColor: '#839b93',
+        backgroundColor: '#839b9318',
         fill: false,
         tension: 0.3,
-        pointRadius: 3,
+        borderWidth: 2,
+        borderDash: [4, 4],
+        pointStyle: 'triangle' as const,
+        pointRadius: 2,
         pointHoverRadius: 5,
         yAxisID: 'y1',
       }
@@ -85,27 +88,31 @@ const chartData = computed(() => {
   }
 })
 
-const chartOptions = {
+const chartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   interaction: { mode: 'index' as const, intersect: false },
   scales: {
+    x: { ticks: { color: textColor.value }, grid: { color: gridColor.value } },
     y: {
       type: 'linear' as const,
       display: true,
       position: 'left' as const,
-      title: { display: true, text: t('payment.admin.revenue') },
+      title: { display: true, text: t('payment.admin.revenue'), color: textColor.value },
+      ticks: { color: textColor.value },
+      grid: { color: gridColor.value },
     },
     y1: {
       type: 'linear' as const,
       display: true,
       position: 'right' as const,
-      title: { display: true, text: t('payment.admin.orderCount') },
+      title: { display: true, text: t('payment.admin.orderCount'), color: textColor.value },
+      ticks: { color: textColor.value },
       grid: { drawOnChartArea: false },
     }
   },
   plugins: {
-    legend: { position: 'top' as const },
+    legend: { position: 'top' as const, labels: { color: textColor.value, usePointStyle: true } },
   }
-}
+}))
 </script>

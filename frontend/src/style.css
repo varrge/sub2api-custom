@@ -307,6 +307,29 @@
   }
 
   /* ============ 统计卡片 ============ */
+  .dashboard-metrics {
+    @apply grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4;
+  }
+
+  .dashboard-metric {
+    @apply min-w-0 p-4 sm:p-5;
+  }
+
+  .dashboard-metric > div {
+    @apply flex-col items-start gap-3;
+  }
+
+  .dashboard-metric > div > div:last-child {
+    @apply min-w-0 w-full;
+    overflow-wrap: anywhere;
+  }
+
+  .dashboard-metric-icon {
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-primary-600 dark:text-primary-400;
+    background: var(--surface-inset);
+    border-color: var(--surface-border);
+  }
+
   .stat-card {
     @apply card p-5;
     @apply flex items-start gap-4;

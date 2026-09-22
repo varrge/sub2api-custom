@@ -49,10 +49,12 @@
 
 ## 中国测试部署（2026-09-22）
 
-- 源码提交：`932b347d677d9f1a8de01406ae5f54a6dee7a891`；版本：`0.2.7-custom.7-candidate.navigation-ui.932b347d6`。
+- 源码提交：`0e44922ce386037c2c760e7c2e041b09ce40d0b7`；版本：`0.2.7-custom.7-candidate.navigation-ui.0e44922ce`。
 - 设置入口：<http://127.0.0.1:18081/admin/settings>；密钥：<http://127.0.0.1:18081/keys>；图标预览：<http://127.0.0.1:18081/menu-icons/preview.html>。
-- 备份与部署证据：`/home/yinan/sub2api-staging/sidebar-ui-20260922T141821Z`。回滚镜像：`sub2api-restore:sidebar-ui-20260922t141821z`。
-- 镜像 ID：`sha256:3fb04e7ae9d8b3b598cdfdd38609a051e82707a92cf186a9122713b501d6da45`；二进制 SHA-256：`c9e10bb8239a6d52beb6db9ba3ee69ce8ed25ef33525e9920099c8810d12330d`。
+- 备份与部署证据：`/home/yinan/sub2api-staging/sidebar-preview-20260922T151000Z`。回滚镜像：`sub2api-restore:sidebar-preview-20260922t151000z`。
+- 镜像 ID：`sha256:b1b5290df5e8705c5f29f1cb05983db71ea9182d6bc6c20a10341fc26e594872`；二进制 SHA-256：`3676f00aca16f1a62edfe4cf7af140c1b319a6832c3bd6e32117f96c9c993e71`。
 - 仅重建中国测试应用，约 7.9 秒后 healthy；其他容器、用户 / 账号 / 密钥 / 订阅记录计数不变，无数据库迁移。
 - 真实接口验证分组保存与读回、公开配置及 HTML 初始化配置过滤、非法输入拒绝、匿名和普通用户无管理权限。临时分组已恢复，原消费榜配置未改动；9 个 SVG 均可访问。
 - 本地证据目录：`/tmp/sub2api-sidebar-ui-20260922T141821Z`。未合并、推送或打 tag，未部署日本生产。
+
+部署后的隧道浏览器检查通过：管理员可打开侧栏分组设置和九种图标预设；普通用户可打开加宽密钥弹窗并切换两页签；图标预览显示九个下载入口。浏览器检查未保存任何业务修改。初次部署发现 Go 文件服务会重定向 `index.html`，最终改为 `preview.html` 后重新构建部署并验证，无重定向。补丁证据位于 `/tmp/sub2api-sidebar-preview-20260922T151000Z`。

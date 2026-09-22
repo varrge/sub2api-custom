@@ -12,7 +12,7 @@
       </p>
     </div>
 
-    <div class="space-y-5 p-6">
+    <div class="space-y-5 p-4 sm:p-6">
       <div v-if="loading" class="flex items-center gap-2 text-gray-500">
         <div
           class="h-4 w-4 animate-spin rounded-full border-b-2 border-primary-600"
@@ -84,7 +84,7 @@
               v-model="form.title"
               type="text"
               maxlength="80"
-              class="input"
+              class="input min-w-0"
               id="activity-leaderboard-title"
               data-testid="activity-leaderboard-title"
             />
@@ -103,7 +103,7 @@
               v-model="form.subtitle"
               type="text"
               maxlength="160"
-              class="input"
+              class="input min-w-0"
               id="activity-leaderboard-subtitle"
               data-testid="activity-leaderboard-subtitle"
             />
@@ -122,7 +122,7 @@
               v-model="form.reward_description"
               rows="3"
               maxlength="1000"
-              class="input"
+              class="input min-w-0"
               id="activity-leaderboard-reward"
               data-testid="activity-leaderboard-reward"
             ></textarea>
@@ -141,7 +141,7 @@
               v-model="form.startsAtInput"
               type="datetime-local"
               step="1"
-              class="input"
+              class="input min-w-0"
               id="activity-leaderboard-starts-at"
               data-testid="activity-leaderboard-starts-at"
             />
@@ -160,7 +160,7 @@
               v-model="form.endsAtInput"
               type="datetime-local"
               step="1"
-              class="input"
+              class="input min-w-0"
               id="activity-leaderboard-ends-at"
               data-testid="activity-leaderboard-ends-at"
             />
@@ -175,12 +175,12 @@
             >
               {{ t("admin.settings.activityLeaderboard.demoExpiresAt") }}
             </label>
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2 sm:flex-nowrap">
               <input
                 v-model="form.demoExpiresAtInput"
                 type="datetime-local"
               step="1"
-                class="input"
+                class="input min-w-0"
                 id="activity-leaderboard-demo-expires-at"
               data-testid="activity-leaderboard-demo-expires-at"
               />
@@ -189,6 +189,7 @@
                 type="button"
                 class="btn btn-secondary btn-sm"
                 data-testid="activity-leaderboard-demo-clear"
+                :disabled="saving"
                 @click="form.demoExpiresAtInput = ''"
               >
                 {{ t("admin.settings.activityLeaderboard.demoExpiresAtClear") }}

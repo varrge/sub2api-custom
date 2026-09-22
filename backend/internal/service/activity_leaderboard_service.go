@@ -13,12 +13,17 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-const festivalCampaignID = "double-festival-2026"
 const activityLeaderboardTTL = time.Minute
 
-// Dates are server-owned: browser timezone and query parameters cannot alter eligibility.
-var festivalStart = time.Date(2026, 9, 25, 0, 0, 0, 0, time.FixedZone("Asia/Shanghai", 8*60*60))
-var festivalEnd = time.Date(2026, 10, 8, 0, 0, 0, 0, festivalStart.Location())
+type ActivityLeaderboardConfigReader interface {
+	GetActivityLeaderboardConfig(context.Context) (*ActivityLeaderboardConfig, error)
+}
+
+type ActivityLeaderboardMetadata struct {
+	ActivityLeaderboardConfig
+	CampaignID string `json:"campaign_id"`
+	Status     string `json:"status"`
+}
 
 // ActivitySpending is private repository data. Never serialize user IDs to the public endpoint.
 type ActivitySpending struct {
@@ -38,20 +43,25 @@ type ActivityLeaderboardEntry struct {
 }
 
 type ActivityLeaderboard struct {
-	Demo             bool                       `json:"demo,omitempty"`
-	DemoExpiresAt    *time.Time                 `json:"demo_expires_at,omitempty"`
-	CampaignID       string                     `json:"campaign_id"`
-	StartsAt         time.Time                  `json:"starts_at"`
-	EndsAt           time.Time                  `json:"ends_at"`
-	Status           string                     `json:"status"`
-	UpdatedAt        time.Time                  `json:"updated_at"`
-	RefreshSeconds   int                        `json:"refresh_seconds"`
-	ParticipantCount int                        `json:"participant_count"`
-	Entries          []ActivityLeaderboardEntry `json:"entries"`
-	Me               *ActivityLeaderboardEntry  `json:"me"`
+	Enabled           bool                       `json:"enabled"`
+	Title             string                     `json:"title"`
+	Subtitle          string                     `json:"subtitle"`
+	RewardDescription string                     `json:"reward_description"`
+	Demo              bool                       `json:"demo,omitempty"`
+	DemoExpiresAt     *time.Time                 `json:"demo_expires_at,omitempty"`
+	CampaignID        string                     `json:"campaign_id"`
+	StartsAt          time.Time                  `json:"starts_at"`
+	EndsAt            time.Time                  `json:"ends_at"`
+	Status            string                     `json:"status"`
+	UpdatedAt         time.Time                  `json:"updated_at"`
+	RefreshSeconds    int                        `json:"refresh_seconds"`
+	ParticipantCount  int                        `json:"participant_count"`
+	Entries           []ActivityLeaderboardEntry `json:"entries"`
+	Me                *ActivityLeaderboardEntry  `json:"me"`
 }
 
 type activityLeaderboardSnapshot struct {
+	key       string
 	updatedAt time.Time
 	status    string
 	top       []ActivityLeaderboardEntry
@@ -59,58 +69,65 @@ type activityLeaderboardSnapshot struct {
 }
 
 type ActivityLeaderboardService struct {
-	repo      ActivityLeaderboardRepository
-	demoUntil time.Time
-	secret    []byte
-	now       func() time.Time
-	mu        sync.RWMutex
-	snapshot  *activityLeaderboardSnapshot
-	refresh   singleflight.Group
+	repo     ActivityLeaderboardRepository
+	settings ActivityLeaderboardConfigReader
+	secret   []byte
+	now      func() time.Time
+	mu       sync.RWMutex
+	snapshot *activityLeaderboardSnapshot
+	refresh  singleflight.Group
 }
 
-func NewActivityLeaderboardService(repo ActivityLeaderboardRepository, cfg *config.Config) *ActivityLeaderboardService {
-	return &ActivityLeaderboardService{repo: repo, secret: []byte(cfg.JWT.Secret), now: time.Now}
+func NewActivityLeaderboardService(repo ActivityLeaderboardRepository, cfg *config.Config, settings ActivityLeaderboardConfigReader) *ActivityLeaderboardService {
+	return &ActivityLeaderboardService{repo: repo, settings: settings, secret: []byte(cfg.JWT.Secret), now: time.Now}
 }
 
-func festivalStatus(now time.Time) string {
-	if now.Before(festivalStart) {
-		return "upcoming"
+func (s *ActivityLeaderboardService) GetConfig(ctx context.Context) (*ActivityLeaderboardMetadata, error) {
+	cfg, err := s.settings.GetActivityLeaderboardConfig(ctx)
+	if err != nil {
+		return nil, err
 	}
-	if !now.Before(festivalEnd) {
-		return "ended"
-	}
-	return "active"
+	return &ActivityLeaderboardMetadata{ActivityLeaderboardConfig: *cfg, CampaignID: cfg.campaignID(), Status: cfg.status(s.now())}, nil
 }
 
-func (s *ActivityLeaderboardService) cached(now time.Time) *activityLeaderboardSnapshot {
+func (s *ActivityLeaderboardService) cached(now time.Time, key, status string) *activityLeaderboardSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if s.snapshot != nil && s.snapshot.status == festivalStatus(now) && now.Sub(s.snapshot.updatedAt) < activityLeaderboardTTL {
+	if s.snapshot != nil && s.snapshot.key == key && s.snapshot.status == status && now.Sub(s.snapshot.updatedAt) < activityLeaderboardTTL {
 		return s.snapshot
 	}
 	return nil
 }
 
-func (s *ActivityLeaderboardService) alias(userID int64) string {
+func (s *ActivityLeaderboardService) alias(campaignID string, userID int64) string {
 	mac := hmac.New(sha256.New, s.secret)
-	fmt.Fprintf(mac, "activity-leaderboard:%s:%d", festivalCampaignID, userID)
+	fmt.Fprintf(mac, "activity-leaderboard:%s:%d", campaignID, userID)
 	return hex.EncodeToString(mac.Sum(nil)[:6])
 }
 
 func (s *ActivityLeaderboardService) Get(ctx context.Context, userID int64) (*ActivityLeaderboard, error) {
+	cfg, err := s.settings.GetActivityLeaderboardConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
 	now := s.now()
+	key := cfg.cacheKey() + ":" + cfg.status(now)
 	result := &ActivityLeaderboard{
-		CampaignID: festivalCampaignID, StartsAt: festivalStart, EndsAt: festivalEnd,
-		Status: festivalStatus(now), UpdatedAt: now, RefreshSeconds: int(activityLeaderboardTTL.Seconds()),
+		Enabled: cfg.Enabled, Title: cfg.Title, Subtitle: cfg.Subtitle, RewardDescription: cfg.RewardDescription,
+		CampaignID: cfg.campaignID(), StartsAt: cfg.StartsAt, EndsAt: cfg.EndsAt,
+		Status: cfg.status(now), UpdatedAt: now, RefreshSeconds: int(activityLeaderboardTTL.Seconds()),
 		Entries: []ActivityLeaderboardEntry{},
+	}
+	if result.Status == "disabled" {
+		return result, nil
 	}
 	// The upcoming screen never scans usage logs.
 	if result.Status == "upcoming" {
-		if now.Before(s.demoUntil) {
+		if cfg.DemoExpiresAt != nil && now.Before(*cfg.DemoExpiresAt) {
 			result.Demo = true
-			expires := s.demoUntil
-			if expires.After(festivalStart) {
-				expires = festivalStart
+			expires := *cfg.DemoExpiresAt
+			if expires.After(cfg.StartsAt) {
+				expires = cfg.StartsAt
 			}
 			result.DemoExpiresAt = &expires
 			// UI preview only: no users, balances, subscriptions or usage logs are written.
@@ -126,27 +143,27 @@ func (s *ActivityLeaderboardService) Get(ctx context.Context, userID int64) (*Ac
 		}
 		return result, nil
 	}
-	snapshot := s.cached(now)
+	snapshot := s.cached(now, key, cfg.status(now))
 	if snapshot == nil {
-		ch := s.refresh.DoChan(festivalCampaignID, func() (any, error) {
+		ch := s.refresh.DoChan(key, func() (any, error) {
 			now := s.now()
-			if cached := s.cached(now); cached != nil {
+			if cached := s.cached(now, key, cfg.status(now)); cached != nil {
 				return cached, nil
 			}
 			// A disconnected caller must not cancel the refresh shared by other users.
 			queryCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 			defer cancel()
 			end := now
-			if end.After(festivalEnd) {
-				end = festivalEnd
+			if end.After(cfg.EndsAt) {
+				end = cfg.EndsAt
 			}
-			rows, err := s.repo.ListSpending(queryCtx, festivalStart, end)
+			rows, err := s.repo.ListSpending(queryCtx, cfg.StartsAt, end)
 			if err != nil {
 				return nil, err
 			}
-			fresh := &activityLeaderboardSnapshot{updatedAt: now, status: festivalStatus(now), byUser: make(map[int64]ActivityLeaderboardEntry, len(rows))}
+			fresh := &activityLeaderboardSnapshot{key: key, updatedAt: now, status: cfg.status(now), byUser: make(map[int64]ActivityLeaderboardEntry, len(rows))}
 			for i, row := range rows {
-				entry := ActivityLeaderboardEntry{Rank: i + 1, Alias: s.alias(row.UserID), Amount: row.Amount}
+				entry := ActivityLeaderboardEntry{Rank: i + 1, Alias: s.alias(cfg.campaignID(), row.UserID), Amount: row.Amount}
 				fresh.byUser[row.UserID] = entry
 				if i < 20 {
 					fresh.top = append(fresh.top, entry)

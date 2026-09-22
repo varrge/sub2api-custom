@@ -14,6 +14,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var festivalStart = DefaultActivityLeaderboardConfig().StartsAt
+var festivalEnd = DefaultActivityLeaderboardConfig().EndsAt
+
+type activityConfigStub struct {
+	cfg *ActivityLeaderboardConfig
+	err error
+}
+
+func (r *activityConfigStub) GetActivityLeaderboardConfig(context.Context) (*ActivityLeaderboardConfig, error) {
+	return r.cfg, r.err
+}
+
 type activityRepoStub struct {
 	calls      atomic.Int32
 	rows       []ActivitySpending
@@ -36,7 +48,7 @@ func (r *activityRepoStub) ListSpending(ctx context.Context, start, end time.Tim
 }
 
 func testActivityService(repo *activityRepoStub, now *time.Time) *ActivityLeaderboardService {
-	s := NewActivityLeaderboardService(repo, &config.Config{JWT: config.JWTConfig{Secret: "test-only-secret-for-activity-alias"}})
+	s := NewActivityLeaderboardService(repo, &config.Config{JWT: config.JWTConfig{Secret: "test-only-secret-for-activity-alias"}}, &activityConfigStub{cfg: DefaultActivityLeaderboardConfig()})
 	s.now = func() time.Time { return *now }
 	return s
 }
@@ -147,7 +159,9 @@ func TestActivityLeaderboardDemoExpiresWithoutTouchingUsage(t *testing.T) {
 	now := festivalStart.Add(-48 * time.Hour)
 	repo := &activityRepoStub{}
 	s := testActivityService(repo, &now)
-	s.demoUntil = now.Add(24 * time.Hour)
+	demoUntil := now.Add(24 * time.Hour)
+	cfg := s.settings.(*activityConfigStub).cfg
+	cfg.DemoExpiresAt = &demoUntil
 	for _, id := range []int64{1, 42} {
 		got, err := s.Get(context.Background(), id)
 		require.NoError(t, err)
@@ -157,10 +171,10 @@ func TestActivityLeaderboardDemoExpiresWithoutTouchingUsage(t *testing.T) {
 		require.Equal(t, 8, got.ParticipantCount)
 		require.Equal(t, 4, got.Me.Rank)
 		require.True(t, got.Entries[3].IsMe)
-		require.Equal(t, s.demoUntil, *got.DemoExpiresAt)
+		require.Equal(t, demoUntil, *got.DemoExpiresAt)
 	}
 	require.Zero(t, repo.calls.Load())
-	now = s.demoUntil
+	now = demoUntil
 	got, err := s.Get(context.Background(), 42)
 	require.NoError(t, err)
 	require.False(t, got.Demo)
@@ -168,7 +182,7 @@ func TestActivityLeaderboardDemoExpiresWithoutTouchingUsage(t *testing.T) {
 	require.Nil(t, got.Me)
 	require.Zero(t, repo.calls.Load())
 	// Even a wrongly extended switch cannot inject samples into an active event.
-	s.demoUntil = festivalEnd.Add(time.Hour)
+	demoUntil = festivalEnd.Add(time.Hour)
 	now = festivalStart
 	repo.rows = []ActivitySpending{{UserID: 42, Amount: "7.50000000"}}
 	got, err = s.Get(context.Background(), 42)
@@ -179,16 +193,52 @@ func TestActivityLeaderboardDemoExpiresWithoutTouchingUsage(t *testing.T) {
 	require.Equal(t, int32(1), repo.calls.Load())
 }
 
-func TestActivityLeaderboardDemoConfigurationIsOptIn(t *testing.T) {
-	for _, raw := range []string{"", "invalid", "2026-09-23T19:00:00+08:00"} {
-		t.Run(raw, func(t *testing.T) {
-			t.Setenv("ACTIVITY_LEADERBOARD_DEMO_UNTIL", raw)
-			s := ProvideActivityLeaderboardService(&activityRepoStub{}, &config.Config{})
-			if raw == "" || raw == "invalid" {
-				require.True(t, s.demoUntil.IsZero())
-			} else {
-				require.Equal(t, raw, s.demoUntil.Format(time.RFC3339))
-			}
-		})
-	}
+func TestActivityLeaderboardConfigChangesInvalidateCache(t *testing.T) {
+	now := festivalStart.Add(24 * time.Hour)
+	repo := &activityRepoStub{rows: []ActivitySpending{{UserID: 1, Amount: "5.25"}}}
+	s := testActivityService(repo, &now)
+	settings := s.settings.(*activityConfigStub)
+	first, err := s.Get(context.Background(), 1)
+	require.NoError(t, err)
+	cfg := *settings.cfg
+	cfg.Title = "New title"
+	settings.cfg = &cfg
+	second, err := s.Get(context.Background(), 1)
+	require.NoError(t, err)
+	require.Equal(t, cfg.Title, second.Title)
+	require.Equal(t, first.Me.Alias, second.Me.Alias)
+	cfg.StartsAt = cfg.StartsAt.Add(time.Hour)
+	third, err := s.Get(context.Background(), 1)
+	require.NoError(t, err)
+	require.NotEqual(t, first.CampaignID, third.CampaignID)
+	require.NotEqual(t, first.Me.Alias, third.Me.Alias)
+	require.Equal(t, cfg.StartsAt, repo.start)
+	require.Equal(t, int32(3), repo.calls.Load())
+	cfg.Enabled = false
+	disabled, err := s.Get(context.Background(), 1)
+	require.NoError(t, err)
+	require.False(t, disabled.Enabled)
+	require.Equal(t, "disabled", disabled.Status)
+	require.Empty(t, disabled.Entries)
+	require.Nil(t, disabled.Me)
+	require.Equal(t, int32(3), repo.calls.Load())
+	meta, err := s.GetConfig(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "disabled", meta.Status)
+	require.Equal(t, cfg.Title, meta.Title)
+	require.Equal(t, int32(3), repo.calls.Load(), "metadata must never aggregate spending")
+	settings.err = errors.New("settings unavailable")
+	_, err = s.Get(context.Background(), 1)
+	require.Error(t, err, "must not show stale rankings when config cannot be loaded")
+}
+
+func TestActivityLeaderboardCanonicalCampaignIdentity(t *testing.T) {
+	a := DefaultActivityLeaderboardConfig()
+	b := *a
+	b.StartsAt = b.StartsAt.UTC()
+	b.EndsAt = b.EndsAt.UTC()
+	require.Equal(t, a.campaignID(), b.campaignID())
+	b.Title = "Another title"
+	require.Equal(t, a.campaignID(), b.campaignID())
+	require.NotEqual(t, a.cacheKey(), b.cacheKey())
 }

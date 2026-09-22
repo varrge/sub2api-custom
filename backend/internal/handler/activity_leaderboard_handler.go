@@ -30,3 +30,18 @@ func (h *ActivityLeaderboardHandler) Get(c *gin.Context) {
 	}
 	response.Success(c, result)
 }
+
+// Config exposes only leaderboard presentation and scheduling, never usage aggregates.
+func (h *ActivityLeaderboardHandler) Config(c *gin.Context) {
+	if _, ok := middleware.GetAuthSubjectFromContext(c); !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	c.Header("Cache-Control", "private, no-store")
+	result, err := h.service.GetConfig(c.Request.Context())
+	if err != nil {
+		response.InternalError(c, "Activity leaderboard configuration temporarily unavailable")
+		return
+	}
+	response.Success(c, result)
+}

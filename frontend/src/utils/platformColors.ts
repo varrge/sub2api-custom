@@ -96,7 +96,7 @@ const ACCENT: Record<Platform, string> = {
   opencode_go: '#f59e0b', // amber-500
   composite: '#06b6d4', // cyan-500
 }
-const ACCENT_DEFAULT = '#14b8a6' // primary-500 (teal)
+const ACCENT_DEFAULT = '#c9976f' // primary-600 (gold)
 
 // ── Accent bar (gradient) ───────────────────────────────────────────
 const ACCENT_BAR: Record<Platform, string> = {
@@ -160,7 +160,7 @@ const BUTTON: Record<Platform, string> = {
   opencode_go: 'bg-amber-500 text-white hover:bg-amber-600 active:bg-amber-700 dark:bg-amber-500/80 dark:hover:bg-amber-500',
   composite: 'bg-cyan-700 text-white hover:bg-cyan-800 active:bg-cyan-900 dark:bg-cyan-600 dark:hover:bg-cyan-500',
 }
-const BUTTON_DEFAULT = 'bg-primary-500 text-white hover:bg-primary-600 dark:bg-primary-600 dark:hover:bg-primary-500'
+const BUTTON_DEFAULT = 'bg-primary-500 text-on-primary hover:bg-primary-600 dark:bg-primary-600 dark:hover:bg-primary-500'
 
 // ── Discount badge ──────────────────────────────────────────────────
 const DISCOUNT: Record<Platform, string> = {

@@ -8,7 +8,7 @@
         <div
           class="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-primary-600 shadow-lg"
         >
-          <Icon name="cog" size="xl" class="text-white" />
+          <Icon name="cog" size="xl" class="text-on-primary" />
         </div>
         <h1 class="text-3xl font-bold text-gray-900 dark:text-white">{{ t('setup.title') }}</h1>
         <p class="mt-2 text-gray-500 dark:text-dark-400">{{ t('setup.description') }}</p>
@@ -23,9 +23,9 @@
                 :class="[
                   'flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold transition-all',
                   currentStep > index
-                    ? 'bg-primary-500 text-white'
+                    ? 'bg-primary-500 text-on-primary'
                     : currentStep === index
-                      ? 'bg-primary-500 text-white ring-4 ring-primary-100 dark:ring-primary-900'
+                      ? 'bg-primary-500 text-on-primary ring-4 ring-primary-100 dark:ring-primary-900'
                       : 'bg-gray-200 text-gray-500 dark:bg-dark-700 dark:text-dark-400'
                 ]"
               >

@@ -11,7 +11,7 @@
               type="button"
               class="px-3 py-1.5 text-xs font-medium transition-colors first:rounded-l-lg last:rounded-r-lg"
               :class="days === d
-                ? 'bg-primary-600 text-white'
+                ? 'bg-primary-600 text-on-primary'
                 : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700'"
               @click="days = d"
             >

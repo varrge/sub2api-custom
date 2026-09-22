@@ -486,7 +486,7 @@
                       <button
                         type="button"
                         class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
-                        :class="configForm.api_keys_mode === 'append' ? 'bg-primary-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700'"
+                        :class="configForm.api_keys_mode === 'append' ? 'bg-primary-500 text-on-primary shadow-sm' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700'"
                         :disabled="configForm.clear_api_key"
                         @click="setAPIKeysMode('append')"
                       >
@@ -746,7 +746,7 @@
                   </span>
                   <span
                     class="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border"
-                    :class="isGroupSelected(group.id) ? 'border-primary-500 bg-primary-500 text-white' : 'border-gray-300 text-transparent dark:border-dark-500'"
+                    :class="isGroupSelected(group.id) ? 'border-primary-500 bg-primary-500 text-on-primary' : 'border-gray-300 text-transparent dark:border-dark-500'"
                   >
                     <Icon name="check" size="xs" :stroke-width="2" />
                   </span>
@@ -782,7 +782,7 @@
                     <span
                       class="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border"
                       :class="configForm.model_filter_type === option.value
-                        ? 'border-primary-500 bg-primary-500 text-white'
+                        ? 'border-primary-500 bg-primary-500 text-on-primary'
                         : 'border-gray-300 text-transparent dark:border-dark-500'"
                     >
                       <Icon name="check" size="xs" :stroke-width="2" />
@@ -998,7 +998,7 @@
                     <span
                       class="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border"
                       :class="configForm.keyword_blocking_mode === option.value
-                        ? 'border-primary-500 bg-primary-500 text-white'
+                        ? 'border-primary-500 bg-primary-500 text-on-primary'
                         : 'border-gray-300 text-transparent dark:border-dark-500'"
                     >
                       <Icon name="check" size="xs" :stroke-width="2" />

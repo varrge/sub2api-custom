@@ -246,7 +246,7 @@
           data-testid="sidebar-account-trigger"
           @click="toggleAccountMenu"
         >
-          <div class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-sm font-medium text-white shadow-sm">
+          <div class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-sm font-medium text-on-primary shadow-sm">
             <img
               v-if="avatarUrl"
               :src="avatarUrl"

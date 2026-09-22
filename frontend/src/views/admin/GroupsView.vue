@@ -900,7 +900,7 @@
                 />
                 <button
                   type="button"
-                  class="rounded bg-primary-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-700"
+                  class="rounded bg-primary-600 px-3 py-1.5 text-sm font-medium text-on-primary transition-colors hover:bg-primary-700"
                   @click="submitCreateAllowlistCustomEntry"
                 >
                   {{ t("admin.groups.modelAllowlist.addCustom") }}
@@ -2567,7 +2567,7 @@
                 />
                 <button
                   type="button"
-                  class="rounded bg-primary-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-700"
+                  class="rounded bg-primary-600 px-3 py-1.5 text-sm font-medium text-on-primary transition-colors hover:bg-primary-700"
                   @click="submitEditAllowlistCustomEntry"
                 >
                   {{ t("admin.groups.modelAllowlist.addCustom") }}

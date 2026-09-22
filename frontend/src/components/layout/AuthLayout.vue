@@ -20,8 +20,11 @@
 
       <!-- Grid Pattern -->
       <div
-        class="absolute inset-0 bg-[linear-gradient(rgba(20,184,166,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(20,184,166,0.03)_1px,transparent_1px)] bg-[size:64px_64px]"
+        class="absolute inset-0 bg-[linear-gradient(rgba(229,185,154,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(229,185,154,0.045)_1px,transparent_1px)] bg-[size:64px_64px]"
       ></div>
+
+      <!-- Ambient Lines -->
+      <AmbientLines />
     </div>
 
     <!-- Content Container -->
@@ -66,6 +69,7 @@
 import { computed, onMounted } from 'vue'
 import { useAppStore } from '@/stores'
 import { sanitizeUrl } from '@/utils/url'
+import AmbientLines from '@/components/common/AmbientLines.vue'
 
 const appStore = useAppStore()
 
@@ -83,6 +87,6 @@ onMounted(() => {
 
 <style scoped>
 .text-gradient {
-  @apply bg-gradient-to-r from-primary-600 to-primary-500 bg-clip-text text-transparent;
+  color: var(--gold-fg);
 }
 </style>

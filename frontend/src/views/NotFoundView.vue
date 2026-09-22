@@ -24,7 +24,7 @@
               class="flex h-24 w-24 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-primary-600 shadow-lg shadow-primary-500/30"
             >
               <svg
-                class="h-12 w-12 text-white"
+                class="h-12 w-12 text-on-primary"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"

@@ -10,7 +10,7 @@
   overflow-wrap: anywhere;
   border-radius: 1rem;
   background: rgb(255 255 255 / 0.72);
-  border: 1px solid rgb(13 148 136 / 0.12);
+  border: 1px solid rgb(138 92 36 / 0.12);
   box-shadow:
     0 1px 2px rgb(2 6 23 / 0.04),
     0 8px 24px rgb(2 6 23 / 0.06);
@@ -21,20 +21,20 @@
     box-shadow 0.2s ease;
 }
 .dark .gb-panel {
-  background: rgb(15 23 42 / 0.55);
-  border-color: rgb(148 163 184 / 0.14);
+  background: rgb(13 13 15 / 0.55);
+  border-color: rgb(161 161 170 / 0.14);
   box-shadow:
     0 1px 2px rgb(0 0 0 / 0.3),
     0 8px 24px rgb(0 0 0 / 0.35);
 }
 .gb-panel-hover:hover {
-  border-color: rgb(20 184 166 / 0.35);
+  border-color: rgb(201 151 111 / 0.35);
   box-shadow:
     0 2px 4px rgb(2 6 23 / 0.05),
-    0 12px 32px rgb(13 148 136 / 0.12);
+    0 12px 32px rgb(138 92 36 / 0.12);
 }
 .dark .gb-panel-hover:hover {
-  border-color: rgb(45 212 191 / 0.3);
+  border-color: rgb(229 185 154 / 0.3);
   box-shadow: 0 12px 32px rgb(0 0 0 / 0.45);
 }
 
@@ -44,19 +44,19 @@
     background: #ffffff;
   }
   .dark .gb-panel {
-    background: #1e293b;
+    background: #121215;
   }
 }
 
 /* 面板内的次级嵌套区域：不做玻璃，避免重复嵌套卡 */
 .gb-strip {
   border-radius: 0.75rem;
-  background: rgb(240 253 250 / 0.8);
-  border: 1px solid rgb(153 246 228 / 0.5);
+  background: rgb(250 244 237 / 0.8);
+  border: 1px solid rgb(242 215 192 / 0.5);
 }
 .dark .gb-strip {
-  background: rgb(4 47 46 / 0.35);
-  border-color: rgb(19 78 74 / 0.6);
+  background: rgb(61 40 18 / 0.35);
+  border-color: rgb(107 69 32 / 0.6);
 }
 .gb-strip-sky {
   background: rgb(240 249 255 / 0.8);
@@ -117,12 +117,12 @@
   white-space: nowrap;
 }
 .gb-pill-teal {
-  background: rgb(204 251 241 / 0.7);
-  color: rgb(15 118 110);
+  background: rgb(247 230 216 / 0.7);
+  color: rgb(138 92 36);
 }
 .dark .gb-pill-teal {
-  background: rgb(19 78 74 / 0.5);
-  color: rgb(94 234 212);
+  background: rgb(107 69 32 / 0.5);
+  color: rgb(238 201 168);
 }
 .gb-pill-sky {
   background: rgb(224 242 254 / 0.7);
@@ -133,12 +133,12 @@
   color: rgb(125 211 252);
 }
 .gb-pill-gray {
-  background: rgb(241 245 249 / 0.8);
-  color: rgb(100 116 139);
+  background: rgb(245 245 247 / 0.8);
+  color: rgb(110 110 118);
 }
 .dark .gb-pill-gray {
-  background: rgb(51 65 85 / 0.6);
-  color: rgb(148 163 184);
+  background: rgb(46 46 53 / 0.6);
+  color: rgb(161 161 170);
 }
 
 /* 紧凑档位标签 */
@@ -149,15 +149,15 @@
   padding: 0.25rem 0.625rem;
   font-size: 0.75rem;
   line-height: 1.25;
-  background: rgb(240 253 250 / 0.8);
-  border: 1px solid rgb(153 246 228 / 0.4);
-  color: rgb(15 118 110);
+  background: rgb(250 244 237 / 0.8);
+  border: 1px solid rgb(242 215 192 / 0.4);
+  color: rgb(138 92 36);
   white-space: nowrap;
 }
 .dark .gb-chip {
-  background: rgb(4 47 46 / 0.4);
-  border-color: rgb(19 78 74 / 0.5);
-  color: rgb(94 234 212);
+  background: rgb(61 40 18 / 0.4);
+  border-color: rgb(107 69 32 / 0.5);
+  color: rgb(238 201 168);
 }
 
 /* 队伍码 / 卡号 */
@@ -171,14 +171,14 @@
   letter-spacing: 0.02em;
   border-radius: 0.5rem;
   padding: 0.125rem 0.5rem;
-  background: rgb(241 245 249 / 0.8);
-  border: 1px solid rgb(226 232 240 / 0.8);
-  color: rgb(71 85 105);
+  background: rgb(245 245 247 / 0.8);
+  border: 1px solid rgb(229 229 233 / 0.8);
+  color: rgb(81 81 88);
 }
 .dark .gb-code {
-  background: rgb(30 41 59 / 0.7);
-  border-color: rgb(51 65 85 / 0.7);
-  color: rgb(148 163 184);
+  background: rgb(18 18 21 / 0.7);
+  border-color: rgb(46 46 53 / 0.7);
+  color: rgb(161 161 170);
 }
 button.gb-code {
   cursor: copy;
@@ -187,12 +187,12 @@ button.gb-code {
     border-color 0.15s ease;
 }
 button.gb-code:hover {
-  color: rgb(13 148 136);
-  border-color: rgb(153 246 228 / 0.8);
+  color: rgb(138 92 36);
+  border-color: rgb(242 215 192 / 0.8);
 }
 .dark button.gb-code:hover {
-  color: rgb(45 212 191);
-  border-color: rgb(19 78 74);
+  color: rgb(229 185 154);
+  border-color: rgb(107 69 32);
 }
 
 /* ============ 进度条 ============ */
@@ -200,15 +200,15 @@ button.gb-code:hover {
   height: 0.375rem;
   border-radius: 9999px;
   overflow: hidden;
-  background: rgb(226 232 240 / 0.7);
+  background: rgb(229 229 233 / 0.7);
 }
 .dark .gb-progress {
-  background: rgb(51 65 85 / 0.5);
+  background: rgb(46 46 53 / 0.5);
 }
 .gb-progress-fill {
   height: 100%;
   border-radius: 9999px;
-  background: linear-gradient(90deg, #14b8a6 0%, #06b6d4 100%);
+  background: linear-gradient(90deg, #c9976f 0%, #e5b99a 100%);
   transition: width 0.4s ease;
 }
 .gb-progress-fill-warn {
@@ -222,44 +222,44 @@ button.gb-code:hover {
   gap: 0.25rem;
   padding: 0.25rem;
   border-radius: 0.875rem;
-  background: rgb(241 245 249 / 0.8);
-  border: 1px solid rgb(226 232 240 / 0.6);
+  background: rgb(245 245 247 / 0.8);
+  border: 1px solid rgb(229 229 233 / 0.6);
 }
 .dark .gb-tabs {
-  background: rgb(15 23 42 / 0.6);
-  border-color: rgb(51 65 85 / 0.5);
+  background: rgb(13 13 15 / 0.6);
+  border-color: rgb(46 46 53 / 0.5);
 }
 .gb-tab {
   border-radius: 0.625rem;
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
   font-weight: 500;
-  color: rgb(100 116 139);
+  color: rgb(110 110 118);
   transition:
     background 0.15s ease,
     color 0.15s ease,
     box-shadow 0.15s ease;
 }
 .dark .gb-tab {
-  color: rgb(148 163 184);
+  color: rgb(161 161 170);
 }
 .gb-tab:hover {
-  color: rgb(15 118 110);
+  color: rgb(138 92 36);
 }
 .dark .gb-tab:hover {
-  color: rgb(94 234 212);
+  color: rgb(238 201 168);
 }
 .gb-tab:focus-visible {
-  outline: 2px solid rgb(20 184 166 / 0.6);
+  outline: 2px solid rgb(201 151 111 / 0.6);
   outline-offset: 2px;
 }
 .gb-tab-active {
   background: #ffffff;
-  color: rgb(15 23 42);
+  color: rgb(13 13 15);
   box-shadow: 0 1px 3px rgb(2 6 23 / 0.1);
 }
 .dark .gb-tab-active {
-  background: rgb(51 65 85 / 0.9);
+  background: rgb(46 46 53 / 0.9);
   color: #f8fafc;
 }
 
@@ -275,72 +275,72 @@ button.gb-code:hover {
   font-weight: 500;
   letter-spacing: 0.03em;
   text-transform: none;
-  color: rgb(100 116 139);
-  border-bottom: 1px solid rgb(226 232 240 / 0.6);
+  color: rgb(110 110 118);
+  border-bottom: 1px solid rgb(229 229 233 / 0.6);
 }
 .dark .gb-table th {
-  color: rgb(148 163 184);
-  border-bottom-color: rgb(51 65 85 / 0.6);
+  color: rgb(161 161 170);
+  border-bottom-color: rgb(46 46 53 / 0.6);
 }
 .gb-table td {
   padding: 0.875rem 1rem;
-  border-top: 1px solid rgb(241 245 249 / 0.8);
+  border-top: 1px solid rgb(245 245 247 / 0.8);
 }
 .dark .gb-table td {
-  border-top-color: rgb(51 65 85 / 0.4);
+  border-top-color: rgb(46 46 53 / 0.4);
 }
 .gb-table tbody tr {
   transition: background 0.15s ease;
 }
 .gb-table tbody tr:hover {
-  background: rgb(240 253 250 / 0.5);
+  background: rgb(250 244 237 / 0.5);
 }
 .dark .gb-table tbody tr:hover {
-  background: rgb(20 184 166 / 0.05);
+  background: rgb(201 151 111 / 0.05);
 }
 
 /* ============ 可拖拽排序行 ============ */
 .gb-sort-row {
   border-radius: 0.75rem;
-  border: 1px solid rgb(226 232 240 / 0.7);
+  border: 1px solid rgb(229 229 233 / 0.7);
   background: rgb(255 255 255 / 0.6);
   transition:
     border-color 0.15s ease,
     background 0.15s ease;
 }
 .dark .gb-sort-row {
-  border-color: rgb(51 65 85 / 0.5);
-  background: rgb(30 41 59 / 0.5);
+  border-color: rgb(46 46 53 / 0.5);
+  background: rgb(18 18 21 / 0.5);
 }
 .gb-sort-row[draggable='true'] {
   cursor: grab;
 }
 .gb-sort-row[draggable='true']:hover {
-  border-color: rgb(153 246 228 / 0.8);
+  border-color: rgb(242 215 192 / 0.8);
 }
 .dark .gb-sort-row[draggable='true']:hover {
-  border-color: rgb(19 78 74 / 0.8);
+  border-color: rgb(107 69 32 / 0.8);
 }
 
 /* ============ 优惠码入口（“有优惠码？”小字） ============ */
 .gb-coupon-toggle {
   font-size: 0.8125rem;
-  color: rgb(100 116 139);
+  color: rgb(110 110 118);
   text-decoration: underline dotted;
   text-underline-offset: 4px;
   transition: color 0.15s ease;
 }
 .dark .gb-coupon-toggle {
-  color: rgb(148 163 184);
+  color: rgb(161 161 170);
 }
 .gb-coupon-toggle:hover:not(:disabled) {
-  color: rgb(13 148 136);
+  color: rgb(138 92 36);
 }
 .dark .gb-coupon-toggle:hover:not(:disabled) {
-  color: rgb(45 212 191);
+  color: rgb(229 185 154);
 }
 .gb-coupon-toggle:focus-visible {
-  outline: 2px solid rgb(20 184 166 / 0.6);
+  outline: 2px solid rgb(201 151 111 / 0.6);
   outline-offset: 2px;
   border-radius: 0.25rem;
 }
@@ -372,16 +372,16 @@ button.gb-code:hover {
   font-size: 0.75rem;
   font-weight: 500;
   letter-spacing: 0.02em;
-  color: rgb(100 116 139);
+  color: rgb(110 110 118);
 }
 .dark .gb-label {
-  color: rgb(148 163 184);
+  color: rgb(161 161 170);
 }
 .gb-accent {
-  color: rgb(13 148 136);
+  color: rgb(138 92 36);
 }
 .dark .gb-accent {
-  color: rgb(45 212 191);
+  color: rgb(229 185 154);
 }
 .gb-accent-sky {
   color: rgb(2 132 199);

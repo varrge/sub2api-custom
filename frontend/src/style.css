@@ -7,6 +7,29 @@
     @apply border-gray-200 dark:border-dark-700;
   }
 
+  :root {
+    /* 黑金主题共享变量（AmbientLines / 侧栏选中态等） */
+    --gold: #e5b99a;
+    --gold-fg: #8a5c24;
+    --primary-text-400: 138 92 36;
+    --primary-text-500: 138 92 36;
+    --primary-text-600: 138 92 36;
+    --primary-text-700: 107 69 32;
+    --bgline: rgba(29, 29, 31, 0.05);
+    --bgline-gold: rgba(148, 104, 47, 0.3);
+  }
+
+  .dark {
+    --gold: #e5b99a;
+    --gold-fg: #e5b99a;
+    --primary-text-400: 233 193 161;
+    --primary-text-500: 229 185 154;
+    --primary-text-600: 229 185 154;
+    --primary-text-700: 233 193 161;
+    --bgline: rgba(255, 255, 255, 0.05);
+    --bgline-gold: rgba(229, 185, 154, 0.36);
+  }
+
   html {
     @apply scroll-smooth antialiased;
     color-scheme: light;
@@ -23,7 +46,7 @@
   }
 
   body {
-    @apply bg-gray-50 text-gray-900 dark:bg-dark-950 dark:text-gray-100;
+    @apply bg-accent-100 text-gray-900 dark:bg-dark-950 dark:text-gray-100;
     @apply min-h-screen;
   }
 
@@ -86,10 +109,11 @@
   }
 
   .btn-primary {
-    @apply bg-gradient-to-r from-primary-500 to-primary-600;
-    @apply text-white shadow-md shadow-primary-500/25;
-    @apply hover:from-primary-600 hover:to-primary-700 hover:shadow-lg hover:shadow-primary-500/30;
-    @apply dark:shadow-primary-500/20;
+    @apply bg-gradient-to-b from-primary-300 to-primary-500;
+    @apply text-on-primary font-semibold shadow-md shadow-primary-500/20;
+    @apply border border-white/20;
+    @apply hover:brightness-105 hover:shadow-lg hover:shadow-primary-500/25;
+    @apply dark:shadow-primary-500/15;
   }
 
   .btn-secondary {
@@ -545,8 +569,8 @@
   /* ============ 侧边栏 ============ */
   .sidebar {
     @apply fixed inset-y-0 left-0 z-40;
-    @apply w-64 bg-white dark:bg-dark-900;
-    @apply border-r border-gray-200 dark:border-dark-800;
+    @apply w-64 bg-accent-100 dark:bg-dark-900;
+    @apply border-r border-gray-200 dark:border-dark-700;
     @apply flex flex-col;
     @apply transition-transform duration-300;
     transition-property: width, transform;
@@ -555,7 +579,7 @@
   .sidebar-header {
     @apply h-16 px-6;
     @apply flex items-center gap-3;
-    @apply border-b border-gray-100 dark:border-dark-800;
+    @apply border-b border-gray-200/80 dark:border-dark-700;
     transition:
       padding 0.2s ease,
       gap 0.2s ease;
@@ -566,21 +590,23 @@
   }
 
   .sidebar-link {
-    @apply flex items-center gap-3 rounded-xl py-2.5;
+    @apply flex items-center gap-3 rounded-lg py-2.5;
     @apply overflow-hidden;
     @apply text-sm font-medium;
-    @apply text-gray-600 dark:text-dark-300;
+    @apply text-accent-600 dark:text-dark-200;
     @apply transition-all duration-200;
-    @apply hover:bg-gray-100 dark:hover:bg-dark-800;
-    @apply hover:text-gray-900 dark:hover:text-white;
+    @apply hover:bg-black/[0.035] dark:hover:bg-white/[0.03];
+    @apply hover:text-accent-900 dark:hover:text-white;
     padding-left: 1.0625rem;
     padding-right: 0.875rem;
   }
 
   .sidebar-link-active {
-    @apply bg-primary-50 dark:bg-primary-900/20;
-    @apply text-primary-600 dark:text-primary-400;
-    @apply hover:bg-primary-100 dark:hover:bg-primary-900/30;
+    @apply bg-black/[0.055] dark:bg-white/[0.05];
+    @apply text-accent-900 dark:text-white;
+    @apply hover:bg-black/[0.055] dark:hover:bg-white/[0.05];
+    @apply border border-black/[0.06] dark:border-white/[0.08];
+    box-shadow: inset 2px 0 0 var(--gold, #e5b99a);
   }
 
   .sidebar-section {
@@ -756,7 +782,8 @@
 @layer utilities {
   /* 文字渐变 */
   .text-gradient {
-    @apply bg-gradient-to-r from-primary-500 to-accent-500 bg-clip-text text-transparent;
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(90deg, var(--gold-fg), rgb(var(--primary-text-700)));
   }
 
   /* 玻璃效果 */
@@ -780,6 +807,96 @@
 
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* ============ Ambient lines · 背景动态线条 ============ */
+.ambient-lines {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  animation: ambient-breathe 14s ease-in-out infinite alternate;
+}
+
+.ambient-lines .hair {
+  fill: none;
+  stroke: var(--bgline);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.ambient-lines .drift-a {
+  animation: ambient-drift-a 64s ease-in-out infinite alternate;
+}
+
+.ambient-lines .drift-b {
+  animation: ambient-drift-b 78s ease-in-out infinite alternate;
+}
+
+.ambient-lines .glint {
+  fill: none;
+  stroke: var(--bgline-gold);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 130 1600;
+  animation: ambient-flow 36s linear infinite;
+}
+
+.ambient-lines .glint.slow {
+  animation-duration: 52s;
+  animation-delay: -16s;
+}
+
+.ambient-lines .glint.late {
+  animation-duration: 44s;
+  animation-delay: -30s;
+}
+
+@keyframes ambient-flow {
+  from {
+    stroke-dashoffset: 1730;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes ambient-drift-a {
+  from {
+    transform: translate3d(-2.4%, 0, 0);
+  }
+  to {
+    transform: translate3d(2.4%, -1%, 0);
+  }
+}
+
+@keyframes ambient-drift-b {
+  from {
+    transform: translate3d(2%, 0.6%, 0);
+  }
+  to {
+    transform: translate3d(-2%, 0, 0);
+  }
+}
+
+@keyframes ambient-breathe {
+  from {
+    opacity: 0.85;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-lines,
+  .ambient-lines .drift-a,
+  .ambient-lines .drift-b,
+  .ambient-lines .glint {
+    animation: none !important;
   }
 }
 

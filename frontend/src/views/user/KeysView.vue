@@ -492,7 +492,7 @@
               </span>
               <span
                 v-if="createProvider === provider.value"
-                class="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary-500 text-white"
+                class="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary-500 text-on-primary"
                 aria-hidden="true"
               >
                 <Icon name="check" size="xs" :stroke-width="3" />

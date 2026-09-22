@@ -49,7 +49,7 @@
       </div>
       <button
         type="button"
-        class="flex-shrink-0 rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-primary-700"
+        class="flex-shrink-0 rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-on-primary transition hover:bg-primary-700"
         @click="emit('open')"
       >
         {{ t('legal.loginAgreementPrompt.viewTerms') }}
@@ -129,7 +129,7 @@
               </button>
               <button
                 type="button"
-                class="rounded-xl bg-primary-600 px-4 py-3 text-sm font-semibold text-white shadow-sm shadow-primary-600/20 transition hover:bg-primary-700"
+                class="rounded-xl bg-primary-600 px-4 py-3 text-sm font-semibold text-on-primary shadow-sm shadow-primary-600/20 transition hover:bg-primary-700"
                 @click="emit('accept')"
               >
                 {{ t('legal.loginAgreementPrompt.accept') }}

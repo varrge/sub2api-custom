@@ -4,8 +4,8 @@
       <header class="usage-heading">
         <div>
           <p class="usage-eyebrow">{{ t('usage.inSelectedRange') }}</p>
-          <h1>{{ t('usage.title') }}</h1>
-          <p class="usage-description">{{ t('usage.description') }}</p>
+          <h1>{{ t('admin.usage.title') }}</h1>
+          <p class="usage-description">{{ t('admin.usage.description') }}</p>
         </div>
         <div class="usage-range">
           <div class="flex flex-wrap items-center gap-4">

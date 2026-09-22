@@ -1,5 +1,6 @@
 <template>
   <button
+    v-if="!entryHidden"
     ref="triggerRef"
     type="button"
     class="btn-ghost btn-icon shrink-0 text-amber-600 dark:text-amber-400"
@@ -32,7 +33,7 @@
         <div class="flex shrink-0 items-center justify-between gap-2 border-b border-amber-200/60 bg-gradient-to-r from-amber-50/90 via-orange-50/50 to-transparent px-3.5 py-2.5 dark:border-amber-400/15 dark:from-amber-950/50 dark:via-dark-900 dark:to-transparent">
           <div class="flex min-w-0 items-center gap-2">
             <Icon name="trophy" size="sm" class="shrink-0 text-amber-600 dark:text-amber-400" />
-            <h2 class="truncate text-sm font-bold tracking-tight text-gray-900 dark:text-white">{{ t('activityLeaderboard.title') }}</h2>
+            <h2 class="truncate text-sm font-bold tracking-tight text-gray-900 dark:text-white">{{ displayTitle }}</h2>
             <span v-if="data" class="shrink-0 rounded-full bg-amber-100/80 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-400/15 dark:text-amber-200" data-testid="leaderboard-status">{{ t(data.demo ? 'activityLeaderboard.demo' : `activityLeaderboard.${data.status}`) }}</span>
           </div>
           <button
@@ -48,11 +49,11 @@
 
         <div :aria-busy="loading" class="min-h-0 flex-1 space-y-3.5 overflow-y-auto overscroll-contain p-3.5">
           <div class="rounded-xl border border-amber-200/60 bg-gradient-to-br from-amber-50 via-orange-50/80 to-white px-3 py-2.5 dark:border-amber-400/15 dark:from-amber-950/40 dark:via-dark-800 dark:to-dark-900">
-            <p class="text-xs font-medium text-amber-800 dark:text-amber-200">{{ t('activityLeaderboard.subtitle') }}</p>
+            <p v-if="displaySubtitle" class="break-words whitespace-pre-wrap text-xs font-medium text-amber-800 dark:text-amber-200">{{ displaySubtitle }}</p>
             <p v-if="data" class="mt-1 text-[11px] leading-5 text-gray-600 dark:text-dark-300">
               {{ t('activityLeaderboard.period', { start: formatTime(data.starts_at), end: formatTime(data.ends_at) }) }}
             </p>
-            <p class="mt-1 text-[11px] leading-5 text-amber-800/90 dark:text-amber-200/90">{{ t('activityLeaderboard.rewards') }}</p>
+            <p v-if="displayReward" class="break-words whitespace-pre-wrap mt-1 text-[11px] leading-5 text-amber-800/90 dark:text-amber-200/90">{{ displayReward }}</p>
           </div>
 
           <p v-if="loading && !data" role="status" class="py-10 text-center text-sm text-gray-500 dark:text-dark-300">{{ t('activityLeaderboard.loading') }}</p>
@@ -142,9 +143,15 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getActivityLeaderboard, type ActivityLeaderboard } from '@/api/activityLeaderboard'
+import {
+  getActivityLeaderboard,
+  getActivityLeaderboardConfig,
+  type ActivityLeaderboard,
+  type ActivityLeaderboardPublicConfig,
+} from '@/api/activityLeaderboard'
+import { activityLeaderboardConfigVersion } from '@/utils/activityLeaderboardEvents'
 import Icon from '@/components/icons/Icon.vue'
 
 const { t, locale } = useI18n()
@@ -152,11 +159,54 @@ const show = ref(false)
 const data = ref<ActivityLeaderboard | null>(null)
 const loading = ref(false)
 const error = ref(false)
+const config = ref<ActivityLeaderboardPublicConfig | null>(null)
 const triggerRef = ref<HTMLButtonElement | null>(null)
+const triggerAnchorRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
 const panelStyle = ref({ top: '0px', left: '0px' })
 let controller: AbortController | undefined
 let timer: ReturnType<typeof setTimeout> | undefined
+let configController: AbortController | undefined
+let configTimer: ReturnType<typeof setInterval> | undefined
+
+const CONFIG_REFRESH_MS = 60 * 1000
+
+// Show the entry only after the server confirms that the feature is enabled.
+const entryHidden = computed(() => config.value?.enabled !== true)
+
+// Headline texts come from the API (leaderboard payload first, public config
+// as a pre-load stand-in); locale strings are the last-resort fallback.
+const displayTitle = computed(() => data.value?.title || config.value?.title || t('activityLeaderboard.title'))
+const displaySubtitle = computed(() => data.value?.subtitle ?? config.value?.subtitle ?? t('activityLeaderboard.subtitle'))
+const displayReward = computed(() => data.value?.reward_description ?? config.value?.reward_description ?? t('activityLeaderboard.rewards'))
+
+async function fetchConfig() {
+  configController?.abort()
+  const request = new AbortController()
+  configController = request
+  try {
+    const result = await getActivityLeaderboardConfig(request.signal)
+    if (!request.signal.aborted) {
+      const changed = JSON.stringify(config.value) !== JSON.stringify(result)
+      config.value = result
+      if (changed) {
+        stop()
+        data.value = null
+        error.value = false
+        if (!result.enabled || result.status === 'disabled') closePopover(false)
+        else if (show.value) void fetchLeaderboard()
+      }
+    }
+  } catch {
+    // Keep the previously known config on failure.
+  } finally {
+    if (configController === request) configController = undefined
+  }
+}
+
+function onVisibilityChange() {
+  if (!document.hidden) void fetchConfig()
+}
 
 const VIEWPORT_MARGIN = 8
 const PANEL_WIDTH = 400
@@ -186,7 +236,13 @@ async function fetchLeaderboard() {
   error.value = false
   try {
     const result = await getActivityLeaderboard(request.signal)
-    if (!request.signal.aborted) data.value = result
+    if (!request.signal.aborted) {
+      if (!result.enabled || result.status === 'disabled') {
+        if (config.value) config.value = { ...config.value, enabled: false, status: 'disabled' }
+        data.value = null
+        closePopover(false)
+      } else data.value = result
+    }
   } catch {
     if (!request.signal.aborted) error.value = true
   } finally {
@@ -264,9 +320,29 @@ watch(show, async (open) => {
   }
 })
 
+// Disabling the activity hides the entry and closes an open popover.
+watch(entryHidden, (hidden) => {
+  if (hidden) closePopover(false)
+})
+
+// An admin saving the settings bumps this counter; refetch immediately.
+watch(activityLeaderboardConfigVersion, () => void fetchConfig())
+
+onMounted(() => {
+  void fetchConfig()
+  configTimer = setInterval(() => {
+    if (!document.hidden) void fetchConfig()
+  }, CONFIG_REFRESH_MS)
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
 onBeforeUnmount(() => {
   removeListeners()
   stop()
+  clearInterval(configTimer)
+  configController?.abort()
+  configController = undefined
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 
 function formatTime(value: string) {

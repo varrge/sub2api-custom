@@ -7,13 +7,35 @@ export interface ActivityLeaderboardEntry {
   is_me: boolean
 }
 
+export type ActivityLeaderboardStatus = 'disabled' | 'upcoming' | 'active' | 'ended'
+
+export interface ActivityLeaderboardConfig {
+  enabled: boolean
+  title: string
+  subtitle: string
+  reward_description: string
+  starts_at: string
+  ends_at: string
+  demo_expires_at: string | null
+}
+
+/** Lightweight public config: the stored config plus campaign metadata. */
+export interface ActivityLeaderboardPublicConfig extends ActivityLeaderboardConfig {
+  campaign_id: string
+  status: ActivityLeaderboardStatus
+}
+
 export interface ActivityLeaderboard {
+  enabled: boolean
+  title: string
+  subtitle: string
+  reward_description: string
   demo?: boolean
   demo_expires_at?: string
   campaign_id: string
   starts_at: string
   ends_at: string
-  status: 'upcoming' | 'active' | 'ended'
+  status: ActivityLeaderboardStatus
   updated_at: string
   refresh_seconds: number
   participant_count: number
@@ -22,6 +44,11 @@ export interface ActivityLeaderboard {
 }
 
 export async function getActivityLeaderboard(signal?: AbortSignal): Promise<ActivityLeaderboard> {
-  const { data } = await apiClient.get<ActivityLeaderboard>('/activities/double-festival/leaderboard', { signal })
+  const { data } = await apiClient.get<ActivityLeaderboard>('/activities/leaderboard', { signal })
+  return data
+}
+
+export async function getActivityLeaderboardConfig(signal?: AbortSignal): Promise<ActivityLeaderboardPublicConfig> {
+  const { data } = await apiClient.get<ActivityLeaderboardPublicConfig>('/activities/leaderboard/config', { signal })
   return data
 }

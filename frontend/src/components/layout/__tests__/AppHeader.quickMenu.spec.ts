@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
-import { mount, type VueWrapper } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 
 import AppHeader from '../AppHeader.vue'
 
@@ -26,7 +26,20 @@ const state = vi.hoisted(() => ({
   },
 }))
 
-vi.mock('@/api/activityLeaderboard', () => ({ getActivityLeaderboard: vi.fn() }))
+vi.mock('@/api/activityLeaderboard', () => ({
+  getActivityLeaderboard: vi.fn(),
+  getActivityLeaderboardConfig: vi.fn(() => Promise.resolve({
+    enabled: true,
+    title: '中秋国庆双节消费榜',
+    subtitle: '月满算力，双节开工！',
+    reward_description: '前三名获得活动奖励，具体奖励另行公布。',
+    starts_at: '2026-09-25T00:00:00+08:00',
+    ends_at: '2026-10-08T00:00:00+08:00',
+    demo_expires_at: null,
+    campaign_id: 'double-festival-2026',
+    status: 'active',
+  })),
+}))
 
 const routerPush = vi.hoisted(() => vi.fn())
 
@@ -142,8 +155,9 @@ describe('AppHeader top quick menu', () => {
     document.documentElement.classList.remove('dark')
   })
 
-  it('places the leaderboard directly between theme and balance', () => {
+  it('places the leaderboard directly between theme and balance', async () => {
     const view = mountHeader()
+    await flushPromises()
     const ids = view.findAll('[data-testid]').map((node) => node.attributes('data-testid'))
     const theme = ids.indexOf('header-theme-toggle')
     expect(ids.slice(theme, theme + 3)).toEqual(['header-theme-toggle', 'header-activity-leaderboard', 'header-balance'])
@@ -230,6 +244,7 @@ describe('AppHeader top quick menu', () => {
   it('ends the header actions with announcement, theme, leaderboard, and available balance', async () => {
     const view = mountHeader()
 
+    await flushPromises()
     expect(
       view.findAll('[data-testid^="header-"]').slice(0, 4).map((node) => node.attributes('data-testid')),
     ).toEqual(['header-announcement', 'header-theme-toggle', 'header-activity-leaderboard', 'header-balance'])

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ActivityLeaderboard from '../ActivityLeaderboard.vue'
-import { getActivityLeaderboard, type ActivityLeaderboard as LeaderboardData } from '@/api/activityLeaderboard'
+import { getActivityLeaderboard, getActivityLeaderboardConfig, type ActivityLeaderboard as LeaderboardData } from '@/api/activityLeaderboard'
 import zh from '@/i18n/locales/zh/activityLeaderboard'
 
 vi.mock('vue-i18n', () => ({
@@ -14,15 +14,37 @@ vi.mock('vue-i18n', () => ({
   }),
 }))
 
-vi.mock('@/api/activityLeaderboard', () => ({ getActivityLeaderboard: vi.fn() }))
+vi.mock('@/api/activityLeaderboard', () => ({
+  getActivityLeaderboard: vi.fn(),
+  getActivityLeaderboardConfig: vi.fn(),
+}))
 const fetchMock = vi.mocked(getActivityLeaderboard)
+const configMock = vi.mocked(getActivityLeaderboardConfig)
 let wrapper: VueWrapper | undefined
 
 const POPOVER = '[data-testid="activity-leaderboard-popover"]'
 const TRIGGER = '[data-testid="header-activity-leaderboard"]'
 
+function configFixture(enabled = true) {
+  return {
+    enabled,
+    title: '中秋国庆双节消费榜',
+    subtitle: '月满算力，双节开工！',
+    reward_description: '前三名获得活动奖励，具体奖励另行公布。',
+    starts_at: '2026-09-25T00:00:00+08:00',
+    ends_at: '2026-10-08T00:00:00+08:00',
+    demo_expires_at: null,
+    campaign_id: 'double-festival-2026',
+    status: 'active' as const,
+  }
+}
+
 function fixture(status: LeaderboardData['status'] = 'active'): LeaderboardData {
   return {
+    enabled: true,
+    title: '中秋国庆双节消费榜',
+    subtitle: '月满算力，双节开工！',
+    reward_description: '前三名获得活动奖励，具体奖励另行公布。',
     campaign_id: 'double-festival-2026',
     starts_at: '2026-09-25T00:00:00+08:00',
     ends_at: '2026-10-08T00:00:00+08:00',
@@ -43,6 +65,7 @@ async function open() {
     global: { stubs: { transition: true } },
   })
   expect(fetchMock).not.toHaveBeenCalled()
+  await flushPromises()
   await wrapper.get(TRIGGER).trigger('click')
   await flushPromises()
   return wrapper
@@ -65,6 +88,8 @@ async function pressEscape() {
 describe('ActivityLeaderboard', () => {
   beforeEach(() => {
     fetchMock.mockReset()
+    configMock.mockReset()
+    configMock.mockResolvedValue(configFixture())
     vi.useFakeTimers()
   })
   afterEach(() => {
@@ -165,7 +190,7 @@ describe('ActivityLeaderboard', () => {
     expect(panel).not.toBeNull()
     expect(panel!.getAttribute('role')).toBe('dialog')
     expect(panel!.getAttribute('aria-modal')).toBe('false')
-    expect(panel!.getAttribute('aria-label')).toBe('双节消费榜')
+    expect(panel!.getAttribute('aria-label')).toBe('消费榜')
     expect(panel!.style.top).toMatch(/^\d+(\.\d+)?px$/)
     expect(panel!.style.left).toMatch(/^\d+(\.\d+)?px$/)
     expect(panel!.className).not.toContain('inset-0')
@@ -241,5 +266,51 @@ describe('ActivityLeaderboard', () => {
     wrapper = undefined
     await vi.advanceTimersByTimeAsync(120000)
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows the API-provided title, subtitle and reward text', async () => {
+    fetchMock.mockResolvedValue({
+      ...fixture(),
+      title: '双旦消费榜',
+      subtitle: '跨年冲刺，算力拉满',
+      reward_description: '冠军获得神秘大礼包。',
+    })
+    await open()
+    expect(document.body.textContent).toContain('双旦消费榜')
+    expect(document.body.textContent).toContain('跨年冲刺，算力拉满')
+    expect(document.body.textContent).toContain('冠军获得神秘大礼包')
+  })
+
+  it('omits empty API-provided subtitle and reward lines', async () => {
+    fetchMock.mockResolvedValue({ ...fixture(), title: '消费榜', subtitle: '', reward_description: '' })
+    await open()
+    expect(document.body.textContent).toContain('消费榜')
+    expect(document.body.textContent).not.toContain('月满算力')
+    expect(document.body.textContent).not.toContain('奖励')
+  })
+
+  it('hides the entry when the lightweight config reports disabled', async () => {
+    configMock.mockResolvedValue(configFixture(false))
+    fetchMock.mockResolvedValue(fixture())
+    wrapper = mount(ActivityLeaderboard, {
+      attachTo: document.body,
+      global: { stubs: { transition: true } },
+    })
+    await flushPromises()
+    expect(document.querySelector(TRIGGER)).toBeNull()
+    await vi.advanceTimersByTimeAsync(60000)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('closes an open popover and hides the entry when a poll reports disabled', async () => {
+    fetchMock.mockResolvedValue({ ...fixture(), refresh_seconds: 3600 })
+    await open()
+    expect(popover()).not.toBeNull()
+    configMock.mockResolvedValue(configFixture(false))
+    await vi.advanceTimersByTimeAsync(60000)
+    await flushPromises()
+    expect(popover()).toBeNull()
+    expect(document.querySelector(TRIGGER)).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

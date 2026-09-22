@@ -1376,6 +1376,39 @@ export async function updatePanelRateLimitSettings(
   return data;
 }
 
+// ==================== Activity Leaderboard Settings ====================
+
+/**
+ * Activity leaderboard configuration. Times are RFC3339 strings with an
+ * explicit timezone offset; `demo_expires_at` is null when unset.
+ */
+export interface ActivityLeaderboardSettings {
+  enabled: boolean;
+  title: string;
+  subtitle: string;
+  reward_description: string;
+  starts_at: string;
+  ends_at: string;
+  demo_expires_at: string | null;
+}
+
+export async function getActivityLeaderboardSettings(): Promise<ActivityLeaderboardSettings> {
+  const { data } = await apiClient.get<ActivityLeaderboardSettings>(
+    "/admin/settings/activity-leaderboard",
+  );
+  return data;
+}
+
+export async function updateActivityLeaderboardSettings(
+  settings: ActivityLeaderboardSettings,
+): Promise<ActivityLeaderboardSettings> {
+  const { data } = await apiClient.put<ActivityLeaderboardSettings>(
+    "/admin/settings/activity-leaderboard",
+    settings,
+  );
+  return data;
+}
+
 // ==================== Stream Timeout Settings ====================
 
 /**
@@ -1605,6 +1638,8 @@ export const settingsAPI = {
   updateRateLimit429CooldownSettings,
   getPanelRateLimitSettings,
   updatePanelRateLimitSettings,
+  getActivityLeaderboardSettings,
+  updateActivityLeaderboardSettings,
   getStreamTimeoutSettings,
   updateStreamTimeoutSettings,
   getRectifierSettings,

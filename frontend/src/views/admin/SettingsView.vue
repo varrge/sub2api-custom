@@ -8932,13 +8932,21 @@
         </div>
         <!-- /Tab: Email -->
 
+        <!-- Tab: Leaderboard -->
+        <div v-show="activeTab === 'leaderboard'">
+          <ActivityLeaderboardSettings />
+        </div>
+
         <!-- Tab: Backup -->
         <div v-show="activeTab === 'backup'">
           <BackupSettings />
         </div>
 
         <!-- Save Button -->
-        <div v-show="activeTab !== 'backup'" class="flex justify-end">
+        <div
+          v-show="activeTab !== 'backup' && activeTab !== 'leaderboard'"
+          class="flex justify-end"
+        >
           <button
             type="submit"
             :disabled="saving || loadFailed"
@@ -9067,6 +9075,7 @@ import Toggle from "@/components/common/Toggle.vue";
 import ProxySelector from "@/components/common/ProxySelector.vue";
 import ImageUpload from "@/components/common/ImageUpload.vue";
 import BackupSettings from "@/views/admin/BackupView.vue";
+import ActivityLeaderboardSettings from "@/views/admin/settings/ActivityLeaderboardSettings.vue";
 import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue";
 import OpenAIFastPolicyUserSelector from "@/views/admin/settings/OpenAIFastPolicyUserSelector.vue";
 import { useClipboard } from "@/composables/useClipboard";
@@ -9132,6 +9141,7 @@ type SettingsTab =
   | "gateway"
   | "payment"
   | "email"
+  | "leaderboard"
   | "backup";
 const activeTab = ref<SettingsTab>("general");
 const settingsTabs = [
@@ -9143,6 +9153,7 @@ const settingsTabs = [
   { key: "gateway" as SettingsTab, icon: "server" as const },
   { key: "payment" as SettingsTab, icon: "creditCard" as const },
   { key: "email" as SettingsTab, icon: "mail" as const },
+  { key: "leaderboard" as SettingsTab, icon: "trophy" as const },
   { key: "backup" as SettingsTab, icon: "database" as const },
 ];
 
@@ -11340,6 +11351,8 @@ const siteBillingModeHint = computed(() =>
 );
 
 async function saveSettings() {
+  // This tab has its own save endpoint; implicit Enter must not submit other settings.
+  if (activeTab.value === "leaderboard") return;
   saving.value = true;
   try {
     const normalizedTableDefaultPageSize = Math.floor(

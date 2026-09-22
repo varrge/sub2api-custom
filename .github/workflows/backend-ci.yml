@@ -2,7 +2,16 @@ name: CI
 
 on:
   push:
+    branches: ['**']
+    # Release runs this workflow itself for these tags.
+    tags-ignore: ['v*']
   pull_request:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Exact source commit to validate'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -12,6 +21,8 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.sha }}
       - name: Check deployment scripts
         run: |
           /bin/bash -n deploy/apple-container.sh
@@ -20,6 +31,8 @@ jobs:
           /bin/sh deploy/tests/docker-compose-gateway-env-test.sh
           /bin/sh deploy/tests/docker-runtime-resources-test.sh
           /bin/sh deploy/test-caddyfile-cache.sh
+      - name: Check release workflow policy
+        run: ruby .github/checks/release-workflow-test.rb
 
   test:
     runs-on: ubuntu-latest
@@ -39,6 +52,8 @@ jobs:
           --health-retries 12
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-go@v6
         with:
           go-version-file: backend/go.mod
@@ -55,6 +70,7 @@ jobs:
         working-directory: backend
         env:
           SCHEDULED_TEST_DSN: postgres://monthcard_test:isolated-test-password@127.0.0.1:55439/monthcard_test?sslmode=disable
+          ACTIVITY_TEST_DSN: postgres://monthcard_test:isolated-test-password@127.0.0.1:55439/monthcard_test?sslmode=disable
         run: make test-integration
       - name: Month-card PostgreSQL concurrency and payment recovery
         working-directory: backend
@@ -68,6 +84,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.sha }}
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
@@ -88,6 +106,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-go@v6
         with:
           go-version-file: backend/go.mod
@@ -103,3 +123,21 @@ jobs:
           version: v2.13
           args: --timeout=30m
           working-directory: backend
+
+  # A reusable workflow can otherwise report success with skipped jobs.
+  required:
+    if: ${{ always() }}
+    needs: [shell, test, frontend, golangci-lint]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every CI job to succeed
+        env:
+          CI_RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          test -n "$CI_RESULTS"
+          for result in $CI_RESULTS; do
+            if [ "$result" != success ]; then
+              echo "CI did not pass: $CI_RESULTS" >&2
+              exit 1
+            fi
+          done

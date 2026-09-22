@@ -181,7 +181,11 @@ func (s *ActivityLeaderboardService) Get(ctx context.Context, userID int64) (*Ac
 			if refreshed.Err != nil {
 				return nil, refreshed.Err
 			}
-			snapshot = refreshed.Val.(*activityLeaderboardSnapshot)
+			var ok bool
+			snapshot, ok = refreshed.Val.(*activityLeaderboardSnapshot)
+			if !ok || snapshot == nil {
+				return nil, fmt.Errorf("invalid activity leaderboard refresh result: %T", refreshed.Val)
+			}
 		}
 	}
 	result.Status = snapshot.status

@@ -160,7 +160,9 @@ func TestActivityLeaderboardDemoExpiresWithoutTouchingUsage(t *testing.T) {
 	repo := &activityRepoStub{}
 	s := testActivityService(repo, &now)
 	demoUntil := now.Add(24 * time.Hour)
-	cfg := s.settings.(*activityConfigStub).cfg
+	settings, ok := s.settings.(*activityConfigStub)
+	require.True(t, ok, "expected activity config stub")
+	cfg := settings.cfg
 	cfg.DemoExpiresAt = &demoUntil
 	for _, id := range []int64{1, 42} {
 		got, err := s.Get(context.Background(), id)
@@ -197,7 +199,8 @@ func TestActivityLeaderboardConfigChangesInvalidateCache(t *testing.T) {
 	now := festivalStart.Add(24 * time.Hour)
 	repo := &activityRepoStub{rows: []ActivitySpending{{UserID: 1, Amount: "5.25"}}}
 	s := testActivityService(repo, &now)
-	settings := s.settings.(*activityConfigStub)
+	settings, ok := s.settings.(*activityConfigStub)
+	require.True(t, ok, "expected activity config stub")
 	first, err := s.Get(context.Background(), 1)
 	require.NoError(t, err)
 	cfg := *settings.cfg

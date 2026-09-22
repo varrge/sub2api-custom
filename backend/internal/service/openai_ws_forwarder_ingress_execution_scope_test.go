@@ -227,7 +227,7 @@ func (c *openAIWSGatedConn) Close() error {
 // runOpenAIWSCodexThreadPair 用 OAuth 账号（抢占只对 OAuth ctx_pool 生效）跑两条并发接入：
 // A 的请求发到上游后 B 才接入并立即完成，B 完成后才放行 A 的上游事件。
 // 返回 A 与 B 的服务端返回值、A 客户端读结果的错误。
-func runOpenAIWSCodexThreadPair(t *testing.T, threadA, threadB string) (serverErrs []error, aReadErr error) {
+func runOpenAIWSCodexThreadPair(t *testing.T, threadA, threadB string, delayPreemptClose bool) (serverErrs []error, aReadErr error) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	cfg := newOpenAIWSExecutionScopeTestConfig()
@@ -265,6 +265,9 @@ func runOpenAIWSCodexThreadPair(t *testing.T, threadA, threadB string) (serverEr
 	}
 
 	serverErrCh := make(chan error, 2)
+	closeGate := make(chan struct{})
+	releaseClose := sync.OnceFunc(func() { close(closeGate) })
+	defer releaseClose()
 	wsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := coderws.Accept(w, r, &coderws.AcceptOptions{CompressionMode: coderws.CompressionContextTakeover})
 		if err != nil {
@@ -286,7 +289,21 @@ func runOpenAIWSCodexThreadPair(t *testing.T, threadA, threadB string) (serverEr
 			serverErrCh <- readErr
 			return
 		}
-		serverErrCh <- svc.ProxyResponsesWebSocketFromClient(r.Context(), ginCtx, conn, account, "test-token", firstMessage, nil)
+		ctx := r.Context()
+		if delayPreemptClose && gjson.GetBytes(firstMessage, "input.0.content").String() == "thread a" {
+			// Hold only the old connection's close notification. Its completed
+			// response must arrive before the preemption close frame in this case.
+			preemptCtx, cleanup, armed := svc.BeginOpenAIWSIngressSessionPreemptionWithClient(
+				ctx, ginCtx, account, firstMessage, &openAIWSGatedPreemptCloser{conn: conn, gate: closeGate},
+			)
+			if !armed {
+				serverErrCh <- errors.New("expected preemption registration")
+				return
+			}
+			defer cleanup()
+			ctx = preemptCtx
+		}
+		serverErrCh <- svc.ProxyResponsesWebSocketFromClient(ctx, ginCtx, conn, account, "test-token", firstMessage, nil)
 	}))
 	defer wsServer.Close()
 
@@ -312,9 +329,22 @@ func runOpenAIWSCodexThreadPair(t *testing.T, threadA, threadB string) (serverEr
 	readCtxA, cancelA := context.WithTimeout(context.Background(), 5*time.Second)
 	_, completedA, aReadErr := connA.Read(readCtxA)
 	cancelA()
+	if delayPreemptClose {
+		releaseClose()
+		require.NoError(t, aReadErr, "fixture must deliver the completed response before the close frame")
+	}
 	if aReadErr == nil {
 		require.Equal(t, "resp_thread_a", gjson.GetBytes(completedA, "response.id").String())
-		require.NoError(t, connA.Close(coderws.StatusNormalClosure, "done"))
+		if threadA == threadB {
+			// The in-flight completion and asynchronous preemption notification
+			// may arrive in either order. Do not initiate a normal close here:
+			// keep reading and require the server's preemption close below.
+			closeCtx, cancelClose := context.WithTimeout(context.Background(), 5*time.Second)
+			_, _, aReadErr = connA.Read(closeCtx)
+			cancelClose()
+		} else {
+			require.NoError(t, connA.Close(coderws.StatusNormalClosure, "done"))
+		}
 	}
 	require.NoError(t, connB.Close(coderws.StatusNormalClosure, "done"))
 
@@ -330,7 +360,7 @@ func runOpenAIWSCodexThreadPair(t *testing.T, threadA, threadB string) (serverEr
 }
 
 func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_CodexThreadsDoNotPreemptEachOther(t *testing.T) {
-	serverErrs, aReadErr := runOpenAIWSCodexThreadPair(t, "thread-a", "thread-b")
+	serverErrs, aReadErr := runOpenAIWSCodexThreadPair(t, "thread-a", "thread-b", false)
 	require.NoError(t, aReadErr, "子智能体接入后父线程在飞的请求必须继续完成")
 	for _, err := range serverErrs {
 		require.NoError(t, err)
@@ -338,7 +368,30 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_CodexThreadsDoNo
 }
 
 func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_SameCodexThreadStillPreempts(t *testing.T) {
-	serverErrs, aReadErr := runOpenAIWSCodexThreadPair(t, "thread-a", "thread-a")
+	for _, delay := range []bool{false, true} {
+		name := "natural_order"
+		if delay {
+			name = "completion_before_close"
+		}
+		t.Run(name, func(t *testing.T) {
+			serverErrs, aReadErr := runOpenAIWSCodexThreadPair(t, "thread-a", "thread-a", delay)
+			requireOpenAIWSCodexThreadPreempted(t, serverErrs, aReadErr)
+		})
+	}
+}
+
+type openAIWSGatedPreemptCloser struct {
+	conn *coderws.Conn
+	gate <-chan struct{}
+}
+
+func (c *openAIWSGatedPreemptCloser) Close(code coderws.StatusCode, reason string) error {
+	<-c.gate
+	return c.conn.Close(code, reason)
+}
+
+func requireOpenAIWSCodexThreadPreempted(t *testing.T, serverErrs []error, aReadErr error) {
+	t.Helper()
 	require.Error(t, aReadErr, "同线程重连必须取代旧连接")
 	var closeErr coderws.CloseError
 	require.True(t, errors.As(aReadErr, &closeErr), "被取代的连接应收到关闭帧而不是裸断开: %v", aReadErr)

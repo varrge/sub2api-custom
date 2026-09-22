@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"testing/synctest"
 	"time"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
@@ -327,20 +328,29 @@ func TestApplyMigrationsFS_ReadMigrationError(t *testing.T) {
 
 func TestPgAdvisoryLockAndUnlock_ErrorBranches(t *testing.T) {
 	t.Run("context_cancelled_while_not_locked", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
-		require.NoError(t, err)
-		defer func() { _ = db.Close() }()
+		synctest.Test(t, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer func() { _ = db.Close() }()
 
-		mock.ExpectQuery("SELECT pg_try_advisory_lock\\(\\$1\\)").
-			WithArgs(migrationsAdvisoryLockID).
-			WillReturnRows(sqlmock.NewRows([]string{"pg_try_advisory_lock"}).AddRow(false))
+			mock.ExpectQuery("SELECT pg_try_advisory_lock\\(\\$1\\)").
+				WithArgs(migrationsAdvisoryLockID).
+				WillReturnRows(sqlmock.NewRows([]string{"pg_try_advisory_lock"}).AddRow(false))
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
-		defer cancel()
-		err = pgAdvisoryLock(ctx, db)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "acquire migrations lock")
-		require.NoError(t, mock.ExpectationsWereMet())
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			done := make(chan error, 1)
+			go func() { done <- pgAdvisoryLock(ctx, db) }()
+			// Wait until the query has returned false and the lock loop is blocked
+			// between retries. Cancellation must not race the initial mock query.
+			synctest.Wait()
+			require.NoError(t, mock.ExpectationsWereMet())
+			cancel()
+			err = <-done
+			require.ErrorIs(t, err, context.Canceled)
+			require.Contains(t, err.Error(), "acquire migrations lock")
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
 	})
 
 	t.Run("unlock_exec_error", func(t *testing.T) {

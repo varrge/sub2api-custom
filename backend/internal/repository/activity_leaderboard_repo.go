@@ -32,13 +32,18 @@ WHERE ul.created_at >= $1 AND ul.created_at < $2
 GROUP BY ul.user_id
 ORDER BY SUM(ul.actual_cost) DESC, MAX(ul.created_at) ASC, ul.user_id ASC`
 
-func (r *activityLeaderboardRepository) ListSpending(ctx context.Context, start, end time.Time) ([]service.ActivitySpending, error) {
+func (r *activityLeaderboardRepository) ListSpending(ctx context.Context, start, end time.Time) (result []service.ActivitySpending, err error) {
 	rows, err := r.db.QueryContext(ctx, activityLeaderboardQuery, start, end)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	result := []service.ActivitySpending{}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+			result = nil
+		}
+	}()
+	result = []service.ActivitySpending{}
 	for rows.Next() {
 		var item service.ActivitySpending
 		if err := rows.Scan(&item.UserID, &item.Amount); err != nil {

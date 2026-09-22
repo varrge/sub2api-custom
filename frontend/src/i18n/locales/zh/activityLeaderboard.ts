@@ -35,5 +35,6 @@ export default {
     error: '榜单暂时无法加载，请稍后重试。',
     stale: '刷新失败，当前显示上次成功获取的榜单。',
     retry: '重试',
+    close: '关闭榜单',
   },
 }

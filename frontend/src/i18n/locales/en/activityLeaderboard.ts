@@ -35,5 +35,6 @@ export default {
     error: 'The leaderboard is unavailable. Please try again later.',
     stale: 'Refresh failed. Showing the last successfully loaded leaderboard.',
     retry: 'Retry',
+    close: 'Close leaderboard',
   },
 }

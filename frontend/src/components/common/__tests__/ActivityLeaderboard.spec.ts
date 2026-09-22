@@ -18,6 +18,9 @@ vi.mock('@/api/activityLeaderboard', () => ({ getActivityLeaderboard: vi.fn() })
 const fetchMock = vi.mocked(getActivityLeaderboard)
 let wrapper: VueWrapper | undefined
 
+const POPOVER = '[data-testid="activity-leaderboard-popover"]'
+const TRIGGER = '[data-testid="header-activity-leaderboard"]'
+
 function fixture(status: LeaderboardData['status'] = 'active'): LeaderboardData {
   return {
     campaign_id: 'double-festival-2026',
@@ -35,11 +38,28 @@ function fixture(status: LeaderboardData['status'] = 'active'): LeaderboardData 
 async function open() {
   wrapper = mount(ActivityLeaderboard, {
     attachTo: document.body,
+    // Exercise component lifecycle without CSS animation timing; real browser
+    // checks cover the transition and positioning.
+    global: { stubs: { transition: true } },
   })
   expect(fetchMock).not.toHaveBeenCalled()
-  await wrapper.get('[data-testid="header-activity-leaderboard"]').trigger('click')
+  await wrapper.get(TRIGGER).trigger('click')
   await flushPromises()
   return wrapper
+}
+
+function popover() {
+  return document.querySelector(POPOVER) as HTMLElement | null
+}
+
+async function settle() {
+  await flushPromises()
+}
+
+async function pressEscape() {
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+  await flushPromises()
+  await settle()
 }
 
 describe('ActivityLeaderboard', () => {
@@ -66,8 +86,8 @@ describe('ActivityLeaderboard', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(60000)
     expect(fetchMock).toHaveBeenCalledTimes(2)
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    await flushPromises()
+    await pressEscape()
+    expect(popover()).toBeNull()
     await vi.advanceTimersByTimeAsync(60000)
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(document.body.classList.contains('modal-open')).toBe(false)
@@ -106,10 +126,9 @@ describe('ActivityLeaderboard', () => {
     fetchMock.mockResolvedValueOnce({ ...fixture(), me: null, entries: [] })
     const view = await open()
     const signal = fetchMock.mock.calls[0][0]!
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    await flushPromises()
+    await pressEscape()
     expect(signal.aborted).toBe(true)
-    await view.get('[data-testid="header-activity-leaderboard"]').trigger('click')
+    await view.get(TRIGGER).trigger('click')
     await flushPromises()
     resolveFirst(fixture())
     await flushPromises()
@@ -117,6 +136,95 @@ describe('ActivityLeaderboard', () => {
     view.unmount()
     wrapper = undefined
     await vi.advanceTimersByTimeAsync(60000)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('opens a compact anchored popover without overlay, blur or scroll lock, and toggles closed', async () => {
+    fetchMock.mockResolvedValue(fixture())
+    const view = await open()
+    const trigger = view.get(TRIGGER)
+    expect(trigger.attributes('aria-expanded')).toBe('true')
+    expect(trigger.attributes('aria-controls')).toBe('activity-leaderboard-popover')
+    expect(trigger.attributes('aria-haspopup')).toBe('dialog')
+    const panel = popover()
+    expect(panel).not.toBeNull()
+    expect(panel!.getAttribute('role')).toBe('dialog')
+    expect(panel!.getAttribute('aria-modal')).toBe('false')
+    expect(panel!.getAttribute('aria-label')).toBe('双节消费榜')
+    expect(panel!.style.top).toMatch(/^\d+(\.\d+)?px$/)
+    expect(panel!.style.left).toMatch(/^\d+(\.\d+)?px$/)
+    expect(panel!.className).not.toContain('inset-0')
+    expect(document.querySelector('.modal-overlay')).toBeNull()
+    expect(document.body.classList.contains('modal-open')).toBe(false)
+    expect(document.body.style.overflow).toBe('')
+    expect(document.activeElement).toBe(panel)
+
+    await trigger.trigger('click')
+    await settle()
+    expect(popover()).toBeNull()
+    expect(trigger.attributes('aria-expanded')).toBe('false')
+  })
+
+  it('closes on outside pointerdown and keeps the focus the user clicked to', async () => {
+    fetchMock.mockResolvedValue(fixture())
+    await open()
+    expect(popover()).not.toBeNull()
+
+    const outside = document.createElement('button')
+    document.body.appendChild(outside)
+    outside.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    outside.focus()
+    await settle()
+
+    expect(popover()).toBeNull()
+    expect(document.activeElement).toBe(outside)
+    outside.remove()
+
+    // Reopen: pointerdown inside the panel must not close it
+    await wrapper!.get(TRIGGER).trigger('click')
+    await flushPromises()
+    const panel = popover()!
+    panel.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    await flushPromises()
+    expect(popover()).not.toBeNull()
+  })
+
+  it('restores trigger focus when closed via Escape or the close button', async () => {
+    fetchMock.mockResolvedValue(fixture())
+    const view = await open()
+    const triggerEl = view.get(TRIGGER).element as HTMLElement
+
+    await pressEscape()
+    expect(popover()).toBeNull()
+    expect(document.activeElement).toBe(triggerEl)
+
+    await view.get(TRIGGER).trigger('click')
+    await flushPromises()
+    ;(document.querySelector('[data-testid="leaderboard-close"]') as HTMLButtonElement).click()
+    await settle()
+    expect(popover()).toBeNull()
+    expect(document.activeElement).toBe(triggerEl)
+  })
+
+  it('removes listeners and timers when closed or unmounted', async () => {
+    fetchMock.mockResolvedValue(fixture())
+    const view = await open()
+    await pressEscape()
+
+    // Listeners are gone: further Escape / pointerdown events are inert
+    await pressEscape()
+    document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    await settle()
+    expect(popover()).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    // Unmount while open: pending refresh is cancelled
+    await view.get(TRIGGER).trigger('click')
+    await flushPromises()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    view.unmount()
+    wrapper = undefined
+    await vi.advanceTimersByTimeAsync(120000)
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })

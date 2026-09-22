@@ -46,7 +46,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 		return nil, err
 	}
 	activityLeaderboardRepository := repository.NewActivityLeaderboardRepository(db)
-	activityLeaderboardService := service.NewActivityLeaderboardService(activityLeaderboardRepository, configConfig)
+	activityLeaderboardService := service.ProvideActivityLeaderboardService(activityLeaderboardRepository, configConfig)
 	activityLeaderboardHandler := handler.NewActivityLeaderboardHandler(activityLeaderboardService)
 	userRepository := repository.NewUserRepository(client, db)
 	redeemCodeRepository := repository.NewRedeemCodeRepository(client)

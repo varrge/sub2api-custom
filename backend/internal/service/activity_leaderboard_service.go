@@ -38,6 +38,8 @@ type ActivityLeaderboardEntry struct {
 }
 
 type ActivityLeaderboard struct {
+	Demo             bool                       `json:"demo,omitempty"`
+	DemoExpiresAt    *time.Time                 `json:"demo_expires_at,omitempty"`
 	CampaignID       string                     `json:"campaign_id"`
 	StartsAt         time.Time                  `json:"starts_at"`
 	EndsAt           time.Time                  `json:"ends_at"`
@@ -57,12 +59,13 @@ type activityLeaderboardSnapshot struct {
 }
 
 type ActivityLeaderboardService struct {
-	repo     ActivityLeaderboardRepository
-	secret   []byte
-	now      func() time.Time
-	mu       sync.RWMutex
-	snapshot *activityLeaderboardSnapshot
-	refresh  singleflight.Group
+	repo      ActivityLeaderboardRepository
+	demoUntil time.Time
+	secret    []byte
+	now       func() time.Time
+	mu        sync.RWMutex
+	snapshot  *activityLeaderboardSnapshot
+	refresh   singleflight.Group
 }
 
 func NewActivityLeaderboardService(repo ActivityLeaderboardRepository, cfg *config.Config) *ActivityLeaderboardService {
@@ -103,6 +106,24 @@ func (s *ActivityLeaderboardService) Get(ctx context.Context, userID int64) (*Ac
 	}
 	// The upcoming screen never scans usage logs.
 	if result.Status == "upcoming" {
+		if now.Before(s.demoUntil) {
+			result.Demo = true
+			expires := s.demoUntil
+			if expires.After(festivalStart) {
+				expires = festivalStart
+			}
+			result.DemoExpiresAt = &expires
+			// UI preview only: no users, balances, subscriptions or usage logs are written.
+			for i, amount := range []string{"1280.50", "986.23", "768.80", "520.00", "388.66", "260.19", "168.25", "88.88"} {
+				entry := ActivityLeaderboardEntry{Rank: i + 1, Alias: fmt.Sprintf("DEMO-%02d", i+1), Amount: amount, IsMe: i == 3}
+				result.Entries = append(result.Entries, entry)
+				if entry.IsMe {
+					me := entry
+					result.Me = &me
+				}
+			}
+			result.ParticipantCount = len(result.Entries)
+		}
 		return result, nil
 	}
 	snapshot := s.cached(now)

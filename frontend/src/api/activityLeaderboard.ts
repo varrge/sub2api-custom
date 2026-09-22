@@ -8,6 +8,8 @@ export interface ActivityLeaderboardEntry {
 }
 
 export interface ActivityLeaderboard {
+  demo?: boolean
+  demo_expires_at?: string
   campaign_id: string
   starts_at: string
   ends_at: string

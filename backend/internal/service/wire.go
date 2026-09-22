@@ -830,6 +830,15 @@ func ProvidePluginManager(repo PluginRepository, encryptor SecretEncryptor, cfg 
 	return manager
 }
 
+// ProvideActivityLeaderboardService enables an explicitly opted-in, expiring UI preview.
+// Missing/invalid configuration leaves real statistics untouched. Preview is also
+// suppressed by the service once the actual campaign starts.
+func ProvideActivityLeaderboardService(repo ActivityLeaderboardRepository, cfg *config.Config) *ActivityLeaderboardService {
+	svc := NewActivityLeaderboardService(repo, cfg)
+	svc.demoUntil, _ = time.Parse(time.RFC3339, os.Getenv("ACTIVITY_LEADERBOARD_DEMO_UNTIL"))
+	return svc
+}
+
 // ProviderSet is the Wire provider set for all services
 var ProviderSet = wire.NewSet(
 	// Core services
@@ -846,7 +855,7 @@ var ProviderSet = wire.NewSet(
 	NewRedeemService,
 	NewPromoService,
 	NewUsageService,
-	NewActivityLeaderboardService,
+	ProvideActivityLeaderboardService,
 	NewDashboardService,
 	ProvidePricingService,
 	NewBillingService,

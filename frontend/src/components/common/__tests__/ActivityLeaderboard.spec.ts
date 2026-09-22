@@ -108,6 +108,21 @@ describe('ActivityLeaderboard', () => {
     }
   })
 
+  it('labels temporary data and shows sample ranks before the event, then clears them on expiry', async () => {
+    fetchMock.mockResolvedValueOnce({ ...fixture('upcoming'), demo: true, demo_expires_at: '2026-09-23T19:00:00+08:00' })
+    fetchMock.mockResolvedValueOnce({ ...fixture('upcoming'), entries: [], me: null, participant_count: 0 })
+    await open()
+    expect(document.querySelector('[data-testid="leaderboard-status"]')?.textContent).toContain('演示数据')
+    expect(document.querySelector('[data-testid="leaderboard-demo-notice"]')?.textContent).toContain('均为模拟数据')
+    expect(document.querySelector('[data-testid="leaderboard-demo-notice"]')?.textContent).toContain('2026/09/23 19:00')
+    expect(document.querySelectorAll('[data-testid="leaderboard-row"]')).toHaveLength(1)
+    expect(document.querySelector('[data-testid="leaderboard-me"]')).not.toBeNull()
+    await vi.advanceTimersByTimeAsync(60000)
+    expect(document.querySelector('[data-testid="leaderboard-demo-notice"]')).toBeNull()
+    expect(document.querySelectorAll('[data-testid="leaderboard-row"]')).toHaveLength(0)
+    expect(document.querySelector('[data-testid="leaderboard-empty"]')).not.toBeNull()
+  })
+
   it('supports retry after failure and retains data on failed refresh', async () => {
     fetchMock.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(fixture()).mockRejectedValueOnce(new Error('offline'))
     await open()

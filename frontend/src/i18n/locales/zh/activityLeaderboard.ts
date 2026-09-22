@@ -1,5 +1,8 @@
 export default {
   activityLeaderboard: {
+    demo: '演示数据',
+    demoNotice: '仅供界面预览，含“我的排名”在内均为模拟数据，不计入正式消费榜。',
+    demoExpiry: '{time}（北京时间）自动恢复正式榜单。',
     entry: '双节消费榜',
     title: '月满算力，双节开工！',
     subtitle: '中秋 · 国庆全分组消费榜',

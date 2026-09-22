@@ -142,3 +142,53 @@ func TestActivityLeaderboardFailureCanRetry(t *testing.T) {
 	require.NotNil(t, got.Entries)
 	require.Empty(t, got.Entries)
 }
+
+func TestActivityLeaderboardDemoExpiresWithoutTouchingUsage(t *testing.T) {
+	now := festivalStart.Add(-48 * time.Hour)
+	repo := &activityRepoStub{}
+	s := testActivityService(repo, &now)
+	s.demoUntil = now.Add(24 * time.Hour)
+	for _, id := range []int64{1, 42} {
+		got, err := s.Get(context.Background(), id)
+		require.NoError(t, err)
+		require.True(t, got.Demo)
+		require.Equal(t, "upcoming", got.Status)
+		require.Len(t, got.Entries, 8)
+		require.Equal(t, 8, got.ParticipantCount)
+		require.Equal(t, 4, got.Me.Rank)
+		require.True(t, got.Entries[3].IsMe)
+		require.Equal(t, s.demoUntil, *got.DemoExpiresAt)
+	}
+	require.Zero(t, repo.calls.Load())
+	now = s.demoUntil
+	got, err := s.Get(context.Background(), 42)
+	require.NoError(t, err)
+	require.False(t, got.Demo)
+	require.Empty(t, got.Entries)
+	require.Nil(t, got.Me)
+	require.Zero(t, repo.calls.Load())
+	// Even a wrongly extended switch cannot inject samples into an active event.
+	s.demoUntil = festivalEnd.Add(time.Hour)
+	now = festivalStart
+	repo.rows = []ActivitySpending{{UserID: 42, Amount: "7.50000000"}}
+	got, err = s.Get(context.Background(), 42)
+	require.NoError(t, err)
+	require.False(t, got.Demo)
+	require.Nil(t, got.DemoExpiresAt)
+	require.Equal(t, "7.50000000", got.Me.Amount)
+	require.Equal(t, int32(1), repo.calls.Load())
+}
+
+func TestActivityLeaderboardDemoConfigurationIsOptIn(t *testing.T) {
+	for _, raw := range []string{"", "invalid", "2026-09-23T19:00:00+08:00"} {
+		t.Run(raw, func(t *testing.T) {
+			t.Setenv("ACTIVITY_LEADERBOARD_DEMO_UNTIL", raw)
+			s := ProvideActivityLeaderboardService(&activityRepoStub{}, &config.Config{})
+			if raw == "" || raw == "invalid" {
+				require.True(t, s.demoUntil.IsZero())
+			} else {
+				require.Equal(t, raw, s.demoUntil.Format(time.RFC3339))
+			}
+		})
+	}
+}

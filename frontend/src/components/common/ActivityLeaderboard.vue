@@ -33,7 +33,7 @@
           <div class="flex min-w-0 items-center gap-2">
             <Icon name="trophy" size="sm" class="shrink-0 text-amber-600 dark:text-amber-400" />
             <h2 class="truncate text-sm font-bold tracking-tight text-gray-900 dark:text-white">{{ t('activityLeaderboard.title') }}</h2>
-            <span v-if="data" class="shrink-0 rounded-full bg-amber-100/80 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-400/15 dark:text-amber-200" data-testid="leaderboard-status">{{ t(`activityLeaderboard.${data.status}`) }}</span>
+            <span v-if="data" class="shrink-0 rounded-full bg-amber-100/80 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-400/15 dark:text-amber-200" data-testid="leaderboard-status">{{ t(data.demo ? 'activityLeaderboard.demo' : `activityLeaderboard.${data.status}`) }}</span>
           </div>
           <button
             type="button"
@@ -62,15 +62,19 @@
           </div>
 
           <template v-if="data">
+            <p v-if="data.demo" role="status" data-testid="leaderboard-demo-notice" class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
+              {{ t('activityLeaderboard.demoNotice') }}
+              <span v-if="data.demo_expires_at" class="block">{{ t('activityLeaderboard.demoExpiry', { time: formatTime(data.demo_expires_at) }) }}</span>
+            </p>
             <p v-if="data.status === 'ended'" class="rounded-xl bg-gray-50 px-3 py-2.5 text-[11px] leading-5 text-gray-600 dark:bg-dark-800 dark:text-dark-300">{{ t('activityLeaderboard.endedNotice') }}</p>
 
-            <div v-if="data.status === 'upcoming' || !data.entries.length" class="rounded-xl border border-dashed border-gray-200 px-4 py-7 text-center dark:border-dark-600" data-testid="leaderboard-empty">
+            <div v-if="(data.status === 'upcoming' && !data.demo) || !data.entries.length" class="rounded-xl border border-dashed border-gray-200 px-4 py-7 text-center dark:border-dark-600" data-testid="leaderboard-empty">
               <Icon name="moon" size="lg" class="mx-auto mb-2 text-amber-500" />
               <p class="text-sm font-semibold text-gray-900 dark:text-white">{{ t(data.status === 'upcoming' ? 'activityLeaderboard.upcomingTitle' : 'activityLeaderboard.emptyTitle') }}</p>
               <p class="mx-auto mt-1.5 max-w-xs text-xs leading-5 text-gray-500 dark:text-dark-300">{{ t(data.status === 'upcoming' ? 'activityLeaderboard.upcomingDescription' : 'activityLeaderboard.emptyDescription') }}</p>
             </div>
 
-            <template v-if="data.status !== 'upcoming'">
+            <template v-if="data.status !== 'upcoming' || data.demo">
               <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-400/20 dark:bg-amber-400/5" data-testid="leaderboard-me">
                 <div>
                   <p class="text-[11px] text-gray-500 dark:text-dark-300">{{ t('activityLeaderboard.myRank') }}</p>

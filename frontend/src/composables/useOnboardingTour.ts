@@ -80,6 +80,7 @@ export function useOnboardingTour(options: OnboardingOptions) {
    * 检查元素是否存在，如果不存在则重试
    */
   const ensureElement = async (selector: string, timeout = 5000): Promise<boolean> => {
+    window.dispatchEvent(new CustomEvent('sub2api:reveal-sidebar-item', { detail: selector }))
     const startTime = Date.now()
     while (Date.now() - startTime < timeout) {
       const element = document.querySelector(selector)
@@ -271,8 +272,13 @@ export function useOnboardingTour(options: OnboardingOptions) {
 
       // 步骤高亮时触发
       onHighlightStarted: async (element, step) => {
+        const highlightIndex = driverInstance?.getActiveIndex()
         // 清理之前的监听器
         cleanupClickListener()
+
+        if (typeof step.element === 'string') {
+          window.dispatchEvent(new CustomEvent('sub2api:reveal-sidebar-item', { detail: step.element }))
+        }
 
         // 尝试等待元素
         if (!element && step.element && typeof step.element === 'string') {
@@ -282,6 +288,15 @@ export function useOnboardingTour(options: OnboardingOptions) {
              return
            }
            element = document.querySelector(step.element) as HTMLElement
+           // driver.js has already selected its dummy element before this
+           // async callback. Once a grouped sidebar target is mounted, select
+           // the same step again so its overlay follows the real link.
+           if (step.element.includes('sidebar-')) {
+             if (highlightIndex !== undefined && driverInstance?.isActive() && driverInstance.getActiveIndex() === highlightIndex) {
+               driverInstance.drive(highlightIndex)
+             }
+             return
+           }
         }
 
         if (isInteractiveStep(step) && element) {

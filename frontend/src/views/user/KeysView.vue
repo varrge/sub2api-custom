@@ -440,11 +440,55 @@
     <BaseDialog
       :show="showCreateModal || showEditModal"
       :title="showEditModal ? t('keys.editKey') : t('keys.createKey')"
-      width="normal"
+      width="wide"
       @close="closeModals"
     >
-      <form id="key-form" @submit.prevent="handleSubmit" class="space-y-5">
-        <div>
+      <form id="key-form" ref="keyFormRef" novalidate @submit.prevent="handleSubmit">
+        <!-- Tabs (edit mode only): basic settings vs model restrictions -->
+        <div
+          v-if="showEditModal"
+          class="mb-5 flex gap-1 rounded-lg bg-gray-100 p-1 dark:bg-dark-700"
+          role="tablist"
+        >
+          <button
+            type="button"
+            role="tab"
+            data-test="key-tab-basic"
+            id="key-tab-basic"
+            aria-controls="key-basic-panel"
+            :tabindex="activeKeyFormTab === 'basic' ? 0 : -1"
+            @keydown="handleKeyTabKeydown"
+            :aria-selected="activeKeyFormTab === 'basic'"
+            class="min-w-0 flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors"
+            :class="activeKeyFormTab === 'basic'
+              ? 'bg-white text-primary-700 shadow-sm dark:bg-dark-600 dark:text-primary-300'
+              : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white'"
+            @click="activeKeyFormTab = 'basic'"
+          >
+            {{ t('admin.channels.form.basicSettings') }}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            data-test="key-tab-models"
+            id="key-tab-models"
+            aria-controls="key-model-panel"
+            :tabindex="activeKeyFormTab === 'models' ? 0 : -1"
+            @keydown="handleKeyTabKeydown"
+            :aria-selected="activeKeyFormTab === 'models'"
+            class="min-w-0 flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors"
+            :class="activeKeyFormTab === 'models'
+              ? 'bg-white text-primary-700 shadow-sm dark:bg-dark-600 dark:text-primary-300'
+              : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white'"
+            @click="activeKeyFormTab = 'models'"
+          >
+            {{ t('keys.modelRestriction.title') }}
+          </button>
+        </div>
+
+        <div id="key-basic-panel" v-show="!showEditModal || activeKeyFormTab === 'basic'" class="space-y-5" :role="showEditModal ? 'tabpanel' : undefined" :aria-labelledby="showEditModal ? 'key-tab-basic' : undefined">
+        <div class="grid gap-4 sm:grid-cols-2">
+        <div :class="showEditModal ? '' : 'sm:col-span-2'">
           <label class="input-label">{{ t('keys.nameLabel') }}</label>
           <input
             v-model="formData.name"
@@ -454,6 +498,16 @@
             :placeholder="t('keys.namePlaceholder')"
             data-tour="key-form-name"
           />
+        </div>
+
+        <div v-if="showEditModal">
+          <label class="input-label">{{ t('keys.statusLabel') }}</label>
+          <Select
+            v-model="formData.status"
+            :options="statusOptions"
+            :placeholder="t('keys.selectStatus')"
+          />
+        </div>
         </div>
 
         <fieldset v-if="!showEditModal" data-tour="key-form-provider">
@@ -551,15 +605,6 @@
           </div>
         </div>
 
-        <div v-if="showEditModal">
-          <label class="input-label">{{ t('keys.statusLabel') }}</label>
-          <Select
-            v-model="formData.status"
-            :options="statusOptions"
-            :placeholder="t('keys.selectStatus')"
-          />
-        </div>
-
         <!-- IP Restriction Section -->
         <div class="space-y-3">
           <div class="flex items-center justify-between">
@@ -581,7 +626,7 @@
             </button>
           </div>
 
-          <div v-if="formData.enable_ip_restriction" class="space-y-4 pt-2">
+          <div v-if="formData.enable_ip_restriction" class="grid gap-4 pt-2 sm:grid-cols-2">
             <div>
               <label class="input-label">{{ t('keys.ipWhitelist') }}</label>
               <textarea
@@ -606,6 +651,8 @@
           </div>
         </div>
 
+        <!-- Quota & Expiration side by side on desktop -->
+        <div class="grid gap-5 sm:grid-cols-2">
         <!-- Quota Limit Section -->
         <div class="space-y-3">
           <label class="input-label">{{ t('keys.quotaLimit') }}</label>
@@ -672,6 +719,80 @@
           </div>
         </div>
 
+        <!-- Expiration Section -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <label class="input-label mb-0">{{ t('keys.expiration') }}</label>
+            <button
+              type="button"
+              @click="formData.enable_expiration = !formData.enable_expiration"
+              :class="[
+                'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                formData.enable_expiration ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+              ]"
+            >
+              <span
+                :class="[
+                  'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                  formData.enable_expiration ? 'translate-x-4' : 'translate-x-0'
+                ]"
+              />
+            </button>
+          </div>
+
+          <div v-if="formData.enable_expiration" class="space-y-4 pt-2">
+            <!-- Quick select buttons (for both create and edit mode) -->
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="days in ['7', '30', '90']"
+                :key="days"
+                type="button"
+                @click="setExpirationDays(parseInt(days))"
+                :class="[
+                  'rounded-lg px-3 py-1.5 text-sm transition-colors',
+                  formData.expiration_preset === days
+                    ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-700 dark:text-gray-400 dark:hover:bg-dark-600'
+                ]"
+              >
+                {{ showEditModal ? t('keys.extendDays', { days }) : t('keys.expiresInDays', { days }) }}
+              </button>
+              <button
+                type="button"
+                @click="formData.expiration_preset = 'custom'"
+                :class="[
+                  'rounded-lg px-3 py-1.5 text-sm transition-colors',
+                  formData.expiration_preset === 'custom'
+                    ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-700 dark:text-gray-400 dark:hover:bg-dark-600'
+                ]"
+              >
+                {{ t('keys.customDate') }}
+              </button>
+            </div>
+
+            <!-- Date picker (always show for precise adjustment) -->
+            <div>
+              <label class="input-label">{{ t('keys.expirationDate') }}</label>
+              <input
+                v-model="formData.expiration_date"
+                type="datetime-local"
+                class="input"
+              />
+              <p class="input-hint">{{ t('keys.expirationDateHint') }}</p>
+            </div>
+
+            <!-- Current expiration display (only in edit mode) -->
+            <div v-if="showEditModal && selectedKey?.expires_at" class="text-sm">
+              <span class="text-gray-500 dark:text-gray-400">{{ t('keys.currentExpiration') }}: </span>
+              <span class="font-medium text-gray-900 dark:text-white">
+                {{ formatDateTime(selectedKey.expires_at) }}
+              </span>
+            </div>
+          </div>
+        </div>
+        </div>
+
         <!-- Rate Limit Section -->
         <div class="space-y-3">
           <div class="flex items-center justify-between">
@@ -693,8 +814,9 @@
             </button>
           </div>
 
-          <div v-if="formData.enable_rate_limit" class="space-y-4 pt-2">
-            <p class="input-hint -mt-2">{{ t('keys.rateLimitHint') }}</p>
+          <div v-if="formData.enable_rate_limit" class="pt-2">
+            <p class="input-hint">{{ t('keys.rateLimitHint') }}</p>
+            <div class="mt-3 grid gap-4 sm:grid-cols-3">
             <!-- 5-Hour Limit -->
             <div>
               <label class="input-label">{{ t('keys.rateLimit5h') }}</label>
@@ -833,8 +955,9 @@
               </div>
             </div>
 
+            </div>
             <!-- Reset Rate Limit button (edit mode only) -->
-            <div v-if="showEditModal && selectedKey && (selectedKey.rate_limit_5h > 0 || selectedKey.rate_limit_1d > 0 || selectedKey.rate_limit_7d > 0)">
+            <div v-if="showEditModal && selectedKey && (selectedKey.rate_limit_5h > 0 || selectedKey.rate_limit_1d > 0 || selectedKey.rate_limit_7d > 0)" class="mt-4">
               <button
                 type="button"
                 @click="confirmResetRateLimit"
@@ -845,86 +968,17 @@
             </div>
           </div>
         </div>
-
-        <!-- Expiration Section -->
-        <div class="space-y-3">
-          <div class="flex items-center justify-between">
-            <label class="input-label mb-0">{{ t('keys.expiration') }}</label>
-            <button
-              type="button"
-              @click="formData.enable_expiration = !formData.enable_expiration"
-              :class="[
-                'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
-                formData.enable_expiration ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-              ]"
-            >
-              <span
-                :class="[
-                  'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                  formData.enable_expiration ? 'translate-x-4' : 'translate-x-0'
-                ]"
-              />
-            </button>
-          </div>
-
-          <div v-if="formData.enable_expiration" class="space-y-4 pt-2">
-            <!-- Quick select buttons (for both create and edit mode) -->
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="days in ['7', '30', '90']"
-                :key="days"
-                type="button"
-                @click="setExpirationDays(parseInt(days))"
-                :class="[
-                  'rounded-lg px-3 py-1.5 text-sm transition-colors',
-                  formData.expiration_preset === days
-                    ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-700 dark:text-gray-400 dark:hover:bg-dark-600'
-                ]"
-              >
-                {{ showEditModal ? t('keys.extendDays', { days }) : t('keys.expiresInDays', { days }) }}
-              </button>
-              <button
-                type="button"
-                @click="formData.expiration_preset = 'custom'"
-                :class="[
-                  'rounded-lg px-3 py-1.5 text-sm transition-colors',
-                  formData.expiration_preset === 'custom'
-                    ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-700 dark:text-gray-400 dark:hover:bg-dark-600'
-                ]"
-              >
-                {{ t('keys.customDate') }}
-              </button>
-            </div>
-
-            <!-- Date picker (always show for precise adjustment) -->
-            <div>
-              <label class="input-label">{{ t('keys.expirationDate') }}</label>
-              <input
-                v-model="formData.expiration_date"
-                type="datetime-local"
-                class="input"
-              />
-              <p class="input-hint">{{ t('keys.expirationDateHint') }}</p>
-            </div>
-
-            <!-- Current expiration display (only in edit mode) -->
-            <div v-if="showEditModal && selectedKey?.expires_at" class="text-sm">
-              <span class="text-gray-500 dark:text-gray-400">{{ t('keys.currentExpiration') }}: </span>
-              <span class="font-medium text-gray-900 dark:text-white">
-                {{ formatDateTime(selectedKey.expires_at) }}
-              </span>
-            </div>
-          </div>
         </div>
-        <KeyModelAllowlist
-          v-if="showEditModal"
-          v-model="formModelAllowlist"
-          :group-ids="formData.group_ids"
-          :load-options="keysAPI.getModelOptions"
-          :disabled="submitting"
-        />
+
+        <!-- Model restrictions live on their own tab in edit mode -->
+        <div v-if="showEditModal" id="key-model-panel" v-show="activeKeyFormTab === 'models'" role="tabpanel" aria-labelledby="key-tab-models" data-test="key-model-panel">
+          <KeyModelAllowlist
+            v-model="formModelAllowlist"
+            :group-ids="formData.group_ids"
+            :load-options="keysAPI.getModelOptions"
+            :disabled="submitting"
+          />
+        </div>
       </form>
       <template #footer>
         <div class="flex justify-end gap-3">
@@ -934,7 +988,7 @@
           <button
             form="key-form"
             type="submit"
-            :disabled="submitting || (showEditModal && formModelAllowlist.enabled && formModelAllowlist.mode !== 'deny' && !formModelAllowlist.models?.length)"
+            :disabled="submitting"
             class="btn btn-primary"
             data-tour="key-form-submit"
           >
@@ -1099,7 +1153,7 @@
 </template>
 
 <script setup lang="ts">
-	import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
+	import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 	import { useI18n } from 'vue-i18n'
 	import { useAppStore } from '@/stores/app'
 	import { useOnboardingStore } from '@/stores/onboarding'
@@ -1329,6 +1383,18 @@ const formData = ref({
   expiration_date: ''
 })
 const formModelAllowlist = ref<ApiKeyModelAllowlist>({ enabled: false, models: [] })
+// Edit dialog tabs: basic settings vs model restrictions. Always reopens on basic.
+const activeKeyFormTab = ref<'basic' | 'models'>('basic')
+const keyFormRef = ref<HTMLFormElement | null>(null)
+
+async function handleKeyTabKeydown(event: KeyboardEvent) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+  event.preventDefault()
+  activeKeyFormTab.value = event.key === 'Home' ? 'basic' : event.key === 'End' ? 'models'
+    : activeKeyFormTab.value === 'basic' ? 'models' : 'basic'
+  await nextTick()
+  keyFormRef.value?.querySelector<HTMLButtonElement>(`#key-tab-${activeKeyFormTab.value}`)?.focus()
+}
 
 // 自定义Key验证
 const customKeyError = computed(() => {
@@ -1542,6 +1608,7 @@ const handleSort = (key: string, order: 'asc' | 'desc') => {
 
 const editKey = (key: ApiKey) => {
   selectedKey.value = key
+  activeKeyFormTab.value = 'basic'
   formModelAllowlist.value = {
     ...key.model_allowlist,
     enabled: key.model_allowlist?.enabled ?? false,
@@ -1621,12 +1688,26 @@ const confirmDelete = (key: ApiKey) => {
 }
 
 const handleSubmit = async () => {
+  if (submitting.value) return
+  // Reveal hidden invalid fields before asking the browser to focus them.
+  // Native automatic validation cannot focus a required input in another tab.
+  const invalidField = keyFormRef.value?.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input:invalid, select:invalid, textarea:invalid')
+  if (invalidField) {
+    activeKeyFormTab.value = 'basic'
+    await nextTick()
+    invalidField.reportValidity()
+    invalidField.focus()
+    return
+  }
   if (showEditModal.value && formModelAllowlist.value.enabled && formModelAllowlist.value.mode !== 'deny' && !formModelAllowlist.value.models?.length) {
+    // Surface the failing field: switch to the model restrictions tab
+    activeKeyFormTab.value = 'models'
     appStore.showError(t('keys.modelRestriction.required'))
     return
   }
   // Ordinary users must retain at least one configured group.
   if (formData.value.group_ids.length === 0) {
+    activeKeyFormTab.value = 'basic'
     appStore.showError(t('keys.groupRequired'))
     return
   }
@@ -1751,6 +1832,7 @@ const closeModals = () => {
   showCreateModal.value = false
   showEditModal.value = false
   selectedKey.value = null
+  activeKeyFormTab.value = 'basic'
   formModelAllowlist.value = { enabled: false, models: [] }
   formData.value = {
     name: '',

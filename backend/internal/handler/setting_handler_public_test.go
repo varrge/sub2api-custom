@@ -219,3 +219,26 @@ func TestSettingHandler_GetPublicSettings_ExposesWeChatOAuthModeCapabilities(t *
 	require.True(t, resp.Data.WeChatOAuthOpenEnabled)
 	require.True(t, resp.Data.WeChatOAuthMPEnabled)
 }
+
+func TestSettingHandler_GetPublicSettings_ExposesOnlyUserSidebarGroups(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &settingHandlerPublicRepoStub{values: map[string]string{
+		service.SettingKeySidebarGroups: `{"groups":[{"id":"user","label":"工具","visibility":"user","items":["/keys","/admin/orders"],"private":"secret"},{"id":"admin","label":"private-admin","visibility":"admin","items":["/admin/users"]}]}`,
+	}}
+	h := NewSettingHandler(service.NewSettingService(repo, &config.Config{}), "")
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/settings/public", nil)
+	h.GetPublicSettings(c)
+	require.Equal(t, http.StatusOK, w.Code)
+	var envelope struct {
+		Data struct {
+			SidebarGroups service.SidebarGroupsConfig `json:"sidebar_groups"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+	require.Equal(t, []service.SidebarGroup{{ID: "user", Label: "工具", Visibility: "user", Items: []string{"/keys"}}}, envelope.Data.SidebarGroups.Groups)
+	require.NotContains(t, w.Body.String(), "secret")
+	require.NotContains(t, w.Body.String(), "private-admin")
+	require.NotContains(t, w.Body.String(), "/admin/")
+}

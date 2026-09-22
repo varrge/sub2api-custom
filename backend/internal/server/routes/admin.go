@@ -574,6 +574,8 @@ func registerPromoCodeRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	adminSettings := admin.Group("/settings")
 	{
+		adminSettings.GET("/sidebar-groups", h.Admin.Setting.GetSidebarGroupsConfig)
+		adminSettings.PUT("/sidebar-groups", h.Admin.Setting.UpdateSidebarGroupsConfig)
 		adminSettings.GET("/activity-leaderboard", h.Admin.Setting.GetActivityLeaderboardConfig)
 		adminSettings.PUT("/activity-leaderboard", h.Admin.Setting.UpdateActivityLeaderboardConfig)
 		adminSettings.GET("", h.Admin.Setting.GetSettings)

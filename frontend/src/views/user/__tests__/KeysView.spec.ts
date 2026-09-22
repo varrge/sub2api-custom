@@ -306,20 +306,26 @@ describe('user KeysView column settings', () => {
     isCurrentStep.mockReturnValue(false)
   })
 
-  it('places model restrictions last in editing and saves the selection for reopening', async () => {
+  it('keeps model restrictions on their own edit tab and saves the selection for reopening', async () => {
     const key = { ...createApiKey(), group_id: 1, group_ids: [1, 2], multi_group_enabled: true }
     listKeys.mockResolvedValue({ items: [key], total: 1, pages: 1 })
     getModelOptions.mockResolvedValue({ models: [{ id: 'allowed', group_ids: [1, 2] }, { id: 'denied', group_ids: [2] }] })
     const wrapper = await mountView()
     await getButtonByText(wrapper, 'common.edit').trigger('click')
     await flushPromises()
-    expect(wrapper.get('#key-form').element.lastElementChild?.getAttribute('data-test')).toBe('model-allowlist')
+    expect(wrapper.get('[data-test="key-model-panel"] [data-test="model-allowlist"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="key-tab-basic"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('[data-test="key-tab-models"]').attributes('aria-selected')).toBe('false')
     expect(getModelOptions).toHaveBeenCalledWith([1, 2])
     expect(wrapper.get('[data-test="model-restriction-enabled"]').element).toMatchObject({ checked: false })
     await wrapper.get('[data-test="model-restriction-enabled"]').setValue(true)
-    expect(wrapper.get('[data-tour="key-form-submit"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-tour="key-form-submit"]').attributes('disabled')).toBeUndefined()
     await wrapper.get('#key-form').trigger('submit')
     expect(updateKey).not.toHaveBeenCalled()
+    // Validation failure surfaces the model restrictions tab
+    expect(wrapper.get('[data-test="key-tab-models"]').attributes('aria-selected')).toBe('true')
+    await wrapper.get('[data-test="key-tab-basic"]').trigger('click')
+    expect(wrapper.get('[data-test="key-tab-basic"]').attributes('aria-selected')).toBe('true')
     await wrapper.get('input[value="allowed"]').setValue(true)
     expect(wrapper.get('[data-tour="key-form-submit"]').attributes('disabled')).toBeUndefined()
     const saved = { ...key, model_allowlist: { enabled: true, models: ['allowed'] } }
@@ -330,9 +336,44 @@ describe('user KeysView column settings', () => {
     expect(updateKey).toHaveBeenCalledWith(1, expect.objectContaining({ group_ids: [1, 2], model_allowlist: { enabled: true, models: ['allowed'] } }))
     await getButtonByText(wrapper, 'common.edit').trigger('click')
     await flushPromises()
+    expect(wrapper.get('[data-test="key-tab-basic"]').attributes('aria-selected')).toBe('true')
     expect(wrapper.get('[data-test="model-restriction-enabled"]').element).toMatchObject({ checked: true })
     expect(wrapper.get('input[value="allowed"]').element).toMatchObject({ checked: true })
     expect(wrapper.get('input[value="denied"]').element).toMatchObject({ checked: false })
+    wrapper.unmount()
+  })
+
+  it('keeps the draft when switching tabs and resets to the basic tab on reopen', async () => {
+    const key = { ...createApiKey(), group_id: 1, group_ids: [1], multi_group_enabled: true }
+    listKeys.mockResolvedValue({ items: [key], total: 1, pages: 1 })
+    const wrapper = await mountView()
+    await getButtonByText(wrapper, 'common.edit').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-tour="key-form-name"]').setValue('Draft name')
+    await wrapper.get('[data-test="key-tab-models"]').trigger('click')
+    await wrapper.get('[data-test="key-tab-basic"]').trigger('click')
+    expect((wrapper.get('[data-tour="key-form-name"]').element as HTMLInputElement).value).toBe('Draft name')
+    await wrapper.get('[data-test="key-tab-models"]').trigger('click')
+    await wrapper.get('[data-test="close-dialog"]').trigger('click')
+    await getButtonByText(wrapper, 'common.edit').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="key-tab-basic"]').attributes('aria-selected')).toBe('true')
+    expect((wrapper.get('[data-tour="key-form-name"]').element as HTMLInputElement).value).toBe('test-key')
+    wrapper.unmount()
+  })
+
+  it('reveals an invalid basic field when submitting from model restrictions', async () => {
+    const key = { ...createApiKey(), group_id: 1, group_ids: [1] }
+    listKeys.mockResolvedValue({ items: [key], total: 1, pages: 1 })
+    const wrapper = await mountView()
+    await getButtonByText(wrapper, 'common.edit').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-tour="key-form-name"]').setValue('')
+    await wrapper.get('[data-test="key-tab-models"]').trigger('click')
+    await wrapper.get('#key-form').trigger('submit')
+    await flushPromises()
+    expect(updateKey).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-test="key-tab-basic"]').attributes('aria-selected')).toBe('true')
     wrapper.unmount()
   })
 
@@ -717,6 +758,7 @@ describe('user KeysView column settings', () => {
   it('creates ordered groups and rejects empty user selections', async () => {
     const wrapper = await mountView()
     await getButtonByText(wrapper, 'Create API Key').trigger('click')
+    await wrapper.get('[data-tour="key-form-name"]').setValue('Group validation')
     await wrapper.get('form#key-form').trigger('submit')
     expect(showError).toHaveBeenCalledWith('keys.groupRequired')
     expect(createKeyRequest).not.toHaveBeenCalled()

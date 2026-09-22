@@ -37,7 +37,9 @@
                   <Icon :name="tab.icon" size="sm" />
                 </span>
                 <span class="settings-tab-label">{{
-                  t(`admin.settings.tabs.${tab.key}`)
+                  tab.key === "sidebar"
+                    ? localText("侧栏分组", "Sidebar")
+                    : t(`admin.settings.tabs.${tab.key}`)
                 }}</span>
               </button>
             </div>
@@ -6826,6 +6828,35 @@
                       :remove-label="t('admin.settings.customMenu.removeSvg')"
                       @update:model-value="(v: string) => (item.icon_svg = v)"
                     />
+                    <div class="mt-2 space-y-1.5" data-testid="custom-menu-icon-presets">
+                      <div
+                        v-for="category in sidebarIconCategories"
+                        :key="category.key"
+                        class="flex items-center gap-2"
+                      >
+                        <span class="w-14 shrink-0 text-xs text-gray-400 dark:text-gray-500">
+                          {{ category.label }}
+                        </span>
+                        <div class="flex flex-wrap gap-1.5">
+                          <button
+                            v-for="preset in category.items"
+                            :key="preset.id"
+                            type="button"
+                            :title="preset.label"
+                            class="flex h-7 w-7 items-center justify-center rounded-md border p-1 transition-colors"
+                            :class="
+                              item.icon_svg === preset.svg
+                                ? 'border-amber-500 bg-amber-50 text-amber-600 dark:border-amber-400 dark:bg-amber-500/10 dark:text-amber-300'
+                                : 'border-gray-200 text-gray-500 hover:border-amber-400 hover:text-amber-600 dark:border-dark-600 dark:text-gray-400 dark:hover:border-amber-500 dark:hover:text-amber-300'
+                            "
+                            :data-testid="`custom-menu-icon-preset-${preset.id}`"
+                            @click="item.icon_svg = preset.svg"
+                          >
+                            <span class="h-full w-full [&>svg]:h-full [&>svg]:w-full" v-html="sanitizeSvg(preset.svg)"></span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -8937,6 +8968,11 @@
           <ActivityLeaderboardSettings />
         </div>
 
+        <!-- Tab: Sidebar Groups -->
+        <div v-show="activeTab === 'sidebar'">
+          <SidebarGroupsSettings :custom-menu-items="form.custom_menu_items" />
+        </div>
+
         <!-- Tab: Backup -->
         <div v-show="activeTab === 'backup'">
           <BackupSettings />
@@ -8944,7 +8980,7 @@
 
         <!-- Save Button -->
         <div
-          v-show="activeTab !== 'backup' && activeTab !== 'leaderboard'"
+          v-show="activeTab !== 'backup' && activeTab !== 'leaderboard' && activeTab !== 'sidebar'"
           class="flex justify-end"
         >
           <button
@@ -9074,7 +9110,10 @@ import GroupOptionItem from "@/components/common/GroupOptionItem.vue";
 import Toggle from "@/components/common/Toggle.vue";
 import ProxySelector from "@/components/common/ProxySelector.vue";
 import ImageUpload from "@/components/common/ImageUpload.vue";
+import { sidebarIconPresets } from "@/features/sidebar/iconPresets";
+import { sanitizeSvg } from "@/utils/sanitize";
 import BackupSettings from "@/views/admin/BackupView.vue";
+import SidebarGroupsSettings from "@/components/admin/SidebarGroupsSettings.vue";
 import ActivityLeaderboardSettings from "@/views/admin/settings/ActivityLeaderboardSettings.vue";
 import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue";
 import OpenAIFastPolicyUserSelector from "@/views/admin/settings/OpenAIFastPolicyUserSelector.vue";
@@ -9120,6 +9159,22 @@ function localText(zh: string, en: string): string {
   return isZhLocale.value ? zh : en;
 }
 
+// Custom menu preset icons (lottery / invite / BOSS). Clicking assigns the
+// preset to the item's icon_svg; uploading a custom SVG stays available and
+// nothing is auto-overwritten.
+const sidebarIconCategories = computed(() =>
+  (["lottery", "invite", "boss"] as const).map((category) => ({
+    key: category,
+    label:
+      category === "lottery"
+        ? localText("抽奖", "Lottery")
+        : category === "invite"
+          ? localText("邀请码", "Invite")
+          : "BOSS",
+    items: sidebarIconPresets.filter((preset) => preset.category === category),
+  })),
+);
+
 const paymentGuideHref = computed(() =>
   locale.value.startsWith("zh")
     ? "https://github.com/Wei-Shaw/sub2api/blob/main/docs/PAYMENT_CN.md"
@@ -9142,6 +9197,7 @@ type SettingsTab =
   | "payment"
   | "email"
   | "leaderboard"
+  | "sidebar"
   | "backup";
 const activeTab = ref<SettingsTab>("general");
 const settingsTabs = [
@@ -9154,6 +9210,7 @@ const settingsTabs = [
   { key: "payment" as SettingsTab, icon: "creditCard" as const },
   { key: "email" as SettingsTab, icon: "mail" as const },
   { key: "leaderboard" as SettingsTab, icon: "trophy" as const },
+  { key: "sidebar" as SettingsTab, icon: "menu" as const },
   { key: "backup" as SettingsTab, icon: "database" as const },
 ];
 
@@ -11351,8 +11408,8 @@ const siteBillingModeHint = computed(() =>
 );
 
 async function saveSettings() {
-  // This tab has its own save endpoint; implicit Enter must not submit other settings.
-  if (activeTab.value === "leaderboard") return;
+  // These tabs have their own save endpoint; implicit Enter must not submit other settings.
+  if (activeTab.value === "leaderboard" || activeTab.value === "sidebar") return;
   saving.value = true;
   try {
     const normalizedTableDefaultPageSize = Math.floor(

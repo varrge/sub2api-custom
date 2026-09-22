@@ -82,6 +82,7 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 		TableDefaultPageSize:                settings.TableDefaultPageSize,
 		TablePageSizeOptions:                settings.TablePageSizeOptions,
 		TopQuickMenuItems:                   service.ParseTopQuickMenuItems(settings.TopQuickMenuItems),
+		SidebarGroups:                       settings.SidebarGroups,
 		CustomMenuItems:                     dto.ParseUserVisibleMenuItems(settings.CustomMenuItems),
 		CustomEndpoints:                     dto.ParseCustomEndpoints(settings.CustomEndpoints),
 		DingTalkOAuthEnabled:                settings.DingTalkOAuthEnabled,

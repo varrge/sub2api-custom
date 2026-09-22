@@ -35,123 +35,58 @@
       <template v-if="isAdmin">
         <!-- Admin Section -->
         <div class="sidebar-section">
-          <template v-for="item in adminNavItems" :key="item.path">
-            <!-- Collapsible group (has children) -->
-            <template v-if="item.children?.length">
-              <button
-                type="button"
-                class="sidebar-link mb-1 w-full"
-                :class="{
-                  'sidebar-link-active': isGroupActive(item) && !isGroupExpanded(item),
-                  'sidebar-link-collapsed': sidebarCollapsed
-                }"
-                :title="sidebarCollapsed ? item.label : undefined"
-                @click="handleGroupClick(item)"
-              >
-                <component :is="item.icon" class="h-5 w-5 flex-shrink-0" />
-                <span
-                  class="sidebar-label sidebar-label-flex"
-                  :class="{ 'sidebar-label-collapsed': sidebarCollapsed }"
-                  :aria-hidden="sidebarCollapsed ? 'true' : 'false'"
-                >
-                  <span class="min-w-0 truncate">{{ item.label }}</span>
-                  <ChevronDownIcon
-                    class="h-4 w-4 flex-shrink-0 transition-transform duration-200"
-                    :class="isGroupExpanded(item) ? 'rotate-180' : ''"
-                  />
-                </span>
-              </button>
-              <!-- Children -->
-              <div v-if="!sidebarCollapsed && isGroupExpanded(item)" class="mb-1 ml-4 border-l border-gray-200 pl-2 dark:border-dark-600">
-                <router-link
-                  v-for="child in item.children"
-                  :key="child.path"
-                  :to="child.path"
-                  class="sidebar-link mb-0.5 py-1.5 text-sm"
-                  :class="{ 'sidebar-link-active': route.path === child.path }"
-                  @click="handleMenuItemClick(child.path)"
-                >
-                  <component :is="child.icon" class="h-4 w-4 flex-shrink-0" />
-                  <span>{{ child.label }}</span>
-                </router-link>
-              </div>
-            </template>
-            <!-- Normal item (no children) -->
-            <router-link
-              v-else
-              :to="item.path"
-              class="sidebar-link mb-1"
-              :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
-              :title="sidebarCollapsed ? item.label : undefined"
-              :id="
-                item.path === '/admin/accounts'
-                  ? 'sidebar-channel-manage'
-                  : item.path === '/admin/groups'
-                    ? 'sidebar-group-manage'
-                    : item.path === '/admin/redeem'
-                      ? 'sidebar-wallet'
-                      : undefined
-              "
-              @click="handleMenuItemClick(item.path)"
-            >
-              <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
-              <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
-              <span class="sidebar-label flex min-w-0 items-center gap-2" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">
-                <span class="min-w-0 truncate">{{ item.label }}</span>
-                <span v-if="item.badge?.()" class="ml-auto rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">{{ item.badge() }}</span>
-              </span>
-            </router-link>
-          </template>
+          <SidebarNavItem
+            v-for="item in adminNavItemsGrouped"
+            :key="item.path"
+            :item="item"
+            :collapsed="sidebarCollapsed"
+            :current-path="route.path"
+            :is-expanded="isGroupExpanded"
+            :is-group-active="isGroupActive"
+            :is-active="isActive"
+            @group-click="handleGroupClick"
+            @menu-click="handleMenuItemClick"
+          />
         </div>
 
         <!-- Personal Section for Admin (hidden in simple mode) -->
-        <div v-if="adminPersonalNavItems.length" class="sidebar-section">
+        <div v-if="adminPersonalNavItemsGrouped.length" class="sidebar-section">
           <div class="sidebar-section-title" :class="{ 'sidebar-section-title-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">
             <span class="sidebar-section-title-text" :class="{ 'sidebar-section-title-text-collapsed': sidebarCollapsed }">
               {{ t('nav.myAccount') }}
             </span>
           </div>
 
-          <router-link
-            v-for="item in adminPersonalNavItems"
+          <SidebarNavItem
+            v-for="item in adminPersonalNavItemsGrouped"
             :key="item.path"
-            :to="item.path"
-            class="sidebar-link mb-1"
-            :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
-            :title="sidebarCollapsed ? item.label : undefined"
-            :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined"
-            @click="handleMenuItemClick(item.path)"
-          >
-            <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
-            <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
-            <span class="sidebar-label flex min-w-0 items-center gap-2" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">
-              <span class="min-w-0 truncate">{{ item.label }}</span>
-              <span v-if="item.badge?.()" class="ml-auto rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">{{ item.badge() }}</span>
-            </span>
-          </router-link>
+            :item="item"
+            :collapsed="sidebarCollapsed"
+            :current-path="route.path"
+            :is-expanded="isGroupExpanded"
+            :is-group-active="isGroupActive"
+            :is-active="isActive"
+            @group-click="handleGroupClick"
+            @menu-click="handleMenuItemClick"
+          />
         </div>
       </template>
 
       <!-- Regular User View -->
       <template v-else-if="!appStore.backendModeEnabled">
         <div class="sidebar-section">
-          <router-link
-            v-for="item in userNavItems"
+          <SidebarNavItem
+            v-for="item in userNavItemsGrouped"
             :key="item.path"
-            :to="item.path"
-            class="sidebar-link mb-1"
-            :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
-            :title="sidebarCollapsed ? item.label : undefined"
-            :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined"
-            @click="handleMenuItemClick(item.path)"
-          >
-            <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
-            <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
-            <span class="sidebar-label flex min-w-0 items-center gap-2" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">
-              <span class="min-w-0 truncate">{{ item.label }}</span>
-              <span v-if="item.badge?.()" class="ml-auto rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">{{ item.badge() }}</span>
-            </span>
-          </router-link>
+            :item="item"
+            :collapsed="sidebarCollapsed"
+            :current-path="route.path"
+            :is-expanded="isGroupExpanded"
+            :is-group-active="isGroupActive"
+            :is-active="isActive"
+            @group-click="handleGroupClick"
+            @menu-click="handleMenuItemClick"
+          />
         </div>
       </template>
     </nav>
@@ -283,7 +218,8 @@ import { useI18n } from 'vue-i18n'
 import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore, useSupportTicketStore } from '@/stores'
 import VersionBadge from '@/components/common/VersionBadge.vue'
 import Icon from '@/components/icons/Icon.vue'
-import { sanitizeSvg } from '@/utils/sanitize'
+import SidebarNavItem, { type SidebarNavEntry } from './SidebarNavItem.vue'
+import { applySidebarGroups } from '@/features/sidebar/sidebarGroups'
 import { sanitizeUrl } from '@/utils/url'
 import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
 import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
@@ -301,6 +237,7 @@ interface NavItem {
    * does NOT navigate to its `path`. The `path` is purely a stable key.
    */
   expandOnly?: boolean
+  exact?: boolean
   /**
    * 可选的功能开关 getter。返回 false 时菜单项被隐藏；返回 undefined/true 时显示。
    * 宽容策略（undefined → 显示）避免 public settings 未加载完成时菜单闪烁消失。
@@ -731,21 +668,6 @@ const PriceTagIcon = {
     )
 }
 
-const ChevronDownIcon = {
-  render: () =>
-    h(
-      'svg',
-      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
-      [
-        h('path', {
-          'stroke-linecap': 'round',
-          'stroke-linejoin': 'round',
-          d: 'm19.5 8.25-7.5 7.5-7.5-7.5'
-        })
-      ]
-    )
-}
-
 // Public-settings flags go through the registry in utils/featureFlags.ts,
 // which handles the opt-in vs opt-out fallback when settings haven't loaded
 // yet. Admin-only flags (not in public settings) stay inline below.
@@ -905,7 +827,7 @@ const adminNavItems = computed((): NavItem[] => {
       featureFlag: flagAdminPayment,
       children: [
         { path: '/admin/orders/dashboard', label: t('nav.paymentDashboard'), icon: ChartIcon },
-        { path: '/admin/orders', label: t('nav.orderManagement'), icon: OrderIcon },
+        { path: '/admin/orders', label: t('nav.orderManagement'), icon: OrderIcon, exact: true },
         { path: '/admin/orders/plans', label: t('nav.paymentPlans'), icon: CreditCardIcon },
       ],
     },
@@ -932,6 +854,21 @@ const adminNavItems = computed((): NavItem[] => {
   }
   return visible
 })
+
+// Custom sidebar groups rearrange the already permission-filtered menus.
+// User-scope groups come from cached public settings and drive both the user
+// sidebar and the admin "My Account" section; admin-scope groups come from the
+// admin settings store. applySidebarGroups never resurrects hidden entries.
+const userSidebarGroups = computed(() => appStore.cachedPublicSettings?.sidebar_groups)
+const userNavItemsGrouped = computed((): NavItem[] =>
+  applySidebarGroups(userNavItems.value, userSidebarGroups.value, 'user', FolderIcon)
+)
+const adminPersonalNavItemsGrouped = computed((): NavItem[] =>
+  applySidebarGroups(adminPersonalNavItems.value, userSidebarGroups.value, 'user', FolderIcon)
+)
+const adminNavItemsGrouped = computed((): NavItem[] =>
+  applySidebarGroups(adminNavItems.value, adminSettingsStore.sidebarGroups, 'admin', FolderIcon)
+)
 
 function toggleAccountMenu() {
   accountMenuOpen.value = !accountMenuOpen.value
@@ -1005,30 +942,39 @@ function isActive(path: string): boolean {
   return route.path === path || route.path.startsWith(path + '/')
 }
 
-function isGroupActive(item: NavItem): boolean {
+// Recursive: a custom group can wrap a native group (e.g. 渠道管理), so an
+// active route nested two levels down must still mark the outer group active.
+function isGroupActive(item: SidebarNavEntry): boolean {
   if (!item.children) return false
-  return item.children.some(child => route.path === child.path)
+  return item.children.some(child => child.children
+    ? isGroupActive(child)
+    : child.exact ? route.path === child.path : isActive(child.path))
 }
 
-function isGroupExpanded(item: NavItem): boolean {
+function isGroupExpanded(item: SidebarNavEntry): boolean {
   const override = groupExpandOverrides.value.get(item.path)
   if (override !== undefined) return override
   return isGroupActive(item)
 }
 
-function toggleGroup(item: NavItem) {
+function toggleGroup(item: SidebarNavEntry) {
   groupExpandOverrides.value.set(item.path, !isGroupExpanded(item))
 }
 
 /**
  * Click handler for collapsible parent items.
- * - When sidebar is collapsed: do nothing (children are not visible).
+ * - When sidebar is collapsed: expand the sidebar first so the entries become
+ *   reachable; the group itself is opened so its children show immediately.
  * - When `expandOnly` is true: only toggle expand state.
  * - Otherwise (default, e.g. /admin/orders): navigate to the parent path
  *   (router-link semantics) and ensure the group is expanded.
  */
-function handleGroupClick(item: NavItem) {
-  if (sidebarCollapsed.value) return
+function handleGroupClick(item: SidebarNavEntry) {
+  if (sidebarCollapsed.value) {
+    appStore.setSidebarCollapsed(false)
+    groupExpandOverrides.value.set(item.path, true)
+    return
+  }
   if (item.expandOnly) {
     toggleGroup(item)
     return
@@ -1038,6 +984,35 @@ function handleGroupClick(item: NavItem) {
     router.push(item.path)
   }
   groupExpandOverrides.value.set(item.path, true)
+}
+
+function revealTourItem(event: Event) {
+  const selector = (event as CustomEvent<string>).detail
+  const targets: Record<string, string> = {
+    '#sidebar-group-manage': '/admin/groups',
+    '#sidebar-channel-manage': '/admin/accounts',
+    '#sidebar-wallet': '/admin/redeem',
+    '[data-tour="sidebar-my-keys"]': '/keys',
+  }
+  const target = targets[selector]
+  if (!target) return
+  const reveal = (items: SidebarNavEntry[]): boolean => {
+    for (const item of items) {
+      if (item.children && reveal(item.children)) {
+        groupExpandOverrides.value.set(item.path, true)
+        return true
+      }
+      if (item.path === target) return true
+    }
+    return false
+  }
+  const items = isAdmin.value
+    ? [...adminNavItemsGrouped.value, ...adminPersonalNavItemsGrouped.value]
+    : appStore.backendModeEnabled ? [] : userNavItemsGrouped.value
+  if (reveal(items)) {
+    appStore.setSidebarCollapsed(false)
+    if (window.innerWidth < 1024) appStore.setMobileOpen(true)
+  }
 }
 
 // Fetch admin settings (for feature-gated nav items like Ops).
@@ -1052,6 +1027,7 @@ watch(
 )
 
 onMounted(() => {
+  window.addEventListener('sub2api:reveal-sidebar-item', revealTourItem)
   appStore.setSidebarCollapsed(false)
   document.addEventListener('click', handleAccountMenuClickOutside)
   document.addEventListener('keydown', handleAccountMenuKeydown)
@@ -1070,6 +1046,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('sub2api:reveal-sidebar-item', revealTourItem)
   document.removeEventListener('click', handleAccountMenuClickOutside)
   document.removeEventListener('keydown', handleAccountMenuKeydown)
   if (sidebarNavRef.value) {
@@ -1131,12 +1108,6 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.sidebar-link-collapsed {
-  gap: 0;
-  padding-left: 0.875rem;
-  padding-right: 0.875rem;
-}
-
 .sidebar-section-title {
   position: relative;
   display: flex;
@@ -1181,43 +1152,5 @@ onBeforeUnmount(() => {
 .sidebar-section-title-collapsed::after {
   opacity: 1;
   transition-delay: 0.08s;
-}
-
-.sidebar-label {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transition:
-    max-width 0.2s ease,
-    opacity 0.12s ease,
-    transform 0.12s ease;
-  max-width: 12rem;
-}
-
-.sidebar-label-flex {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.sidebar-label-collapsed {
-  max-width: 0;
-  opacity: 0;
-  transform: translateX(-4px);
-  pointer-events: none;
-}
-
-/* Custom SVG icon in sidebar: constrain size without overriding uploaded SVG colors */
-.sidebar-svg-icon {
-  color: currentColor;
-}
-
-.sidebar-svg-icon :deep(svg) {
-  display: block;
-  width: 1.25rem;
-  height: 1.25rem;
 }
 </style>

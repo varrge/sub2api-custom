@@ -12,6 +12,8 @@ func firstNonEmpty(values ...string) string {
 }
 
 type SystemSettings struct {
+	SidebarGroups *SidebarGroupsConfig // read-only in generic settings; saved independently
+
 	RegistrationEnabled                 bool
 	EmailVerifyEnabled                  bool
 	RegistrationEmailSuffixWhitelist    []string
@@ -328,6 +330,8 @@ type DefaultSubscriptionSetting struct {
 }
 
 type PublicSettings struct {
+	SidebarGroups *SidebarGroupsConfig // read-only in generic settings; saved independently
+
 	RegistrationEnabled                 bool
 	EmailVerifyEnabled                  bool
 	ForceEmailOnThirdPartySignup        bool

@@ -129,9 +129,33 @@ vi.mock("@/stores", () => ({
   }),
 }));
 
+// SidebarGroupsSettings (mounted inside the sidebar tab) imports these two
+// modules directly; keep them mocked so mounting the view never hits Pinia or
+// the network.
+vi.mock("@/stores/app", () => ({
+  useAppStore: () => ({
+    showError,
+    showSuccess,
+    showWarning: vi.fn(),
+    showInfo: vi.fn(),
+    fetchPublicSettings,
+    cachedPublicSettings: null,
+  }),
+}));
+
+vi.mock("@/api/admin/settings", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/api/admin/settings")>();
+  return {
+    ...actual,
+    getSidebarGroups: vi.fn().mockResolvedValue({ groups: [] }),
+    updateSidebarGroups: vi.fn().mockImplementation(async (payload) => payload),
+  };
+});
+
 vi.mock("@/stores/adminSettings", () => ({
   useAdminSettingsStore: () => ({
     fetch: adminSettingsFetch,
+    sidebarGroups: { groups: [] },
   }),
 }));
 

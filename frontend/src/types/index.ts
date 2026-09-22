@@ -196,6 +196,17 @@ export interface CustomMenuItem {
   sort_order: number
 }
 
+export interface SidebarGroup {
+  id: string
+  label: string
+  visibility: 'user' | 'admin'
+  items: string[]
+}
+
+export interface SidebarGroupsConfig {
+  groups: SidebarGroup[]
+}
+
 export type TopQuickMenuItemId =
   | 'image_generation'
   | 'batch_image'
@@ -255,6 +266,7 @@ export interface PublicSettings {
   table_page_size_options: number[]
   top_quick_menu_items: TopQuickMenuItemId[]
   custom_menu_items: CustomMenuItem[]
+  sidebar_groups?: SidebarGroupsConfig
   custom_endpoints: CustomEndpoint[]
   linuxdo_oauth_enabled: boolean
   dingtalk_oauth_enabled?: boolean

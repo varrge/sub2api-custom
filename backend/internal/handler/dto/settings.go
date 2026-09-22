@@ -28,6 +28,8 @@ type CustomEndpoint struct {
 
 // SystemSettings represents the admin settings API response payload.
 type SystemSettings struct {
+	SidebarGroups *service.SidebarGroupsConfig `json:"sidebar_groups"`
+
 	RegistrationEnabled                 bool                     `json:"registration_enabled"`
 	EmailVerifyEnabled                  bool                     `json:"email_verify_enabled"`
 	RegistrationEmailSuffixWhitelist    []string                 `json:"registration_email_suffix_whitelist"`
@@ -363,6 +365,8 @@ type DefaultSubscriptionSetting struct {
 }
 
 type PublicSettings struct {
+	SidebarGroups *service.SidebarGroupsConfig `json:"sidebar_groups"`
+
 	RegistrationEnabled                 bool                     `json:"registration_enabled"`
 	EmailVerifyEnabled                  bool                     `json:"email_verify_enabled"`
 	ForceEmailOnThirdPartySignup        bool                     `json:"force_email_on_third_party_signup"`

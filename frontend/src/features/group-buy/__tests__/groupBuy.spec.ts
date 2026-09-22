@@ -90,7 +90,7 @@ describe('month card freeze controls', () => {
     const view = mount(MonthCardCard, { props: { card: frozenCard }, global: global() })
     expect(view.text()).toContain('剩余 23 天 · 已暂停计时')
     expect(view.text()).toContain('解冻后本周期可用 $100.00')
-    expect(view.text()).toContain('解冻后会从冻结时所在周期继续')
+    expect(view.text()).toContain('冻结不计时、不重置额度，解冻后接着用')
     expect(view.text()).not.toContain('下次重置')
     expect(view.find('button').exists()).toBe(false)
     await view.setProps({ manageable: true })

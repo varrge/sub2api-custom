@@ -4,7 +4,7 @@
  */
 
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { Toast, ToastType, PublicSettings } from '@/types'
 import { i18n } from '@/i18n'
 import {
@@ -34,6 +34,8 @@ export const useAppStore = defineStore('app', () => {
   const docUrl = ref<string>('')
   const cachedPublicSettings = ref<PublicSettings | null>(null)
   let publicSettingsRequest: Promise<PublicSettings | null> | null = null
+  let sidebarGroupsRevision = 0
+  watch(() => cachedPublicSettings.value?.sidebar_groups, () => { sidebarGroupsRevision++ }, { flush: 'sync' })
 
   // Version cache state
   const versionLoaded = ref<boolean>(false)
@@ -389,6 +391,7 @@ export const useAppStore = defineStore('app', () => {
     }
 
     publicSettingsLoading.value = true
+    const groupsRevisionAtStart = sidebarGroupsRevision
     let apiRequest: Promise<PublicSettings>
     try {
       apiRequest = fetchPublicSettingsAPI()
@@ -400,6 +403,9 @@ export const useAppStore = defineStore('app', () => {
 
     const request = apiRequest
       .then((data) => {
+        if (sidebarGroupsRevision !== groupsRevisionAtStart && cachedPublicSettings.value?.sidebar_groups) {
+          data = { ...data, sidebar_groups: cachedPublicSettings.value.sidebar_groups }
+        }
         applySettings(data)
         return data
       })

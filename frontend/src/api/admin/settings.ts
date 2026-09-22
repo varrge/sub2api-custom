@@ -7,6 +7,7 @@ import { apiClient } from "../client";
 import type {
   CustomEndpoint,
   CustomMenuItem,
+  SidebarGroupsConfig,
   LoginAgreementDocument,
   NotifyEmailEntry,
   TopQuickMenuItemId,
@@ -491,6 +492,7 @@ export interface SystemSettings {
   top_quick_menu_items: TopQuickMenuItemId[];
   backend_mode_enabled: boolean;
   custom_menu_items: CustomMenuItem[];
+  sidebar_groups?: SidebarGroupsConfig;
   custom_endpoints: CustomEndpoint[];
   // SMTP settings
   smtp_host: string;
@@ -1377,6 +1379,16 @@ export async function updatePanelRateLimitSettings(
 }
 
 // ==================== Activity Leaderboard Settings ====================
+
+export async function getSidebarGroups(): Promise<SidebarGroupsConfig> {
+  const { data } = await apiClient.get<SidebarGroupsConfig>("/admin/settings/sidebar-groups");
+  return data;
+}
+
+export async function updateSidebarGroups(settings: SidebarGroupsConfig): Promise<SidebarGroupsConfig> {
+  const { data } = await apiClient.put<SidebarGroupsConfig>("/admin/settings/sidebar-groups", settings);
+  return data;
+}
 
 /**
  * Activity leaderboard configuration. Times are RFC3339 strings with an

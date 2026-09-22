@@ -161,7 +161,6 @@ const loading = ref(false)
 const error = ref(false)
 const config = ref<ActivityLeaderboardPublicConfig | null>(null)
 const triggerRef = ref<HTMLButtonElement | null>(null)
-const triggerAnchorRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
 const panelStyle = ref({ top: '0px', left: '0px' })
 let controller: AbortController | undefined

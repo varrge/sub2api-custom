@@ -36,16 +36,16 @@ export default {
         // 深色模式背景 - 黑灰层级
         dark: {
           50: '#f5f5f7',
-          100: '#e8e8ec',
-          200: '#c6c6cd',
-          300: '#9d9da6',
-          400: '#6e6e77',
-          500: '#4a4a52',
-          600: '#2e2e35',
-          700: '#1d1d22',
-          800: '#121215',
-          900: '#0d0d0f',
-          950: '#080809'
+          100: '#e8e8ed',
+          200: '#d6d6de',
+          300: '#b7b7c0',
+          400: '#9999a3',
+          500: '#6f6f78',
+          600: '#4a4a51',
+          700: '#37373e',
+          800: '#27272d',
+          900: '#1e1e23',
+          950: '#17171b'
         }
       },
       // Text uses deeper gold on light surfaces; surfaces retain the copper palette.
@@ -58,8 +58,8 @@ export default {
           700: 'rgb(var(--primary-text-700) / <alpha-value>)'
         },
         dark: {
-          400: '#a1a1aa',
-          500: '#93939e'
+          400: '#b0b0bb',
+          500: '#9e9ea9'
         }
       },
       fontFamily: {
@@ -90,7 +90,7 @@ export default {
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'gradient-primary': 'linear-gradient(135deg, #eec9a8 0%, #e5b99a 100%)',
-        'gradient-dark': 'linear-gradient(135deg, #1d1d22 0%, #0d0d0f 100%)',
+        'gradient-dark': 'linear-gradient(135deg, #303036 0%, #1e1e23 100%)',
         'gradient-glass':
           'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
         'mesh-gradient':

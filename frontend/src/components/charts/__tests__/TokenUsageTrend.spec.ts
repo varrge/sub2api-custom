@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 
 import TokenUsageTrend from '../TokenUsageTrend.vue'
 
@@ -26,6 +26,27 @@ vi.mock('vue-chartjs', () => ({
 }))
 
 describe('TokenUsageTrend', () => {
+  it('updates an already mounted chart when the site theme changes without changing the data', async () => {
+    document.documentElement.classList.remove('dark')
+    const wrapper = mount(TokenUsageTrend, {
+      props: { trendData: [{ date: '2026-09-01', requests: 1, input_tokens: 200, output_tokens: 50, cache_creation_tokens: 0, cache_read_tokens: 800, cost: 0.02, actual_cost: 0.01 }] },
+    })
+    try {
+      const before = JSON.parse(wrapper.find('.chart-data').text())
+      document.documentElement.classList.add('dark')
+      await flushPromises()
+      const after = JSON.parse(wrapper.find('.chart-data').text())
+      expect(after.datasets[0].borderColor).not.toBe(before.datasets[0].borderColor)
+      expect(after.datasets.map((item: { data: number[] }) => item.data)).toEqual(before.datasets.map((item: { data: number[] }) => item.data))
+      document.documentElement.classList.remove('dark')
+      await flushPromises()
+      expect(JSON.parse(wrapper.find('.chart-data').text()).datasets[0].borderColor).toBe(before.datasets[0].borderColor)
+    } finally {
+      wrapper.unmount()
+      document.documentElement.classList.remove('dark')
+    }
+  })
+
   it('calculates cache hit rate against all prompt tokens', () => {
     const wrapper = mount(TokenUsageTrend, {
       props: {

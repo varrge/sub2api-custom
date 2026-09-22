@@ -1,0 +1,43 @@
+/* Shared presentation for user and administrator usage views. */
+.usage-page { display: flex; flex-direction: column; gap: 24px; max-width: 1600px; margin-inline: auto; }
+.usage-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 24px; padding: 4px 0 8px; }
+.usage-eyebrow { margin-bottom: 8px; font-size: 10px; font-weight: 600; letter-spacing: .16em; color: var(--gold-fg); }
+.usage-heading h1 { font-size: 30px; font-weight: 600; letter-spacing: -.045em; line-height: 1.2; }
+.usage-description { margin-top: 10px; font-size: 13px; color: #6b6b75; }
+.dark .usage-description { color: #b0b0bb; }
+.usage-range { padding: 12px 16px; border: 1px solid var(--surface-border); border-radius: 16px; background: var(--surface-card); }
+.usage-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 16px; }
+.usage-metric { position: relative; display: flex; min-width: 0; flex-direction: column; gap: 18px; padding: 22px; border: 1px solid var(--surface-border); border-radius: 20px; background: var(--surface-card); box-shadow: var(--surface-shadow); }
+.usage-metric-icon { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--surface-border); border-radius: 10px; color: var(--gold-fg); background: var(--surface-inset); }
+.usage-metric-label { font-size: 12px; font-weight: 500; color: #6b6b75; }
+.dark .usage-metric-label { color: #b0b0bb; }
+.usage-metric-value { margin-block: 6px; font-size: clamp(22px,2.1vw,30px); line-height: 1.2; font-weight: 600; letter-spacing: -.035em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.usage-metric-cost { color: var(--gold-fg); }
+.usage-metric-note { font-size: 11px; line-height: 1.7; color: #6b6b75; }
+.dark .usage-metric-note { color: #b0b0bb; }
+.usage-charts { display: flex; flex-direction: column; gap: 20px; }
+.usage-chart-row { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; }
+.usage-chart-row > .card { min-width: 0; padding: 22px; border-radius: 20px; }
+.usage-page .distribution-heading { align-items: flex-start; flex-wrap: wrap; }
+.usage-page .distribution-body { flex-direction: column; }
+.usage-page .distribution-plot { width: 160px; height: 160px; margin: 8px auto; }
+.usage-page .distribution-table { max-height: 218px; }
+.usage-page .distribution-table table { border-collapse: separate; border-spacing: 0; }
+.usage-page .distribution-table th { padding: 0 8px 12px; white-space: nowrap; font-weight: 500; }
+.usage-page .distribution-table td { padding: 10px 8px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.usage-page .distribution-table th:first-child, .usage-page .distribution-table td:first-child { padding-left: 0; }
+.usage-page .trend-plot { height: 360px; }
+.usage-page .input-label { font-size: 12px; }
+@media (max-width: 1279px) { .usage-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 767px) {
+  .usage-page { gap: 20px; }
+  .usage-heading h1 { font-size: 26px; }
+  .usage-range { width: 100%; padding: 12px; }
+  .usage-range > div { gap: 12px; }
+  .usage-metrics { gap: 12px; }
+  .usage-metric { padding: 16px; gap: 14px; border-radius: 16px; }
+  .usage-metric-value { font-size: 23px; }
+  .usage-chart-row { grid-template-columns: minmax(0,1fr); }
+  .usage-chart-row > .card { padding: 18px; }
+  .usage-page .trend-plot { height: 250px; }
+}

@@ -367,21 +367,11 @@ function openPurchase() {
 }
 
 .quick-menu-link-idle {
-  color: rgb(75 85 99);
+  @apply text-gray-600 dark:text-dark-400;
 }
 
 .quick-menu-link-idle:hover {
-  background: rgb(229 231 235 / 0.75);
-  color: rgb(17 24 39);
-}
-
-:global(.dark) .quick-menu-link-idle {
-  color: rgb(156 163 175);
-}
-
-:global(.dark) .quick-menu-link-idle:hover {
-  background: rgb(55 65 81 / 0.8);
-  color: white;
+  @apply bg-gray-200/75 text-gray-900 dark:bg-dark-700/80 dark:text-white;
 }
 
 .quick-menu-dashboard-label,

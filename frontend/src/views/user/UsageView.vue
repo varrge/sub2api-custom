@@ -1,10 +1,13 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
-      <UsageStatsCards :stats="usageStats" :show-account-cost="false" :strike-standard-cost="true" />
-
-      <div class="space-y-4">
-        <div class="card p-4">
+    <div class="usage-page">
+      <header class="usage-heading">
+        <div>
+          <p class="usage-eyebrow">{{ t('usage.inSelectedRange') }}</p>
+          <h1>{{ t('usage.title') }}</h1>
+          <p class="usage-description">{{ t('usage.description') }}</p>
+        </div>
+        <div class="usage-range">
           <div class="flex flex-wrap items-center gap-4">
             <div class="flex items-center gap-2">
               <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.timeRange') }}:</span>
@@ -22,8 +25,12 @@
             </div>
           </div>
         </div>
+      </header>
 
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <UsageStatsCards :stats="usageStats" :show-account-cost="false" :strike-standard-cost="true" />
+
+      <div class="usage-charts">
+        <div class="usage-chart-row">
           <ModelDistributionChart
             v-model:metric="modelDistributionMetric"
             :model-stats="requestedModelStats"
@@ -47,7 +54,7 @@
           />
         </div>
 
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div class="usage-chart-row">
           <EndpointDistributionChart
             v-model:source="endpointDistributionSource"
             v-model:metric="endpointDistributionMetric"
@@ -66,7 +73,7 @@
         </div>
       </div>
 
-      <div class="card p-6">
+      <div class="card usage-filter-panel p-5 sm:p-6">
         <div class="flex flex-wrap items-end justify-between gap-4">
           <div v-if="activeTab === 'errors'" class="flex flex-1 flex-wrap items-end gap-4">
             <div class="w-full sm:w-auto sm:min-w-[220px]">
@@ -219,6 +226,7 @@
 </template>
 
 <script setup lang="ts">
+import '@/styles/usage.css'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'

@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-accent-100 dark:bg-dark-950">
+  <div class="app-canvas min-h-screen">
     <!-- 全局背景：发丝级动态线条（颜色随 .dark 主题切换，reduced-motion 时静止） -->
     <AmbientLines />
 

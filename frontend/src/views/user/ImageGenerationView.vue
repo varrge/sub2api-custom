@@ -2,14 +2,15 @@
   <AppLayout>
     <div class="studio-shell -m-4 md:-m-6 lg:-m-8">
       <!-- Top Studio Header -->
-      <header class="flex h-12 shrink-0 items-center justify-between border-b border-gray-200/70 bg-white/80 px-4 backdrop-blur-md dark:border-dark-700/70 dark:bg-dark-900/80 sm:px-6">
+      <header class="studio-heading">
         <div class="flex items-center gap-3">
-          <div class="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200/70 bg-white text-gray-700 shadow-sm dark:border-dark-700 dark:bg-dark-800 dark:text-dark-100">
+          <div class="studio-heading-icon">
             <Icon name="sparkles" size="sm" />
           </div>
-          <h1 class="text-sm font-semibold tracking-tight text-gray-900 dark:text-white sm:text-base">
-            {{ t('imageGeneration.studioTitle') }}
-          </h1>
+          <div>
+            <p class="studio-eyebrow">{{ t('imageGeneration.badge') }}</p>
+            <h1 class="studio-title">{{ t('imageGeneration.studioTitle') }}</h1>
+          </div>
         </div>
 
         <!-- Mobile History Toggle -->
@@ -156,14 +157,15 @@
             </div>
 
             <!-- Empty Canvas State -->
-            <div v-else class="flex flex-col items-center justify-center text-center">
-              <div class="empty-apple-icon">
-                <Icon name="sparkles" size="lg" />
+            <div v-else class="studio-empty">
+              <div class="studio-art" aria-hidden="true">
+                <span class="studio-art-frame studio-art-back"></span>
+                <span class="studio-art-frame studio-art-front"><Icon name="sparkles" size="lg" /></span>
               </div>
-              <h3 class="mt-4 text-sm font-semibold text-gray-800 dark:text-dark-100">
+              <h3 class="studio-empty-title">
                 {{ t('imageGeneration.emptyTitle') }}
               </h3>
-              <p class="mt-1.5 max-w-sm text-xs leading-relaxed text-gray-400 dark:text-dark-400">
+              <p class="studio-empty-description">
                 {{ t('imageGeneration.resultPlaceholder') }}
               </p>
             </div>
@@ -234,6 +236,7 @@
 
               <!-- Prompt Input Area -->
               <div class="relative px-4 pb-2 pt-3.5 sm:px-5 sm:pb-3 sm:pt-4">
+                <label for="image-prompt" class="studio-prompt-label">{{ t('imageGeneration.prompt') }}</label>
                 <textarea
                   id="image-prompt"
                   v-model="form.prompt"
@@ -416,7 +419,7 @@
           </div>
 
           <div class="max-h-40 shrink-0 space-y-1 overflow-y-auto border-b border-gray-100/80 p-2 dark:border-dark-700/80" data-testid="image-sessions">
-            <div v-for="session in studio.sessions" :key="session.id" class="flex items-center gap-1 rounded-lg" :class="session.id === studio.activeId ? 'bg-primary-50 dark:bg-primary-950' : ''">
+            <div v-for="session in studio.sessions" :key="session.id" class="flex items-center gap-1 rounded-lg" :class="session.id === studio.activeId ? 'bg-primary-50 dark:bg-primary-500/10' : ''">
               <button type="button" class="min-w-0 flex-1 px-2 py-2 text-left" :aria-pressed="session.id === studio.activeId" @click="studio.activeId = session.id; showMobileHistory = false">
                 <span class="block truncate text-xs font-medium text-gray-800 dark:text-dark-100">{{ session.title || t('imageGeneration.untitledSession') }}</span>
                 <span class="block text-[10px] text-gray-500 dark:text-dark-400">{{ session.pending ? t('imageGeneration.generating') : t('imageGeneration.sessionImageCount', { count: session.results.length }) }}</span>
@@ -843,17 +846,19 @@ onBeforeUnmount(() => { modelRequestID++; clearReferences(); void studio.flush()
 
 <style scoped>
 .studio-shell {
-  @apply flex min-h-0 flex-col overflow-hidden bg-[#f7f7f6] dark:bg-[#0b0d13];
+  @apply flex min-h-0 flex-col overflow-hidden;
+  background: var(--surface-page);
   height: calc(100dvh - 4rem - 1px);
 }
 
 .studio-grid {
-  @apply grid min-h-0 flex-1 grid-cols-1 grid-rows-1 lg:grid-cols-[minmax(0,1fr)_280px] lg:overflow-hidden;
+  @apply grid min-h-0 flex-1 grid-cols-1 grid-rows-1 lg:grid-cols-[minmax(0,1fr)_260px] lg:overflow-hidden;
 }
 
 /* Canvas Viewport */
 .studio-canvas-section {
   @apply relative flex min-h-0 min-w-0 flex-col;
+  background: radial-gradient(ellipse at 48% 30%, rgb(229 185 154 / 0.07), transparent 65%);
 }
 
 .canvas-header {
@@ -862,25 +867,27 @@ onBeforeUnmount(() => { modelRequestID++; clearReferences(); void studio.flush()
 
 .canvas-viewport {
   @apply relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-4 sm:p-6;
-  background-image: radial-gradient(rgba(0, 0, 0, 0.025) 1px, transparent 1px);
-  background-size: 24px 24px;
+  margin: 20px 24px 0;
+  border: 1px solid var(--surface-border);
+  border-radius: 24px;
+  background: var(--surface-card);
+  box-shadow: inset 0 1px 0 var(--surface-highlight);
 }
 
-.dark .canvas-viewport {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-}
 
-.empty-apple-icon {
-  @apply flex h-14 w-14 items-center justify-center rounded-2xl border border-gray-200/70 bg-white/70 text-gray-400 shadow-sm transition-transform duration-300 dark:border-dark-700 dark:bg-dark-800/70 dark:text-dark-400;
-}
+
 
 /* Composer */
 .composer-container {
-  @apply pointer-events-none shrink-0 px-3 pb-3 sm:px-6 sm:pb-5;
+  @apply pointer-events-none shrink-0 px-3 pb-3 pt-4 sm:px-6 sm:pb-5;
 }
 
 .composer-card {
-  @apply pointer-events-auto mx-auto w-full max-w-3xl overflow-visible rounded-2xl border border-gray-200/80 bg-white/90 shadow-lg shadow-gray-900/[0.06] backdrop-blur-xl transition dark:border-dark-700/80 dark:bg-dark-900/90 dark:shadow-black/30;
+  @apply pointer-events-auto mx-auto w-full max-w-4xl overflow-visible rounded-2xl border;
+  background: var(--surface-card);
+  border-color: var(--surface-border);
+  box-shadow: var(--surface-shadow);
+  transition: border-color 180ms, box-shadow 180ms;
   container: image-composer / inline-size;
 }
 
@@ -962,7 +969,9 @@ details > summary::-webkit-details-marker {
 
 /* History Sidebar */
 .history-sidebar {
-  @apply flex min-h-0 flex-col border-t border-gray-200/70 bg-white/55 backdrop-blur-md dark:border-dark-700/70 dark:bg-dark-900/55 lg:border-l lg:border-t-0;
+  @apply flex min-h-0 flex-col border-t lg:border-l lg:border-t-0;
+  background: var(--surface-inset);
+  border-color: var(--surface-border);
 }
 
 @media (max-width: 1023px) {
@@ -1006,8 +1015,11 @@ details > summary::-webkit-details-marker {
 }
 
 .generate-button {
-  @apply flex h-8 shrink-0 items-center justify-center gap-1.5 justify-self-end whitespace-nowrap rounded-lg bg-gray-900 px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-black focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/30 focus-visible:ring-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500 disabled:shadow-none disabled:active:scale-100 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-100 dark:focus-visible:ring-white/40 dark:focus-visible:ring-offset-dark-900 dark:disabled:bg-dark-700 dark:disabled:text-dark-400;
+  @apply flex h-9 shrink-0 items-center justify-center gap-1.5 justify-self-end whitespace-nowrap rounded-lg px-4 text-xs font-semibold text-on-primary transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 dark:focus-visible:ring-offset-dark-800;
+  background: linear-gradient(120deg, #edc7a7, #dba980);
+  box-shadow: 0 2px 8px rgb(138 92 36 / 0.12), inset 0 1px 0 rgb(255 255 255 / 0.35);
 }
+.generate-button:hover:not(:disabled) { filter: brightness(1.05); }
 
 @media (max-width: 767px) {
   .composer-key-select,
@@ -1046,7 +1058,6 @@ details > summary::-webkit-details-marker {
 }
 
 @media (max-height: 600px) {
-  .studio-shell > header,
   .canvas-header {
     @apply h-8;
   }
@@ -1067,9 +1078,6 @@ details > summary::-webkit-details-marker {
     display: none;
   }
 
-  .empty-apple-icon {
-    display: none;
-  }
 }
 
 .result-skeleton-card::before {
@@ -1118,5 +1126,35 @@ details > summary::-webkit-details-marker {
   .fade-fast-leave-active {
     transition: none;
   }
+}
+
+.studio-heading {
+  @apply flex shrink-0 items-center justify-between gap-3 px-5 py-4 sm:px-6;
+  border-bottom: 1px solid var(--surface-border);
+  background: var(--surface-card);
+}
+.studio-heading-icon { @apply flex h-10 w-10 items-center justify-center rounded-xl bg-primary-500/10 text-primary-600 dark:text-primary-400; }
+.studio-eyebrow { @apply mb-1 text-[10px] font-medium tracking-[0.15em] text-primary-600 dark:text-primary-400; }
+.studio-title { @apply text-lg font-semibold tracking-tight text-gray-900 dark:text-white; }
+.studio-empty { @apply flex max-w-sm flex-col items-center px-5 text-center; }
+.studio-art { position: relative; width: 120px; height: 112px; margin-bottom: 26px; }
+.studio-art-frame { position: absolute; width: 84px; height: 104px; border-radius: 18px; }
+.studio-art-back { top: 0; left: 4px; transform: rotate(-12deg); background: var(--surface-inset); border: 1px solid var(--surface-border); }
+.studio-art-front { display: grid; place-items: center; top: 10px; right: 3px; transform: rotate(9deg); color: var(--gold-fg); border: 1px solid rgb(201 151 111 / 0.38); background: linear-gradient(145deg, rgb(229 185 154 / 0.16), var(--surface-card) 80%); box-shadow: 0 16px 32px rgb(0 0 0 / 0.06); }
+.studio-empty-title { @apply text-xl font-semibold tracking-tight text-gray-900 dark:text-gray-100 sm:text-2xl; }
+.studio-empty-description { @apply mt-3 text-sm leading-relaxed text-gray-500 dark:text-dark-400; }
+.studio-prompt-label { @apply mb-2 block text-xs font-medium text-primary-600 dark:text-primary-400; }
+.composer-card:focus-within { border-color: rgb(201 151 111 / 0.7); box-shadow: 0 0 0 3px rgb(201 151 111 / 0.07), var(--surface-shadow); }
+@media (max-width: 639px) {
+  .canvas-viewport { margin: 12px 12px 0; border-radius: 18px; }
+  .studio-art { transform: scale(0.8); margin-bottom: 8px; }
+}
+@media (max-height: 700px) {
+  .studio-art { display: none; }
+  .studio-heading { padding-block: 8px; }
+  .studio-heading-icon { width: 28px; height: 28px; }
+  .studio-eyebrow { display: none; }
+  .canvas-viewport { margin-top: 8px; }
+  .studio-prompt-label { display: none; }
 }
 </style>

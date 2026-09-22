@@ -6,7 +6,7 @@
     <div v-if="loading" class="flex h-48 items-center justify-center">
       <LoadingSpinner />
     </div>
-    <div v-else-if="trendData.length > 0 && chartData" class="h-48">
+    <div v-else-if="trendData.length > 0 && chartData" class="trend-plot h-48">
       <Line :data="chartData" :options="lineOptions" />
     </div>
     <div
@@ -19,6 +19,7 @@
 </template>
 
 <script setup lang="ts">
+import { useChartDarkMode } from './palette'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
@@ -54,18 +55,16 @@ const props = defineProps<{
   loading?: boolean
 }>()
 
-const isDarkMode = computed(() => {
-  return document.documentElement.classList.contains('dark')
-})
+const isDarkMode = useChartDarkMode()
 
 const chartColors = computed(() => ({
-  text: isDarkMode.value ? '#e5e7eb' : '#374151',
-  grid: isDarkMode.value ? '#374151' : '#e5e7eb',
-  input: '#3b82f6',
-  output: '#10b981',
-  cacheCreation: '#f59e0b',
-  cacheRead: '#06b6d4',
-  cacheHitRate: '#8b5cf6'
+  text: isDarkMode.value ? '#b0b0bb' : '#6b6b75',
+  grid: isDarkMode.value ? '#ffffff0d' : '#1d1d1f0b',
+  input: isDarkMode.value ? '#e5b99a' : '#94682f',
+  output: isDarkMode.value ? '#a5bdb2' : '#637d73',
+  cacheCreation: isDarkMode.value ? '#c6b69a' : '#92805f',
+  cacheRead: isDarkMode.value ? '#a1b6c5' : '#607f96',
+  cacheHitRate: isDarkMode.value ? '#baa6c5' : '#8b709b'
 }))
 
 const chartData = computed(() => {
@@ -80,6 +79,9 @@ const chartData = computed(() => {
         borderColor: chartColors.value.input,
         backgroundColor: `${chartColors.value.input}20`,
         fill: true,
+        borderWidth: 2,
+        pointRadius: 2,
+        pointHoverRadius: 4,
         tension: 0.3
       },
       {
@@ -88,6 +90,9 @@ const chartData = computed(() => {
         borderColor: chartColors.value.output,
         backgroundColor: `${chartColors.value.output}20`,
         fill: true,
+        borderWidth: 2,
+        pointRadius: 2,
+        pointHoverRadius: 4,
         tension: 0.3
       },
       {
@@ -96,6 +101,9 @@ const chartData = computed(() => {
         borderColor: chartColors.value.cacheCreation,
         backgroundColor: `${chartColors.value.cacheCreation}20`,
         fill: true,
+        borderWidth: 2,
+        pointRadius: 2,
+        pointHoverRadius: 4,
         tension: 0.3
       },
       {
@@ -104,6 +112,9 @@ const chartData = computed(() => {
         borderColor: chartColors.value.cacheRead,
         backgroundColor: `${chartColors.value.cacheRead}20`,
         fill: true,
+        borderWidth: 2,
+        pointRadius: 2,
+        pointHoverRadius: 4,
         tension: 0.3
       },
       {
@@ -116,6 +127,9 @@ const chartData = computed(() => {
         backgroundColor: `${chartColors.value.cacheHitRate}20`,
         borderDash: [5, 5],
         fill: false,
+        borderWidth: 2,
+        pointRadius: 2,
+        pointHoverRadius: 4,
         tension: 0.3,
         yAxisID: 'yPercent'
       }

@@ -21,7 +21,7 @@
     </button>
 
     <Transition name="date-picker-dropdown">
-      <div v-if="isOpen" class="date-picker-dropdown">
+      <div v-if="isOpen" class="date-picker-dropdown" :style="{ left: `${dropdownOffset}px` }">
         <!-- Quick presets -->
         <div class="date-picker-presets">
           <button
@@ -47,9 +47,6 @@
               class="date-picker-input"
               @change="onDateChange"
             />
-          </div>
-          <div class="date-picker-separator">
-            <Icon name="arrowRight" size="sm" class="text-gray-400" />
           </div>
           <div class="date-picker-field">
             <label class="date-picker-label">{{ t('dates.endDate') }}</label>
@@ -103,6 +100,7 @@ const emit = defineEmits<Emits>()
 const { t, locale } = useI18n()
 
 const isOpen = ref(false)
+const dropdownOffset = ref(0)
 const containerRef = ref<HTMLElement | null>(null)
 const localStartDate = ref(props.startDate)
 const localEndDate = ref(props.endDate)
@@ -263,7 +261,16 @@ const onDateChange = () => {
   }
 }
 
+const updateDropdownPosition = () => {
+  if (!containerRef.value) return
+  const left = containerRef.value.getBoundingClientRect().left
+  const width = Math.min(320, window.innerWidth - 32)
+  const clampedLeft = Math.max(16, Math.min(left, window.innerWidth - 16 - width))
+  dropdownOffset.value = clampedLeft - left
+}
+
 const toggle = () => {
+  if (!isOpen.value) updateDropdownPosition()
   isOpen.value = !isOpen.value
 }
 
@@ -310,6 +317,7 @@ watch(
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
   document.addEventListener('keydown', handleEscape)
+  window.addEventListener('resize', updateDropdownPosition)
   // Initialize active preset detection
   onDateChange()
 })
@@ -317,6 +325,7 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('keydown', handleEscape)
+  window.removeEventListener('resize', updateDropdownPosition)
 })
 </script>
 
@@ -356,7 +365,7 @@ onUnmounted(() => {
   @apply border border-gray-200 dark:border-dark-700;
   @apply shadow-lg shadow-black/10 dark:shadow-black/30;
   @apply overflow-hidden;
-  @apply min-w-[320px];
+  width: min(320px, calc(100vw - 2rem));
 }
 
 .date-picker-presets {
@@ -380,11 +389,11 @@ onUnmounted(() => {
 }
 
 .date-picker-custom {
-  @apply flex items-end gap-2 p-3;
+  @apply grid gap-3 p-3;
 }
 
 .date-picker-field {
-  @apply flex-1;
+  @apply min-w-0;
 }
 
 .date-picker-label {
@@ -406,10 +415,6 @@ onUnmounted(() => {
 
 .dark .date-picker-input::-webkit-calendar-picker-indicator {
   filter: none;
-}
-
-.date-picker-separator {
-  @apply flex items-center justify-center pb-1;
 }
 
 .date-picker-actions {

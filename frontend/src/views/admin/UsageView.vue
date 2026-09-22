@@ -1,10 +1,13 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
-      <UsageStatsCards :stats="usageStats" />
-      <!-- Charts Section -->
-      <div class="space-y-4">
-        <div class="card p-4">
+    <div class="usage-page">
+      <header class="usage-heading">
+        <div>
+          <p class="usage-eyebrow">{{ t('usage.inSelectedRange') }}</p>
+          <h1>{{ t('usage.title') }}</h1>
+          <p class="usage-description">{{ t('usage.description') }}</p>
+        </div>
+        <div class="usage-range">
           <div class="flex flex-wrap items-center gap-4">
             <div class="flex items-center gap-2">
               <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.timeRange') }}:</span>
@@ -22,7 +25,12 @@
             </div>
           </div>
         </div>
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      </header>
+
+      <UsageStatsCards :stats="usageStats" />
+      <!-- Charts Section -->
+      <div class="usage-charts">
+        <div class="usage-chart-row">
           <ModelDistributionChart
             v-model:source="modelDistributionSource"
             v-model:metric="modelDistributionMetric"
@@ -46,7 +54,7 @@
             :filters="breakdownFilters"
           />
         </div>
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div class="usage-chart-row">
           <EndpointDistributionChart
             v-model:source="endpointDistributionSource"
             v-model:metric="endpointDistributionMetric"
@@ -184,6 +192,7 @@
 </template>
 
 <script setup lang="ts">
+import '@/styles/usage.css'
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { saveAs } from 'file-saver'

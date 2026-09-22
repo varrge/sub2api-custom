@@ -42,7 +42,7 @@
 }
 
 .dark .driver-popover.theme-tour-popover {
-  background-color: #1e293b !important;
+  background-color: var(--surface-card) !important;
   border-color: #334155 !important;
   color: #f3f4f6 !important;
 }
@@ -110,7 +110,7 @@
   margin: 0 !important;
 }
 .dark .theme-tour-popover .driver-popover-footer {
-  background-color: #0f172a !important;
+  background-color: var(--surface-inset) !important;
   border-top-color: #1e293b !important;
 }
 
@@ -174,7 +174,7 @@
   display: inline-block !important;
 }
 .dark .shortcut-item kbd {
-  background-color: #1e293b !important;
+  background-color: var(--surface-card) !important;
   border-color: #475569 !important;
   color: #cbd5e1 !important;
 }
@@ -211,7 +211,7 @@
 }
 .theme-tour-popover .driver-popover-prev-btn:hover { background-color: #f9fafb !important; color: #374151 !important; }
 .dark .theme-tour-popover .driver-popover-prev-btn {
-  background-color: #1d1d22 !important;
+  background-color: var(--surface-inset) !important;
   border-color: #4a4a52 !important;
   color: #9ca3af !important;
 }

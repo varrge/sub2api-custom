@@ -95,6 +95,7 @@ export default {
       exampleHint: 'Choose a group to see its client setup. This does not change priority: requests still select a group automatically from the saved order.',
       title: "Ordered API key groups",
       selectedGroups: "Selected groups in request order",
+      addGroup: "Add group ({count} available)",
       editGroups: "Edit groups for {name}",
       orderHint: "Requests try these groups in numbered order before sending upstream. Add eligible groups below and use the arrows to change priority.",
       moveUp: "Increase priority for {name}",

@@ -447,7 +447,7 @@
         <!-- Tabs (edit mode only): basic settings vs model restrictions -->
         <div
           v-if="showEditModal"
-          class="mb-5 flex gap-1 rounded-lg bg-gray-100 p-1 dark:bg-dark-700"
+          class="key-form-tabs sticky top-0 z-20 mb-5 flex gap-1 rounded-lg bg-gray-100 p-1 dark:bg-dark-700"
           role="tablist"
         >
           <button
@@ -2019,3 +2019,30 @@ onUnmounted(() => {
   if (resetTimer) clearInterval(resetTimer)
 })
 </script>
+
+<style scoped>
+/* Edit dialog tabs: stay pinned and clickable while the form scrolls.
+   top: 0 (offset by padding below instead of a negative top, which clipped
+   the tab bar) and an explicit opaque background so content scrolling
+   underneath never bleeds through. */
+.key-form-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin-top: -0.75rem;
+  padding-top: 0.75rem;
+  padding-bottom: 0.25rem;
+  background-color: rgb(243 244 246); /* gray-100 */
+}
+
+@media (min-width: 640px) {
+  .key-form-tabs {
+    margin-top: -1rem;
+    padding-top: 1rem;
+  }
+}
+
+.dark .key-form-tabs {
+  background-color: #37373e; /* dark-700 */
+}
+</style>

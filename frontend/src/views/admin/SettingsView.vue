@@ -11,11 +11,19 @@
       <!-- Settings Form -->
       <form v-else @submit.prevent="saveSettings" class="space-y-6" novalidate>
         <!-- Tab Navigation -->
-        <div class="settings-tabs-shell">
+        <div
+          class="settings-tabs-shell"
+          :class="{
+            'settings-tabs-shell-fade-start': settingsTabsFadeStart,
+            'settings-tabs-shell-fade-end': settingsTabsFadeEnd,
+          }"
+        >
           <nav
+            ref="settingsTabsScrollRef"
             class="settings-tabs-scroll"
             role="tablist"
             :aria-label="t('admin.settings.title')"
+            @scroll.passive="updateSettingsTabsScrollEdges"
           >
             <div class="settings-tabs">
               <button
@@ -9055,7 +9063,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from "vue";
+import { ref, reactive, computed, nextTick, onMounted, onBeforeUnmount, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { adminAPI } from "@/api";
 import {
@@ -9223,15 +9231,105 @@ const settingsTabKeyboardActions = {
   End: "last",
 } as const;
 
+const settingsTabsScrollRef = ref<HTMLElement | null>(null);
+const settingsTabsFadeStart = ref(false);
+const settingsTabsFadeEnd = ref(false);
+let settingsTabsResizeObserver: ResizeObserver | null = null;
+
+function updateSettingsTabsScrollEdges(): void {
+  const el = settingsTabsScrollRef.value;
+  if (!el) {
+    settingsTabsFadeStart.value = false;
+    settingsTabsFadeEnd.value = false;
+    return;
+  }
+  const overflow = el.scrollWidth - el.clientWidth;
+  if (overflow <= 1) {
+    settingsTabsFadeStart.value = false;
+    settingsTabsFadeEnd.value = false;
+    return;
+  }
+  const threshold = 1;
+  settingsTabsFadeStart.value = el.scrollLeft > threshold;
+  settingsTabsFadeEnd.value =
+    el.scrollLeft + el.clientWidth < el.scrollWidth - threshold;
+}
+
+function scrollSettingsTabIntoView(button: HTMLElement, behavior: "smooth" | "instant" = "smooth"): void {
+  const container = settingsTabsScrollRef.value;
+  if (!container) return;
+  const maxScroll = container.scrollWidth - container.clientWidth;
+  if (maxScroll <= 1) return;
+  const padding = 12;
+  const cRect = container.getBoundingClientRect();
+  const bRect = button.getBoundingClientRect();
+  let delta = 0;
+  if (bRect.left < cRect.left + padding) {
+    delta = bRect.left - cRect.left - padding;
+  } else if (bRect.right > cRect.right - padding) {
+    delta = bRect.right - cRect.right + padding;
+  }
+  if (delta !== 0) {
+    container.scrollTo({
+      left: Math.min(maxScroll, Math.max(0, container.scrollLeft + delta)),
+      behavior,
+    });
+  }
+}
+
 function selectSettingsTab(tab: SettingsTab): void {
   activeTab.value = tab;
 }
 
+function revealActiveSettingsTab(): void {
+  const button = settingsTabsScrollRef.value?.querySelector<HTMLElement>(
+    `#settings-tab-${activeTab.value}`,
+  );
+  if (button) scrollSettingsTabIntoView(button, "instant");
+  updateSettingsTabsScrollEdges();
+}
+
 function focusSettingsTab(tab: SettingsTab): void {
   window.requestAnimationFrame(() => {
-    document.getElementById(`settings-tab-${tab}`)?.focus();
+    const button = document.getElementById(`settings-tab-${tab}`);
+    if (!button) return;
+    button.focus();
+    scrollSettingsTabIntoView(button);
+    updateSettingsTabsScrollEdges();
   });
 }
+
+// The nav only renders once settings finish loading (form v-else), so attach the
+// observer through the ref instead of onMounted.
+watch(settingsTabsScrollRef, (element) => {
+  settingsTabsResizeObserver?.disconnect();
+  if (!element) {
+    settingsTabsFadeStart.value = false;
+    settingsTabsFadeEnd.value = false;
+    return;
+  }
+  if (typeof ResizeObserver !== "undefined") {
+    if (!settingsTabsResizeObserver) {
+      settingsTabsResizeObserver = new ResizeObserver(() => {
+        revealActiveSettingsTab();
+      });
+    }
+    settingsTabsResizeObserver.observe(element);
+    const track = element.firstElementChild;
+    if (track) settingsTabsResizeObserver.observe(track);
+  }
+  revealActiveSettingsTab();
+});
+
+watch(activeTab, async () => {
+  await nextTick();
+  revealActiveSettingsTab();
+});
+
+onBeforeUnmount(() => {
+  settingsTabsResizeObserver?.disconnect();
+  settingsTabsResizeObserver = null;
+});
 
 function handleSettingsTabKeydown(event: KeyboardEvent, tab: SettingsTab): void {
   const action =
@@ -13362,7 +13460,7 @@ watch(
 
 /* ============ 系统设置 Tab 导航 ============ */
 .settings-tabs-shell {
-  @apply sticky z-20 -mx-1 rounded-2xl border border-white/80 bg-white/90 p-1.5 backdrop-blur-xl;
+  @apply sticky z-20 -mx-1 overflow-hidden rounded-2xl border border-white/80 bg-white/90 p-1.5 backdrop-blur-xl;
   top: 4.75rem;
   box-shadow:
     0 12px 28px rgb(15 23 42 / 0.07),
@@ -13384,21 +13482,45 @@ watch(
 }
 
 .settings-tab {
-  @apply relative isolate flex h-10 min-w-[6.75rem] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-transparent px-3 text-sm font-medium text-gray-600 outline-none transition-colors duration-200 ease-out dark:text-gray-300;
+  @apply relative isolate flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-transparent px-3 text-sm font-medium text-gray-600 outline-none transition-colors duration-200 ease-out dark:text-gray-300;
 }
 
 @media (min-width: 768px) {
   .settings-tabs {
-    @apply min-w-full;
+    @apply min-w-full flex-wrap;
   }
 
   .settings-tab {
-    @apply min-w-0 flex-1 basis-0 overflow-hidden px-2 text-[13px];
+    @apply min-w-[5rem] px-2.5 text-[13px];
   }
 
   .settings-tab-icon {
     @apply h-6 w-6;
   }
+}
+
+/* Mobile/narrow: show fade hints only when scrollable */
+.settings-tabs-shell-fade-start::before,
+.settings-tabs-shell-fade-end::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2.25rem;
+  pointer-events: none;
+  z-index: 30;
+  content: "";
+}
+
+.settings-tabs-shell-fade-start::before {
+  left: 0;
+  border-radius: inherit;
+  background: linear-gradient(to right, rgb(255 255 255 / 0.95), transparent);
+}
+
+.settings-tabs-shell-fade-end::after {
+  right: 0;
+  border-radius: inherit;
+  background: linear-gradient(to left, rgb(255 255 255 / 0.95), transparent);
 }
 
 .settings-tab::before {
@@ -13452,7 +13574,7 @@ watch(
 }
 
 .settings-tab-label {
-  @apply min-w-0 overflow-hidden text-ellipsis whitespace-nowrap leading-none;
+  @apply whitespace-nowrap leading-none;
 }
 </style>
 
@@ -13476,5 +13598,13 @@ watch(
   box-shadow:
     0 12px 26px rgb(0 0 0 / 0.22),
     0 1px 0 rgb(255 255 255 / 0.08) inset;
+}
+
+.dark .settings-tabs-shell-fade-start::before {
+  background: linear-gradient(to right, rgb(15 23 42 / 0.95), transparent);
+}
+
+.dark .settings-tabs-shell-fade-end::after {
+  background: linear-gradient(to left, rgb(15 23 42 / 0.95), transparent);
 }
 </style>

@@ -36,6 +36,7 @@ describe('ordered key group selection', () => {
 
   it('offers only eligible unselected groups and appends them after current choices', async () => {
     const wrapper = makeSelector({ availableGroups: [group(2), group(3), group(9, 'inactive')] })
+    await wrapper.get('[data-test="expand-groups"]').trigger('click')
     expect(wrapper.findAll('[data-add-group]').map(button => button.attributes('data-add-group'))).toEqual(['3'])
     await wrapper.get('[data-add-group="3"]').trigger('click')
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([[7, 2, 3]])
@@ -43,6 +44,7 @@ describe('ordered key group selection', () => {
 
   it('filters additions without marking eligible selections from other providers unavailable', async () => {
     const wrapper = makeSelector({ modelValue: [2], availableGroups: [group(2), group(3)], additionGroupIds: [3] })
+    await wrapper.get('[data-test="expand-groups"]').trigger('click')
     expect(wrapper.findAll('[data-add-group]').map(button => button.attributes('data-add-group'))).toEqual(['3'])
     expect(wrapper.get('[data-group-id="2"]').text()).not.toContain('keys.multiGroup.ineligible')
     await wrapper.setProps({ additionGroupIds: [2] })
@@ -75,4 +77,36 @@ describe('ordered key group selection', () => {
     expect(keyGroupIds({ group_id: 2, group_ids: [] })).toEqual([])
     expect(keyGroups({ group: group(2) })).toEqual([group(2)])
   })
+  it('restores candidate access after collapsing an empty search result', async () => {
+    const wrapper = makeSelector()
+    expect(wrapper.find('[data-add-group]').exists()).toBe(false)
+    await wrapper.get('[data-test="expand-groups"]').trigger('click')
+    await wrapper.get('input[type="search"]').setValue('no-match')
+    expect(wrapper.find('[data-add-group]').exists()).toBe(false)
+    await wrapper.get('[data-test="collapse-groups"]').trigger('click')
+    await wrapper.get('[data-test="expand-groups"]').trigger('click')
+    expect((wrapper.get('input[type="search"]').element as HTMLInputElement).value).toBe('')
+    expect(wrapper.get('[data-add-group="3"]').exists()).toBe(true)
+  })
+
+  it('opens additions for an empty selection and keeps disabled selection immutable', async () => {
+    const wrapper = makeSelector({ modelValue: [], disabled: true })
+    expect(wrapper.get('[data-add-group="3"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-add-group="3"]').trigger('click')
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    await wrapper.setProps({ modelValue: [2], disabled: false })
+    await wrapper.get('[data-test="collapse-groups"]').trigger('click')
+    await wrapper.setProps({ modelValue: [] })
+    expect(wrapper.get('input[type="search"]').isVisible()).toBe(true)
+  })
+
+  it('labels subscription and balance groups independently of their names', async () => {
+    const wrapper = makeSelector({
+      modelValue: [2], availableGroups: [group(2), { ...group(3), subscription_type: 'subscription' }],
+    })
+    expect(wrapper.get('[data-group-id="2"] [data-test="group-billing-type"]').text()).toBe('dashboard.balance')
+    await wrapper.get('[data-test="expand-groups"]').trigger('click')
+    expect(wrapper.get('[data-add-group="3"] [data-test="group-billing-type"]').text()).toBe('groups.subscription')
+  })
+
 })

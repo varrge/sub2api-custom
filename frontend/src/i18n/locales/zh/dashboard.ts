@@ -95,6 +95,7 @@ export default {
       exampleHint: '选择分组以查看对应客户端的配置示例。这不会改变优先级，请求仍按已保存的分组顺序自动选组。',
       title: "API 密钥分组与顺序",
       selectedGroups: "按请求优先级排列的已选分组",
+      addGroup: "添加分组（{count} 个可选）",
       editGroups: "编辑「{name}」的分组",
       orderHint: "新请求发送上游前，按编号从小到大选组。可添加已有资格的分组，并用箭头调整优先级。",
       moveUp: "提高「{name}」的优先级",

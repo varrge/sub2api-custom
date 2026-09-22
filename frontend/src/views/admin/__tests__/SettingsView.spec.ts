@@ -1,12 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h } from "vue";
-import { flushPromises, mount } from "@vue/test-utils";
+import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 
 import enCommon from "@/i18n/locales/en/common";
 import enSettings from "@/i18n/locales/en/admin/settings";
 import zhCommon from "@/i18n/locales/zh/common";
 import zhSettings from "@/i18n/locales/zh/admin/settings";
 import SettingsView from "../SettingsView.vue";
+
+enableAutoUnmount(afterEach);
 
 const {
   getSettings,
@@ -167,6 +169,7 @@ vi.mock("@/composables/useClipboard", () => ({
 
 vi.mock("@/utils/apiError", () => ({
   extractApiErrorMessage: () => "error",
+  extractI18nErrorMessage: () => "error",
 }));
 
 vi.mock("vue-i18n", async () => {
@@ -570,8 +573,9 @@ const baseSettingsResponse = {
   },
 };
 
-function mountView() {
+function mountView(attachTo?: HTMLElement) {
   return mount(SettingsView, {
+    attachTo,
     global: {
       stubs: {
         AppLayout: AppLayoutStub,
@@ -586,6 +590,8 @@ function mountView() {
         ProxySelector: true,
         ImageUpload: ImageUploadStub,
         BackupSettings: true,
+        ActivityLeaderboardSettings: true,
+        RouterLink: true,
       },
     },
   });
@@ -1450,6 +1456,8 @@ describe("admin SettingsView payment visible method controls", () => {
           ProxySelector: true,
           ImageUpload: ImageUploadStub,
           BackupSettings: true,
+        ActivityLeaderboardSettings: true,
+        RouterLink: true,
         },
       },
     });
@@ -1748,6 +1756,8 @@ describe("admin SettingsView payment visible method controls", () => {
           ProxySelector: true,
           ImageUpload: ImageUploadStub,
           BackupSettings: true,
+        ActivityLeaderboardSettings: true,
+        RouterLink: true,
         },
       },
     });
@@ -2160,5 +2170,320 @@ describe("admin SettingsView platform quota matrix", () => {
     const quotas = payload["default_platform_quotas"] as Record<string, Record<string, unknown>>;
     // 不管输入是什么，提交值应为 null（而非 "" 或 NaN）
     expect(quotas["anthropic"]?.["daily"]).toBe(null);
+  });
+});
+describe("admin SettingsView tab navigation (responsive)", () => {
+  beforeEach(() => {
+    getSettings.mockReset();
+    updateSettings.mockReset();
+    getWebSearchEmulationConfig.mockReset();
+    updateWebSearchEmulationConfig.mockReset();
+    getAdminApiKey.mockReset();
+    getOverloadCooldownSettings.mockReset();
+    getRateLimit429CooldownSettings.mockReset();
+    updateRateLimit429CooldownSettings.mockReset();
+    getStreamTimeoutSettings.mockReset();
+    getRectifierSettings.mockReset();
+    getBetaPolicySettings.mockReset();
+    getUpstreamBillingProbeSettings.mockReset();
+    updateUpstreamBillingProbeSettings.mockReset();
+    getOllamaCloudUsageSettings.mockReset();
+    updateOllamaCloudUsageSettings.mockReset();
+    getGroups.mockReset();
+    listProxies.mockReset();
+    getProviders.mockReset();
+    updateProvider.mockReset();
+    createProvider.mockReset();
+    deleteProvider.mockReset();
+    fetchPublicSettings.mockReset();
+    adminSettingsFetch.mockReset();
+    showError.mockReset();
+    showSuccess.mockReset();
+    localeRef.value = "zh-CN";
+
+    getSettings.mockResolvedValue({ ...baseSettingsResponse });
+    updateSettings.mockImplementation(async (payload) => ({
+      ...baseSettingsResponse,
+      ...payload,
+    }));
+    getWebSearchEmulationConfig.mockResolvedValue({ enabled: false, providers: [] });
+    updateWebSearchEmulationConfig.mockResolvedValue({ enabled: false, providers: [] });
+    getAdminApiKey.mockResolvedValue({ exists: false, masked_key: "" });
+    getOverloadCooldownSettings.mockResolvedValue({ enabled: true, cooldown_minutes: 10 });
+    getRateLimit429CooldownSettings.mockResolvedValue({ enabled: true, cooldown_seconds: 5 });
+    getStreamTimeoutSettings.mockResolvedValue({ enabled: false });
+    getRectifierSettings.mockResolvedValue({ enabled: false });
+    getBetaPolicySettings.mockResolvedValue({ rules: [] });
+    getGroups.mockResolvedValue([]);
+    listProxies.mockResolvedValue({ items: [] });
+    getProviders.mockResolvedValue({ data: [] });
+    fetchPublicSettings.mockResolvedValue(undefined);
+    adminSettingsFetch.mockResolvedValue(undefined);
+    getUpstreamBillingProbeSettings.mockResolvedValue({
+      enabled: true,
+      interval_minutes: 30,
+    });
+    getOllamaCloudUsageSettings.mockResolvedValue({
+      enabled: false,
+      interval_minutes: 60,
+      debounce_minutes: 1,
+    });
+    getPanelRateLimitSettings.mockResolvedValue({
+      enabled: true,
+      user_rpm: 240,
+      heavy_rpm: 60,
+      exempt_admin: true,
+      public_ip_rpm: 300,
+    });
+
+    // Run requestAnimationFrame synchronously so keyboard-nav assertions are immediate
+    vi.stubGlobal(
+      "requestAnimationFrame",
+      (cb: FrameRequestCallback) => {
+        cb(0);
+        return 0;
+      },
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("renders all 11 tabs with full labels, ARIA roles, and no truncation classes", async () => {
+    const wrapper = mountView(document.body);
+    await flushPromises();
+    await flushPromises();
+
+    const tablist = wrapper.find('[role="tablist"]');
+    expect(tablist.exists()).toBe(true);
+    expect(tablist.attributes("aria-label")).toBe("admin.settings.title");
+
+    const tabs = wrapper.findAll('[role="tab"]');
+    expect(tabs).toHaveLength(11);
+
+    for (const tab of tabs) {
+      expect(tab.attributes("aria-selected")).toBeDefined();
+      expect(tab.attributes("tabindex")).toBeDefined();
+      expect(tab.attributes("id")).toMatch(/^settings-tab-/);
+
+      const label = tab.find(".settings-tab-label");
+      expect(label.exists()).toBe(true);
+      // Labels must NOT be truncated — no ellipsis-relevant classes
+      expect(label.classes()).not.toContain("text-ellipsis");
+      expect(label.classes()).not.toContain("truncate");
+      expect(label.classes()).not.toContain("overflow-hidden");
+    }
+
+    // First tab (general) is active by default
+    expect(tabs[0].attributes("aria-selected")).toBe("true");
+    expect(tabs[0].attributes("tabindex")).toBe("0");
+    expect(tabs[0].classes()).toContain("settings-tab-active");
+
+    // All others are inactive
+    for (let i = 1; i < tabs.length; i++) {
+      expect(tabs[i].attributes("aria-selected")).toBe("false");
+      expect(tabs[i].attributes("tabindex")).toBe("-1");
+    }
+  });
+
+  it("ArrowRight / ArrowLeft / Home / End navigate between tabs", async () => {
+    const wrapper = mountView(document.body);
+    await flushPromises();
+    await flushPromises();
+
+    const tabs = wrapper.findAll('[role="tab"]');
+
+    // ArrowRight → next tab
+    await tabs[0].trigger("keydown", { key: "ArrowRight" });
+    await flushPromises();
+    let updatedTabs = wrapper.findAll('[role="tab"]');
+    expect(updatedTabs[1].attributes("aria-selected")).toBe("true");
+    expect(updatedTabs[1].attributes("tabindex")).toBe("0");
+    expect(updatedTabs[0].attributes("aria-selected")).toBe("false");
+    expect(updatedTabs[0].attributes("tabindex")).toBe("-1");
+
+    // ArrowLeft → back to first
+    await updatedTabs[1].trigger("keydown", { key: "ArrowLeft" });
+    await flushPromises();
+    updatedTabs = wrapper.findAll('[role="tab"]');
+    expect(updatedTabs[0].attributes("aria-selected")).toBe("true");
+
+    // End → last tab
+    await updatedTabs[0].trigger("keydown", { key: "End" });
+    await flushPromises();
+    updatedTabs = wrapper.findAll('[role="tab"]');
+    expect(updatedTabs[updatedTabs.length - 1].attributes("aria-selected")).toBe(
+      "true",
+    );
+    expect(
+      updatedTabs[updatedTabs.length - 1].attributes("tabindex"),
+    ).toBe("0");
+
+    // Home → back to first
+    await updatedTabs[updatedTabs.length - 1].trigger("keydown", {
+      key: "Home",
+    });
+    await flushPromises();
+    updatedTabs = wrapper.findAll('[role="tab"]');
+    expect(updatedTabs[0].attributes("aria-selected")).toBe("true");
+
+    // Wrap-around: ArrowLeft from first → last
+    await updatedTabs[0].trigger("keydown", { key: "ArrowLeft" });
+    await flushPromises();
+    updatedTabs = wrapper.findAll('[role="tab"]');
+    expect(updatedTabs[updatedTabs.length - 1].attributes("aria-selected")).toBe(
+      "true",
+    );
+  });
+
+  it("toggles fade indicator classes based on scroll overflow state", async () => {
+    const wrapper = mountView(document.body);
+    await flushPromises();
+    await flushPromises();
+
+    const shell = wrapper.find(".settings-tabs-shell");
+    const scroller = shell.find(".settings-tabs-scroll");
+
+    // jsdom defaults: scrollWidth=0, clientWidth=0 → no overflow → no fades
+    expect(shell.classes()).not.toContain("settings-tabs-shell-fade-start");
+    expect(shell.classes()).not.toContain("settings-tabs-shell-fade-end");
+
+    // ── Simulate an overflowing narrow viewport (e.g. 375px mobile) ──
+    const navEl = scroller.element as HTMLElement;
+    Object.defineProperty(navEl, "scrollWidth", { value: 1200, configurable: true });
+    Object.defineProperty(navEl, "clientWidth", { value: 400, configurable: true });
+
+    // At scroll start: only end fade
+    Object.defineProperty(navEl, "scrollLeft", { value: 0, writable: true, configurable: true });
+    await scroller.trigger("scroll");
+    await flushPromises();
+    expect(shell.classes()).not.toContain("settings-tabs-shell-fade-start");
+    expect(shell.classes()).toContain("settings-tabs-shell-fade-end");
+
+    // Scrolled to middle: both fades
+    Object.defineProperty(navEl, "scrollLeft", { value: 400, writable: true, configurable: true });
+    await scroller.trigger("scroll");
+    await flushPromises();
+    expect(shell.classes()).toContain("settings-tabs-shell-fade-start");
+    expect(shell.classes()).toContain("settings-tabs-shell-fade-end");
+
+    // Scrolled to end: only start fade
+    Object.defineProperty(navEl, "scrollLeft", { value: 800, writable: true, configurable: true });
+    await scroller.trigger("scroll");
+    await flushPromises();
+    expect(shell.classes()).toContain("settings-tabs-shell-fade-start");
+    expect(shell.classes()).not.toContain("settings-tabs-shell-fade-end");
+
+    // ── Simulate enough width (e.g. desktop 1280px) → no overflow → no fades ──
+    Object.defineProperty(navEl, "scrollWidth", { value: 400, configurable: true });
+    Object.defineProperty(navEl, "clientWidth", { value: 400, configurable: true });
+    Object.defineProperty(navEl, "scrollLeft", { value: 0, writable: true, configurable: true });
+    await scroller.trigger("scroll");
+    await flushPromises();
+    expect(shell.classes()).not.toContain("settings-tabs-shell-fade-start");
+    expect(shell.classes()).not.toContain("settings-tabs-shell-fade-end");
+  });
+
+  it("keeps the active tab visible after resizing to mobile without stealing focus", async () => {
+    let notifyResize: (() => void) | undefined;
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+    vi.stubGlobal("ResizeObserver", class {
+      observe = observe;
+      unobserve = vi.fn();
+      disconnect = disconnect;
+
+      constructor(callback: ResizeObserverCallback) {
+        notifyResize = () => callback([], this);
+      }
+    });
+
+    const wrapper = mountView(document.body);
+    await flushPromises();
+    const nav = wrapper.get(".settings-tabs-scroll").element as HTMLElement;
+    const backup = wrapper.get("#settings-tab-backup");
+    let viewportWidth = 1400;
+    Object.defineProperties(nav, {
+      scrollWidth: { value: 1400, configurable: true },
+      clientWidth: { get: () => viewportWidth, configurable: true },
+      scrollLeft: { value: 0, writable: true, configurable: true },
+    });
+    nav.getBoundingClientRect = () => new DOMRect(0, 0, viewportWidth, 42);
+    backup.element.getBoundingClientRect = () => new DOMRect(1280 - nav.scrollLeft, 0, 96, 40);
+    const scrollTo = vi.fn((options: ScrollToOptions) => {
+      nav.scrollLeft = options.left ?? nav.scrollLeft;
+    });
+    Object.defineProperty(nav, "scrollTo", { value: scrollTo, configurable: true });
+
+    // Select the last tab while every tab fits on desktop, then continue typing.
+    await backup.trigger("click");
+    await flushPromises();
+    expect(backup.attributes("aria-selected")).toBe("true");
+    expect(scrollTo).not.toHaveBeenCalled();
+    const focusedInput = document.createElement("input");
+    document.body.append(focusedInput);
+    try {
+      focusedInput.focus();
+      expect(document.activeElement).toBe(focusedInput);
+      expect(observe).toHaveBeenCalledWith(nav);
+      expect(observe).toHaveBeenCalledWith(nav.firstElementChild);
+      expect(notifyResize).toBeTypeOf("function");
+
+      // Layout changes should reveal the selection immediately, with no focus move.
+      viewportWidth = 375;
+      notifyResize!();
+      await flushPromises();
+      expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior: "instant" }));
+      expect(nav.scrollLeft).toBeGreaterThan(0);
+      const selectedBounds = backup.element.getBoundingClientRect();
+      expect(selectedBounds.left).toBeGreaterThanOrEqual(0);
+      expect(selectedBounds.right).toBeLessThanOrEqual(viewportWidth);
+      expect(backup.attributes("aria-selected")).toBe("true");
+      expect(document.activeElement).toBe(focusedInput);
+    } finally {
+      focusedInput.remove();
+    }
+  });
+
+  it("calls scrollTo when keyboard nav moves a tab out of view", async () => {
+    const wrapper = mountView(document.body);
+    await flushPromises();
+    await flushPromises();
+
+    // Get the scroll container and stub dimensions
+    const navEl = wrapper.find(".settings-tabs-scroll").element as HTMLElement;
+    const scrollToMock = vi.fn();
+    (navEl.scrollTo as unknown) = scrollToMock;
+    Object.defineProperty(navEl, "scrollWidth", { value: 1400, configurable: true });
+    Object.defineProperty(navEl, "clientWidth", { value: 400, configurable: true });
+    Object.defineProperty(navEl, "scrollLeft", { value: 0, writable: true, configurable: true });
+    (navEl.getBoundingClientRect as unknown) = () => ({
+      left: 0, right: 400, top: 0, bottom: 42,
+      width: 400, height: 42, x: 0, y: 0, toJSON: () => ({}),
+    });
+
+    // The first tab is within view; the last tab (backup/index 10) is off-screen
+    const tabs = wrapper.findAll('[role="tab"]');
+    tabs.forEach((tab, i) => {
+      (tab.element.getBoundingClientRect as unknown) = () => ({
+        left: 50 + i * 130,
+        right: 110 + i * 130,
+        top: 0,
+        bottom: 40,
+        width: 80,
+        height: 40,
+        x: 50 + i * 130,
+        y: 0,
+        toJSON: () => ({}),
+      });
+    });
+
+    // End → scroll to last tab (off-screen at index 10 with left≈1350)
+    await tabs[0].trigger("keydown", { key: "End" });
+    await flushPromises();
+
+    // Should have attempted to scroll into view
+    expect(scrollToMock).toHaveBeenCalled();
   });
 });

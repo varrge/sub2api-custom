@@ -33,3 +33,17 @@
 - 详情见 [消费榜说明](../../../docs/festival-leaderboard.md)。
 
 浏览器实测桌面明暗主题、375px 和 320px：榜单接口 200、入口顺序正确、弹窗不溢出、Esc 关闭及焦点恢复正常、无页面 JS 异常。320px 时原有密钥列表的一处内容容器超宽约 8px，位于榜单之外；没有将此问题算作全页面适配通过。
+
+## 下拉浮层更新（2026-09-22）
+
+- 用户要求：根据截图将居中大弹窗改成右上角下拉浮层，并让 Kimi 实现。
+- Kimi 完成组件、交互和文案；主代理补全验证。仅改前端，消费统计和 API 未改。
+- 应用提交：`b96466f0bf21c6d11e010129c144654c12647f99`；版本：`0.2.7-custom.7-candidate.festival-popover.b96466f0b`。
+- 镜像：`sub2api-custom:0.2.7-custom.7-candidate.festival-popover.b96466f0b`；ID：`sha256:f583f6e7a4efcaf69905f8403297a7c7223862a9a9c2645cefefd68c1de26532`。
+- 二进制 SHA-256：`88af058ab517848b7a6a50dfaf4fda868403884f6954dd1b26ce0ba838e07578`。
+- 备份/证据目录：`/home/yinan/sub2api-staging/festival-popover-20260922T102604Z`。
+- 回滚镜像：`sub2api-restore:festival-popover-20260922t102604z`，数据库 dump `65349914` 字节，归档可读。
+- 只重建应用，7.9 秒恢复 healthy，其他容器及记录计数不变。
+- 27 项相关前端测试、ESLint、类型编译和构建通过；本地完整活动榜与中国服务器 upcoming 实测均通过。
+- 浏览器确认 400px 宽（手机自适应）、最大高 560px，无遮罩、不锁页面滚动；按钮切换、外部点击、Esc 及缩放定位正常。
+- 原隧道 <http://127.0.0.1:18081/keys> 继续使用；未合并分支、未推送、未打 tag。

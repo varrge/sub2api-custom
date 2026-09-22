@@ -17,3 +17,5 @@
 | boss | [BOSS 战](swords.svg) | [SVG](https://raw.githubusercontent.com/lucide-icons/lucide/f06ac67e33d645c40b8ce19a0419c85c5d7dd751/icons/swords.svg) |
 
 24 × 24，描边使用 `currentColor`，跟随侧栏主题。可在系统设置的自定义菜单中点选预设或上传单独 SVG 文件。
+
+在线预览：`/menu-icons/preview.html`。使用明确文件名，避免 Go 文件服务对 `index.html` 的目录重定向。

@@ -17,7 +17,7 @@
 
 系统设置的自定义菜单支持点选抽奖、邀请码、BOSS 三类预设，也可以继续上传 SVG。选中后保存该菜单的系统设置即可生效。现有图标不会自动替换。
 
-共九个图标和预览页位于 [`frontend/public/menu-icons`](../frontend/public/menu-icons/README.md)，网站访问路径为 `/menu-icons/index.html`。图标来自 Lucide，保留来源版本与原始许可证，描边颜色跟随主题。
+共九个图标和预览页位于 [`frontend/public/menu-icons`](../frontend/public/menu-icons/README.md)，网站访问路径为 `/menu-icons/preview.html`。图标来自 Lucide，保留来源版本与原始许可证，描边颜色跟随主题。
 
 ## 数据接口
 
@@ -46,3 +46,13 @@
 ## 验证
 
 2026-09-22：前端完整回归 345 个文件、2,578 项测试通过；相关后端六个包的单元测试通过。前端生产构建与 ESLint 通过，生产构建的浏览器检查覆盖密钥页签和跨页签校验、分组独立保存、预设图标选择、嵌套目录、收起态恢复，以及 375px / 320px 手机布局。
+
+## 中国测试部署（2026-09-22）
+
+- 源码提交：`932b347d677d9f1a8de01406ae5f54a6dee7a891`；版本：`0.2.7-custom.7-candidate.navigation-ui.932b347d6`。
+- 设置入口：<http://127.0.0.1:18081/admin/settings>；密钥：<http://127.0.0.1:18081/keys>；图标预览：<http://127.0.0.1:18081/menu-icons/preview.html>。
+- 备份与部署证据：`/home/yinan/sub2api-staging/sidebar-ui-20260922T141821Z`。回滚镜像：`sub2api-restore:sidebar-ui-20260922t141821z`。
+- 镜像 ID：`sha256:3fb04e7ae9d8b3b598cdfdd38609a051e82707a92cf186a9122713b501d6da45`；二进制 SHA-256：`c9e10bb8239a6d52beb6db9ba3ee69ce8ed25ef33525e9920099c8810d12330d`。
+- 仅重建中国测试应用，约 7.9 秒后 healthy；其他容器、用户 / 账号 / 密钥 / 订阅记录计数不变，无数据库迁移。
+- 真实接口验证分组保存与读回、公开配置及 HTML 初始化配置过滤、非法输入拒绝、匿名和普通用户无管理权限。临时分组已恢复，原消费榜配置未改动；9 个 SVG 均可访问。
+- 本地证据目录：`/tmp/sub2api-sidebar-ui-20260922T141821Z`。未合并、推送或打 tag，未部署日本生产。

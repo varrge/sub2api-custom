@@ -177,7 +177,7 @@ onMounted(load)
   scrollbar-width: thin;
 }
 .gb-preview-scroll:focus-visible {
-  outline: 2px solid rgb(20 184 166 / 0.6);
+  outline: 2px solid rgb(201 151 111 / 0.6);
   outline-offset: 2px;
 }
 .gb-preview-track {
@@ -193,7 +193,7 @@ onMounted(load)
   top: calc(0.5rem - 1px);
   height: 2px;
   border-radius: 9999px;
-  background: linear-gradient(90deg, #14b8a6 0%, #06b6d4 100%);
+  background: linear-gradient(90deg, #c9976f 0%, #e5b99a 100%);
   opacity: 0.35;
 }
 .gb-preview-step {
@@ -212,16 +212,16 @@ onMounted(load)
   flex: none;
 }
 .gb-preview-dot-filled {
-  background: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);
-  box-shadow: 0 0 0 3px rgb(20 184 166 / 0.15);
+  background: linear-gradient(135deg, #c9976f 0%, #e5b99a 100%);
+  box-shadow: 0 0 0 3px rgb(201 151 111 / 0.15);
 }
 .gb-preview-dot-open {
   background: #ffffff;
-  border: 1.5px solid rgb(13 148 136 / 0.45);
+  border: 1.5px solid rgb(138 92 36 / 0.45);
 }
 .dark .gb-preview-dot-open {
   background: rgb(15 23 42);
-  border-color: rgb(45 212 191 / 0.4);
+  border-color: rgb(229 185 154 / 0.4);
 }
 .gb-preview-name {
   white-space: nowrap;
@@ -247,14 +247,14 @@ onMounted(load)
   cursor: pointer;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: rgb(13 148 136);
+  color: rgb(138 92 36);
   list-style-position: inside;
 }
 .dark .gb-details > summary {
-  color: rgb(45 212 191);
+  color: rgb(229 185 154);
 }
 .gb-details > summary:focus-visible {
-  outline: 2px solid rgb(20 184 166 / 0.6);
+  outline: 2px solid rgb(201 151 111 / 0.6);
   outline-offset: 2px;
   border-radius: 0.25rem;
 }

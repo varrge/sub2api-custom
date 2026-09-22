@@ -361,8 +361,8 @@ function openPurchase() {
 }
 
 .quick-menu-link-active {
-  background: rgb(37 99 235);
-  color: white;
+  background: var(--gold);
+  color: #0b0a09;
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
 }
 

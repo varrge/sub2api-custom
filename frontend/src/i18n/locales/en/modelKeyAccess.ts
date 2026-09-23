@@ -10,7 +10,7 @@ export default {
     conflict: 'These keys’ model permissions were just changed elsewhere. Refresh and try again.',
     invalidModel: 'Please enter a complete, valid model ID.',
     saved: 'Model permissions saved.',
-    catalogWarning: 'The model catalog did not fully load. Saved models and manually entered model IDs still work.',
+    catalogWarning: 'The model catalog did not fully load. Only keys whose groups are confirmed to list this model are shown; refresh to retry.',
     allBlocked: 'All models are blocked; check models to allow them again.',
 
     // Model picker
@@ -21,7 +21,7 @@ export default {
     noModelMatches: 'No catalog match. You can still use the full ID entered above.',
 
     // Key list
-    stats: '{allowed} of {total} keys allow this model',
+    stats: '{allowed} of {total} eligible keys allow this model',
     filterNote: 'Filters only narrow what you see, not what gets saved.',
     keySearchPlaceholder: 'Search key name or ID',
     allGroups: 'All groups',
@@ -34,17 +34,13 @@ export default {
     columnStatus: 'Status',
     noGroups: 'No groups',
     modifiedBadge: 'Modified',
-    catalogUnlisted: 'Not in catalog',
-    catalogUnlistedHint: 'This model is not listed in the key’s group catalog; it may still be callable.',
-    catalogUnknown: 'Catalog pending',
-    catalogUnknownHint: 'The model catalog did not fully load, so we cannot confirm whether this key’s groups list the model.',
     expiresAt: 'Expires: {time}',
 
     // Empty states
     noModelSelectedTitle: 'Select a model first',
     noModelSelectedHint: 'Choose a model from the list on the left, or enter a full model ID and click “Use this model”.',
-    noKeysTitle: 'No API keys yet',
-    noKeysHint: 'Create a key on the API Keys page first, then come back to manage access by model.',
+    noKeysTitle: 'No keys can use this model',
+    noKeysHint: 'None of your keys are bound to a group whose catalog lists this model.',
     noMatchesTitle: 'No matching keys',
     noMatchesHint: 'Try adjusting the search or group filter.',
 
@@ -52,7 +48,7 @@ export default {
     added: '{count} newly allowed',
     removed: '{count} newly blocked',
     noChanges: 'No changes yet',
-    saveScopeNote: 'Saving applies to every loaded key, not just the filtered results.',
+    saveScopeNote: 'Saving applies to all eligible keys, including ones hidden by the search filters.',
     save: 'Save changes',
     discard: 'Discard changes',
     saving: 'Saving…',

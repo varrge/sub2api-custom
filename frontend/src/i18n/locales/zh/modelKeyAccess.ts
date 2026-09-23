@@ -10,7 +10,7 @@ export default {
     conflict: '这些 Key 的模型权限刚在其他地方被修改，请刷新后重试。',
     invalidModel: '请输入完整有效的模型 ID。',
     saved: '模型权限已保存。',
-    catalogWarning: '模型目录加载不完整；已保存的模型和手动输入的模型 ID 仍可正常使用。',
+    catalogWarning: '模型目录加载不完整；仅显示已确认分组列出此模型的 Key，请刷新重试。',
     allBlocked: '已禁止所有模型；勾选模型可重新允许。',
 
     // Model picker
@@ -21,7 +21,7 @@ export default {
     noModelMatches: '目录中没有匹配的模型，可直接使用上方输入的完整 ID。',
 
     // Key list
-    stats: '全部 {total} 个 Key，其中 {allowed} 个允许此模型',
+    stats: '符合条件的 Key 共 {total} 个，其中 {allowed} 个允许此模型',
     filterNote: '筛选只用于查找，不会缩小保存范围。',
     keySearchPlaceholder: '搜索 Key 名称或 ID',
     allGroups: '全部分组',
@@ -34,17 +34,13 @@ export default {
     columnStatus: '状态',
     noGroups: '无分组',
     modifiedBadge: '已修改',
-    catalogUnlisted: '目录未列出',
-    catalogUnlistedHint: '该 Key 的分组目录中未列出此模型，不代表一定不能调用。',
-    catalogUnknown: '目录待确认',
-    catalogUnknownHint: '模型目录未成功加载完整，暂时无法确认该 Key 的分组是否列出此模型。',
     expiresAt: '到期：{time}',
 
     // Empty states
     noModelSelectedTitle: '先选择一个模型',
     noModelSelectedHint: '从左侧列表选择模型，或输入完整模型 ID 后点击「使用此模型」。',
-    noKeysTitle: '还没有 API Key',
-    noKeysHint: '请先在 API 密钥页面创建 Key，再回到这里按模型管理权限。',
+    noKeysTitle: '暂无可用此模型的 Key',
+    noKeysHint: '没有任何 Key 绑定的分组列出此模型。',
     noMatchesTitle: '没有匹配的 Key',
     noMatchesHint: '试试调整搜索内容或分组筛选。',
 
@@ -52,7 +48,7 @@ export default {
     added: '新增允许 {count} 个',
     removed: '新增禁止 {count} 个',
     noChanges: '暂无修改',
-    saveScopeNote: '保存会应用到全部已加载的 Key，而不仅是当前筛选结果。',
+    saveScopeNote: '保存会应用到所有符合条件的 Key，包括被搜索筛选隐藏的 Key。',
     save: '保存修改',
     discard: '放弃修改',
     saving: '保存中…',

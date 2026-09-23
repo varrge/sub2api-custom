@@ -40,6 +40,47 @@ describe('model policy semantics', () => {
   })
 })
 describe('model access editor', () => {
+  it('preserves catalog, saved and manual model choices while filtering keys', async () => {
+    mocks.groups.mockResolvedValue([{ id: 1 }, { id: 2 }])
+    mocks.options.mockImplementation(async (ids: number[]) => ({ models: [
+      ...(ids.includes(1) ? [{ id: 'target', group_ids: [1] }] : []),
+      ...(ids.includes(2) ? [{ id: 'unbound-model', group_ids: [2] }] : [])
+    ] }))
+    const { state, wrapper } = await setup()
+    expect(state.models.value).toEqual(['other', 'target', 'unbound-model'])
+    expect(mocks.options).toHaveBeenCalledWith([1, 2])
+    state.selectModel('other')
+    expect(state.selectedModel.value).toBe('other')
+    expect(state.rows.value).toEqual([])
+    state.selectModel('custom/Model-X')
+    expect(state.models.value).toContain('custom/Model-X')
+    expect(state.selectedModel.value).toBe('custom/Model-X')
+    expect(state.rows.value).toEqual([])
+    state.selectModel('unbound-model')
+    expect(state.rows.value).toEqual([])
+    wrapper.unmount()
+  })
+  it('hides unsupported keys and group badges and never submits their policies', async () => {
+    const secondGroup = { id: 2, name: 'Unavailable', platform: 'anthropic' }
+    const mixed = { ...key(3, false), groups: [...key(3).groups, secondGroup], group_ids: [1, 2] }
+    mocks.list.mockResolvedValue({ keys: [key(1), { ...key(2), groups: [secondGroup], group_ids: [2] }, mixed] })
+    mocks.groups.mockResolvedValue([{ id: 1 }, { id: 2 }])
+    const { state, wrapper } = await setup()
+    state.selectModel('target')
+    expect(state.rows.value.map(row => row.id)).toEqual([1, 3])
+    expect(state.rows.value[1].groups.map(group => group.id)).toEqual([1])
+    expect(state.groups.value.map(group => group.id)).toEqual([1])
+    expect(state.totalCount.value).toBe(2)
+    state.toggleKey(2, false)
+    expect(state.dirty.value).toBe(false)
+    state.toggleKey(1, false); state.keySearch.value = 'Key 3'; state.setVisible(true)
+    mocks.update.mockResolvedValue({ keys: [], updated_count: 2 })
+    await state.save()
+    expect(mocks.update).toHaveBeenCalledWith('target', [
+      { id: 1, allowed: false, revision: 'revision-1' }, { id: 3, allowed: true, revision: 'revision-3' }
+    ])
+    wrapper.unmount()
+  })
   it('saves all rows including hidden keys and retains group display metadata', async () => {
     const { state, wrapper } = await setup()
     state.selectModel('target'); state.toggleKey(1, false); state.keySearch.value = 'Key 3'; state.setVisible(true)
@@ -56,7 +97,28 @@ describe('model access editor', () => {
     expect(state.dirty.value).toBe(false); expect(state.rows.value[0].groups[0].name).toBe('OpenAI')
     wrapper.unmount()
   })
+  it('saves eligible keys hidden by a group filter but excludes unsupported keys', async () => {
+    const secondGroup = { id: 2, name: 'Second', platform: 'openai' }
+    const unsupportedGroup = { id: 3, name: 'Unsupported', platform: 'anthropic' }
+    mocks.list.mockResolvedValue({ keys: [
+      key(1), { ...key(2), group_ids: [2], groups: [secondGroup] },
+      { ...key(3), group_ids: [3], groups: [unsupportedGroup] }
+    ] })
+    mocks.groups.mockResolvedValue([{ id: 1 }, { id: 2 }, { id: 3 }])
+    mocks.options.mockResolvedValue({ models: [{ id: 'target', group_ids: [1, 2] }] })
+    const { state, wrapper } = await setup()
+    state.selectModel('target'); state.toggleKey(2, false); state.groupFilter.value = 1
+    expect(state.rows.value.map(row => row.id)).toEqual([1])
+    state.setVisible(false)
+    mocks.update.mockResolvedValue({ keys: [], updated_count: 2 })
+    expect(await state.save()).toBe(true)
+    expect(mocks.update).toHaveBeenCalledWith('target', [
+      { id: 1, allowed: false, revision: 'revision-1' }, { id: 2, allowed: false, revision: 'revision-2' }
+    ])
+    wrapper.unmount()
+  })
   it('does not switch models or discard drafts when a save conflicts', async () => {
+    mocks.options.mockResolvedValue({ models: [{ id: 'target', group_ids: [1] }, { id: 'other', group_ids: [1] }] })
     const { state, wrapper } = await setup()
     state.selectModel('target'); state.toggleKey(1, false); state.selectModel('other')
     expect(state.switchPending.value).toBe(true)
@@ -68,13 +130,53 @@ describe('model access editor', () => {
     expect(state.selectedModel.value).toBe('other'); expect(state.dirty.value).toBe(false)
     wrapper.unmount()
   })
-  it('keeps saved and manually entered models when discovery fails', async () => {
+  it('retains saved and manual choices but hides unconfirmed keys when discovery fails', async () => {
     mocks.options.mockRejectedValue(new Error('catalog failed'))
     const { state, wrapper } = await setup()
-    expect(state.catalogWarning.value).toBe(true); expect(state.models.value).toContain('other')
+    expect(state.catalogWarning.value).toBe(true); expect(state.models.value).toEqual(['other'])
     state.selectModel('custom/Model-X')
-    expect(state.selectedModel.value).toBe('custom/Model-X'); expect(state.models.value).toContain('custom/Model-X')
-    expect(state.rows.value.every(row => row.catalogState === 'unknown')).toBe(true)
+    expect(state.selectedModel.value).toBe('custom/Model-X')
+    expect(state.models.value).toEqual(['custom/Model-X', 'other'])
+    expect(state.rows.value).toEqual([])
+    state.toggleKey(1, false); state.setVisible(false)
+    expect(state.dirty.value).toBe(false)
+    await state.save()
+    expect(mocks.update).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+  it('drops unsupported rows when the refreshed catalog no longer lists the model', async () => {
+    const { state, wrapper } = await setup()
+    state.selectModel('target')
+    mocks.options.mockResolvedValue({ models: [] })
+    state.reload(); await flushPromises()
+    expect(state.models.value).toEqual(['other'])
+    expect(state.rows.value).toEqual([])
+    expect(state.dirty.value).toBe(false)
+    state.toggleKey(1, false); await state.save()
+    expect(mocks.update).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+  it('resets a group filter when switching to a model opened by a different group', async () => {
+    const group2 = { id: 2, name: 'Second', platform: 'anthropic' }
+    mocks.list.mockResolvedValue({ keys: [key(1), { ...key(2), group_ids: [2], groups: [group2] }] })
+    mocks.groups.mockResolvedValue([{ id: 1 }, { id: 2 }])
+    mocks.options.mockResolvedValue({ models: [{ id: 'target', group_ids: [1] }, { id: 'second', group_ids: [2] }] })
+    const { state, wrapper } = await setup()
+    state.selectModel('target'); state.groupFilter.value = 1
+    state.selectModel('second')
+    expect(state.groupFilter.value).toBeNull()
+    expect(state.rows.value.map(row => row.id)).toEqual([2])
+    expect(state.groups.value.map(group => group.id)).toEqual([2])
+    wrapper.unmount()
+  })
+  it('keeps unbound group models in the picker without showing unrelated keys', async () => {
+    mocks.groups.mockResolvedValue([{ id: 9 }])
+    mocks.options.mockResolvedValue({ models: [{ id: 'unbound', group_ids: [9] }] })
+    const { state, wrapper } = await setup()
+    expect(mocks.options).toHaveBeenCalledWith([9])
+    expect(state.models.value).toEqual(['other', 'unbound'])
+    state.selectModel('unbound')
+    expect(state.rows.value).toEqual([])
     wrapper.unmount()
   })
   it('guards navigation and does not reload away unsaved work', async () => {

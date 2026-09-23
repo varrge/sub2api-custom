@@ -38,7 +38,6 @@ export function useModelKeyAccess() {
   const keys = ref<ModelAccessKey[]>([])
   const draft = ref<Record<number, boolean>>({})
   const catalog = ref<Map<string, Set<number>>>(new Map())
-  const loadedGroupIDs = ref<Set<number>>(new Set())
   const customModels = ref<string[]>([])
   const switchPending = ref(false)
   let pendingAction: (() => void | Promise<void>) | null = null
@@ -49,7 +48,7 @@ export function useModelKeyAccess() {
 
   const groups = computed(() => {
     const byID = new Map<number, ModelAccessGroup>()
-    for (const key of keys.value) for (const group of key.groups) byID.set(group.id, group)
+    for (const row of allRows.value) for (const group of row.groups) byID.set(group.id, group)
     return [...byID.values()].sort((a, b) => a.name.localeCompare(b.name))
   })
   const allModels = computed(() => [...new Set([
@@ -58,16 +57,19 @@ export function useModelKeyAccess() {
   ])].sort())
   const models = computed(() => allModels.value.filter(model => model.toLowerCase().includes(modelSearch.value.trim().toLowerCase())))
 
-  const allRows = computed<ModelAccessRow[]>(() => keys.value.map(key => {
+  const eligibleKeys = computed(() => {
     const sourceGroups = catalog.value.get(selectedModel.value)
-    const listed = key.group_ids.some(id => sourceGroups?.has(id))
-    const known = key.group_ids.length > 0 && key.group_ids.every(id => loadedGroupIDs.value.has(id))
+    return keys.value.filter(key => key.group_ids.some(id => sourceGroups?.has(id)))
+  })
+  const allRows = computed<ModelAccessRow[]>(() => eligibleKeys.value.map(key => {
+    const sourceGroups = catalog.value.get(selectedModel.value)!
     const originalAllowed = modelPolicyAllows(key.model_allowlist, selectedModel.value)
     return {
       id: key.id, name: key.name, status: key.status, expires_at: key.expires_at,
-      groups: key.groups, group_ids: key.group_ids,
+      groups: key.groups.filter(group => sourceGroups.has(group.id)),
+      group_ids: key.group_ids.filter(id => sourceGroups.has(id)),
       allowed: draft.value[key.id] ?? originalAllowed, originalAllowed,
-      catalogState: listed ? 'listed' : known ? 'unlisted' : 'unknown'
+      catalogState: 'listed'
     }
   }))
   const rows = computed(() => {
@@ -75,14 +77,14 @@ export function useModelKeyAccess() {
     return allRows.value.filter(row => (!search || row.name.toLowerCase().includes(search) || String(row.id).includes(search)) &&
       (groupFilter.value === null || row.group_ids.includes(groupFilter.value)))
   })
-  const totalCount = computed(() => keys.value.length)
+  const totalCount = computed(() => eligibleKeys.value.length)
   const allowedCount = computed(() => selectedModel.value ? allRows.value.filter(row => row.allowed).length : 0)
   const addedCount = computed(() => allRows.value.filter(row => row.allowed && !row.originalAllowed).length)
   const removedCount = computed(() => allRows.value.filter(row => !row.allowed && row.originalAllowed).length)
   const dirty = computed(() => !!selectedModel.value && addedCount.value + removedCount.value > 0)
 
   function resetDraft() {
-    draft.value = Object.fromEntries(keys.value.map(key => [key.id, modelPolicyAllows(key.model_allowlist, selectedModel.value)]))
+    draft.value = Object.fromEntries(eligibleKeys.value.map(key => [key.id, modelPolicyAllows(key.model_allowlist, selectedModel.value)]))
   }
 
   async function load() {
@@ -92,19 +94,19 @@ export function useModelKeyAccess() {
     controller = new AbortController()
     loading.value = true
     error.value = ''
+    catalog.value = new Map()
     const [snapshot, available] = await Promise.allSettled([
       modelKeyAccessAPI.list(controller.signal), userGroupsAPI.getAvailable()
     ])
     if (!alive || request !== generation) return
     if (snapshot.status === 'rejected') {
       error.value = t('modelKeyAccess.loadFailed')
+      selectedModel.value = ''
+      resetDraft()
       loading.value = false
       return
     }
     keys.value = snapshot.value.keys
-    resetDraft()
-    catalog.value = new Map()
-    loadedGroupIDs.value = new Set()
     catalogWarning.value = available.status === 'rejected'
     if (available.status === 'fulfilled') {
       const ids = available.value.map(group => group.id)
@@ -117,14 +119,17 @@ export function useModelKeyAccess() {
           catalogWarning.value = true
           return
         }
-        chunks[index].forEach(id => loadedGroupIDs.value.add(id))
+        const requested = new Set(chunks[index])
         for (const model of result.value.models) {
+          if (!validModelAccessID(model.id)) continue
           const sources = catalog.value.get(model.id) ?? new Set<number>()
-          model.group_ids.forEach(id => sources.add(id))
-          catalog.value.set(model.id, sources)
+          model.group_ids.filter(id => requested.has(id)).forEach(id => sources.add(id))
+          if (sources.size) catalog.value.set(model.id, sources)
         }
       })
     }
+    groupFilter.value = null
+    resetDraft()
     loading.value = false
   }
 
@@ -152,13 +157,14 @@ export function useModelKeyAccess() {
     requestAction(() => {
       selectedModel.value = model
       if (!allModels.value.includes(model)) customModels.value.push(model)
+      groupFilter.value = null
       resetDraft()
       error.value = ''
     })
   }
 
   function toggleKey(id: number, allowed: boolean) {
-    if (!selectedModel.value || saving.value || loading.value || switchPending.value || !keys.value.some(key => key.id === id)) return
+    if (!selectedModel.value || saving.value || loading.value || switchPending.value || !eligibleKeys.value.some(key => key.id === id)) return
     draft.value[id] = allowed
   }
 
@@ -180,8 +186,8 @@ export function useModelKeyAccess() {
     error.value = ''
     const revisions = new Map(keys.value.map(key => [key.id, key.revision]))
     try {
-      // Submit every snapshotted key, including hidden rows. The backend checks
-      // all policy revisions under row locks before committing the batch.
+      // Submit every eligible key, including rows hidden by search/group filters.
+      // Keys with no group offering this model remain completely untouched.
       const result = await modelKeyAccessAPI.update(selectedModel.value, allRows.value.map(row => ({
         id: row.id, allowed: row.allowed, revision: revisions.get(row.id)!
       })))

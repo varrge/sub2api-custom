@@ -13,7 +13,7 @@
       <p class="text-sm text-gray-500 dark:text-dark-400">{{ t('modelKeyAccess.subtitle') }}</p>
     </div>
 
-    <!-- Catalog warning: saved/manual models still usable -->
+    <!-- Catalog warning: catalog incomplete; only keys with confirmed matching groups are shown -->
     <div
       v-if="catalogWarning"
       role="status"
@@ -195,20 +195,6 @@
                     :class="isExpired(row.expires_at) ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-dark-500'"
                   >
                     {{ t('modelKeyAccess.expiresAt', { time: formatDateTime(row.expires_at) }) }}
-                  </span>
-                  <span
-                    v-if="row.catalogState === 'unlisted'"
-                    class="badge badge-gray"
-                    :title="t('modelKeyAccess.catalogUnlistedHint')"
-                  >
-                    {{ t('modelKeyAccess.catalogUnlisted') }}
-                  </span>
-                  <span
-                    v-else-if="row.catalogState === 'unknown'"
-                    class="badge badge-gray"
-                    :title="t('modelKeyAccess.catalogUnknownHint')"
-                  >
-                    {{ t('modelKeyAccess.catalogUnknown') }}
                   </span>
                 </div>
               </li>

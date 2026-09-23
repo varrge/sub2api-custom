@@ -82,7 +82,9 @@ describe('ModelKeyAccessPanel', () => {
       ]
     })
     expect(wrapper.findAll('[data-test="modified-badge"]')).toHaveLength(1)
-    expect(wrapper.text()).toContain('modelKeyAccess.catalogUnlisted')
+    // Catalog state badges are gone: unlisted/unknown rows are filtered out upstream
+    expect(wrapper.text()).not.toContain('modelKeyAccess.catalogUnlisted')
+    expect(wrapper.text()).not.toContain('modelKeyAccess.catalogUnknown')
     const toggles = wrapper.findAll('[data-test="allow-toggle"]')
     await toggles[0].trigger('click')
     expect(wrapper.emitted('toggle-key')).toEqual([[1, false]])

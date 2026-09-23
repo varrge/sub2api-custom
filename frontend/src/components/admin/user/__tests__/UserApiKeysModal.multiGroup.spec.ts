@@ -18,7 +18,7 @@ vi.mock('vue-i18n', async () => ({
 }))
 const user = { id: 18, email: 'test@example.com', username: 'target' } as AdminUser
 const group = (id: number) => ({ id, name: `Group ${id}`, status: 'active', platform: 'openai', subscription_type: 'standard' } as Group)
-const key = { id: 4, key: 'sk-test-long-api-key', name: 'mixed', group_id: 7, group_ids: [7, 2], groups: [group(7), group(2)], multi_group_enabled: true } as ApiKey
+const key = { model_allowlist_revision: 'test-revision', id: 4, key: 'sk-test-long-api-key', name: 'mixed', group_id: 7, group_ids: [7, 2], groups: [group(7), group(2)], multi_group_enabled: true } as ApiKey
 const global = { stubs: {
   BaseDialog: { props: ['show'], template: '<div v-if="show" role="dialog"><slot /><slot name="footer" /></div>' },
   GroupOptionItem: true, GroupBadge: true, Icon: true,
@@ -49,7 +49,7 @@ describe('admin API key group configuration', () => {
     expect(save.attributes('disabled')).toBeUndefined()
     await save.trigger('click')
     await flushPromises()
-    expect(updateGroups).toHaveBeenCalledWith(4, [], { enabled: false, models: [] })
+    expect(updateGroups).toHaveBeenCalledWith(4, [], { enabled: false, models: [] }, 'test-revision')
   })
 
   it('loads target-user models, validates the allowlist, and restores it after saving', async () => {
@@ -61,13 +61,14 @@ describe('admin API key group configuration', () => {
     expect(getModelOptions).toHaveBeenCalledWith(18, [7, 2])
     await wrapper.get('[data-test="model-restriction-enabled"]').setValue(true)
     const save = wrapper.findAll('button').find(button => button.text() === 'common.save')!
-    expect(save.attributes('disabled')).toBeDefined()
+    expect(save.attributes('disabled')).toBeUndefined()
+    expect(wrapper.text()).toContain('modelKeyAccess.allBlocked')
     await wrapper.get('input[value="allowed"]').setValue(true)
     const model_allowlist = { enabled: true, models: ['allowed'] }
     updateGroups.mockResolvedValue({ api_key: { ...key, model_allowlist } })
     await save.trigger('click')
     await flushPromises()
-    expect(updateGroups).toHaveBeenCalledWith(4, [7, 2], model_allowlist)
+    expect(updateGroups).toHaveBeenCalledWith(4, [7, 2], model_allowlist, 'test-revision')
     await wrapper.get('[aria-label="keys.multiGroup.editGroups"]').trigger('click')
     await flushPromises()
     expect(wrapper.get('[data-test="model-restriction-enabled"]').element).toMatchObject({ checked: true })
@@ -111,5 +112,5 @@ it('admin saves an empty deny list and restores the selected mode', async () => 
   expect(save.attributes('disabled')).toBeUndefined()
   await save.trigger('click')
   await flushPromises()
-  expect(updateGroups).toHaveBeenCalledWith(4, [7, 2], model_allowlist)
+  expect(updateGroups).toHaveBeenCalledWith(4, [7, 2], model_allowlist, 'test-revision')
 })

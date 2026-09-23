@@ -217,6 +217,17 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/keys/model-access',
+    name: 'ModelKeyAccess',
+    component: () => import('@/views/user/ModelKeyAccessView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Manage by Model',
+      titleKey: 'modelKeyAccess.title'
+    }
+  },
+  {
     path: '/image-generation',
     name: 'ImageGeneration',
     alias: '/docs/image-generation',

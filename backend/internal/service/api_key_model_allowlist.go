@@ -41,9 +41,8 @@ func NormalizeAPIKeyModelAllowlist(cfg GroupModelAllowlist) (GroupModelAllowlist
 			out.Models = append(out.Models, model)
 		}
 	}
-	if out.Enabled && out.Mode != "deny" && len(out.Models) == 0 {
-		return invalid("model allowlist cannot be enabled with an empty model list")
-	}
+	// An enabled empty allowlist intentionally denies every model. This is
+	// distinct from disabling restrictions, and permits revoking the last grant.
 	return out, nil
 }
 

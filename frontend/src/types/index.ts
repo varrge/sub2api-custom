@@ -764,6 +764,7 @@ export interface ApiKeyModelOptions {
 }
 
 export interface ApiKey {
+  model_allowlist_revision?: string
   id: number
   user_id: number
   key: string
@@ -813,6 +814,7 @@ export interface CreateApiKeyRequest {
 }
 
 export interface UpdateApiKeyRequest {
+  model_allowlist_revision?: string
   name?: string
   group_ids?: number[]
   model_allowlist?: ApiKeyModelAllowlist & { models: string[] }

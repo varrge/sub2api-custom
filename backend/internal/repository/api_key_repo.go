@@ -276,6 +276,13 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 }
 
 func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey, fields service.APIKeyUpdateFields) error {
+	if fields.ModelAllowlist && fields.ModelAllowlistRevision != "" {
+		return r.updateWithModelAccessRevision(ctx, key, fields)
+	}
+	return r.updateFields(ctx, key, fields)
+}
+
+func (r *apiKeyRepository) updateFields(ctx context.Context, key *service.APIKey, fields service.APIKeyUpdateFields) error {
 	// 空掩码代表调用方不改任何列，直接返回，避免产生一次无意义的整行写。
 	if fields.IsEmpty() {
 		return nil

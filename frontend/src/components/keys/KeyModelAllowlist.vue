@@ -59,7 +59,7 @@
         <span class="break-all font-mono">{{ model }}</span>
       </label>
     </div>
-    <p v-if="modelValue.enabled && mode !== 'deny' && !selectedModels.length" class="text-sm text-red-600 dark:text-red-400" role="alert">{{ t('keys.modelRestriction.required') }}</p>
+    <p v-if="modelValue.enabled && mode !== 'deny' && !selectedModels.length" class="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/10 dark:text-amber-300" data-test="empty-allowlist-hint">{{ t('modelKeyAccess.allBlocked') }}</p>
   </section>
 </template>
 

@@ -25,7 +25,7 @@ func (s *modelLimitsAdminStub) AdminUpdateAPIKeyModelLimits(_ context.Context, i
 
 func TestAdminAPIKeyModelAllowlistValidatedBeforeAnyMutation(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	for _, cfg := range []string{`{"enabled":true,"models":[]}`, `{"enabled":true,"models":["*"]}`} {
+	for _, cfg := range []string{`{"enabled":true,"models":["*"]}`} {
 		stub := &modelLimitsAdminStub{}
 		router := gin.New()
 		router.PUT("/keys/:id", NewAdminAPIKeyHandler(stub).UpdateGroup)

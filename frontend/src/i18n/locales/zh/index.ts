@@ -7,6 +7,7 @@ import channelMonitorV2 from './channelMonitorV2'
 import batchImage from './batchImage'
 import imageGeneration from './imageGeneration'
 import supportTickets from './supportTickets'
+import modelKeyAccess from './modelKeyAccess'
 import admin from './admin'
 import misc from './misc'
 
@@ -20,6 +21,7 @@ export default {
   ...batchImage,
   ...imageGeneration,
   ...supportTickets,
+  ...modelKeyAccess,
   admin,
   ...misc,
 }

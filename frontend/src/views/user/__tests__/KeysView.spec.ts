@@ -320,9 +320,9 @@ describe('user KeysView column settings', () => {
     expect(wrapper.get('[data-test="model-restriction-enabled"]').element).toMatchObject({ checked: false })
     await wrapper.get('[data-test="model-restriction-enabled"]').setValue(true)
     expect(wrapper.get('[data-tour="key-form-submit"]').attributes('disabled')).toBeUndefined()
-    await wrapper.get('#key-form').trigger('submit')
-    expect(updateKey).not.toHaveBeenCalled()
-    // Validation failure surfaces the model restrictions tab
+    // An empty enabled allowlist is a valid deny-all selection.
+    expect(wrapper.text()).toContain('modelKeyAccess.allBlocked')
+    await wrapper.get('[data-test="key-tab-models"]').trigger('click')
     expect(wrapper.get('[data-test="key-tab-models"]').attributes('aria-selected')).toBe('true')
     await wrapper.get('[data-test="key-tab-basic"]').trigger('click')
     expect(wrapper.get('[data-test="key-tab-basic"]').attributes('aria-selected')).toBe('true')

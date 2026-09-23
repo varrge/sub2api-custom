@@ -77,6 +77,8 @@ func RegisterUserRoutes(
 		keys := authenticated.Group("/keys")
 		{
 			keys.GET("", h.APIKey.List)
+			keys.GET("/model-access", h.APIKey.ModelAccess)
+			keys.PUT("/model-access", h.APIKey.UpdateModelAccess)
 			keys.GET("/:id", h.APIKey.GetByID)
 			keys.POST("", h.APIKey.Create)
 			keys.POST("/model-options", h.APIKey.ModelOptions(h.Gateway, false))

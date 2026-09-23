@@ -89,6 +89,10 @@
               </button>
             </div>
           </div>
+          <RouterLink to="/keys/model-access" class="btn btn-secondary" data-test="model-access-link">
+            <Icon name="key" size="md" class="mr-2" />
+            {{ t('modelKeyAccess.title') }}
+          </RouterLink>
           <button @click="showCreateModal = true" class="btn btn-primary" data-tour="keys-create-btn">
             <Icon name="plus" size="md" class="mr-2" />
             {{ t('keys.createKey') }}
@@ -1699,12 +1703,6 @@ const handleSubmit = async () => {
     invalidField.focus()
     return
   }
-  if (showEditModal.value && formModelAllowlist.value.enabled && formModelAllowlist.value.mode !== 'deny' && !formModelAllowlist.value.models?.length) {
-    // Surface the failing field: switch to the model restrictions tab
-    activeKeyFormTab.value = 'models'
-    appStore.showError(t('keys.modelRestriction.required'))
-    return
-  }
   // Ordinary users must retain at least one configured group.
   if (formData.value.group_ids.length === 0) {
     activeKeyFormTab.value = 'basic'
@@ -1765,6 +1763,7 @@ const handleSubmit = async () => {
       const updates: UpdateApiKeyRequest = {
         name: formData.value.name,
         group_ids: [...formData.value.group_ids],
+        model_allowlist_revision: selectedKey.value.model_allowlist_revision,
         model_allowlist: { ...formModelAllowlist.value, enabled: formModelAllowlist.value.enabled, models: [...(formModelAllowlist.value.models ?? [])] },
         ip_whitelist: ipWhitelist,
         ip_blacklist: ipBlacklist,

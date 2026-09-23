@@ -11,10 +11,11 @@ type AdminAPIKeyModelLimits interface {
 }
 
 type AdminUpdateAPIKeyModelLimitsRequest struct {
-	GroupID             *int64
-	GroupIDs            *[]int64
-	ModelAllowlist      *GroupModelAllowlist
-	ResetRateLimitUsage bool
+	ModelAllowlistRevision string
+	GroupID                *int64
+	GroupIDs               *[]int64
+	ModelAllowlist         *GroupModelAllowlist
+	ResetRateLimitUsage    bool
 }
 
 // AdminUpdateAPIKeyModelLimits validates the whole selection before writing
@@ -58,6 +59,10 @@ func (s *adminServiceImpl) AdminUpdateAPIKeyModelLimits(ctx context.Context, key
 		setAPIKeyGroups(key, ids, groups)
 	}
 	if req.ModelAllowlist != nil {
+		if req.ModelAllowlistRevision != "" && req.ModelAllowlistRevision != APIKeyModelAccessRevision(key) {
+			return nil, ErrAPIKeyModelAccessConflict
+		}
+		fields.ModelAllowlistRevision = req.ModelAllowlistRevision
 		key.ModelAllowlist = cfg
 	}
 	if req.ResetRateLimitUsage {

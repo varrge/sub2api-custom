@@ -68,7 +68,9 @@ type APIKeyUpdateFields struct {
 	GroupID        bool
 	GroupIDs       bool
 	ModelAllowlist bool
-	ExpiresAt      bool
+	// Optional optimistic lock used by the current single-key editors.
+	ModelAllowlistRevision string
+	ExpiresAt              bool
 	// QuotaUsed 仅供"重置配额用量"路径声明；常规计费走 IncrementQuotaUsed。
 	QuotaUsed bool
 	// RateLimits 覆盖 rate_limit_5h / _1d / _7d 三个阈值。
@@ -233,14 +235,15 @@ type CreateAPIKeyRequest struct {
 
 // UpdateAPIKeyRequest 更新API Key请求
 type UpdateAPIKeyRequest struct {
-	Name           *string              `json:"name"`
-	GroupID        *int64               `json:"group_id"`
-	GroupIDs       *[]int64             `json:"group_ids"`
-	GroupIDPresent bool                 `json:"-"`
-	ModelAllowlist *GroupModelAllowlist `json:"model_allowlist"`
-	Status         *string              `json:"status"`
-	IPWhitelist    *[]string            `json:"ip_whitelist"` // IP 白名单（nil 不修改，空数组清空）
-	IPBlacklist    *[]string            `json:"ip_blacklist"` // IP 黑名单（nil 不修改，空数组清空）
+	ModelAllowlistRevision string               `json:"model_allowlist_revision"`
+	Name                   *string              `json:"name"`
+	GroupID                *int64               `json:"group_id"`
+	GroupIDs               *[]int64             `json:"group_ids"`
+	GroupIDPresent         bool                 `json:"-"`
+	ModelAllowlist         *GroupModelAllowlist `json:"model_allowlist"`
+	Status                 *string              `json:"status"`
+	IPWhitelist            *[]string            `json:"ip_whitelist"` // IP 白名单（nil 不修改，空数组清空）
+	IPBlacklist            *[]string            `json:"ip_blacklist"` // IP 黑名单（nil 不修改，空数组清空）
 
 	// Quota fields
 	Quota           *float64   `json:"quota"`       // Quota limit in USD (nil = no change, 0 = unlimited)
@@ -850,6 +853,10 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 	// 原子递增，除非用户显式点了"重置"，否则这里不用快照把它们写回去。
 	var fields APIKeyUpdateFields
 	if req.ModelAllowlist != nil {
+		if req.ModelAllowlistRevision != "" && req.ModelAllowlistRevision != APIKeyModelAccessRevision(apiKey) {
+			return nil, ErrAPIKeyModelAccessConflict
+		}
+		fields.ModelAllowlistRevision = req.ModelAllowlistRevision
 		apiKey.ModelAllowlist = modelAllowlist
 		fields.ModelAllowlist = true
 	}

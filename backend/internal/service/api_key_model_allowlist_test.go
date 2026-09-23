@@ -17,8 +17,8 @@ func TestNormalizeAPIKeyModelAllowlist(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{"GPT-5.4", "gpt-5.4", "models/gemini-2.5-pro", "cheap", "CHEAP"}, got.Models)
 	for _, cfg := range []GroupModelAllowlist{
-		{Enabled: true}, {Enabled: true, Models: []string{" "}},
-		{Models: []string{"gpt-*"}}, {Models: []string{"gpt-?"}},
+		{Models: []string{"gpt-*"}},
+		{Models: []string{"gpt-?"}},
 		{Models: []string{"gpt-[5]"}}, {Models: []string{"gpt-5\n"}},
 		{Models: []string{"gpt-\x00"}}, {Models: []string{strings.Repeat("a", 257)}},
 		{Models: make([]string, 513)},
@@ -60,6 +60,28 @@ func TestAPIKeyAllowsModelExactPublicIDs(t *testing.T) {
 	require.True(t, key.AllowsModel("gpt-5.4"))
 	require.True(t, key.AllowsModel(""))
 	require.False(t, (*APIKey)(nil).AllowsModel("gpt-5.4"))
+}
+
+func TestSetAPIKeyModelAccessPreservesOtherModelsAndSupportsAllBlocked(t *testing.T) {
+	const model = "gpt-5.4"
+
+	next, err := SetAPIKeyModelAccess(GroupModelAllowlist{Enabled: false, Models: []string{"dormant"}}, model, false)
+	require.NoError(t, err)
+	require.Equal(t, GroupModelAllowlist{Enabled: true, Mode: "deny", Models: []string{model}}, next)
+
+	next, err = SetAPIKeyModelAccess(GroupModelAllowlist{Enabled: true, Models: []string{model, "claude-sonnet-4"}}, model, false)
+	require.NoError(t, err)
+	require.Equal(t, []string{"claude-sonnet-4"}, next.Models)
+
+	next, err = SetAPIKeyModelAccess(GroupModelAllowlist{Enabled: true, Models: []string{model}}, model, false)
+	require.NoError(t, err)
+	require.True(t, next.Enabled)
+	require.Empty(t, next.Models)
+	require.False(t, (&APIKey{ModelAllowlist: next}).AllowsModel(model))
+
+	next, err = SetAPIKeyModelAccess(GroupModelAllowlist{Enabled: true, Mode: "deny", Models: []string{model, "blocked"}}, model, true)
+	require.NoError(t, err)
+	require.Equal(t, []string{"blocked"}, next.Models)
 }
 
 type modelLimitKeyRepo struct {

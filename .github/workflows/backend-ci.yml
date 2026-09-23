@@ -71,6 +71,7 @@ jobs:
         env:
           SCHEDULED_TEST_DSN: postgres://monthcard_test:isolated-test-password@127.0.0.1:55439/monthcard_test?sslmode=disable
           ACTIVITY_TEST_DSN: postgres://monthcard_test:isolated-test-password@127.0.0.1:55439/monthcard_test?sslmode=disable
+          TEST_MODEL_ACCESS_DATABASE_URL: postgres://monthcard_test:isolated-test-password@127.0.0.1:55439/monthcard_test?sslmode=disable
         run: make test-integration
       - name: Month-card PostgreSQL concurrency and payment recovery
         working-directory: backend

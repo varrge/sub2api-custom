@@ -23,10 +23,12 @@ export interface UpdateApiKeyGroupResult {
 export async function updateApiKeyGroups(
   id: number,
   groupIds: number[],
-  modelAllowlist?: ApiKeyModelAllowlist & { models: string[] }
+  modelAllowlist?: ApiKeyModelAllowlist & { models: string[] },
+  modelAllowlistRevision?: string
 ): Promise<UpdateApiKeyGroupResult> {
   const { data } = await apiClient.put<UpdateApiKeyGroupResult>(`/admin/api-keys/${id}`, {
     group_ids: [...groupIds],
+    ...(modelAllowlistRevision ? { model_allowlist_revision: modelAllowlistRevision } : {}),
     ...(modelAllowlist === undefined ? {} : { model_allowlist: modelAllowlist })
   })
   return data

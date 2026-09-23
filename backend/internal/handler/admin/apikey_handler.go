@@ -25,10 +25,11 @@ func NewAdminAPIKeyHandler(adminService service.AdminService) *AdminAPIKeyHandle
 
 // AdminUpdateAPIKeyGroupRequest represents the request to update an API key.
 type AdminUpdateAPIKeyGroupRequest struct {
-	ModelAllowlist      *service.GroupModelAllowlist `json:"model_allowlist"`
-	GroupIDs            *[]int64                     `json:"group_ids"`
-	GroupID             *int64                       `json:"group_id"`               // nil=不修改, 0=解绑, >0=绑定到目标分组
-	ResetRateLimitUsage *bool                        `json:"reset_rate_limit_usage"` // true=重置 5h/1d/7d 限速用量
+	ModelAllowlistRevision string                       `json:"model_allowlist_revision"`
+	ModelAllowlist         *service.GroupModelAllowlist `json:"model_allowlist"`
+	GroupIDs               *[]int64                     `json:"group_ids"`
+	GroupID                *int64                       `json:"group_id"`               // nil=不修改, 0=解绑, >0=绑定到目标分组
+	ResetRateLimitUsage    *bool                        `json:"reset_rate_limit_usage"` // true=重置 5h/1d/7d 限速用量
 }
 
 // UpdateGroup handles updating an API key's admin-managed fields.
@@ -60,10 +61,11 @@ func (h *AdminAPIKeyHandler) UpdateGroup(c *gin.Context) {
 			return
 		}
 		result, err = limitService.AdminUpdateAPIKeyModelLimits(c.Request.Context(), keyID, service.AdminUpdateAPIKeyModelLimitsRequest{
-			GroupID:             req.GroupID,
-			GroupIDs:            req.GroupIDs,
-			ModelAllowlist:      &cfg,
-			ResetRateLimitUsage: req.ResetRateLimitUsage != nil && *req.ResetRateLimitUsage,
+			ModelAllowlistRevision: req.ModelAllowlistRevision,
+			GroupID:                req.GroupID,
+			GroupIDs:               req.GroupIDs,
+			ModelAllowlist:         &cfg,
+			ResetRateLimitUsage:    req.ResetRateLimitUsage != nil && *req.ResetRateLimitUsage,
 		})
 		if err != nil {
 			response.ErrorFrom(c, err)

@@ -49,7 +49,7 @@
     <template #footer>
       <div class="flex justify-end gap-3">
         <button class="btn btn-secondary" :disabled="saving" @click="selectedKey = null">{{ t('common.cancel') }}</button>
-        <button class="btn btn-primary" :disabled="saving || (selectedModelAllowlist.enabled && selectedModelAllowlist.mode !== 'deny' && !selectedModelAllowlist.models?.length)" @click="saveGroups">{{ t(saving ? 'common.saving' : 'common.save') }}</button>
+        <button class="btn btn-primary" :disabled="saving" @click="saveGroups">{{ t(saving ? 'common.saving' : 'common.save') }}</button>
       </div>
     </template>
   </BaseDialog>
@@ -133,17 +133,13 @@ const loadModelOptions = (groupIds: number[]) => adminAPI.users.getApiKeyModelOp
 const saveGroups = async () => {
   const key = selectedKey.value
   if (!key || saving.value) return
-  if (selectedModelAllowlist.value.enabled && selectedModelAllowlist.value.mode !== 'deny' && !selectedModelAllowlist.value.models?.length) {
-    appStore.showError(t('keys.modelRestriction.required'))
-    return
-  }
   saving.value = true
   try {
     const result = await adminAPI.apiKeys.updateApiKeyGroups(key.id, selectedGroupIds.value, {
       ...selectedModelAllowlist.value,
       enabled: selectedModelAllowlist.value.enabled,
       models: [...(selectedModelAllowlist.value.models ?? [])]
-    })
+    }, key.model_allowlist_revision)
     const index = apiKeys.value.findIndex(item => item.id === key.id)
     if (index !== -1) apiKeys.value[index] = result.api_key
     selectedKey.value = null

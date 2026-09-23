@@ -72,25 +72,28 @@ func generateRandomString(n int) string {
 }
 
 type CreateOrderRequest struct {
-	UserID            int64
-	Amount            float64
-	PaymentType       string
-	OpenID            string
-	ClientIP          string
-	IsMobile          bool
-	IsWeChatBrowser   bool
-	SrcHost           string
-	SrcURL            string
-	ReturnURL         string
-	PaymentSource     string
-	OrderType         string
-	PlanID            int64
-	ProductID         int64
-	Mode              string
-	TeamCode          string
-	CouponCode        string
-	monthCardPurchase *monthcard.Purchase
-	Locale            string
+	UserID                int64
+	Amount                float64
+	PaymentType           string
+	OpenID                string
+	ClientIP              string
+	IsMobile              bool
+	IsWeChatBrowser       bool
+	SrcHost               string
+	SrcURL                string
+	ReturnURL             string
+	PaymentSource         string
+	OrderType             string
+	PlanID                int64
+	ProductID             int64
+	Mode                  string
+	TeamCode              string
+	CouponCode            string
+	RulesAccepted         bool
+	RulesPublication      int64
+	monthCardPurchase     *monthcard.Purchase
+	monthCardOAuthConsent string
+	Locale                string
 }
 
 type CreateOrderResponse struct {

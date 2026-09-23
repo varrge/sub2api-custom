@@ -254,6 +254,8 @@ type CreateOrderRequest struct {
 	Mode              string  `json:"mode"`
 	TeamCode          string  `json:"team_code"`
 	CouponCode        string  `json:"coupon_code,omitempty"`
+	RulesAccepted     bool    `json:"rules_accepted"`
+	RulesPublication  int64   `json:"rules_publication"`
 	// IsMobile lets the frontend declare its mobile status directly. When
 	// nil we fall back to User-Agent heuristics (which miss iPadOS / some
 	// embedded browsers that strip the "Mobile" keyword).
@@ -279,6 +281,10 @@ func (h *PaymentHandler) CreateOrder(c *gin.Context) {
 			response.ErrorFrom(c, err)
 			return
 		}
+		if claims.OrderType == payment.OrderTypeMonthCard && claims.ConsentUserID != subject.UserID {
+			response.ErrorFrom(c, infraerrors.BadRequest("MONTH_CARD_RULES_REQUIRED", "请重新选择月卡并确认购买规则"))
+			return
+		}
 		if err := applyWeChatPaymentResumeClaims(&req, claims); err != nil {
 			response.ErrorFrom(c, err)
 			return
@@ -289,25 +295,34 @@ func (h *PaymentHandler) CreateOrder(c *gin.Context) {
 	if req.IsMobile != nil {
 		mobile = *req.IsMobile
 	}
+	wechatBrowser := isWeChatBrowser(c)
+	if req.OrderType == payment.OrderTypeMonthCard && req.IsMobile != nil && !mobile && service.NormalizePaymentSource(req.PaymentSource) == service.PaymentSourceHostedRedirect {
+		// A signed OAuth resume proves purchase consent independently of OpenID.
+		// Explicit desktop-QR fallback must not select JSAPI or start OAuth again.
+		req.OpenID = ""
+		wechatBrowser = false
+	}
 	result, err := h.paymentService.CreateOrder(c.Request.Context(), service.CreateOrderRequest{
-		UserID:          subject.UserID,
-		Amount:          req.Amount,
-		PaymentType:     req.PaymentType,
-		OpenID:          req.OpenID,
-		ClientIP:        c.ClientIP(),
-		IsMobile:        mobile,
-		IsWeChatBrowser: isWeChatBrowser(c),
-		SrcHost:         c.Request.Host,
-		SrcURL:          c.Request.Referer(),
-		ReturnURL:       req.ReturnURL,
-		PaymentSource:   req.PaymentSource,
-		OrderType:       req.OrderType,
-		PlanID:          req.PlanID,
-		ProductID:       req.ProductID,
-		Mode:            req.Mode,
-		TeamCode:        req.TeamCode,
-		CouponCode:      req.CouponCode,
-		Locale:          c.GetHeader("Accept-Language"),
+		UserID:           subject.UserID,
+		Amount:           req.Amount,
+		PaymentType:      req.PaymentType,
+		OpenID:           req.OpenID,
+		ClientIP:         c.ClientIP(),
+		IsMobile:         mobile,
+		IsWeChatBrowser:  wechatBrowser,
+		SrcHost:          c.Request.Host,
+		SrcURL:           c.Request.Referer(),
+		ReturnURL:        req.ReturnURL,
+		PaymentSource:    req.PaymentSource,
+		OrderType:        req.OrderType,
+		PlanID:           req.PlanID,
+		ProductID:        req.ProductID,
+		Mode:             req.Mode,
+		TeamCode:         req.TeamCode,
+		CouponCode:       req.CouponCode,
+		RulesAccepted:    req.RulesAccepted,
+		RulesPublication: req.RulesPublication,
+		Locale:           c.GetHeader("Accept-Language"),
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -354,6 +369,7 @@ func applyWeChatPaymentResumeClaims(req *CreateOrderRequest, claims *service.WeC
 	if claims.OrderType == payment.OrderTypeMonthCard {
 		req.ProductID, req.Mode, req.TeamCode = claims.ProductID, claims.Mode, claims.TeamCode
 		req.CouponCode = claims.CouponCode
+		req.RulesAccepted, req.RulesPublication = claims.RulesAccepted, claims.RulesPublication
 	}
 	return nil
 }

@@ -7,6 +7,7 @@ import AmountInput from '@/components/payment/AmountInput.vue'
 import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
 import ProductCatalog from '@/features/group-buy/ProductCatalog.vue'
 import CouponEntry from '@/features/group-buy/CouponEntry.vue'
+import PurchaseRulesConsent from '@/features/group-buy/PurchaseRulesConsent.vue'
 import type { GroupBuyProduct, GroupBuyTeam } from '@/types/groupBuy'
 import en from '@/i18n/locales/en'
 import zh from '@/i18n/locales/zh'
@@ -31,6 +32,8 @@ const showWarning = vi.hoisted(() => vi.fn())
 const getCheckoutInfo = vi.hoisted(() => vi.fn())
 const getGroupBuyProducts = vi.hoisted(() => vi.fn().mockResolvedValue([]))
 const getGroupBuyTeam = vi.hoisted(() => vi.fn())
+const getMonthCardRules = vi.hoisted(() => vi.fn())
+vi.mock('@/api/monthCardRules', () => ({ monthCardRulesAPI: { get: getMonthCardRules, read: vi.fn() } }))
 vi.mock('@/api/groupBuy', () => ({ groupBuyAPI: { products: getGroupBuyProducts, team: getGroupBuyTeam } }))
 const getUserGroupRates = vi.hoisted(() => vi.fn())
 const bridgeInvoke = vi.hoisted(() => vi.fn())
@@ -123,6 +126,7 @@ vi.mock('@/utils/device', () => ({
 }))
 
 beforeEach(() => {
+  getMonthCardRules.mockReset().mockResolvedValue({ publication: 1, documents: [{ id: 'a', title: 'Rules', content: 'text', version: 'v1', read_at: '2026-09-23' }] })
   getUserGroupRates.mockReset().mockResolvedValue({})
 })
 
@@ -869,8 +873,11 @@ describe('independent month-card checkout', () => {
     wrapper.getComponent(ProductCatalog).vm.$emit('select', { product, mode })
     await flushPromises()
     expect(wrapper.text()).toContain('¥198.00')
+    expect(wrapper.get('button.btn-primary.w-full').attributes('disabled')).toBeDefined()
+    wrapper.getComponent(PurchaseRulesConsent).vm.$emit('update:modelValue', true)
+    await flushPromises()
     await wrapper.get('button.btn-primary.w-full').trigger('click')
-    expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ order_type: 'month_card', product_id: 41, mode, amount: 198 }))
+    expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ order_type: 'month_card', product_id: 41, mode, amount: 198, rules_accepted: true, rules_publication: 1 }))
     expect(createOrder.mock.calls[0][0]).not.toHaveProperty('plan_id')
     wrapper.unmount()
   })
@@ -879,6 +886,8 @@ describe('independent month-card checkout', () => {
     const wrapper = await mountSubscriptionPlanList(0, {}, 'group-buy')
     createOrder.mockReset().mockResolvedValue({ order_id: 92, amount: 178.2, pay_amount: 178.2, currency: 'CNY', qr_code: 'pay:92', expires_at: '2099-01-01T00:00:00Z' })
     wrapper.getComponent(ProductCatalog).vm.$emit('select', { product, mode: 'create' })
+    await flushPromises()
+    wrapper.getComponent(PurchaseRulesConsent).vm.$emit('update:modelValue', true)
     await flushPromises()
     const coupon = wrapper.getComponent(CouponEntry)
     coupon.vm.$emit('busy', true)
@@ -892,6 +901,58 @@ describe('independent month-card checkout', () => {
     await wrapper.get('button.btn-primary.w-full').trigger('click')
     expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ amount: 178.2, coupon_code: 'SAVE10', order_type: 'month_card', product_id: 41, mode: 'create' }))
     wrapper.unmount()
+  })
+
+  it('rejects an unread checkbox event and resets consent when the server publishes newer rules', async () => {
+    const wrapper = await mountSubscriptionPlanList(0, {}, 'group-buy')
+    getMonthCardRules.mockResolvedValueOnce({ publication: 1, documents: [{ id: 'a', title: 'Rules', content: 'text', version: 'v1' }] })
+    wrapper.getComponent(ProductCatalog).vm.$emit('select', { product, mode: 'solo' })
+    await flushPromises()
+    wrapper.getComponent(PurchaseRulesConsent).vm.$emit('update:modelValue', true)
+    await flushPromises()
+    expect(wrapper.get('button.btn-primary.w-full').attributes('disabled')).toBeDefined()
+    wrapper.getComponent(PurchaseRulesConsent).vm.$emit('reload')
+    await flushPromises()
+    wrapper.getComponent(PurchaseRulesConsent).vm.$emit('update:modelValue', true)
+    await flushPromises()
+    createOrder.mockReset().mockRejectedValue({ reason: 'MONTH_CARD_RULES_CHANGED', message: '购买规则已更新' })
+    getMonthCardRules.mockResolvedValue({ publication: 2, documents: [{ id: 'a', title: 'New rules', content: 'changed', version: 'v2' }] })
+    await wrapper.get('button.btn-primary.w-full').trigger('click')
+    await flushPromises()
+    expect(createOrder).toHaveBeenCalledTimes(1)
+    expect(wrapper.getComponent(PurchaseRulesConsent).props('modelValue')).toBe(false)
+    expect(wrapper.get('button.btn-primary.w-full').attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+  })
+
+  it.each([false, true])('retains checkout consent through month-card JSAPI QR fallback (OAuth=%s)', async oauth => {
+    vi.useRealTimers()
+    const originalBridge = (window as any).WeixinJSBridge
+    ;(window as any).WeixinJSBridge = { invoke: (_action: string, _payload: unknown, callback: (data: unknown) => void) => callback({ err_msg: 'get_brand_wcpay_request:fail' }) }
+    let wrapper: ReturnType<typeof shallowMount> | undefined
+    try {
+      if (oauth) {
+        window.localStorage.clear()
+        routeState.query = { tab: 'group-buy', mode: 'solo', product_id: '41', order_type: 'month_card', wechat_resume_token: 'month-card-consent-token' }
+        getGroupBuyProducts.mockResolvedValue([product])
+        getCheckoutInfo.mockResolvedValue(checkoutInfoFixture())
+      } else {
+        wrapper = await mountSubscriptionPlanList(0, {}, 'group-buy')
+        wrapper.getComponent(ProductCatalog).vm.$emit('select', { product, mode: 'solo' })
+        await flushPromises()
+        wrapper.getComponent(PurchaseRulesConsent).vm.$emit('update:modelValue', true)
+        await flushPromises()
+      }
+      (window as any).WeixinJSBridge = { invoke: (_action: string, _payload: unknown, callback: (data: unknown) => void) => callback({ err_msg: 'get_brand_wcpay_request:fail' }) }
+      createOrder.mockReset().mockResolvedValueOnce(jsapiOrderFixture('month-card-order-token')).mockResolvedValueOnce({ order_id: 199, order_type: 'month_card', amount: 198, pay_amount: 198, currency: 'CNY', qr_code: 'weixin://wxpay/bizpayurl?pr=monthcard-fallback', expires_at: '2099-01-01T00:00:00Z' })
+      if (oauth) wrapper = shallowMount(PaymentView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } } })
+      else await wrapper!.get('button.btn-primary.w-full').trigger('click')
+      await flushPromises(); await flushPromises()
+      expect(createOrder).toHaveBeenCalledTimes(2)
+      expect(createOrder.mock.calls[1][0]).toMatchObject({ order_type: 'month_card', product_id: 41, mode: 'solo', is_mobile: false })
+      if (oauth) expect(createOrder.mock.calls[1][0].wechat_resume_token).toBe('month-card-consent-token')
+      else expect(createOrder.mock.calls[1][0]).toMatchObject({ rules_accepted: true, rules_publication: 1 })
+    } finally { wrapper?.unmount(); (window as any).WeixinJSBridge = originalBridge }
   })
 
   it('blocks non-CNY methods while leaving the original recharge method list available', async () => {

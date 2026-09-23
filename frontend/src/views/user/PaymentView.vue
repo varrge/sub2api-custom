@@ -142,7 +142,9 @@
                 <p>{{ t(selectedMonthCard.mode === 'solo' ? 'groupBuy.soloHint' : selectedMonthCard.mode === 'join' ? 'groupBuy.joinHint' : 'groupBuy.createHint') }}</p></div>
                 <p class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('groupBuy.independent') }}</p>
               </div>
-              <div class="gb-panel p-5 sm:p-6"><CouponEntry v-model="appliedCoupon" class="mb-4" :selection="selectedMonthCard" :disabled="submitting" @busy="couponBusy = $event" /><PaymentMethodSelector :methods="monthCardMethods" :selected="selectedMethod" @select="selectedMethod = $event" /><p class="mt-3 text-sm text-amber-700 dark:text-amber-300">{{ t('groupBuy.cnyOnly') }}</p></div>
+              <div class="gb-panel p-5 sm:p-6"><CouponEntry v-model="appliedCoupon" class="mb-4" :selection="selectedMonthCard" :disabled="submitting" @busy="couponBusy = $event" /><PaymentMethodSelector :methods="monthCardMethods" :selected="selectedMethod" @select="selectedMethod = $event" /><p class="mt-3 text-sm text-amber-700 dark:text-amber-300">{{ t('groupBuy.cnyOnly') }}</p>
+                <PurchaseRulesConsent :documents="ruleDocuments" :loading="rulesLoading" :error="rulesError" :model-value="rulesAccepted" :reading-id="ruleReadingId" :disabled="submitting" @update:model-value="monthCardRules.setAccepted" @read="monthCardRules.read" @reload="monthCardRules.load" />
+              </div>
               <p v-if="feeRate > 0" class="text-sm text-gray-600 dark:text-gray-400">{{ t('payment.fee') }} ({{ feeRate }}%): {{ cny(monthCardFee) }}</p>
               <p v-if="selectedMonthCard.team && !canJoin(selectedMonthCard.team, monthCardNow)" class="gb-notice gb-notice-error p-3" role="alert">{{ t('groupBuy.joinUnavailable') }}</p>
               <button class="btn btn-primary w-full" :disabled="!canSubmitMonthCard || submitting" @click="confirmMonthCard">{{ submitting ? t('common.processing') : t('groupBuy.pay', { amount: cny(monthCardTotal) }) }}</button>
@@ -327,6 +329,8 @@ import '@/features/group-buy/glass.css'
 import type { CouponQuote } from '@/types/groupBuy'
 import { canJoin, cny, usd, exactDate, purchaseQuery, purchaseQuota, monthCardFeeCNY } from '@/features/group-buy/model'
 import { groupBuyAPI } from '@/api/groupBuy'
+import PurchaseRulesConsent from '@/features/group-buy/PurchaseRulesConsent.vue'
+import { useMonthCardRules } from '@/features/group-buy/useMonthCardRules'
 import type { MonthCardSelection } from '@/types/groupBuy'
 
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
@@ -353,7 +357,7 @@ import {
   useTemporaryRateNow,
   type TemporaryRateFields
 } from '@/utils/temporary-rate'
-import type { SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, OrderType } from '@/types/payment'
+import type { SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, CreateOrderRequest, OrderType } from '@/types/payment'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import AmountInput from '@/components/payment/AmountInput.vue'
 import PaymentMethodSelector from '@/components/payment/PaymentMethodSelector.vue'
@@ -450,6 +454,16 @@ const amount = ref<number | null>(null)
 const selectedMethod = ref('')
 const selectedPlan = ref<SubscriptionPlan | null>(null)
 const selectedMonthCard = ref<MonthCardSelection | null>(null)
+const monthCardRules = useMonthCardRules()
+watch(() => authStore.user?.id, () => {
+  if (selectedMonthCard.value) void monthCardRules.load()
+  else monthCardRules.reset()
+})
+const { documents: ruleDocuments, loading: rulesLoading, error: rulesError, accepted: rulesAccepted, readingId: ruleReadingId } = monthCardRules
+watch(selectedMonthCard, selection => {
+  if (selection) void monthCardRules.load()
+  else monthCardRules.reset()
+}, { flush: 'sync' })
 const appliedCoupon = ref<CouponQuote | null>(null)
 const couponBusy = ref(false)
 const monthCardAmount = computed(() => appliedCoupon.value?.amount_cny ?? selectedMonthCard.value?.product.price_cny ?? 0)
@@ -460,7 +474,7 @@ onUnmounted(() => clearInterval(monthCardTimer))
 const monthCardMethods = computed<PaymentMethodOption[]>(() => enabledMethods.value.map(type => ({ type, display_name: visibleMethods.value[type]?.display_name, fee_rate: visibleMethods.value[type]?.fee_rate ?? 0, available: normalizePaymentCurrency(visibleMethods.value[type]?.currency) === 'CNY' && visibleMethods.value[type]?.available !== false && amountFitsMethod(monthCardTotal.value, type) })))
 const monthCardFee = computed(() => monthCardFeeCNY(monthCardAmount.value, feeRate.value))
 const monthCardTotal = computed(() => Math.round((monthCardAmount.value + monthCardFee.value) * 100) / 100)
-const canSubmitMonthCard = computed(() => !couponBusy.value && !!selectedMonthCard.value && monthCardMethods.value.some(method => method.type === selectedMethod.value && method.available) && (!selectedMonthCard.value.team || canJoin(selectedMonthCard.value.team, monthCardNow.value)))
+const canSubmitMonthCard = computed(() => monthCardRules.canPay.value && !couponBusy.value && !!selectedMonthCard.value && monthCardMethods.value.some(method => method.type === selectedMethod.value && method.available) && (!selectedMonthCard.value.team || canJoin(selectedMonthCard.value.team, monthCardNow.value)))
 function selectMonthCard(selection: MonthCardSelection) {
   selectedPlan.value = null
   selectedMonthCard.value = selection
@@ -576,6 +590,7 @@ function removeRecoverySnapshot() {
 }
 
 function resetPayment() {
+  monthCardRules.setAccepted(false)
   paymentPhase.value = 'select'
   paymentState.value = emptyPaymentState()
   removeRecoverySnapshot()
@@ -958,6 +973,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
   submitting.value = true
   errorMessage.value = ''
   errorHintMessage.value = ''
+  let fallbackRequest: CreateOrderRequest | undefined
   const requestType = normalizeVisibleMethod(options.paymentType || selectedMethod.value) || options.paymentType || selectedMethod.value
   try {
     const payload = buildCreateOrderPayload({
@@ -976,6 +992,8 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
       payload.mode = selectedMonthCard.value.mode
       payload.team_code = selectedMonthCard.value.team?.code
       payload.coupon_code = appliedCoupon.value?.code
+      payload.rules_accepted = monthCardRules.canPay.value
+      payload.rules_publication = monthCardRules.state.value?.publication
     }
     if (options.openid) {
       payload.openid = options.openid
@@ -984,6 +1002,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
       payload.wechat_resume_token = options.wechatResumeToken
     }
 
+    fallbackRequest = { ...payload }
     const result = await paymentStore.createOrder(payload) as CreateOrderResult & { resume_token?: string }
     const openWindow = (url: string) => {
       const win = window.open(url, 'paymentPopup', getPaymentPopupFeatures())
@@ -1078,6 +1097,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
               planId,
               paymentType: visibleMethod,
               attempted: options.mobileQrFallbackAttempted === true,
+          request: fallbackRequest,
             },
           )
           if (!fallbackApplied) {
@@ -1096,6 +1116,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
           planId,
           paymentType: visibleMethod,
           attempted: options.mobileQrFallbackAttempted === true,
+          request: fallbackRequest,
         })
         if (!fallbackApplied) {
           throw err
@@ -1112,7 +1133,11 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
     }
   } catch (err: unknown) {
     const apiErr = err as Record<string, unknown>
-    if (apiErr.reason === 'TOO_MANY_PENDING') {
+    if (orderType === 'month_card' && (apiErr.reason === 'MONTH_CARD_RULES_CHANGED' || apiErr.reason === 'MONTH_CARD_RULES_REQUIRED')) {
+      await monthCardRules.load()
+      errorMessage.value = extractApiErrorMessage(err, t('groupBuy.loadFailed'))
+      errorHintMessage.value = ''
+    } else if (apiErr.reason === 'TOO_MANY_PENDING') {
       const metadata = apiErr.metadata as Record<string, unknown> | undefined
       errorMessage.value = t('payment.errors.tooManyPending', { max: metadata?.max || '' })
       errorHintMessage.value = ''
@@ -1125,6 +1150,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
       planId,
       paymentType: requestType,
       attempted: options.mobileQrFallbackAttempted === true,
+      request: fallbackRequest,
     })) {
       return
     } else {
@@ -1147,6 +1173,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
 }
 
 interface MobileQrFallbackContext {
+  request?: CreateOrderRequest
   orderAmount: number
   orderType: OrderType
   planId?: number
@@ -1203,6 +1230,17 @@ async function attemptMobileQrFallback(err: unknown, context: MobileQrFallbackCo
       isMobile: false,
       isWechatBrowser: false,
     })
+    if (context.orderType === 'month_card') {
+      const original = context.request
+      if (!original || (!original.wechat_resume_token && (!original.rules_accepted || !original.rules_publication))) return false
+      payload.product_id = original.product_id
+      payload.mode = original.mode
+      payload.team_code = original.team_code
+      payload.coupon_code = original.coupon_code
+      payload.rules_accepted = original.rules_accepted
+      payload.rules_publication = original.rules_publication
+      payload.wechat_resume_token = original.wechat_resume_token
+    }
     const result = await paymentStore.createOrder(payload) as CreateOrderResult & { resume_token?: string }
     const stripeMethod = visibleMethod === 'wxpay' ? 'wechat_pay' : 'alipay'
     const stripeRouteUrl = result.client_secret

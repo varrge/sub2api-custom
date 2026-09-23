@@ -87,14 +87,18 @@ type wechatOAuthUserInfoResponse struct {
 }
 
 type wechatPaymentOAuthContext struct {
-	PaymentType string `json:"payment_type"`
-	Amount      string `json:"amount,omitempty"`
-	OrderType   string `json:"order_type,omitempty"`
-	PlanID      int64  `json:"plan_id,omitempty"`
-	ProductID   int64  `json:"product_id,omitempty"`
-	Mode        string `json:"mode,omitempty"`
-	TeamCode    string `json:"team_code,omitempty"`
-	CouponCode  string `json:"coupon_code,omitempty"`
+	RulesConsentToken string `json:"rules_consent_token,omitempty"`
+	PaymentType       string `json:"payment_type"`
+	Amount            string `json:"amount,omitempty"`
+	OrderType         string `json:"order_type,omitempty"`
+	PlanID            int64  `json:"plan_id,omitempty"`
+	ProductID         int64  `json:"product_id,omitempty"`
+	Mode              string `json:"mode,omitempty"`
+	TeamCode          string `json:"team_code,omitempty"`
+	CouponCode        string `json:"coupon_code,omitempty"`
+	RulesAccepted     bool   `json:"rules_accepted,omitempty"`
+	RulesPublication  int64  `json:"rules_publication,omitempty"`
+	ConsentUserID     int64  `json:"consent_user_id,omitempty"`
 }
 
 // WeChatOAuthStart starts the WeChat OAuth login flow and stores the short-lived
@@ -359,16 +363,22 @@ func (h *AuthHandler) WeChatPaymentOAuthStart(c *gin.Context) {
 	if redirectTo == "" {
 		redirectTo = wechatPaymentOAuthDefaultTo
 	}
-	rawContext, err := encodeWeChatPaymentOAuthContext(wechatPaymentOAuthContext{
-		PaymentType: paymentType,
-		Amount:      strings.TrimSpace(c.Query("amount")),
-		OrderType:   strings.TrimSpace(c.Query("order_type")),
-		PlanID:      parseWeChatPaymentPlanID(c.Query("plan_id")),
-		ProductID:   parseWeChatPaymentPlanID(c.Query("product_id")),
-		Mode:        strings.TrimSpace(c.Query("mode")),
-		TeamCode:    strings.TrimSpace(c.Query("team_code")),
-		CouponCode:  strings.TrimSpace(c.Query("coupon_code")),
-	})
+	paymentContext := wechatPaymentOAuthContext{
+		PaymentType:       paymentType,
+		Amount:            strings.TrimSpace(c.Query("amount")),
+		OrderType:         strings.TrimSpace(c.Query("order_type")),
+		PlanID:            parseWeChatPaymentPlanID(c.Query("plan_id")),
+		ProductID:         parseWeChatPaymentPlanID(c.Query("product_id")),
+		Mode:              strings.TrimSpace(c.Query("mode")),
+		TeamCode:          strings.TrimSpace(c.Query("team_code")),
+		CouponCode:        strings.TrimSpace(c.Query("coupon_code")),
+		RulesConsentToken: strings.TrimSpace(c.Query("rules_consent_token")),
+	}
+	if err := h.verifyMonthCardOAuthContext(&paymentContext); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	rawContext, err := encodeWeChatPaymentOAuthContext(paymentContext)
 	if err != nil {
 		response.ErrorFrom(c, infraerrors.InternalServer("OAUTH_CONTEXT_ENCODE_FAILED", "failed to encode oauth context").WithCause(err))
 		return
@@ -463,18 +473,25 @@ func (h *AuthHandler) WeChatPaymentOAuthCallback(c *gin.Context) {
 		scope = strings.TrimSpace(tokenResp.Scope)
 	}
 
+	if err := h.verifyMonthCardOAuthContext(&paymentContext); err != nil {
+		redirectOAuthError(c, frontendCallback, "invalid_context", "please confirm month card rules again", "")
+		return
+	}
 	resumeToken, err := h.wechatPaymentResumeService().CreateWeChatPaymentResumeToken(service.WeChatPaymentResumeClaims{
-		OpenID:      openid,
-		PaymentType: paymentContext.PaymentType,
-		Amount:      paymentContext.Amount,
-		OrderType:   paymentContext.OrderType,
-		PlanID:      paymentContext.PlanID,
-		ProductID:   paymentContext.ProductID,
-		Mode:        paymentContext.Mode,
-		TeamCode:    paymentContext.TeamCode,
-		CouponCode:  paymentContext.CouponCode,
-		RedirectTo:  redirectTo,
-		Scope:       scope,
+		OpenID:           openid,
+		PaymentType:      paymentContext.PaymentType,
+		Amount:           paymentContext.Amount,
+		OrderType:        paymentContext.OrderType,
+		PlanID:           paymentContext.PlanID,
+		ProductID:        paymentContext.ProductID,
+		Mode:             paymentContext.Mode,
+		TeamCode:         paymentContext.TeamCode,
+		CouponCode:       paymentContext.CouponCode,
+		RulesAccepted:    paymentContext.RulesAccepted,
+		RulesPublication: paymentContext.RulesPublication,
+		ConsentUserID:    paymentContext.ConsentUserID,
+		RedirectTo:       redirectTo,
+		Scope:            scope,
 	})
 	if err != nil {
 		redirectOAuthError(c, frontendCallback, "invalid_context", "failed to encode payment resume context", "")
@@ -1372,4 +1389,21 @@ func wechatPaymentClearCookie(c *gin.Context, name string, secure bool) {
 		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 	})
+}
+
+// Revalidate the signed authenticated checkout both before and after OAuth;
+// neither public query parameters nor editable browser cookies prove consent.
+func (h *AuthHandler) verifyMonthCardOAuthContext(c *wechatPaymentOAuthContext) error {
+	if c.OrderType != payment.OrderTypeMonthCard && c.RulesConsentToken == "" {
+		return nil
+	}
+	claims, err := h.wechatPaymentResumeService().ParseMonthCardOAuthConsent(c.RulesConsentToken)
+	if err != nil {
+		return err
+	}
+	c.PaymentType, c.Amount, c.OrderType = claims.PaymentType, claims.Amount, claims.OrderType
+	c.ProductID, c.Mode, c.TeamCode, c.CouponCode = claims.ProductID, claims.Mode, claims.TeamCode, claims.CouponCode
+	c.PlanID = 0
+	c.RulesAccepted, c.RulesPublication, c.ConsentUserID = claims.RulesAccepted, claims.RulesPublication, claims.ConsentUserID
+	return nil
 }

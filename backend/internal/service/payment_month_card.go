@@ -50,6 +50,9 @@ func (s *PaymentService) prepareMonthCardOrder(ctx context.Context, req *CreateO
 	if s.monthCards == nil {
 		return infraerrors.ServiceUnavailable("MONTH_CARD_UNAVAILABLE", "月卡服务暂不可用")
 	}
+	if err := s.monthCards.ValidateRulesConsent(ctx, req.UserID, req.RulesPublication, req.RulesAccepted); err != nil {
+		return err
+	}
 	purchase, err := s.monthCards.PreparePurchase(ctx, req.UserID, req.ProductID, req.Mode, req.TeamCode)
 	if err != nil {
 		switch {

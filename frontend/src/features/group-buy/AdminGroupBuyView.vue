@@ -17,7 +17,7 @@
       </div>
       <div class="gb-tabs" role="tablist">
         <button
-          v-for="key in ['products', 'teams', 'cards', 'coupons'] as const"
+          v-for="key in ['products', 'teams', 'cards', 'coupons', 'ruleManagement'] as const"
           :key="key"
           class="gb-tab"
           :class="{ 'gb-tab-active': tab === key }"
@@ -31,7 +31,7 @@
       <p v-if="error" class="gb-notice gb-notice-error p-3" role="alert">
         {{ error }}
       </p>
-      <section class="card space-y-3 p-4">
+      <section v-if="tab !== 'ruleManagement'" class="card space-y-3 p-4">
         <h2 class="font-semibold">{{ t('groupBuy.freezePolicy') }}</h2>
         <p class="text-sm text-gray-500">{{ t('groupBuy.freezePolicyHint') }}</p>
         <label class="flex items-center gap-2 text-sm">
@@ -102,6 +102,7 @@
         </div>
       </template>
       <AdminCoupons v-else-if="tab === 'coupons'" :products="products" />
+      <AdminRulesManager v-else-if="tab === 'ruleManagement'" />
       <template v-else-if="tab === 'teams'">
         <form class="flex gap-2" @submit.prevent="inspectTeam(teamCode)">
           <input
@@ -415,6 +416,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import MonthCardCard from './MonthCardCard.vue'
 import AdminCoupons from './AdminCoupons.vue'
+import AdminRulesManager from './AdminRulesManager.vue'
 import AllocationTable from './AllocationTable.vue'
 import QuotaLadder from './QuotaLadder.vue'
 import { adminGroupBuyAPI } from '@/api/groupBuy'
@@ -432,7 +434,7 @@ import { extractApiErrorMessage } from '@/utils/apiError'
 import './glass.css'
 const { t } = useI18n()
 const app = useAppStore()
-const tab = ref<'products' | 'teams' | 'cards' | 'coupons'>('products')
+const tab = ref<'products' | 'teams' | 'cards' | 'coupons' | 'ruleManagement'>('products')
 const loading = ref(true)
 const error = ref('')
 const formError = ref('')
@@ -616,3 +618,10 @@ async function cancelTeam() {
 }
 onMounted(load)
 </script>
+
+<style scoped>
+/* 五个页签在窄屏内容宽度内换行，避免横向溢出 */
+.gb-tabs {
+  max-width: 100%;
+}
+</style>

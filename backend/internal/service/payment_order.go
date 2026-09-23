@@ -199,6 +199,11 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		if providerSnapshot == nil {
 			providerSnapshot = make(map[string]any)
 		}
+		consent, err := monthcard.ValidateRulesConsent(ctx, tx.Client(), req.UserID, req.RulesPublication, req.RulesAccepted, true)
+		if err != nil {
+			return nil, err
+		}
+		providerSnapshot["month_card_rules_consent"] = consent
 		providerSnapshot["month_card_purchase"] = req.monthCardPurchase
 	}
 	selectedInstanceID := ""
@@ -629,6 +634,16 @@ func (s *PaymentService) buildWeChatOAuthRequiredResponse(ctx context.Context, r
 		return nil, err
 	}
 
+	if req.OrderType == payment.OrderTypeMonthCard {
+		req.monthCardOAuthConsent, err = s.paymentResume().CreateMonthCardOAuthConsent(WeChatPaymentResumeClaims{
+			PaymentType: req.PaymentType, Amount: strconv.FormatFloat(req.Amount, 'f', -1, 64), OrderType: req.OrderType,
+			ProductID: req.ProductID, Mode: req.Mode, TeamCode: req.TeamCode, CouponCode: req.CouponCode,
+			RulesAccepted: req.RulesAccepted, RulesPublication: req.RulesPublication, ConsentUserID: req.UserID,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
 	authorizeURL, err := buildWeChatPaymentOAuthStartURL(req, "snsapi_base")
 	if err != nil {
 		return nil, err
@@ -813,6 +828,7 @@ func buildWeChatPaymentOAuthStartURL(req CreateOrderRequest, scope string) (stri
 		q.Set("mode", req.Mode)
 		q.Set("team_code", req.TeamCode)
 		q.Set("coupon_code", req.CouponCode)
+		q.Set("rules_consent_token", req.monthCardOAuthConsent)
 	}
 	if scope = strings.TrimSpace(scope); scope != "" {
 		q.Set("scope", scope)

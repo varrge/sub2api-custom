@@ -55,20 +55,23 @@ type ResumeTokenClaims struct {
 }
 
 type WeChatPaymentResumeClaims struct {
-	TokenType   string `json:"tk,omitempty"`
-	OpenID      string `json:"openid"`
-	PaymentType string `json:"pt,omitempty"`
-	Amount      string `json:"amt,omitempty"`
-	OrderType   string `json:"ot,omitempty"`
-	PlanID      int64  `json:"pid,omitempty"`
-	ProductID   int64  `json:"product_id,omitempty"`
-	Mode        string `json:"mode,omitempty"`
-	TeamCode    string `json:"team_code,omitempty"`
-	CouponCode  string `json:"coupon_code,omitempty"`
-	RedirectTo  string `json:"rd,omitempty"`
-	Scope       string `json:"scp,omitempty"`
-	IssuedAt    int64  `json:"iat"`
-	ExpiresAt   int64  `json:"exp,omitempty"`
+	TokenType        string `json:"tk,omitempty"`
+	OpenID           string `json:"openid"`
+	PaymentType      string `json:"pt,omitempty"`
+	Amount           string `json:"amt,omitempty"`
+	OrderType        string `json:"ot,omitempty"`
+	PlanID           int64  `json:"pid,omitempty"`
+	ProductID        int64  `json:"product_id,omitempty"`
+	Mode             string `json:"mode,omitempty"`
+	TeamCode         string `json:"team_code,omitempty"`
+	CouponCode       string `json:"coupon_code,omitempty"`
+	RulesAccepted    bool   `json:"rules_accepted,omitempty"`
+	RulesPublication int64  `json:"rules_publication,omitempty"`
+	ConsentUserID    int64  `json:"consent_user_id,omitempty"`
+	RedirectTo       string `json:"rd,omitempty"`
+	Scope            string `json:"scp,omitempty"`
+	IssuedAt         int64  `json:"iat"`
+	ExpiresAt        int64  `json:"exp,omitempty"`
 }
 
 type PaymentResumeService struct {

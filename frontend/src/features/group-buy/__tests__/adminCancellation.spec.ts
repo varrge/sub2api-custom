@@ -13,6 +13,7 @@ vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string, params: Record<s
   return String(message).replace(/\{(\w+)\}/g, (_, name: string) => String(params[name] ?? ''))
 } }) }))
 vi.mock('@/api/groupBuy', () => ({ adminGroupBuyAPI: { products: vi.fn().mockResolvedValue([]), teams: vi.fn(), cancelTeam: vi.fn() }, groupBuyAPI: {} }))
+vi.mock('@/api/monthCardRules', () => ({ monthCardRulesAPI: { admin: vi.fn(), save: vi.fn(), publish: vi.fn(), get: vi.fn(), read: vi.fn() } }))
 const team = { id: 1, code: 'TEAM-TO-CANCEL', product_id: 1, product: { id: 1, name: '98月卡', max_members: 10 }, member_count: 2, current_quota_usd: 400, status: 'recruiting', closes_at: '2099-01-01T00:00:00Z' }
 const button = (view: ReturnType<typeof mount>, text: string) => view.findAll('button').find(b => b.text() === text)!
 

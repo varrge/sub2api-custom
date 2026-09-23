@@ -111,7 +111,7 @@ func TestMonthCardUnpaidOrderCannotFulfill(t *testing.T) {
 
 func TestMonthCardWeChatResumePreservesSignedPurchase(t *testing.T) {
 	svc := NewPaymentResumeService([]byte("month-card-test-signing-key-32-bytes"))
-	claims := WeChatPaymentResumeClaims{OpenID: "test-openid", OrderType: payment.OrderTypeMonthCard, ProductID: 7, Mode: "join", TeamCode: "TEAMCODE", CouponCode: "SAVE10"}
+	claims := WeChatPaymentResumeClaims{OpenID: "test-openid", OrderType: payment.OrderTypeMonthCard, ProductID: 7, Mode: "join", TeamCode: "TEAMCODE", CouponCode: "SAVE10", RulesAccepted: true, RulesPublication: 7, ConsentUserID: 42}
 	token, err := svc.CreateWeChatPaymentResumeToken(claims)
 	require.NoError(t, err)
 	parsed, err := svc.ParseWeChatPaymentResumeToken(token)
@@ -120,6 +120,9 @@ func TestMonthCardWeChatResumePreservesSignedPurchase(t *testing.T) {
 	require.Equal(t, claims.Mode, parsed.Mode)
 	require.Equal(t, claims.TeamCode, parsed.TeamCode)
 	require.Equal(t, claims.CouponCode, parsed.CouponCode)
+	require.Equal(t, claims.RulesAccepted, parsed.RulesAccepted)
+	require.Equal(t, claims.RulesPublication, parsed.RulesPublication)
+	require.Equal(t, claims.ConsentUserID, parsed.ConsentUserID)
 	parts := strings.Split(token, ".")
 	require.Len(t, parts, 2)
 	parsed.TeamCode = "DIFFERENT-TEAM"

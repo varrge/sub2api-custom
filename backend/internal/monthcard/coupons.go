@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/shopspring/decimal"
 )
 
@@ -21,6 +23,7 @@ type Coupon struct {
 	Kind         string     `json:"kind"`
 	Value        float64    `json:"value"`
 	ProductID    *int64     `json:"product_id"`
+	ProductIDs   []int64    `json:"product_ids"`
 	Active       bool       `json:"active"`
 	ExpiresAt    *time.Time `json:"expires_at"`
 	MaxUses      int        `json:"max_uses"`
@@ -43,11 +46,11 @@ type CouponDB interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 }
 
-const couponColumns = `id,code,kind,value,product_id,active,expires_at,max_uses,per_user_limit`
+const couponColumns = `id,code,kind,value,product_id,active,expires_at,max_uses,per_user_limit,product_ids`
 
 func scanCoupon(row rowScanner) (*Coupon, error) {
 	var c Coupon
-	err := row.Scan(&c.ID, &c.Code, &c.Kind, &c.Value, &c.ProductID, &c.Active, &c.ExpiresAt, &c.MaxUses, &c.PerUserLimit)
+	err := row.Scan(&c.ID, &c.Code, &c.Kind, &c.Value, &c.ProductID, &c.Active, &c.ExpiresAt, &c.MaxUses, &c.PerUserLimit, pq.Array(&c.ProductIDs))
 	return &c, err
 }
 
@@ -55,14 +58,34 @@ func couponError(message string) error { return fmt.Errorf("%w：%s", ErrCoupon,
 
 func validateCoupon(c *Coupon) error {
 	c.Code = strings.ToUpper(strings.TrimSpace(c.Code))
-	if !couponCodePattern.MatchString(c.Code) || c.ID < 0 || c.MaxUses < 0 || c.PerUserLimit < 1 || c.MaxUses > 2147483647 || c.PerUserLimit > 2147483647 {
+	if !couponCodePattern.MatchString(c.Code) || c.ID < 0 || c.MaxUses < 0 || c.PerUserLimit < 0 || c.MaxUses > 2147483647 || c.PerUserLimit > 2147483647 {
 		return couponError("请检查优惠码格式和使用次数")
 	}
 	if !validMoney(c.Value) || !decimal.NewFromFloat(c.Value).Equal(decimal.NewFromFloat(c.Value).Round(2)) || (c.Kind != "fixed" && c.Kind != "percent") || (c.Kind == "percent" && c.Value >= 100) {
 		return couponError("减免金额或优惠比例无效")
 	}
-	if c.ProductID != nil && *c.ProductID <= 0 {
-		return couponError("适用商品无效")
+	// A missing list accepts legacy single-product clients; an explicit empty
+	// list means all products. Copy before sorting so callers retain their input.
+	ids := c.ProductIDs
+	if ids == nil && c.ProductID != nil {
+		ids = []int64{*c.ProductID}
+	}
+	if len(ids) > 1000 {
+		return couponError("适用商品最多选择 1000 个")
+	}
+	for _, id := range ids {
+		if id <= 0 {
+			return couponError("适用商品无效")
+		}
+	}
+	c.ProductIDs = append([]int64{}, ids...)
+	slices.Sort(c.ProductIDs)
+	c.ProductIDs = slices.Compact(c.ProductIDs)
+	// Retain a restrictive legacy field for old clients and application rollback.
+	c.ProductID = nil
+	if len(c.ProductIDs) > 0 {
+		id := c.ProductIDs[0]
+		c.ProductID = &id
 	}
 	return nil
 }
@@ -74,7 +97,11 @@ func quoteCoupon(c *Coupon, product Product, now time.Time) (*CouponQuote, error
 	if c.ExpiresAt != nil && !now.Before(*c.ExpiresAt) {
 		return nil, couponError("已过期")
 	}
-	if c.ProductID != nil && *c.ProductID != product.ID {
+	ids := c.ProductIDs
+	if ids == nil && c.ProductID != nil {
+		ids = []int64{*c.ProductID}
+	}
+	if len(ids) > 0 && !slices.Contains(ids, product.ID) {
 		return nil, couponError("不适用于当前商品")
 	}
 	if !validMoney(product.PriceCNY) {
@@ -143,7 +170,7 @@ func checkCouponCapacity(ctx context.Context, db CouponDB, c *Coupon, userID, ex
 	if c.MaxUses > 0 && total >= c.MaxUses {
 		return couponError("使用次数已用完，未支付订单请先取消")
 	}
-	if own >= c.PerUserLimit {
+	if c.PerUserLimit > 0 && own >= c.PerUserLimit {
 		return couponError("你已达到使用次数上限，未支付订单请先取消")
 	}
 	return nil
@@ -276,22 +303,53 @@ func (s *Store) SaveCoupon(ctx context.Context, c *Coupon) error {
 	if err := validateCoupon(c); err != nil {
 		return err
 	}
-	if c.ID == 0 {
-		err := s.db.QueryRowContext(ctx, `INSERT INTO month_card_coupons(code,kind,value,product_id,active,expires_at,max_uses,per_user_limit)
-			VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(code) DO NOTHING RETURNING id`, c.Code, c.Kind, c.Value, c.ProductID, c.Active, c.ExpiresAt, c.MaxUses, c.PerUserLimit).Scan(&c.ID)
-		if errors.Is(err, sql.ErrNoRows) {
-			return couponError("该优惠码已存在")
-		}
-		return err
-	}
-	// Codes are immutable so existing order snapshots remain resolvable.
-	result, err := s.db.ExecContext(ctx, `UPDATE month_card_coupons SET kind=$2,value=$3,product_id=$4,active=$5,expires_at=$6,max_uses=$7,per_user_limit=$8,updated_at=NOW() WHERE id=$1 AND code=$9`, c.ID, c.Kind, c.Value, c.ProductID, c.Active, c.ExpiresAt, c.MaxUses, c.PerUserLimit, c.Code)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	n, err := result.RowsAffected()
-	if err == nil && n == 0 {
-		return couponError("优惠码不存在或编号已变更")
+	defer func() { _ = tx.Rollback() }()
+	if len(c.ProductIDs) > 0 {
+		// Validate every selected product, including ones not currently for sale.
+		// Keep the rows locked until the coupon save commits.
+		rows, err := tx.QueryContext(ctx, `SELECT id FROM month_card_products WHERE id=ANY($1) ORDER BY id FOR KEY SHARE`, pq.Array(c.ProductIDs))
+		if err != nil {
+			return err
+		}
+		count := 0
+		for rows.Next() {
+			count++
+		}
+		err = rows.Err()
+		_ = rows.Close()
+		if err != nil {
+			return err
+		}
+		if count != len(c.ProductIDs) {
+			return couponError("适用商品不存在，请刷新后重试")
+		}
 	}
-	return err
+	if c.ID == 0 {
+		err = tx.QueryRowContext(ctx, `INSERT INTO month_card_coupons(code,kind,value,product_id,active,expires_at,max_uses,per_user_limit,product_ids)
+			VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(code) DO NOTHING RETURNING id`, c.Code, c.Kind, c.Value, c.ProductID, c.Active, c.ExpiresAt, c.MaxUses, c.PerUserLimit, pq.Array(c.ProductIDs)).Scan(&c.ID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return couponError("该优惠码已存在")
+		}
+		if err != nil {
+			return err
+		}
+	} else {
+		// Codes are immutable so existing order snapshots remain resolvable.
+		result, err := tx.ExecContext(ctx, `UPDATE month_card_coupons SET kind=$2,value=$3,product_id=$4,active=$5,expires_at=$6,max_uses=$7,per_user_limit=$8,product_ids=$10,updated_at=NOW() WHERE id=$1 AND code=$9`, c.ID, c.Kind, c.Value, c.ProductID, c.Active, c.ExpiresAt, c.MaxUses, c.PerUserLimit, c.Code, pq.Array(c.ProductIDs))
+		if err != nil {
+			return err
+		}
+		n, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return couponError("优惠码不存在或编号已变更")
+		}
+	}
+	return tx.Commit()
 }

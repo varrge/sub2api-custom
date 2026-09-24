@@ -84,6 +84,7 @@ export interface MonthCardCoupon {
   kind: 'fixed' | 'percent'
   value: number
   product_id: number | null
+  product_ids?: number[]
   active: boolean
   expires_at: string | null
   max_uses: number

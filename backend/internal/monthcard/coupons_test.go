@@ -73,6 +73,10 @@ func couponPostgres(t *testing.T) (*Store, *sql.DB, Product, Coupon) {
 	require.NoError(t, err)
 	_, err = db.Exec(string(migration))
 	require.NoError(t, err)
+	migration, err = os.ReadFile(filepath.Join("..", "..", "migrations", "248_month_card_coupon_product_scope.sql"))
+	require.NoError(t, err)
+	_, err = db.Exec(string(migration))
+	require.NoError(t, err)
 	p := coreSave(t, s, Product{GroupID: 1, Name: "Monthly", PriceCNY: 198, BaseQuotaUSD: 940, MaxMembers: 10, RecruitmentHours: 48, ForSale: true, Tiers: []Tier{{Members: 3, QuotaUSD: 960}}})
 	c := Coupon{Code: "SAVE10", Kind: "percent", Value: 10, Active: true, MaxUses: 1, PerUserLimit: 1}
 	require.NoError(t, s.SaveCoupon(context.Background(), &c))
@@ -102,8 +106,10 @@ func TestCouponPostgresConcurrentReservations(t *testing.T) {
 		name     string
 		max, per int
 		sameUser bool
+		want     int32
 	}{
-		{"global_limit", 2, 10, false}, {"per_user_limit", 0, 2, true},
+		{"global_limit", 2, 10, false, 2}, {"per_user_limit", 0, 2, true, 2},
+		{"unlimited_per_user_global_cap", 2, 0, true, 2}, {"both_unlimited", 0, 0, true, 12},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := db.Exec(`DELETE FROM month_card_coupon_uses`)
@@ -133,7 +139,7 @@ func TestCouponPostgresConcurrentReservations(t *testing.T) {
 			}
 			wg.Wait()
 			close(errs)
-			require.Equal(t, int32(2), successes.Load())
+			require.Equal(t, tc.want, successes.Load())
 			for err := range errs {
 				require.ErrorIs(t, err, ErrCoupon)
 			}

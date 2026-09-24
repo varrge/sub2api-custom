@@ -262,7 +262,8 @@ func (h *GroupBuyHandler) AdminCoupons(c *gin.Context) {
 }
 
 func (h *GroupBuyHandler) SaveCoupon(c *gin.Context) {
-	var coupon monthcard.Coupon
+	// Omission keeps the default cap; an explicit zero opts into unlimited uses.
+	coupon := monthcard.Coupon{PerUserLimit: 1}
 	if err := c.ShouldBindJSON(&coupon); err != nil {
 		response.BadRequest(c, "优惠码参数无效")
 		return

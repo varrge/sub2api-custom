@@ -116,6 +116,7 @@
                     <dt class="text-gray-500 dark:text-gray-400">{{ t('payment.paymentAmount') }}</dt>
                     <dd class="gb-accent text-xl font-bold">
                       <span v-if="appliedCoupon" class="mr-2 text-sm font-normal text-gray-400 line-through">{{ cny(appliedCoupon.original_cny) }}</span>{{ cny(monthCardAmount) }}
+                      <p v-if="appliedCoupon" data-test="coupon-savings" class="mt-0.5 text-right text-xs font-medium text-green-600 dark:text-green-400">{{ t('groupBuy.couponSavings', { amount: cny(appliedCoupon.discount_cny) }) }}</p>
                     </dd>
                   </div>
                   <div class="flex justify-between">
@@ -132,7 +133,7 @@
                   </div>
                 </dl>
                 <template v-if="selectedMonthCard.mode !== 'solo'">
-                  <QuotaLadder :product="selectedMonthCard.product" />
+                  <QuotaLadder :product="selectedMonthCard.product" :amount-cny="monthCardAmount" :original-amount-cny="appliedCoupon?.original_cny" />
                   <div class="gb-strip space-y-1 p-3 text-sm text-gray-700 dark:text-gray-300">
                     <p>{{ t('groupBuy.maxMembers') }}: {{ selectedMonthCard.product.max_members }} · {{ t('groupBuy.recruitmentHours') }}: {{ selectedMonthCard.product.recruitment_hours }}</p>
                     <p v-if="selectedMonthCard.team">{{ t('groupBuy.closes') }}: {{ exactDate(selectedMonthCard.team.closes_at) }}</p>

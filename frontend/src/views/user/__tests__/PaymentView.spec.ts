@@ -7,6 +7,7 @@ import AmountInput from '@/components/payment/AmountInput.vue'
 import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
 import ProductCatalog from '@/features/group-buy/ProductCatalog.vue'
 import CouponEntry from '@/features/group-buy/CouponEntry.vue'
+import QuotaLadder from '@/features/group-buy/QuotaLadder.vue'
 import PurchaseRulesConsent from '@/features/group-buy/PurchaseRulesConsent.vue'
 import type { GroupBuyProduct, GroupBuyTeam } from '@/types/groupBuy'
 import en from '@/i18n/locales/en'
@@ -280,7 +281,7 @@ async function mountSubscriptionConfirm(options: Parameters<typeof checkoutInfoW
   return wrapper
 }
 
-async function mountSubscriptionPlanList(planCount: number, rates: Record<number, number> | Error = {}, tab = 'subscription') {
+async function mountSubscriptionPlanList(planCount: number, rates: Record<number, number> | Error = {}, tab = 'subscription', renderQuotaLadder = false) {
   vi.useRealTimers()
   routeState.path = '/purchase'
   routeState.query = { tab }
@@ -317,6 +318,7 @@ async function mountSubscriptionPlanList(planCount: number, rates: Record<number
         },
         Teleport: true,
         Transition: false,
+        ...(renderQuotaLadder ? { QuotaLadder: false } : {}),
       },
     },
   })
@@ -900,6 +902,73 @@ describe('independent month-card checkout', () => {
     expect(wrapper.get('span.line-through').text()).toBe('¥198.00')
     await wrapper.get('button.btn-primary.w-full').trigger('click')
     expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ amount: 178.2, coupon_code: 'SAVE10', order_type: 'month_card', product_id: 41, mode: 'create' }))
+    wrapper.unmount()
+  })
+
+  it.each([
+    { code: 'SAVE10', discount: 19.8, amount: 178.2, expected: ['0.2520', '0.2430', '0.2340', '0.2250'] },
+    { code: 'MINUS20', discount: 20, amount: 178, expected: ['0.2517', '0.2427', '0.2337', '0.2247'] }
+  ])('updates every displayed quota rate for $code and restores it on removal', async ({ code, discount, amount, expected }) => {
+    const currentProduct = { ...product, base_quota_usd: 707.14, tiers: [
+      { members: 3, quota_usd: 733.33 }, { members: 5, quota_usd: 761.53 }, { members: 10, quota_usd: 792 }
+    ] }
+    const wrapper = await mountSubscriptionPlanList(0, {}, 'group-buy', true)
+    wrapper.getComponent(ProductCatalog).vm.$emit('select', { product: currentProduct, mode: 'create' })
+    await flushPromises()
+    const ladder = wrapper.getComponent(QuotaLadder)
+    const rates = () => ladder.findAll('tbody tr').map(row => row.findAll('td')[2].text())
+    const quotas = () => ladder.findAll('tbody tr').map(row => row.findAll('td').slice(0, 2).map(cell => cell.text()))
+    const beforeQuotas = quotas()
+    expect(rates()).toEqual(['0.2800', '0.2700', '0.2600', '0.2500'])
+    const coupon = wrapper.getComponent(CouponEntry)
+    coupon.vm.$emit('update:modelValue', { coupon_id: 1, code, original_cny: 198, discount_cny: discount, amount_cny: amount })
+    await flushPromises()
+    expect(wrapper.text()).toContain(`¥${amount.toFixed(2)}`)
+    for (const [i, rate] of expected.entries()) expect(rates()[i]).toContain(rate)
+    expect(quotas()).toEqual(beforeQuotas)
+    expect(currentProduct.price_cny).toBe(198)
+    coupon.vm.$emit('update:modelValue', null)
+    await flushPromises()
+    expect(rates()).toEqual(['0.2800', '0.2700', '0.2600', '0.2500'])
+    expect(quotas()).toEqual(beforeQuotas)
+    wrapper.unmount()
+  })
+
+  it('uses the validated quote when the listed price changed after the catalog loaded', async () => {
+    const wrapper = await mountSubscriptionPlanList(0, {}, 'group-buy', true)
+    const currentProduct = { ...product, base_quota_usd: 1000, tiers: [] }
+    wrapper.getComponent(ProductCatalog).vm.$emit('select', { product: currentProduct, mode: 'create' })
+    await flushPromises()
+    wrapper.getComponent(CouponEntry).vm.$emit('update:modelValue', {
+      coupon_id: 1, code: 'SAVE10', original_cny: 300, discount_cny: 30, amount_cny: 270
+    })
+    await flushPromises()
+    const ladder = wrapper.getComponent(QuotaLadder)
+    expect(ladder.get('[data-test="original-rate"]').text()).toContain('0.3000')
+    expect(ladder.get('[data-test="current-rate"]').text()).toContain('0.2700')
+    expect(wrapper.text()).toContain('¥270.00')
+    expect(wrapper.get('span.line-through').text()).toBe('¥300.00')
+    expect(currentProduct.price_cny).toBe(198)
+    wrapper.unmount()
+  })
+
+  it('uses the frozen team price for discounted rates and resets them for another purchase', async () => {
+    const wrapper = await mountSubscriptionPlanList(0, {}, 'group-buy', true)
+    wrapper.getComponent(ProductCatalog).vm.$emit('select', { product: team.product, team, mode: 'join' })
+    await flushPromises()
+    const coupon = wrapper.getComponent(CouponEntry)
+    coupon.vm.$emit('update:modelValue', { coupon_id: 1, code: 'SAVE10', original_cny: 188, discount_cny: 18.8, amount_cny: 169.2 })
+    await flushPromises()
+    const ladder = wrapper.getComponent(QuotaLadder)
+    expect(ladder.findAll('tbody tr')[0].findAll('td')[2].text()).toContain('0.1800')
+    expect(ladder.findAll('tbody tr')[1].findAll('td')[2].text()).toContain('0.1692')
+    expect(team.product.price_cny).toBe(188)
+    await wrapper.get('button.btn-secondary.w-full').trigger('click')
+    wrapper.getComponent(ProductCatalog).vm.$emit('select', { product, mode: 'create' })
+    await flushPromises()
+    expect(wrapper.getComponent(CouponEntry).props('modelValue')).toBeNull()
+    expect(wrapper.getComponent(QuotaLadder).findAll('tbody tr')[0].findAll('td')[2].text()).toBe('0.2106')
+    expect(wrapper.text()).not.toContain('¥169.20')
     wrapper.unmount()
   })
 

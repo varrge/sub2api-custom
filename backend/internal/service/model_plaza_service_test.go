@@ -114,13 +114,15 @@ func TestListPlazaGroups_AllowlistUsesGatewayAliases(t *testing.T) {
 func TestListPlazaGroups_CatalogMetadata(t *testing.T) {
 	pricing := &PricingService{cfg: &config.Config{}}
 	data, err := pricing.parsePricingData([]byte(`{
-		"claude-sonnet-4.5": {"input_cost_per_token":0.000003,"output_cost_per_token":0.000015,"max_input_tokens":200000,"max_output_tokens":64000,"supports_vision":true,"mode":"chat"},
+		"claude-sonnet-4.5": {"input_cost_per_token":0.000003,"output_cost_per_token":0.000015,"cache_creation_input_token_cost":0,"max_input_tokens":200000,"max_output_tokens":64000,"supports_vision":true,"mode":"chat"},
 		"plain-model": {"input_cost_per_token":0.000001,"max_input_tokens":-1,"max_output_tokens":0,"supports_vision":false},
 		"no-metadata": {"input_cost_per_token":0.000002},
 		"malformed-metadata": {"input_cost_per_token":0.000007,"max_input_tokens":"unknown"}
 	}`))
 	require.NoError(t, err)
 	pricing.pricingData = data
+	require.True(t, data["claude-sonnet-4.5"].CacheCreationInputTokenCostExplicit)
+	require.Zero(t, data["claude-sonnet-4.5"].CacheCreationInputTokenCost)
 	require.Equal(t, 7e-6, data["malformed-metadata"].InputCostPerToken)
 	require.Nil(t, data["malformed-metadata"].MaxInputTokens)
 	svc := newPlazaService([]Channel{
@@ -179,17 +181,14 @@ func TestPlazaDisplayPricing_PreservesOneHourCachePrice(t *testing.T) {
 	}
 }
 
-func TestWithDefaultMaxReasoningEffortMultiplier_Fable51(t *testing.T) {
-	base := &ChannelModelPricing{BillingMode: BillingModeToken}
-	got := withDefaultMaxReasoningEffortMultiplier(base, "claude-fable-5-1")
-	require.NotSame(t, base, got)
-	require.NotNil(t, got.MaxReasoningEffortMultiplier)
-	require.Equal(t, 3.0, *got.MaxReasoningEffortMultiplier)
-	require.Nil(t, base.MaxReasoningEffortMultiplier)
-
-	configured := 1.25
-	custom := &ChannelModelPricing{MaxReasoningEffortMultiplier: &configured}
-	require.Same(t, custom, withDefaultMaxReasoningEffortMultiplier(custom, "claude-fable-5-1"))
+func TestListPlazaGroups_Fable51HasNoImplicitReasoningMultiplier(t *testing.T) {
+	ch := plazaPricedChannel(1, "ch", []int64{10}, "anthropic", "claude-fable-5-1")
+	svc := newPlazaService([]Channel{ch}, []Group{{ID: 10, Platform: "anthropic"}}, nil)
+	groups, err := svc.ListGroups(context.Background())
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	require.Len(t, groups[0].Models, 1)
+	require.Empty(t, groups[0].Models[0].Pricing.ReasoningEffortMultipliers)
 }
 
 func TestListPlazaGroups_DedupFirstWinsWithPricingUpgrade(t *testing.T) {

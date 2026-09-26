@@ -63,17 +63,23 @@ assert(release_ci['uses'] == './.github/workflows/backend-ci.yml', 'Release must
 assert(release_ci['needs'] == ['resolve-ref'], 'CI must wait for tag resolution')
 assert(release_ci.fetch('with').fetch('ref') == '${{ needs.resolve-ref.outputs.sha }}', 'CI must validate the resolved commit')
 publish = release_jobs.fetch('release')
-assert(publish.fetch('needs').sort == %w[resolve-ref ci update-version build-frontend].sort, 'Publishing must require CI and all build inputs')
+assert(publish.fetch('needs').sort == %w[prepare ci build-binaries].sort, 'Publishing must require CI and all build inputs')
 assert(publish['if'] == "${{ needs.ci.result == 'success' }}", 'Publishing must explicitly require successful CI')
 assert(release.fetch('permissions') == { 'contents' => 'read' }, 'Preparatory jobs must have read-only permissions')
 assert(publish.fetch('permissions') == { 'contents' => 'write', 'packages' => 'write' }, 'Only publishing needs write permissions')
-%w[update-version build-frontend release].each do |name|
+prepare = release_jobs.fetch('prepare')
+assert(prepare.fetch('needs') == ['resolve-ref'], 'Matrix preparation must wait for tag resolution')
+source_checkout = prepare.fetch('steps').find { |step| step['name'] == 'Checkout selected application source' }
+assert(source_checkout.fetch('with').fetch('ref') == '${{ needs.resolve-ref.outputs.sha }}', 'Matrix preparation must use the pinned source')
+assert(release_jobs.fetch('build-binaries').fetch('needs').sort == %w[prepare build-frontend].sort, 'Binary builds must require the prepared source and frontend')
+assert(!release_jobs.key?('sync-version-file'), 'Release must not overwrite an unrelated default branch')
+%w[build-frontend build-binaries release].each do |name|
   job = release_jobs.fetch(name)
-  assert(job.fetch('needs').include?('resolve-ref'), "#{name} must wait for tag resolution")
-  assert(checkout(job).fetch('with').fetch('ref') == '${{ needs.resolve-ref.outputs.sha }}', "#{name} must build the commit CI validated")
+  assert(Array(job.fetch('needs')).include?('prepare'), "#{name} must wait for source preparation")
+  assert(checkout(job).fetch('with').fetch('ref') == '${{ needs.prepare.outputs.sha }}', "#{name} must build the commit CI validated")
 end
 goreleaser = publish.fetch('steps').find { |step| step['uses'].to_s.start_with?('goreleaser/goreleaser-action@') }
-assert(goreleaser.fetch('env').fetch('GORELEASER_CURRENT_TAG') == '${{ needs.resolve-ref.outputs.tag }}', 'GoReleaser must publish the requested tag even during manual runs')
+assert(goreleaser.fetch('env').fetch('GORELEASER_CURRENT_TAG') == '${{ needs.prepare.outputs.tag }}', 'GoReleaser must publish the requested tag even during manual runs')
 
 resolver = release_jobs.fetch('resolve-ref')
 validation = resolver.fetch('steps').find { |step| step['id'] == 'tag' }
@@ -85,6 +91,20 @@ Dir.mktmpdir('release-policy') do |dir|
     assert(status.success? == %w[v1.2.3 v0.2.7-custom.7 v2.0.0-rc.1].include?(tag), "Incorrect tag validation: #{tag.inspect}")
   end
 end
+
+# Dry runs may select a branch while real publication remains tag-only.
+Dir.mktmpdir('release-dry-run-policy') do |dir|
+  output = File.join(dir, 'output')
+  _, _, status = Open3.capture3({ 'RELEASE_TAG' => 'custom/0.2.8', 'DRY_RUN' => 'true', 'GITHUB_OUTPUT' => output }, '/bin/bash', '-e', '-c', validation.fetch('run'))
+  assert(status.success? && File.read(output).include?('ref=custom/0.2.8'), 'Dry runs must support candidate branches')
+end
+steps = publish.fetch('steps')
+verify_index = steps.index { |step| step['name'] == 'Verify release tag still points to the validated commit' }
+images_index = steps.index { |step| step['name'] == 'Build images and publish manifests' }
+release_index = steps.index(goreleaser)
+assert(verify_index < images_index && verify_index < release_index, 'Tag verification must precede every publication step')
+assert(steps[verify_index]['if'] == "${{ env.DRY_RUN != 'true' }}", 'Branch dry runs must not require a release tag')
+assert(publish.fetch('env').fetch('RELEASE_SHA') == '${{ needs.prepare.outputs.sha }}', 'Publication must verify the prepared source SHA')
 
 # Execute the workflow's own pin and publication checks against real Git refs.
 pin_script = resolver.fetch('steps').find { |step| step['id'] == 'commit' }.fetch('run')

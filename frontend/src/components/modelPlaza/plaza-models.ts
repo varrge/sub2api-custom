@@ -1,5 +1,5 @@
 import type { ModelPlazaGroup, PlazaModel, PlazaOfficialPricing } from '@/api/modelPlaza'
-import type { BillingMode } from '@/constants/channel'
+import { REASONING_EFFORT_LEVELS, type BillingMode } from '@/constants/channel'
 import type { GroupPlatform } from '@/types'
 import { effectiveGroupRate } from '@/utils/temporary-rate'
 
@@ -77,6 +77,16 @@ export interface PlazaPriceCell {
   price: number | null
   original: number | null
   unitKey: string
+}
+
+export function reasoningEffortMultipliers(model: PlazaModel): [string, number][] {
+  const multipliers = model.pricing?.reasoning_effort_multipliers
+  return REASONING_EFFORT_LEVELS.flatMap(effort => {
+    const multiplier = multipliers?.[effort]
+    return typeof multiplier === 'number' && Number.isFinite(multiplier) && multiplier > 0
+      ? [[effort, multiplier] as [string, number]]
+      : []
+  })
 }
 
 /** The backend resolves official defaults and channel/group overrides before applying multipliers. */

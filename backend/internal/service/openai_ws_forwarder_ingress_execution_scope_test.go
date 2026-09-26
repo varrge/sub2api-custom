@@ -327,24 +327,28 @@ func runOpenAIWSCodexThreadPair(t *testing.T, threadA, threadB string, delayPree
 	close(gatedConn.gate)
 
 	readCtxA, cancelA := context.WithTimeout(context.Background(), 5*time.Second)
-	_, completedA, aReadErr := connA.Read(readCtxA)
-	cancelA()
-	if delayPreemptClose {
-		releaseClose()
-		require.NoError(t, aReadErr, "fixture must deliver the completed response before the close frame")
-	}
-	if aReadErr == nil {
-		require.Equal(t, "resp_thread_a", gjson.GetBytes(completedA, "response.id").String())
-		if threadA == threadB {
-			// The in-flight completion and asynchronous preemption notification
-			// may arrive in either order. Do not initiate a normal close here:
-			// keep reading and require the server's preemption close below.
-			closeCtx, cancelClose := context.WithTimeout(context.Background(), 5*time.Second)
-			_, _, aReadErr = connA.Read(closeCtx)
-			cancelClose()
-		} else {
-			require.NoError(t, connA.Close(coderws.StatusNormalClosure, "done"))
+	defer cancelA()
+	awaitingGatedCompletion := delayPreemptClose
+	for {
+		var completedA []byte
+		_, completedA, aReadErr = connA.Read(readCtxA)
+		if awaitingGatedCompletion {
+			require.NoError(t, aReadErr, "fixture must deliver the completed response before the close frame")
+			releaseClose()
+			awaitingGatedCompletion = false
 		}
+		if aReadErr != nil {
+			break
+		}
+		require.Equal(t, "resp_thread_a", gjson.GetBytes(completedA, "response.id").String())
+		if threadA != threadB {
+			break
+		}
+		// 抢占关闭帧异步发送，已在飞的响应可能先到达；同线程必须继续读到关闭帧。
+	}
+	cancelA()
+	if aReadErr == nil {
+		require.NoError(t, connA.Close(coderws.StatusNormalClosure, "done"))
 	}
 	require.NoError(t, connB.Close(coderws.StatusNormalClosure, "done"))
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/monthcard"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
@@ -17,7 +18,7 @@ func (s *APIKeyService) SetMonthCardStore(store *monthcard.Store)       { s.mont
 
 // RefreshMonthCardAdmission begins a new billable turn of a long-lived session.
 func (s *BillingCacheService) RefreshMonthCardAdmission(ctx context.Context, userID int64, group *Group, previous *UserSubscription) (*UserSubscription, error) {
-	if s == nil || s.monthCardStore == nil || group == nil || !group.IsSubscriptionType() {
+	if s == nil || (s.cfg != nil && s.cfg.RunMode == config.RunModeSimple) || s.monthCardStore == nil || group == nil || !group.IsSubscriptionType() {
 		return previous, nil
 	}
 	snap, err := s.monthCardStore.Admit(ctx, userID, group.ID, time.Now())

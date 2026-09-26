@@ -28,10 +28,13 @@ function group(overrides: Partial<ModelPlazaGroup> = {}): ModelPlazaGroup {
   }
 }
 describe('catalog prices', () => {
-  it('retains the upstream max reasoning notice while showing normal base prices', () => {
-    const m = model({ pricing: { ...model().pricing!, max_reasoning_effort_multiplier: 3 } })
+  it('shows every configured reasoning multiplier in level order while retaining normal base prices', () => {
+    const m = model({ pricing: { ...model().pricing!, reasoning_effort_multipliers: { max: 3, high: 1.5, low: 0, medium: NaN, unknown: 2 } } })
     const wrapper = mount(PlazaModelCard, { props: { model: aggregatePlazaModels([group({ models: [m] })])[0], priceGroupId: 1 } })
-    expect(wrapper.text()).toContain('modelPlaza.table.maxReasoningMultiplierBadge')
+    const badges = wrapper.findAll('[data-reasoning-effort]')
+    expect(badges.map(badge => badge.attributes('data-reasoning-effort'))).toEqual(['high', 'max'])
+    expect(badges[0].text()).toContain('\"multiplier\":1.5')
+    expect(badges[1].attributes('title')).toContain('\"multiplier\":3')
     expect(wrapper.text()).toContain('modelPlaza.catalog.baseTierNote')
     expect(wrapper.get('[data-price="input_price"]').text()).toBe('$1')
     wrapper.unmount()

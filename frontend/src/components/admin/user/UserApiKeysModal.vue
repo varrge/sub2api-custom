@@ -83,27 +83,36 @@ const selectedGroupIds = ref<number[]>([])
 const selectedModelAllowlist = ref<ApiKeyModelAllowlist>({ enabled: false, models: [] })
 const saving = ref(false)
 let loadGeneration = 0
+let groupsGeneration = 0
 
 const loadGroups = async () => {
   const userId = props.user?.id
-  if (!userId) return
+  if (!props.show || !userId) return
+  const generation = loadGeneration
+  const request = ++groupsGeneration
+  const isCurrentRequest = () => generation === loadGeneration && request === groupsGeneration
   groupsLoading.value = true
   groupsFailed.value = false
   availableGroups.value = []
   try {
     const groups = await adminAPI.users.getAvailableGroups(userId)
-    if (props.user?.id === userId) availableGroups.value = groups
+    if (isCurrentRequest()) availableGroups.value = groups
   } catch {
-    if (props.user?.id === userId) groupsFailed.value = true
+    if (isCurrentRequest()) groupsFailed.value = true
   } finally {
-    if (props.user?.id === userId) groupsLoading.value = false
+    if (isCurrentRequest()) groupsLoading.value = false
   }
 }
 
-watch(() => [props.show, props.user?.id] as const, async ([show, userId]) => {
+watch(() => [props.show, props.user?.id] as const, async ([show, userId], _, onCleanup) => {
+  onCleanup(() => { loadGeneration++ })
   const generation = ++loadGeneration
   selectedKey.value = null
   apiKeys.value = []
+  availableGroups.value = []
+  groupsLoading.value = false
+  groupsFailed.value = false
+  loading.value = false
   if (!show || !userId) return
   loading.value = true
   const groupsPromise = loadGroups()

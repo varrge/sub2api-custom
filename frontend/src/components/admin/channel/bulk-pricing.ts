@@ -19,10 +19,10 @@ function modelKey(model: string): string {
 
 function hasOverrides(entry: PricingFormEntry): boolean {
   return entry.billing_mode !== 'token' ||
-    [...priceFields, 'per_request_price', 'fast_multiplier', 'flex_multiplier', 'max_reasoning_effort_multiplier'].some((field) => {
+    [...priceFields, 'per_request_price', 'fast_multiplier', 'flex_multiplier'].some((field) => {
       const value = entry[field as keyof PricingFormEntry]
       return value !== null && value !== undefined && value !== ''
-    }) || entry.intervals.length > 0 || entry.time_pricing.periods.length > 0
+    }) || Object.values(entry.reasoning_effort_multipliers || {}).some(multiplier => multiplier !== '') || entry.intervals.length > 0 || entry.time_pricing.periods.length > 0
 }
 
 /** Do not replace custom prices (including zero), media rules, or wildcard rules. */
@@ -72,7 +72,7 @@ export function mergeDefaultPricing(entries: PricingFormEntry[], rows: DefaultPr
       image_output_price: perTokenToMTok(pricing.image_output_price ?? null),
       fast_multiplier: null,
       flex_multiplier: null,
-      max_reasoning_effort_multiplier: pricing.max_reasoning_effort_multiplier ?? null,
+      reasoning_effort_multipliers: pricing.reasoning_effort_multipliers ? { ...pricing.reasoning_effort_multipliers } : null,
       per_request_price: null,
       intervals: [],
       time_pricing: createDefaultTimePricingForm()

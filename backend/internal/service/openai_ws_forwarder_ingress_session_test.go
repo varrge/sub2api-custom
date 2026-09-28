@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -2197,6 +2198,16 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_StoreDisabledPre
 }
 
 func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_StoreDisabledFunctionCallOutputAutoAttachPreviousResponseID(t *testing.T) {
+	runIngressBillingResponseIDCase(t, false, false)
+}
+
+func TestOpenAIWSIngress_MonthCardBillingIDDoesNotChangeResponseChain(t *testing.T) {
+	t.Run("same context window", func(t *testing.T) { runIngressBillingResponseIDCase(t, true, false) })
+	t.Run("new context window", func(t *testing.T) { runIngressBillingResponseIDCase(t, true, true) })
+}
+
+func runIngressBillingResponseIDCase(t *testing.T, rewriteBillingID, rollover bool) {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 
 	cfg := &config.Config{}
@@ -2249,6 +2260,17 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_StoreDisabledFun
 		},
 	}
 
+	var billingIDs []string
+	var hooks *OpenAIWSIngressHooks
+	if rewriteBillingID {
+		hooks = &OpenAIWSIngressHooks{AfterTurn: func(turn int, result *OpenAIForwardResult, turnErr error) {
+			if turnErr == nil && result != nil {
+				// The month-card handler assigns an independent settlement ID.
+				result.RequestID = fmt.Sprintf("ws-turn:test:%d", turn)
+				billingIDs = append(billingIDs, result.RequestID)
+			}
+		}}
+	}
 	serverErrCh := make(chan error, 1)
 	wsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := coderws.Accept(w, r, &coderws.AcceptOptions{
@@ -2281,7 +2303,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_StoreDisabledFun
 			return
 		}
 
-		serverErrCh <- svc.ProxyResponsesWebSocketFromClient(r.Context(), ginCtx, conn, account, "sk-test", firstMessage, nil)
+		serverErrCh <- svc.ProxyResponsesWebSocketFromClient(r.Context(), ginCtx, conn, account, "sk-test", firstMessage, hooks)
 	}))
 	defer wsServer.Close()
 
@@ -2307,11 +2329,15 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_StoreDisabledFun
 		return message
 	}
 
-	writeMessage(`{"type":"response.create","model":"gpt-5.1","stream":false,"store":false,"input":[{"type":"input_text","text":"hello"}]}`)
+	writeMessage(`{"type":"response.create","model":"gpt-5.1","stream":false,"store":false,"client_metadata":{"x-codex-window-id":"window-a"},"input":[{"type":"input_text","text":"hello"}]}`)
 	firstTurn := readMessage()
 	require.Equal(t, "resp_auto_prev_1", gjson.GetBytes(firstTurn, "response.id").String())
 
-	writeMessage(`{"type":"response.create","model":"gpt-5.1","stream":false,"store":false,"input":[{"type":"function_call_output","call_id":"call_auto_1","output":"ok"}]}`)
+	secondPayload := `{"type":"response.create","model":"gpt-5.1","stream":false,"store":false,"client_metadata":{"x-codex-window-id":"window-a"},"input":[{"type":"function_call_output","call_id":"call_auto_1","output":"ok"}]}`
+	if rollover {
+		secondPayload = `{"type":"response.create","model":"gpt-5.1","stream":false,"store":false,"client_metadata":{"x-codex-window-id":"window-b"},"previous_response_id":"resp_auto_prev_1","input":[{"type":"input_text","text":"new context"}]}`
+	}
+	writeMessage(secondPayload)
 	secondTurn := readMessage()
 	require.Equal(t, "resp_auto_prev_2", gjson.GetBytes(secondTurn, "response.id").String())
 
@@ -2325,7 +2351,15 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_StoreDisabledFun
 
 	require.Equal(t, 1, captureDialer.DialCount())
 	require.Len(t, captureConn.writes, 2)
-	require.Equal(t, "resp_auto_prev_1", gjson.Get(requestToJSONString(captureConn.writes[1]), "previous_response_id").String(), "function_call_output 缺失 previous_response_id 时应回填上一轮响应 ID")
+	previousID := gjson.Get(requestToJSONString(captureConn.writes[1]), "previous_response_id")
+	if rollover {
+		require.False(t, previousID.Exists(), "a new context window must not continue the old response")
+	} else {
+		require.Equal(t, "resp_auto_prev_1", previousID.String(), "tool output must continue the upstream response, never its billing ID")
+	}
+	if rewriteBillingID {
+		require.Equal(t, []string{"ws-turn:test:1", "ws-turn:test:2"}, billingIDs)
+	}
 }
 
 func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_StoreDisabledToolSearchOutputAutoAttachesPreviousResponseID(t *testing.T) {

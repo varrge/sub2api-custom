@@ -24,10 +24,30 @@ function group(overrides: Partial<ModelPlazaGroup> = {}): ModelPlazaGroup {
     temporary_rate_starts_at: null, temporary_rate_ends_at: null, peak_rate_enabled: false,
     peak_start: '', peak_end: '', peak_rate_multiplier: 1, is_exclusive: false,
     image_rate_independent: false, image_rate_multiplier: 1, long_context_pricing_enabled: true,
+    video_rate_independent: false, video_rate_multiplier: 1,
     models: [model()], ...overrides
   }
 }
 describe('catalog prices', () => {
+  it.each([0, -1, 0.5])('keeps card and details video prices consistent at independent rate %s', (rate) => {
+    const video = model({ name: 'video', pricing: { ...model().pricing!, billing_mode: 'video', per_request_price: 2 } })
+    const entry = group({ models: [video], rate_multiplier: 0.15, user_rate_multiplier: 0.05,
+      image_rate_independent: true, image_rate_multiplier: 9,
+      video_rate_independent: true, video_rate_multiplier: rate })
+    const expected = 2 * Math.max(0, rate)
+    const variant = aggregatePlazaModels([entry])[0].variants[0]
+    expect(modelPriceCells(variant)[0].price).toBe(expected)
+    const details = mount(PlazaModelPricingTable, { props: {
+      models: [video], rateMultiplier: entry.rate_multiplier, userRateMultiplier: entry.user_rate_multiplier,
+      imageRateIndependent: true, imageRateMultiplier: 9,
+      videoRateIndependent: true, videoRateMultiplier: rate
+    } })
+    try {
+      expect(details.find('tbody tr').findAll('td')[1].text()).toContain(`$${expected.toFixed(2)}`)
+    } finally {
+      details.unmount()
+    }
+  })
   it('shows every configured reasoning multiplier in level order while retaining normal base prices', () => {
     const m = model({ pricing: { ...model().pricing!, reasoning_effort_multipliers: { max: 3, high: 1.5, low: 0, medium: NaN, unknown: 2 } } })
     const wrapper = mount(PlazaModelCard, { props: { model: aggregatePlazaModels([group({ models: [m] })])[0], priceGroupId: 1 } })

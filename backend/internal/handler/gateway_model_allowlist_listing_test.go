@@ -63,6 +63,47 @@ func TestGatewayModels_ModelAllowlistWildcardExpandsAgainstSource(t *testing.T) 
 	require.Equal(t, []string{"gpt-5.5-codex", "gpt-5.5-mini", "gpt-5.4"}, modelIDsForTest(got.Data))
 }
 
+// Group globs must not widen the independent, exact per-key allow/deny filter.
+func TestGatewayModels_GroupGlobStillNarrowsExactKeyPermissions(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	groupID := int64(31)
+	for _, pattern := range []string{"*-codex", "gpt-*-codex"} {
+		for _, mode := range []string{"allow", "deny"} {
+			t.Run(pattern+"/"+mode, func(t *testing.T) {
+				h := newGatewayModelsHandlerForTest(&gatewayModelsAccountRepoStub{
+					byGroup: map[int64][]service.Account{groupID: {{
+						ID: 1, Platform: service.PlatformOpenAI,
+						Credentials: map[string]any{"model_mapping": map[string]any{
+							"gpt-5.4-codex": "gpt-5.4-codex", "gpt-5.5-codex": "gpt-5.5-codex", "other-foo": "other-foo",
+						}},
+					}}},
+				})
+				keyModels := []string{"gpt-5.5-codex", "other-foo"}
+				if mode == "deny" {
+					keyModels = []string{"gpt-5.4-codex"}
+				}
+				key := &service.APIKey{
+					GroupID: &groupID,
+					Group: &service.Group{ID: groupID, Platform: service.PlatformOpenAI,
+						ModelAllowlist: service.GroupModelAllowlist{Enabled: true, Models: []string{pattern}}},
+					ModelAllowlist: service.GroupModelAllowlist{Enabled: true, Mode: mode, Models: keyModels},
+				}
+				rec := httptest.NewRecorder()
+				c, _ := gin.CreateTestContext(rec)
+				c.Request = httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+				c.Set(string(middleware2.ContextKeyAPIKey), key)
+				h.Models(c)
+				require.Equal(t, http.StatusOK, rec.Code)
+				var got gatewayModelsResponseForTest
+				require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+				require.Equal(t, []string{"gpt-5.5-codex"}, modelIDsForTest(got.Data))
+				require.Equal(t, "gpt-5.4-codex", blockedAPIKeyModelCandidate(key, []string{"gpt-5.4-codex"}))
+				require.Empty(t, blockedAPIKeyModelCandidate(key, []string{"gpt-5.5-codex"}))
+			})
+		}
+	}
+}
+
 // geminiAllowlistAccountRepoStub 在 gatewayModelsAccountRepoStub 之上补充
 // Gemini 兼容层用到的按平台过滤查询（分组内无任何账号，触发 fallback 列表）。
 type geminiAllowlistAccountRepoStub struct {

@@ -142,7 +142,7 @@ export function aggregatePlazaModels(groups: ModelPlazaGroup[], now: number | Da
       const effectiveRate = billingMode === 'image' && group.image_rate_independent
         ? group.image_rate_multiplier
         : billingMode === 'video' && group.video_rate_independent
-          ? group.video_rate_multiplier ?? 1
+          ? Math.max(0, group.video_rate_multiplier ?? 1)
           : effectiveGroupRate(group, group.user_rate_multiplier, now)
       const id = `${model.name.trim().toLowerCase()}::${billingMode}`
       const entry = models.get(id) ?? { id, name: model.name, brand: inferModelBrand(model.name, model.platform), billingMode, variants: [] }

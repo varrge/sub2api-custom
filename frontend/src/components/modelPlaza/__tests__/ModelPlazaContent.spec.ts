@@ -37,6 +37,8 @@ function group(id: number, name: string, platform: string, rate: number): ModelP
     is_exclusive: false,
     image_rate_independent: false,
     image_rate_multiplier: 1,
+    video_rate_independent: false,
+    video_rate_multiplier: 1,
     long_context_pricing_enabled: true,
     models: ['shared-model', `${platform}-model`].map((name) => ({
       name, platform, pricing: null, official_pricing: null

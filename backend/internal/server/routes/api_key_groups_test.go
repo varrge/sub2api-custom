@@ -540,3 +540,35 @@ func TestAPIKeyModelLimitDeferredSelectionUsesFreshKey(t *testing.T) {
 	require.ErrorContains(t, err, "not allowed for this API key")
 	require.Empty(t, probe.seen)
 }
+
+func TestMultiGroupWebSocketDefersKeyModelPolicyUntilFirstFrame(t *testing.T) {
+	for _, mode := range []string{"allow", "deny"} {
+		for _, model := range []string{"allowed", "denied"} {
+			t.Run(mode+"/"+model, func(t *testing.T) {
+				key := routingKey()
+				models := []string{"allowed"}
+				if mode == "deny" {
+					models = []string{"denied"}
+				}
+				key.ModelAllowlist = service.GroupModelAllowlist{Enabled: true, Mode: mode, Models: models}
+				probe := &routingProbe{available: map[int64]bool{1: true}}
+				routing := &apiKeyGroupRouting{keys: &routingKeys{key: key}, prober: probe}
+				c := routingContext("GET", "/v1/responses?model=denied", "")
+				routing.wrap(func(*gin.Context) {})(c)
+				handshake, err := routing.resolve(c, key)
+				require.NoError(t, err, "the handshake has no authoritative model yet")
+				require.True(t, middleware.APIKeyGroupSelectionDeferred(c))
+				require.Empty(t, probe.seen)
+				selected, err := middleware.ResolveDeferredAPIKeyGroup(c, handshake, []byte(`{"type":"response.create","model":"`+model+`"}`))
+				if model == "denied" {
+					require.ErrorContains(t, err, "not allowed for this API key")
+					require.Empty(t, probe.seen)
+				} else {
+					require.NoError(t, err)
+					require.Equal(t, int64(1), *selected.GroupID)
+					require.Equal(t, []string{"allowed"}, probe.models)
+				}
+			})
+		}
+	}
+}

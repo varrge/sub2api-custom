@@ -1394,6 +1394,15 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_PassthroughHeade
 }
 
 func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_HTTPBridgeModeRelaysHTTPStream(t *testing.T) {
+	runHTTPBridgeResponseIdentityCase(t, false)
+}
+
+func TestOpenAIWSHTTPBridge_MonthCardBillingIDPreservesResponseAccount(t *testing.T) {
+	runHTTPBridgeResponseIdentityCase(t, true)
+}
+
+func runHTTPBridgeResponseIdentityCase(t *testing.T, rewriteBillingID bool) {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 
 	cfg := &config.Config{}
@@ -1448,6 +1457,9 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_HTTPBridgeModeRe
 	hooks := &OpenAIWSIngressHooks{
 		AfterTurn: func(_ int, result *OpenAIForwardResult, turnErr error) {
 			if turnErr == nil && result != nil {
+				if rewriteBillingID {
+					result.RequestID = "ws-turn:test:1"
+				}
 				resultCh <- result
 			}
 		},
@@ -1531,7 +1543,11 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_HTTPBridgeModeRe
 
 	select {
 	case result := <-resultCh:
-		require.Equal(t, "resp_http_bridge_1", result.RequestID)
+		if rewriteBillingID {
+			require.Equal(t, "ws-turn:test:1", result.RequestID)
+		} else {
+			require.Equal(t, "resp_http_bridge_1", result.RequestID)
+		}
 		require.True(t, result.OpenAIWSMode)
 		require.Equal(t, 2, result.Usage.InputTokens)
 		require.Equal(t, 1, result.Usage.OutputTokens)
@@ -1540,6 +1556,13 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_HTTPBridgeModeRe
 	case <-time.After(2 * time.Second):
 		t.Fatal("未收到 http_bridge turn 结果回调")
 	}
+
+	stickyAccount, err := svc.getOpenAIWSStateStore().GetResponseAccount(context.Background(), 0, "resp_http_bridge_1")
+	require.NoError(t, err)
+	require.Equal(t, account.ID, stickyAccount, "reconnect must locate the account by the public upstream response ID")
+	billingAccount, err := svc.getOpenAIWSStateStore().GetResponseAccount(context.Background(), 0, "ws-turn:test:1")
+	require.NoError(t, err)
+	require.Zero(t, billingAccount, "a settlement ID must never become a routing key")
 
 	require.NotNil(t, upstream.lastReq, "http_bridge 模式应调用 HTTP 上游")
 	require.Equal(t, "true", upstream.lastReq.Header.Get(responsesLiteHeader))

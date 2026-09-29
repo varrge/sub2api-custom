@@ -282,6 +282,7 @@ interface Props {
   apiKey: string
   baseUrl: string
   platform: GroupPlatform | null
+  claudeCodeOnly?: boolean
   allowMessagesDispatch?: boolean
   groups?: Group[]
 }
@@ -307,6 +308,7 @@ const props = defineProps<Props>()
 const exampleGroupId = ref<number | null>(null)
 const exampleGroup = computed(() => props.groups?.find(group => group.id === exampleGroupId.value) ?? props.groups?.[0])
 const effectivePlatform = computed(() => exampleGroup.value?.platform ?? props.platform)
+const effectiveClaudeCodeOnly = computed(() => exampleGroup.value?.claude_code_only ?? props.claudeCodeOnly)
 const effectiveAllowMessagesDispatch = computed(() => exampleGroup.value?.allow_messages_dispatch ?? props.allowMessagesDispatch)
 watch(() => [props.apiKey, props.groups] as const, () => {
   exampleGroupId.value = props.groups?.[0]?.id ?? null
@@ -330,8 +332,8 @@ let codexModelManifestRequestID = 0
 
 const showCodexModelCatalog = computed(() =>
   props.show &&
-  (activeClientTab.value === 'codex' ||
-    (effectivePlatform.value === 'openai' && activeClientTab.value === 'codex-ws'))
+  effectivePlatform.value !== 'openai' &&
+  activeClientTab.value === 'codex'
 )
 
 const codexModelCatalogPath = computed(() => {
@@ -351,6 +353,7 @@ const codexManifestContext = computed(() => {
 
 // Reset tabs when platform changes
 const defaultClientTab = computed(() => {
+  if (effectiveClaudeCodeOnly.value) return 'claude'
   switch (effectivePlatform.value) {
     case 'openai':
       return 'codex'
@@ -365,7 +368,7 @@ const defaultClientTab = computed(() => {
   }
 })
 
-watch(() => [effectivePlatform.value, exampleGroup.value?.id] as const, () => {
+watch(() => [effectivePlatform.value, effectiveClaudeCodeOnly.value, exampleGroup.value?.id] as const, () => {
   activeTab.value = 'unix'
   activeClientTab.value = defaultClientTab.value
   codexAuthMode.value = 'legacy'
@@ -455,6 +458,9 @@ const SparkleIcon = {
 
 const clientTabs = computed((): TabConfig[] => {
   if (!effectivePlatform.value) return []
+  if (effectiveClaudeCodeOnly.value) {
+    return [{ id: 'claude', label: t('keys.useKeyModal.cliTabs.claudeCode'), icon: TerminalIcon }]
+  }
   switch (effectivePlatform.value) {
     case 'openai': {
       const tabs: TabConfig[] = [
@@ -971,7 +977,6 @@ function generateOpenAIFiles(baseUrl: string, apiKey: string): FileConfig[] {
 model = "${model}"
 review_model = "${model}"
 ${reasoningEffortLine}disable_response_storage = true
-model_catalog_json = "${CODEX_MODEL_CATALOG_CONFIG_PATH}"
 network_access = "enabled"
 windows_wsl_setup_acknowledged = true
 
@@ -1320,7 +1325,6 @@ function generateOpenAIWsFiles(baseUrl: string, apiKey: string): FileConfig[] {
 model = "${model}"
 review_model = "${model}"
 ${reasoningEffortLine}disable_response_storage = true
-model_catalog_json = "${CODEX_MODEL_CATALOG_CONFIG_PATH}"
 network_access = "enabled"
 windows_wsl_setup_acknowledged = true
 
@@ -1922,6 +1926,19 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
         limit: { context: 1000000, output: 128000 },
         modalities: { input: ['text', 'image', 'pdf'], output: ['text'] },
         options: { thinking: { type: 'adaptive' }, effort: 'medium' },
+        variants: {
+          low: { effort: 'low' },
+          medium: { effort: 'medium' },
+          high: { effort: 'high' },
+          xhigh: { effort: 'xhigh' },
+          max: { effort: 'max' }
+        }
+      },
+      'claude-sonnet-5-5': {
+        name: 'Claude Sonnet 5.5',
+        limit: { context: 1000000, output: 128000 },
+        modalities: { input: ['text', 'image', 'pdf'], output: ['text'] },
+        options: { thinking: { type: 'adaptive' }, effort: 'high' },
         variants: {
           low: { effort: 'low' },
           medium: { effort: 'medium' },

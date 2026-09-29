@@ -261,9 +261,13 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 	if len(body) > 0 {
 		modelCandidates = append(modelCandidates, requestmodel.FromBodyCandidates(path, c.GetHeader("Content-Type"), body)...)
 	}
-	for _, requested := range modelCandidates {
-		if !key.AllowsModel(requested) {
-			return nil, groupRoutingError(404, "MODEL_NOT_ALLOWED", fmt.Sprintf("Model %q is not allowed for this API key", requested))
+	// A WebSocket handshake has no authoritative model. The first frame repeats
+	// this resolution with a fresh key and must pass its model policy before probing.
+	if !deferred {
+		for _, requested := range modelCandidates {
+			if !key.AllowsModel(requested) {
+				return nil, groupRoutingError(404, "MODEL_NOT_ALLOWED", fmt.Sprintf("Model %q is not allowed for this API key", requested))
+			}
 		}
 	}
 	forcedPlatform, _ := middleware.GetForcePlatformFromContext(c)

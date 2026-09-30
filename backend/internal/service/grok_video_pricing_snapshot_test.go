@@ -16,7 +16,7 @@ func TestGrokVideoPricingSnapshotSurvivesPriceChangeAfterCreate(t *testing.T) {
 		t.Run(source, func(t *testing.T) {
 			ctx := context.Background()
 			price := 0.25
-			key := &APIKey{ID: 2, UserID: 3, GroupID: liveOptionalID(4), Group: &Group{ID: 4, RateMultiplier: 2}}
+			key := &APIKey{ID: 2, UserID: 3, User: &User{ID: 3}, GroupID: liveOptionalID(4), Group: &Group{ID: 4, RateMultiplier: 2}}
 			usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 			svc := newOpenAIRecordUsageServiceForTest(usageRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
 			switch source {
@@ -56,6 +56,12 @@ func TestGrokVideoPricingSnapshotSurvivesPriceChangeAfterCreate(t *testing.T) {
 			require.NotNil(t, usageRepo.lastLog)
 			require.InDelta(t, expected, usageRepo.lastLog.TotalCost, 1e-12)
 			require.InDelta(t, expected*2, usageRepo.lastLog.ActualCost, 1e-12)
+			estimate, priced := svc.EstimateInflightReservation(ctx, key, InflightEstimateRequest{
+				Model: "grok-imagine-video", Kind: InflightEstimateVideo, BodyBytes: 400, MaxTokens: 200,
+				Units: 1, VideoDurationSeconds: 10, VideoPricingSnapshot: restored.PricingSnapshot,
+			})
+			require.True(t, priced)
+			require.InDelta(t, usageRepo.lastLog.ActualCost, estimate, 1e-12, "reservation and settlement must use the same frozen pricing")
 			require.InDelta(t, 2, usageRepo.lastLog.RateMultiplier, 1e-12)
 		})
 	}

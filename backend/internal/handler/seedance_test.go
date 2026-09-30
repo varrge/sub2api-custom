@@ -5,7 +5,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
-	"github.com/Wei-Shaw/sub2api/internal/monthcard"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -13,11 +13,59 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/monthcard"
 	middleware "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestSeedanceInflightReservationUsesTokenSnapshot(t *testing.T) {
+	for _, heldAmount := range []float64{0.1, 0.19} {
+		t.Run(fmt.Sprintf("held_%g", heldAmount), func(t *testing.T) {
+			h, slots, bindings, upstream := newGrokMediaSlotHandler(t, false, false, service.PlatformOpenAI)
+			h.cfg.RunMode = config.RunModeStandard
+			h.cfg.Billing.InflightReservation = config.InflightReservationConfig{Enabled: true, DefaultMaxTokens: 1000, FailClosedOnUnpriced: true}
+			cache := newHandlerInflightCache(0.2)
+			billing := service.NewBillingCacheService(cache, nil, nil, nil, nil, nil, h.cfg, nil)
+			t.Cleanup(billing.Stop)
+			h.billingCacheService = billing
+			c, w := grokMediaSlotContext(t.Context(), true)
+			key, _ := middleware.GetAPIKeyFromContext(c)
+			key.Group.Platform = service.PlatformOpenAI
+			key.Group.RateMultiplier = 1
+			price := 15e-6
+			key.Group.ModelPricing = []service.ChannelModelPricing{{Models: []string{"doubao-seedance"}, BillingMode: service.BillingModeToken, OutputPrice: &price}}
+			c.Request = httptest.NewRequest(http.MethodPost, "/api/v3/contents/generations/tasks", strings.NewReader(`{"model":"doubao-seedance","content":[{"type":"text","text":"waves"}]}`))
+			held, err := billing.ReserveInflight(t.Context(), key.User, key.Group, nil, heldAmount)
+			require.NoError(t, err)
+			t.Cleanup(held.HandlerDone)
+			upstream.call = func(*http.Request, int64) (*http.Response, error) {
+				cache.mu.Lock()
+				sum := 0.0
+				for _, amount := range cache.res {
+					sum += amount
+				}
+				cache.mu.Unlock()
+				require.InDelta(t, heldAmount+0.015, sum, 1e-12)
+				return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"id":"task-reservation","status":"queued"}`))}, nil
+			}
+			h.SeedanceTasks(c)
+			if heldAmount == 0.1 {
+				require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+				require.Equal(t, 1, upstream.calls)
+				require.Len(t, bindings.pending, 1)
+			} else {
+				require.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
+				require.Zero(t, upstream.calls)
+				require.Empty(t, bindings.pending)
+			}
+			require.Equal(t, 1, cache.count(), "submission must release only its own reservation")
+			slots.assertReleased(t)
+		})
+	}
+}
 
 func TestSeedanceHandlerLifecycleAndOwnership(t *testing.T) {
 	h, slots, bindings, upstream := newGrokMediaSlotHandler(t, false, false, service.PlatformOpenAI)

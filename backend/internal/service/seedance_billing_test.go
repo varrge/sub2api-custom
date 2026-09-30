@@ -47,7 +47,7 @@ func TestSeedanceTokenBillingSnapshotDurableRetryAndDedup(t *testing.T) {
 			repo := &seedanceDurableBillingRepo{fail: true, applied: map[string]string{}}
 			svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(logs, repo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
 			at := time.Now().UTC().Add(-8 * 24 * time.Hour)
-			key := &APIKey{ID: 2, UserID: 3, GroupID: liveOptionalID(4), Group: &Group{ID: 4, RateMultiplier: 2}, Quota: 100}
+			key := &APIKey{ID: 2, UserID: 3, User: &User{ID: 3}, GroupID: liveOptionalID(4), Group: &Group{ID: 4, RateMultiplier: 2}, Quota: 100}
 			svc.resolver = newOpenAITokenImageChannelPricingResolverForTest(t, 4, "doubao-seedance")
 			snapshot, err := svc.SnapshotSeedanceTokenPricing(t.Context(), key, "doubao-seedance", at)
 			require.NoError(t, err)
@@ -75,6 +75,12 @@ func TestSeedanceTokenBillingSnapshotDurableRetryAndDedup(t *testing.T) {
 			// switch a completed Seedance job to Grok's per-second tariff.
 			key.Group.RateMultiplier = 200
 			svc.resolver = newOpenAIImageChannelPricingResolverForTest(t, 4, "doubao-seedance", 500)
+			estimate, priced := svc.EstimateInflightReservation(t.Context(), key, InflightEstimateRequest{
+				Model: "doubao-seedance", Kind: InflightEstimateVideo, MaxTokens: 1000,
+				VideoDurationSeconds: 10, VideoPricingSnapshot: pending.PricingSnapshot,
+			})
+			require.True(t, priced)
+			require.InDelta(t, 0.03, estimate, 1e-12, "reservation must use frozen output-token rates, not today's duration tariff")
 			for poll := 0; poll < 5; poll++ {
 				result := &OpenAIForwardResult{RequestID: StableGrokVideoBillingRequestID("seedance:task"), ResponseID: "seedance:task", Model: "doubao-seedance", BillingModel: "doubao-seedance", VideoPricingSnapshot: pending.PricingSnapshot, Usage: OpenAIUsage{OutputTokens: 1000}}
 				ctx := context.WithValue(t.Context(), ctxkey.ClientRequestID, fmt.Sprintf("different-poll-%d", poll))

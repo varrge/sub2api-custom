@@ -3,6 +3,7 @@ package routes
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -570,5 +571,41 @@ func TestMultiGroupWebSocketDefersKeyModelPolicyUntilFirstFrame(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestMultiGroupRoutingSystemOneProtocolIsolation(t *testing.T) {
+	for _, composite := range []bool{false, true} {
+		t.Run(fmt.Sprintf("composite=%t", composite), func(t *testing.T) {
+			key := routingKey()
+			key.Groups[1].Platform = service.PlatformTypeSafe
+			if composite {
+				key.Groups[1].Platform = service.PlatformComposite
+			}
+			p := &routingProbe{available: map[int64]bool{1: true, 2: true}}
+			r := &apiKeyGroupRouting{prober: p, composite: service.NewCompositeRouteResolver(compositeRouteRepoStub{})}
+			body := `{"model":"jev-latest","state":"hello","questions":{"safe":{"type":"noul"}}}`
+			selected, err := r.resolve(routingContext(http.MethodPost, "/v1/systemone", body), key)
+			require.NoError(t, err)
+			require.Equal(t, int64(2), *selected.GroupID)
+			require.Equal(t, []int64{2}, p.seen, "incompatible first group must not be probed")
+			require.Equal(t, int64(1), *key.GroupID, "shared key configuration stays unchanged")
+
+			p.seen = nil
+			key.ModelAllowlist = service.GroupModelAllowlist{Enabled: true, Models: []string{"gpt-test"}}
+			_, err = r.resolve(routingContext(http.MethodPost, "/v1/systemone", body), key)
+			require.ErrorContains(t, err, "not allowed for this API key")
+			require.Empty(t, p.seen)
+		})
+	}
+	for _, path := range []string{"/v1/responses", "/v1/chat/completions", "/v1/messages"} {
+		key := routingKey()
+		key.Groups[0].Platform = service.PlatformTypeSafe
+		p := &routingProbe{available: map[int64]bool{1: true, 2: true}}
+		r := &apiKeyGroupRouting{prober: p}
+		selected, err := r.resolve(routingContext(http.MethodPost, path, `{"model":"gpt-test"}`), key)
+		require.NoError(t, err)
+		require.Equal(t, int64(2), *selected.GroupID)
+		require.Equal(t, []int64{2}, p.seen)
 	}
 }

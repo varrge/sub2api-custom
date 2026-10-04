@@ -33,7 +33,7 @@ func (h *GatewayHandler) MultiGroupModels(c *gin.Context) bool {
 	}
 	catalogs := make([]service.APIKeyGroupCatalog, 0, len(key.Groups))
 	for _, group := range key.Groups {
-		if group == nil {
+		if group == nil || codex && group.Platform == service.PlatformTypeSafe {
 			continue
 		}
 		if !google && group.Platform == service.PlatformOpenAI && group.CodexModelsManifestConfig.Enabled {
@@ -104,6 +104,9 @@ func (h *GatewayHandler) MultiGroupModels(c *gin.Context) bool {
 			platforms := []string{group.Platform}
 			if group.Platform == service.PlatformComposite {
 				platforms = []string{service.PlatformOpenAI, service.PlatformAnthropic, service.PlatformGemini, service.PlatformAntigravity, service.PlatformGrok, service.PlatformKimi, service.PlatformZhipu, service.PlatformDeepseek, service.PlatformMiniMax, service.PlatformOpenCodeGo}
+				if !codex {
+					platforms = append(platforms, service.PlatformTypeSafe)
+				}
 			}
 			for _, platform := range platforms {
 				models, useDefaults, err := h.gatewayService.APIKeyGroupModelCatalog(c.Request.Context(), group.ID, platform)

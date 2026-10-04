@@ -135,7 +135,7 @@ func (s *OpenAIGatewayService) ProbeAPIKeyGroup(ctx context.Context, key *APIKey
 }
 
 func apiKeyGroupTokenRequest(req APIKeyGroupRequest) bool {
-	return (strings.Contains(req.Path, "/responses") || strings.Contains(req.Path, "/messages") || strings.Contains(req.Path, "/chat/completions")) && !strings.Contains(req.Path, "/count_tokens") && !strings.HasSuffix(strings.TrimRight(req.Path, "/"), "/responses/input_tokens")
+	return (strings.Contains(req.Path, "/responses") || strings.Contains(req.Path, "/messages") || strings.Contains(req.Path, "/chat/completions") || strings.HasSuffix(req.Path, "/systemone")) && !strings.Contains(req.Path, "/count_tokens") && !strings.HasSuffix(strings.TrimRight(req.Path, "/"), "/responses/input_tokens")
 }
 
 // CheckAPIKeyGroupRoutingLimits performs read-only admission before selecting a

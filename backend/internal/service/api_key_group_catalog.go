@@ -41,6 +41,10 @@ func (s *GatewayService) APIKeyCompositeModelAliases(ctx context.Context, groupI
 			if !ok || !isConcreteRequestPlatform(matched.TargetPlatform) {
 				continue
 			}
+			// System One models belong only in the general model directory.
+			if endpoint != "" && matched.TargetPlatform == PlatformTypeSafe {
+				continue
+			}
 			if targetEndpoint == CompositeRouteEndpointGemini && matched.TargetPlatform != PlatformGemini && matched.TargetPlatform != PlatformAntigravity {
 				continue
 			}

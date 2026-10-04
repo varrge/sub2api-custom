@@ -358,3 +358,30 @@ func TestAPIKeyModelOptionsPreservesCaseSensitivePublicIDs(t *testing.T) {
 	w := performModelOptions(t, h, newGatewayModelsHandlerForTest(repo), false, 7, "", service.RoleUser, `{"group_ids":[1]}`)
 	require.Equal(t, []apiKeyModelOption{{ID: "CHEAP", GroupIDs: []int64{1}}}, decodeModelOptions(t, w))
 }
+
+func TestAPIKeyModelOptionsIncludesNativeTypeSafeInCompositeGroups(t *testing.T) {
+	repo := &multiGroupCatalogAccountRepo{gatewayModelsAccountRepoStub{byGroup: map[int64][]service.Account{
+		1: {{Platform: service.PlatformTypeSafe, Type: service.AccountTypeAPIKey}},
+		2: {{Platform: service.PlatformTypeSafe, Type: service.AccountTypeAPIKey}},
+		4: {{Platform: service.PlatformTypeSafe, Type: service.AccountTypeAPIKey}},
+	}}}
+	h := newModelOptionsHandler([]service.Group{
+		{ID: 1, Platform: service.PlatformComposite},
+		{ID: 2, Platform: service.PlatformTypeSafe},
+		{ID: 3, Platform: service.PlatformComposite},
+		{ID: 4, Platform: service.PlatformComposite, ModelAllowlist: service.GroupModelAllowlist{Enabled: true, Models: []string{"other-model"}}},
+	}, &service.User{ID: 7}, &service.User{ID: 8})
+	for _, tc := range []struct {
+		name         string
+		admin        bool
+		target, role string
+	}{
+		{name: "user", role: service.RoleUser},
+		{name: "admin", admin: true, target: "8", role: service.RoleAdmin},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := performModelOptions(t, h, newGatewayModelsHandlerForTest(repo), tc.admin, 7, tc.target, tc.role, `{"group_ids":[1,2,3,4]}`)
+			require.Equal(t, []apiKeyModelOption{{ID: "jev-latest", GroupIDs: []int64{1, 2}}}, decodeModelOptions(t, w))
+		})
+	}
+}

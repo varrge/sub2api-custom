@@ -51,6 +51,7 @@ describe('UseKeyModal', () => {
         groups: [
           { id: 7, name: 'Claude', platform: 'anthropic' },
           { id: 2, name: 'OpenAI', platform: 'openai' },
+          { id: 3, name: 'TypeSafe', platform: 'typesafe' },
         ] as Group[],
       },
       global: { stubs: {
@@ -65,6 +66,15 @@ describe('UseKeyModal', () => {
     expect(code).toContain('model_provider')
     expect(wrapper.text()).toContain('keys.multiGroup.exampleHint')
     expect(wrapper.get('[data-testid="codex-auth-mode-legacy"]').exists()).toBe(true)
+    await wrapper.get('[data-testid="key-example-group"]').setValue('3')
+    const systemOneCode = wrapper.findAll('pre code').map(block => block.text()).join('\n')
+    expect(systemOneCode).toContain('https://example.com/v1/systemone')
+    expect(systemOneCode).toContain('jev-latest')
+    expect(systemOneCode).toContain('sk-mixed-test')
+    expect(wrapper.get('nav[aria-label="Client"]').text()).toContain('keys.useKeyModal.cliTabs.systemOne')
+    expect(wrapper.find('[data-testid="codex-auth-mode-legacy"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="key-example-group"]').setValue('7')
+    expect(wrapper.findAll('pre code').map(block => block.text()).join('\n')).toContain('ANTHROPIC_AUTH_TOKEN')
   })
 
   it('uses the selected group’s Claude Code restriction and Codex catalog policy', async () => {

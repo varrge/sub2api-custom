@@ -9,6 +9,7 @@ import (
 
 func TestAPIKeyCompositeModelAliasesRespectDirectoryEndpoint(t *testing.T) {
 	routes := []CompositeModelRoute{
+		{PublicModel: "systemone-alias", TargetPlatform: PlatformTypeSafe, Endpoint: CompositeRouteEndpointAny},
 		{PublicModel: "shared", TargetPlatform: PlatformOpenAI, Endpoint: CompositeRouteEndpointAny},
 		{PublicModel: "shared", TargetPlatform: PlatformGemini, Endpoint: CompositeRouteEndpointGemini},
 		{PublicModel: "codex-alias", TargetPlatform: PlatformOpenAI, Endpoint: CompositeRouteEndpointResponses},
@@ -28,7 +29,7 @@ func TestAPIKeyCompositeModelAliasesRespectDirectoryEndpoint(t *testing.T) {
 		endpoint string
 		want     []string
 	}{
-		{"", []string{"codex-alias", "image-alias", "shared"}},
+		{"", []string{"codex-alias", "image-alias", "shared", "systemone-alias"}},
 		{CompositeRouteEndpointResponses, []string{"codex-alias", "shared"}},
 		{CompositeRouteEndpointGemini, []string{"google-alias", "shared"}},
 	} {

@@ -55,7 +55,7 @@ func TestMonthCardOrderConsentCommitsWithOrder(t *testing.T) {
 	purchase := &monthcard.Purchase{Mode: "solo", Product: monthcard.Product{ID: 1, GroupID: group.ID, Name: "month card", PriceCNY: 168, BaseQuotaUSD: 700}}
 	req := CreateOrderRequest{UserID: user.ID, Amount: 168, PaymentType: payment.TypeWxpay, OrderType: payment.OrderTypeMonthCard, ClientIP: "127.0.0.1", SrcHost: "example.test", monthCardPurchase: purchase, RulesPublication: 1}
 	create := func() (*dbent.PaymentOrder, error) {
-		return svc.createOrderInTx(ctx, req, &User{ID: user.ID, Email: user.Email}, nil, &PaymentConfig{MaxPendingOrders: 10}, 168, 168, 0, 168, nil)
+		return svc.createOrderInTx(ctx, req, &User{ID: user.ID, Email: user.Email}, nil, &PaymentConfig{MaxPendingOrders: 10}, 168, 168, 0, 168, 0, nil)
 	}
 	_, err = create()
 	require.Error(t, err)
@@ -71,6 +71,7 @@ func TestMonthCardOrderConsentCommitsWithOrder(t *testing.T) {
 	require.NoError(t, err)
 	saved, err := client.PaymentOrder.Get(ctx, order.ID)
 	require.NoError(t, err)
+	require.Zero(t, saved.BonusAmount, "month card purchases do not receive balance recharge bonuses")
 	consent, ok := saved.ProviderSnapshot["month_card_rules_consent"].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, float64(user.ID), consent["user_id"])

@@ -156,7 +156,7 @@ func (h *GatewayHandler) apiKeyModelOptionsCatalog(ctx context.Context, group *s
 		if group.Platform == service.PlatformComposite {
 			platforms = []string{service.PlatformOpenAI, service.PlatformAnthropic, service.PlatformGemini,
 				service.PlatformAntigravity, service.PlatformGrok, service.PlatformKimi, service.PlatformZhipu,
-				service.PlatformDeepseek, service.PlatformMiniMax, service.PlatformOpenCodeGo}
+				service.PlatformDeepseek, service.PlatformMiniMax, service.PlatformOpenCodeGo, service.PlatformTypeSafe}
 		}
 		for _, platform := range platforms {
 			catalog, useDefaults, err := h.gatewayService.APIKeyGroupModelCatalogForSelection(ctx, group.ID, platform)

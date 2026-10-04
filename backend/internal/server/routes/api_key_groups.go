@@ -453,6 +453,14 @@ func (r *apiKeyGroupRouting) catalog(c *gin.Context, key *service.APIKey) (*serv
 }
 
 func apiKeyGroupSupportsPath(platform, path, method string) bool {
+	// System One is a separate native protocol. Reject incompatible candidate
+	// groups before probing so an earlier group cannot hide a later match.
+	if strings.HasSuffix(path, "/systemone") {
+		return platform == service.PlatformTypeSafe
+	}
+	if platform == service.PlatformTypeSafe {
+		return false
+	}
 	if strings.Contains(path, "/v1beta/") {
 		return platform == service.PlatformGemini || platform == service.PlatformAntigravity
 	}

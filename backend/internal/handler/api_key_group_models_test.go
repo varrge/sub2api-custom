@@ -459,3 +459,28 @@ func TestMultiGroupGoogleModelRetrievalUsesAllEligibleCatalogs(t *testing.T) {
 		}
 	}
 }
+
+func TestMultiGroupCatalogTypeSafeOnlyInNativeDirectory(t *testing.T) {
+	repo := &multiGroupCatalogAccountRepo{gatewayModelsAccountRepoStub{byGroup: map[int64][]service.Account{
+		1: {{ID: 1, Platform: service.PlatformTypeSafe, Type: service.AccountTypeAPIKey}},
+		2: {{ID: 2, Platform: service.PlatformTypeSafe, Type: service.AccountTypeAPIKey}},
+		3: {{ID: 3, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey, Credentials: map[string]any{"model_mapping": map[string]any{"gpt-test": "gpt-5"}}}},
+	}}}
+	h := newGatewayModelsHandlerForTest(repo)
+	for _, first := range []*service.Group{
+		{ID: 1, Platform: service.PlatformTypeSafe},
+		{ID: 2, Platform: service.PlatformComposite},
+	} {
+		groups := []*service.Group{first, {ID: 3, Platform: service.PlatformOpenAI}}
+		w := serveMultiGroupCatalog(t, h, "/v1/models", groups...)
+		require.Contains(t, w.Body.String(), `"id":"jev-latest"`)
+		require.Contains(t, w.Body.String(), `"id":"gpt-test"`)
+		w = serveMultiGroupCatalog(t, h, "/v1/models/jev-latest", groups...)
+		require.Contains(t, w.Body.String(), `"id":"jev-latest"`)
+		for _, path := range []string{"/v1/models?client_version=test", "/backend-api/codex/models"} {
+			w = serveMultiGroupCatalog(t, h, path, groups...)
+			require.NotContains(t, w.Body.String(), "jev-latest")
+			require.Contains(t, w.Body.String(), `"slug":"gpt-test"`)
+		}
+	}
+}

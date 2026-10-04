@@ -162,6 +162,61 @@ func TestUsageBillingRepositoryApply_RequestFingerprintConflict(t *testing.T) {
 	require.ErrorIs(t, err, service.ErrUsageBillingRequestConflict)
 }
 
+func TestUsageBillingRepositoryApply_DeletedAPIKeyStillBillsBalance(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("usage-billing-deleted-key-user-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Balance:      100,
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID:      user.ID,
+		Key:         "sk-usage-billing-deleted-key-" + uuid.NewString(),
+		Name:        "billing-deleted-key",
+		Quota:       50,
+		RateLimit5h: 50,
+	})
+	account := mustCreateAccount(t, client, &service.Account{
+		Name: "usage-billing-deleted-key-account-" + uuid.NewString(),
+		Type: service.AccountTypeAPIKey,
+	})
+
+	_, err := integrationDB.ExecContext(ctx, "UPDATE api_keys SET deleted_at = NOW() WHERE id = $1", apiKey.ID)
+	require.NoError(t, err)
+
+	requestID := uuid.NewString()
+	result, err := repo.Apply(ctx, &service.UsageBillingCommand{
+		RequestID:           requestID,
+		APIKeyID:            apiKey.ID,
+		UserID:              user.ID,
+		AccountID:           account.ID,
+		AccountType:         service.AccountTypeAPIKey,
+		BalanceCost:         1.25,
+		APIKeyQuotaCost:     1.25,
+		APIKeyRateLimitCost: 1.25,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, result.Applied)
+	require.False(t, result.APIKeyQuotaExhausted)
+
+	var balance float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance FROM users WHERE id = $1", user.ID).Scan(&balance))
+	require.InDelta(t, 98.75, balance, 0.000001)
+
+	var quotaUsed, usage5h float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT quota_used, usage_5h FROM api_keys WHERE id = $1", apiKey.ID).Scan(&quotaUsed, &usage5h))
+	require.InDelta(t, 0, quotaUsed, 0.000001)
+	require.InDelta(t, 0, usage5h, 0.000001)
+
+	var dedupCount int
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM usage_billing_dedup WHERE request_id = $1 AND api_key_id = $2", requestID, apiKey.ID).Scan(&dedupCount))
+	require.Equal(t, 1, dedupCount)
+}
+
 func TestUsageBillingRepositoryApply_UpdatesAccountQuota(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)
@@ -364,4 +419,33 @@ func TestUsageBillingRepositoryApply_DeduplicatesAgainstArchivedKey(t *testing.T
 	var balance float64
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance FROM users WHERE id = $1", user.ID).Scan(&balance))
 	require.InDelta(t, 98.75, balance, 0.000001)
+}
+
+func TestUsageBillingRepositoryApply_DeletedAPIKeyStillSettlesMonthCardSnapshot(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+	user := mustCreateUser(t, client, &service.User{Email: "deleted-key-card-" + uuid.NewString() + "@example.com", PasswordHash: "hash", Balance: 10})
+	group := mustCreateGroup(t, client, &service.Group{Name: "deleted-key-card-" + uuid.NewString(), Platform: service.PlatformOpenAI, SubscriptionType: service.SubscriptionTypeSubscription})
+	key := mustCreateApiKey(t, client, &service.APIKey{UserID: user.ID, GroupID: &group.ID, Key: "sk-" + uuid.NewString(), Name: "card", Quota: 20})
+	sub := mustCreateSubscription(t, client, &service.UserSubscription{UserID: user.ID, GroupID: group.ID})
+	snapshot, err := repo.(*usageBillingRepository).SnapshotBatchImageEntitlement(ctx, user.ID, group.ID, time.Now())
+	require.NoError(t, err)
+	_, err = integrationDB.ExecContext(ctx, `UPDATE api_keys SET deleted_at=NOW() WHERE id=$1`, key.ID)
+	require.NoError(t, err)
+	cmd := &service.UsageBillingCommand{RequestID: uuid.NewString(), UserID: user.ID, APIKeyID: key.ID,
+		MonthCardSnapshot: snapshot, MonthCardCost: 1.25, APIKeyQuotaCost: 1.25, APIKeyRateLimitCost: 1.25}
+	first, err := repo.Apply(ctx, cmd)
+	require.NoError(t, err)
+	require.True(t, first.Applied)
+	second, err := repo.Apply(ctx, cmd)
+	require.NoError(t, err)
+	require.False(t, second.Applied)
+	var balance, dailyUsage, quotaUsed float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT balance FROM users WHERE id=$1`, user.ID).Scan(&balance))
+	require.Equal(t, 10.0, balance, "entitlement covers usage without charging balance")
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT daily_usage_usd FROM user_subscriptions WHERE id=$1`, sub.ID).Scan(&dailyUsage))
+	require.Equal(t, 1.25, dailyUsage, "deleted Key must not roll back or duplicate settlement")
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT quota_used FROM api_keys WHERE id=$1`, key.ID).Scan(&quotaUsed))
+	require.Zero(t, quotaUsed, "ordinary completed request skips the deleted Key counter")
 }

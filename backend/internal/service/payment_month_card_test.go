@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -14,6 +16,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/monthcard"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
+	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
 	"github.com/stretchr/testify/require"
 )
 
@@ -64,16 +67,20 @@ func TestMonthCardPaymentInputCannotBecomeRecharge(t *testing.T) {
 	require.Error(t, svc.prepareMonthCardOrder(context.Background(), &CreateOrderRequest{}))
 }
 
-func newMonthCardPaymentTestOrder(t *testing.T, client *dbent.Client, status string) *dbent.PaymentOrder {
+func newMonthCardPaymentTestOrder(t *testing.T, client *dbent.Client, status string, createdAt ...time.Time) *dbent.PaymentOrder {
 	t.Helper()
 	ctx := context.Background()
 	u, err := client.User.Create().SetEmail("monthcard@example.test").SetPasswordHash("test-only").SetUsername("monthcard").Save(ctx)
 	require.NoError(t, err)
-	o, err := client.PaymentOrder.Create().SetUserID(u.ID).SetUserEmail(u.Email).SetUserName(u.Username).
+	builder := client.PaymentOrder.Create().SetUserID(u.ID).SetUserEmail(u.Email).SetUserName(u.Username).
 		SetAmount(198).SetPayAmount(198).SetFeeRate(0).SetRechargeCode("MONTHCARD-PAYMENT-TEST").
 		SetOutTradeNo("sub2_monthcard_test").SetPaymentType(payment.TypeWxpay).SetPaymentTradeNo("").
 		SetOrderType(payment.OrderTypeMonthCard).SetStatus(status).SetExpiresAt(time.Now().Add(-24 * time.Hour)).
-		SetClientIP("127.0.0.1").SetSrcHost("example.test").Save(ctx)
+		SetClientIP("127.0.0.1").SetSrcHost("example.test")
+	if len(createdAt) > 0 {
+		builder.SetCreatedAt(createdAt[0])
+	}
+	o, err := builder.Save(ctx)
 	require.NoError(t, err)
 	return o
 }
@@ -236,4 +243,49 @@ func TestMonthCardCouponForwardedToWeChatOAuth(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "SAVE10", parsed.Query().Get("coupon_code"))
 	require.Equal(t, "178.2", parsed.Query().Get("amount"))
+}
+
+func TestMonthCardEasyPayReconciliationPreservesPaidTimeOnRetry(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentOrderLifecycleTestClient(t)
+	paid := time.Now().UTC().Add(-12 * time.Hour).Truncate(time.Second)
+	order := newMonthCardPaymentTestOrder(t, client, OrderStatusExpired, paid.Add(-time.Hour))
+	var err error
+	order, err = client.PaymentOrder.UpdateOneID(order.ID).SetUpdatedAt(paid.Add(-time.Hour)).Save(ctx)
+	require.NoError(t, err)
+	orderRef := order.OutTradeNo
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Error(err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if r.URL.Path != "/api.php" || r.PostForm.Get("key") != "test-merchant-secret" || r.PostForm.Get("out_trade_no") != orderRef {
+			t.Error("unexpected EasyPay query")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"code": 1, "status": 1, "money": "198.00", "trade_no": "verified-trade", "endtime": paid.Format(time.RFC3339)})
+	}))
+	defer server.Close()
+	easyPay, err := provider.NewEasyPay("test", map[string]string{"pid": "test-merchant", "pkey": "test-merchant-secret", "apiBase": server.URL, "notifyUrl": "https://example.test/notify", "returnUrl": "https://example.test/payment/result"})
+	require.NoError(t, err)
+	registry := payment.NewRegistry()
+	registry.Register(easyPay)
+	svc := &PaymentService{entClient: client, registry: registry, providersLoaded: true}
+	// Leave fulfillment unavailable to exercise durable confirmation and retry.
+	for i := 0; i < 2; i++ {
+		require.Equal(t, checkPaidResultAlreadyPaid, svc.reconcilePaid(ctx, order))
+		saved, err := client.PaymentOrder.Get(ctx, order.ID)
+		require.NoError(t, err)
+		require.Equal(t, OrderStatusPaid, saved.Status)
+		require.NotNil(t, saved.PaidAt)
+		require.True(t, saved.PaidAt.Equal(paid), "recovery must keep the provider payment time")
+		require.Equal(t, "verified-trade", saved.PaymentTradeNo)
+		user, err := client.User.Get(ctx, order.UserID)
+		require.NoError(t, err)
+		require.Zero(t, user.Balance, "month-card payment must never credit balance")
+		order = saved
+	}
 }

@@ -20,7 +20,23 @@ func TestEasyPayQueryOrderStatusMapping(t *testing.T) {
 		wantStatus  string
 		wantTradeNo string
 		wantAmount  float64
+		wantPaidAt  string
 	}{
+		{
+			name:       "top level verified payment time",
+			body:       `{"code":1,"status":1,"money":"168.00","endtime":"2026-10-07 09:00:00"}`,
+			wantStatus: payment.ProviderStatusPaid, wantTradeNo: orderID, wantAmount: 168, wantPaidAt: "2026-10-07 09:00:00",
+		},
+		{
+			name:       "nested verified payment time",
+			body:       `{"code":1,"data":{"status":1,"money":"168.00","endtime":"2026-10-07T01:00:00Z"}}`,
+			wantStatus: payment.ProviderStatusPaid, wantTradeNo: orderID, wantAmount: 168, wantPaidAt: "2026-10-07T01:00:00Z",
+		},
+		{
+			name:       "pending does not confirm time",
+			body:       `{"code":1,"status":0,"money":"168.00","endtime":"2026-10-07 09:00:00"}`,
+			wantStatus: payment.ProviderStatusPending, wantTradeNo: orderID, wantAmount: 168,
+		},
 		{
 			name:        "top level trade success is paid",
 			body:        `{"code":1,"trade_status":"TRADE_SUCCESS","status":0,"money":"12.34","trade_no":"gateway-123"}`,
@@ -112,6 +128,9 @@ func TestEasyPayQueryOrderStatusMapping(t *testing.T) {
 			}
 			if resp.TradeNo != tt.wantTradeNo {
 				t.Fatalf("trade_no = %q, want %q", resp.TradeNo, tt.wantTradeNo)
+			}
+			if resp.PaidAt != tt.wantPaidAt {
+				t.Fatalf("paid_at = %q, want %q", resp.PaidAt, tt.wantPaidAt)
 			}
 			if resp.Amount != tt.wantAmount {
 				t.Fatalf("amount = %v, want %v", resp.Amount, tt.wantAmount)

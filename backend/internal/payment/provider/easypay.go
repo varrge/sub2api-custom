@@ -314,6 +314,7 @@ func (e *EasyPay) QueryOrder(ctx context.Context, tradeNo string) (*payment.Quer
 		Status      *int    `json:"status"`
 		Money       *string `json:"money"`
 		TradeNo     *string `json:"trade_no"`
+		EndTime     *string `json:"endtime"`
 	}
 	var resp struct {
 		Code        int              `json:"code"`
@@ -322,6 +323,7 @@ func (e *EasyPay) QueryOrder(ctx context.Context, tradeNo string) (*payment.Quer
 		Status      *int             `json:"status"`
 		Money       *string          `json:"money"`
 		TradeNo     *string          `json:"trade_no"`
+		EndTime     *string          `json:"endtime"`
 		Data        easyPayQueryData `json:"data"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -359,11 +361,22 @@ func (e *EasyPay) QueryOrder(ctx context.Context, tradeNo string) (*payment.Quer
 		responseTradeNo = *resp.Data.TradeNo
 	}
 
+	// Authenticated queries must preserve the payment instant just like signed
+	// notifications, so delayed month-card reconciliation does not restart validity.
+	paidAt := ""
+	if status == payment.ProviderStatusPaid {
+		if resp.EndTime != nil {
+			paidAt = *resp.EndTime
+		} else if resp.Data.EndTime != nil {
+			paidAt = *resp.Data.EndTime
+		}
+	}
 	amount, _ := strconv.ParseFloat(money, 64)
 	return &payment.QueryOrderResponse{
 		TradeNo:  responseTradeNo,
 		Status:   status,
 		Amount:   amount,
+		PaidAt:   paidAt,
 		Metadata: e.MerchantIdentityMetadata(),
 	}, nil
 }
@@ -376,6 +389,9 @@ func (e *EasyPay) VerifyNotification(_ context.Context, rawBody string, _ map[st
 	// url.ParseQuery already decodes values — no additional decode needed.
 	params := make(map[string]string)
 	for k := range values {
+		if !easyPayNotifyAllowedParams[k] {
+			return nil, fmt.Errorf("unexpected notify param: %s", k)
+		}
 		params[k] = values.Get(k)
 	}
 	sign := params["sign"]
@@ -606,4 +622,28 @@ func easyPaySign(params map[string]string, pkey string) string {
 
 func easyPayVerifySign(params map[string]string, pkey string, sign string) bool {
 	return hmac.Equal([]byte(easyPaySign(params, pkey)), []byte(sign))
+}
+
+// easyPayNotifyAllowedParams accepts the standard EasyPay notification fields
+// plus the signed endtime extension used by custom month-card settlement.
+// Order-creation-only fields (notify_url, return_url, cid, device, clientip, ...) must never
+// appear in a callback: because the sign base string concatenates values
+// unescaped, a signed order URL whose return_url embeds e.g.
+// "trade_status=TRADE_SUCCESS" could otherwise be replayed as a forged
+// payment-success notification (issue #7881). Rejecting unknown keys closes
+// the whole smuggling class; genuinely paid orders rejected by an exotic
+// upstream variant are still recovered by the upstream QueryOrder reconcile
+// path.
+var easyPayNotifyAllowedParams = map[string]bool{
+	"pid":          true,
+	"trade_no":     true,
+	"out_trade_no": true,
+	"type":         true,
+	"name":         true,
+	"money":        true,
+	"trade_status": true,
+	"endtime":      true, // Still included in signature verification before paid_at is read.
+	"param":        true,
+	"sign":         true,
+	"sign_type":    true,
 }

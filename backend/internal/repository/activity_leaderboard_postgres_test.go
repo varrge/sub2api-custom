@@ -33,14 +33,14 @@ func TestActivityLeaderboardPostgresAccounting(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close(); _, _ = admin.Exec("DROP SCHEMA " + schema + " CASCADE"); _ = admin.Close() })
 	_, err = db.Exec(`
-CREATE TABLE users(id BIGINT PRIMARY KEY, role TEXT DEFAULT 'user', deleted_at TIMESTAMPTZ);
+CREATE TABLE users(id BIGINT PRIMARY KEY, email TEXT, role TEXT DEFAULT 'user', deleted_at TIMESTAMPTZ);
 CREATE TABLE usage_logs(user_id BIGINT, api_key_id BIGINT DEFAULT 1, request_id TEXT,
  created_at TIMESTAMPTZ, actual_cost NUMERIC(20,8), total_cost NUMERIC(20,8) DEFAULT 100,
  rate_multiplier NUMERIC DEFAULT 1, group_id BIGINT, billing_type SMALLINT, billing_mode TEXT,
  UNIQUE(request_id,api_key_id));
 CREATE TABLE month_card_billing_pending(request_id TEXT, api_key_id BIGINT, PRIMARY KEY(request_id,api_key_id));
 CREATE TABLE payment_orders(user_id BIGINT, amount NUMERIC);
-INSERT INTO users(id) SELECT generate_series(1,8);
+INSERT INTO users(id, email) SELECT id, 'user-' || id || '@example.test' FROM generate_series(1,8) AS id;
 UPDATE users SET role='admin' WHERE id=4;
 UPDATE users SET deleted_at=NOW() WHERE id=5;
 INSERT INTO payment_orders VALUES(8,999999);`)
@@ -75,15 +75,15 @@ INSERT INTO payment_orders VALUES(8,999999);`)
 	rows, err := repo.ListSpending(context.Background(), start, end)
 	require.NoError(t, err)
 	require.Equal(t, []service.ActivitySpending{
-		{UserID: 6, Amount: "1.00000001"}, {UserID: 2, Amount: "1.00000000"},
-		{UserID: 3, Amount: "1.00000000"}, {UserID: 1, Amount: "1.00000000"},
+		{UserID: 6, Email: "user-6@example.test", Amount: "1.00000001"}, {UserID: 2, Email: "user-2@example.test", Amount: "1.00000000"},
+		{UserID: 3, Email: "user-3@example.test", Amount: "1.00000000"}, {UserID: 1, Email: "user-1@example.test", Amount: "1.00000000"},
 	}, rows)
 	// Successful recovery admits exactly the original cost, with no allocation join.
 	_, err = db.Exec(`DELETE FROM month_card_billing_pending WHERE request_id='pending'`)
 	require.NoError(t, err)
 	rows, err = repo.ListSpending(context.Background(), start, end)
 	require.NoError(t, err)
-	require.Equal(t, service.ActivitySpending{UserID: 1, Amount: "101.00000000"}, rows[0])
+	require.Equal(t, service.ActivitySpending{UserID: 1, Email: "user-1@example.test", Amount: "101.00000000"}, rows[0])
 	rows, err = repo.ListSpending(context.Background(), start, start)
 	require.NoError(t, err)
 	require.Empty(t, rows)

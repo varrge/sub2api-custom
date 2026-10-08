@@ -5,6 +5,11 @@ FRONTEND_CRITICAL_VITEST := \
 	src/api/__tests__/client.spec.ts \
 	src/api/__tests__/tokenRefresh.spec.ts \
 	src/api/__tests__/keys.bulkUpdate.spec.ts \
+	src/api/__tests__/activityLeaderboard.admin.spec.ts \
+	src/components/common/__tests__/ActivityLeaderboard.spec.ts \
+	src/components/common/__tests__/ActivityLeaderboard.admin.spec.ts \
+	src/components/common/__tests__/ActivityLeaderboard.configSync.spec.ts \
+	src/components/layout/__tests__/AppHeader.quickMenu.spec.ts \
 	src/components/account/__tests__/OpenAIReferralCell.spec.ts \
 	src/components/account/__tests__/OpenAIReferralCell.transport.spec.ts \
 	src/components/account/__tests__/OpenAIQuotaResetCell.spark_shadow.spec.ts \

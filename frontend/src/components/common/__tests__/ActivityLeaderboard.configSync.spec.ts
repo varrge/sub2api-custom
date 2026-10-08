@@ -5,6 +5,9 @@ import { getActivityLeaderboard, getActivityLeaderboardConfig, type ActivityLead
 import { notifyActivityLeaderboardConfigSaved } from '@/utils/activityLeaderboardEvents'
 
 vi.mock('@/api/activityLeaderboard', () => ({ getActivityLeaderboard: vi.fn(), getActivityLeaderboardConfig: vi.fn() }))
+vi.mock('@/api/admin/activityLeaderboard', () => ({ getAdminActivityLeaderboard: vi.fn(), exportActivityLeaderboard: vi.fn() }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isAdmin: false, user: { id: 1 } }) }))
+
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ locale: { value: 'zh' }, t: (key: string, params: Record<string, unknown> = {}) => key + JSON.stringify(params) }) }))
 const boardAPI = vi.mocked(getActivityLeaderboard)
 const configAPI = vi.mocked(getActivityLeaderboardConfig)

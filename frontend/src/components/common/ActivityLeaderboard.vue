@@ -69,6 +69,19 @@
             </p>
             <p v-if="data.status === 'ended'" class="rounded-xl bg-gray-50 px-3 py-2.5 text-[11px] leading-5 text-gray-600 dark:bg-dark-800 dark:text-dark-300">{{ t('activityLeaderboard.endedNotice') }}</p>
 
+            <div v-if="authStore.isAdmin" class="space-y-2 rounded-xl bg-gray-50 p-3 dark:bg-dark-800" data-testid="leaderboard-admin-tools">
+              <p class="text-[11px] leading-5 text-gray-600 dark:text-dark-300">{{ t('activityLeaderboardAdmin.help') }}</p>
+              <div class="flex flex-wrap gap-2">
+                <button type="button" class="btn btn-secondary btn-sm" :disabled="!canExport" data-testid="leaderboard-export-top3" @click="download('top3')">
+                  {{ t(exporting === 'top3' ? 'activityLeaderboardAdmin.exporting' : 'activityLeaderboardAdmin.exportTop3') }}
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" :disabled="!canExport" data-testid="leaderboard-export-all" @click="download('all')">
+                  {{ t(exporting === 'all' ? 'activityLeaderboardAdmin.exporting' : 'activityLeaderboardAdmin.exportAll') }}
+                </button>
+              </div>
+              <p v-if="exportError" role="alert" class="text-xs text-red-600 dark:text-red-400">{{ t(exportError) }}</p>
+            </div>
+
             <div v-if="(data.status === 'upcoming' && !data.demo) || !data.entries.length" class="rounded-xl border border-dashed border-gray-200 px-4 py-7 text-center dark:border-dark-600" data-testid="leaderboard-empty">
               <Icon name="moon" size="lg" class="mx-auto mb-2 text-amber-500" />
               <p class="text-sm font-semibold text-gray-900 dark:text-white">{{ t(data.status === 'upcoming' ? 'activityLeaderboard.upcomingTitle' : 'activityLeaderboard.emptyTitle') }}</p>
@@ -76,7 +89,7 @@
             </div>
 
             <template v-if="data.status !== 'upcoming' || data.demo">
-              <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-400/20 dark:bg-amber-400/5" data-testid="leaderboard-me">
+              <div v-if="!authStore.isAdmin" class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-400/20 dark:bg-amber-400/5" data-testid="leaderboard-me">
                 <div>
                   <p class="text-[11px] text-gray-500 dark:text-dark-300">{{ t('activityLeaderboard.myRank') }}</p>
                   <p class="mt-0.5 text-sm font-bold text-gray-900 dark:text-white">{{ data.me ? `#${data.me.rank}` : t('activityLeaderboard.unranked') }}</p>
@@ -94,12 +107,12 @@
                   <span class="text-[11px] text-gray-500 dark:text-dark-300">{{ t('activityLeaderboard.participants', { count: data.participant_count }) }}</span>
                 </div>
                 <div class="overflow-x-auto rounded-xl border border-gray-200 dark:border-dark-700">
-                  <table class="w-full text-left text-xs">
+                  <table class="w-full table-fixed text-left text-xs">
                     <thead class="bg-gray-50 text-[11px] text-gray-500 dark:bg-dark-800 dark:text-dark-300">
                       <tr>
-                        <th scope="col" class="px-2.5 py-2 font-medium">{{ t('activityLeaderboard.rank') }}</th>
+                        <th scope="col" class="w-12 px-2.5 py-2 font-medium">{{ t('activityLeaderboard.rank') }}</th>
                         <th scope="col" class="px-2 py-2 font-medium">{{ t('activityLeaderboard.participant') }}</th>
-                        <th scope="col" class="px-2.5 py-2 text-right font-medium">{{ t('activityLeaderboard.amount') }}</th>
+                        <th scope="col" class="w-24 px-2.5 py-2 text-right font-medium">{{ t('activityLeaderboard.amount') }}</th>
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
@@ -108,10 +121,14 @@
                           <span class="inline-flex h-6 min-w-6 items-center justify-center rounded-md text-xs font-semibold tabular-nums" :class="rankClass(entry.rank)">{{ entry.rank }}</span>
                         </td>
                         <td class="px-2 py-2 text-gray-700 dark:text-dark-200">
-                          <span class="break-all font-mono text-[11px]">{{ t('activityLeaderboard.anonymous', { alias: entry.alias }) }}</span>
+                          <template v-if="authStore.isAdmin && 'user_id' in entry">
+                            <span class="block font-semibold" data-testid="leaderboard-user-id">{{ t('activityLeaderboardAdmin.userId') }}: {{ entry.user_id }}</span>
+                            <span class="block break-all select-text" data-testid="leaderboard-email">{{ entry.email || '—' }}</span>
+                          </template>
+                          <span class="break-all font-mono text-[11px]">{{ t(authStore.isAdmin ? 'activityLeaderboardAdmin.alias' : 'activityLeaderboard.anonymous', { alias: entry.alias }) }}</span>
                           <span v-if="entry.is_me" class="ml-1 inline-block rounded bg-amber-100 px-1 text-[10px] text-amber-800 dark:bg-amber-400/20 dark:text-amber-200">{{ t('activityLeaderboard.you') }}</span>
                         </td>
-                        <td class="px-2.5 py-2 text-right font-medium tabular-nums text-gray-900 dark:text-white" :title="entry.amount">{{ formatAmount(entry.amount) }}</td>
+                        <td class="break-all px-2.5 py-2 text-right font-medium tabular-nums text-gray-900 dark:text-white" :title="entry.amount">{{ formatAmount(entry.amount) }}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -132,7 +149,7 @@
                 <li>{{ t('activityLeaderboard.rulesScope') }}</li>
                 <li>{{ t('activityLeaderboard.rulesExclusions') }}</li>
                 <li>{{ t('activityLeaderboard.rulesRanking') }}</li>
-                <li>{{ t('activityLeaderboard.rulesPrivacy') }}</li>
+                <li>{{ t(authStore.isAdmin ? 'activityLeaderboardAdmin.rulesPrivacy' : 'activityLeaderboard.rulesPrivacy') }}</li>
               </ul>
             </details>
           </template>
@@ -145,18 +162,31 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { saveAs } from 'file-saver'
+import { useAuthStore } from '@/stores/auth'
+import {
+  getAdminActivityLeaderboard,
+  exportActivityLeaderboard,
+  type AdminActivityLeaderboardEntry,
+  type ActivityLeaderboardExportScope,
+} from '@/api/admin/activityLeaderboard'
 import {
   getActivityLeaderboard,
   getActivityLeaderboardConfig,
   type ActivityLeaderboard,
+  type ActivityLeaderboardEntry,
   type ActivityLeaderboardPublicConfig,
 } from '@/api/activityLeaderboard'
 import { activityLeaderboardConfigVersion } from '@/utils/activityLeaderboardEvents'
 import Icon from '@/components/icons/Icon.vue'
 
 const { t, locale } = useI18n()
+const authStore = useAuthStore()
 const show = ref(false)
-const data = ref<ActivityLeaderboard | null>(null)
+type DisplayLeaderboard = Omit<ActivityLeaderboard, 'entries'> & {
+  entries: (ActivityLeaderboardEntry | AdminActivityLeaderboardEntry)[]
+}
+const data = ref<DisplayLeaderboard | null>(null)
 const loading = ref(false)
 const error = ref(false)
 const config = ref<ActivityLeaderboardPublicConfig | null>(null)
@@ -167,6 +197,11 @@ let controller: AbortController | undefined
 let timer: ReturnType<typeof setTimeout> | undefined
 let configController: AbortController | undefined
 let configTimer: ReturnType<typeof setInterval> | undefined
+let exportController: AbortController | undefined
+const exporting = ref<ActivityLeaderboardExportScope | null>(null)
+const exportError = ref('')
+const canExport = computed(() => authStore.isAdmin && !loading.value && !error.value && !exporting.value &&
+  !!data.value?.entries.length && ['active', 'ended'].includes(data.value.status))
 
 const CONFIG_REFRESH_MS = 60 * 1000
 
@@ -215,6 +250,10 @@ function stop() {
   controller?.abort()
   controller = undefined
   loading.value = false
+  exportController?.abort()
+  exportController = undefined
+  exporting.value = null
+  exportError.value = ''
 }
 
 function scheduleRefresh() {
@@ -234,7 +273,9 @@ async function fetchLeaderboard() {
   loading.value = true
   error.value = false
   try {
-    const result = await getActivityLeaderboard(request.signal)
+    const result: DisplayLeaderboard = authStore.isAdmin
+      ? { ...await getAdminActivityLeaderboard(request.signal), me: null }
+      : await getActivityLeaderboard(request.signal)
     if (!request.signal.aborted) {
       if (!result.enabled || result.status === 'disabled') {
         if (config.value) config.value = { ...config.value, enabled: false, status: 'disabled' }
@@ -243,12 +284,45 @@ async function fetchLeaderboard() {
       } else data.value = result
     }
   } catch {
-    if (!request.signal.aborted) error.value = true
+    if (!request.signal.aborted) {
+      error.value = true
+      if (authStore.isAdmin) data.value = null
+    }
   } finally {
     if (controller === request) {
       loading.value = false
       controller = undefined
       scheduleRefresh()
+    }
+  }
+}
+
+async function download(scope: ActivityLeaderboardExportScope) {
+  if (!canExport.value || !data.value) return
+  const campaignID = data.value.campaign_id
+  const request = new AbortController()
+  exportController = request
+  exporting.value = scope
+  exportError.value = ''
+  try {
+    const blob = await exportActivityLeaderboard(campaignID, scope, request.signal)
+    if (!request.signal.aborted && authStore.isAdmin) {
+      saveAs(blob, `leaderboard-${campaignID}-${scope}.csv`)
+    }
+  } catch (cause) {
+    if (!request.signal.aborted) {
+      const status = (cause as { status?: number })?.status
+      if (status === 409) await fetchLeaderboard()
+      if (status === 401 || status === 403) {
+        data.value = null
+        error.value = true
+      }
+      exportError.value = status === 409 ? 'activityLeaderboardAdmin.campaignChanged' : 'activityLeaderboardAdmin.exportError'
+    }
+  } finally {
+    if (exportController === request) {
+      exportController = undefined
+      exporting.value = null
     }
   }
 }
@@ -326,6 +400,14 @@ watch(entryHidden, (hidden) => {
 
 // An admin saving the settings bumps this counter; refetch immediately.
 watch(activityLeaderboardConfigVersion, () => void fetchConfig())
+
+// Clear private rows and pending downloads immediately on account/role changes.
+watch([() => authStore.user?.id, () => authStore.isAdmin], () => {
+  stop()
+  data.value = null
+  error.value = false
+  if (show.value) void fetchLeaderboard()
+}, { flush: 'sync' })
 
 onMounted(() => {
   void fetchConfig()

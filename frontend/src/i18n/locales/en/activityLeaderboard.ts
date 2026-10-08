@@ -41,4 +41,15 @@ export default {
     retry: 'Retry',
     close: 'Close leaderboard',
   },
+  activityLeaderboardAdmin: {
+    help: 'Only admins can see user IDs and emails. To award a user, search their email in Users and verify the ID. Export all includes participants outside the top 20.',
+    userId: 'User ID',
+    alias: 'Anonymous ID {alias}',
+    exportTop3: 'Export top 3',
+    exportAll: 'Export all participants',
+    exporting: 'Exporting…',
+    exportError: 'Unable to export the participant list. Please try again.',
+    campaignChanged: 'The activity changed. The leaderboard has reloaded; review it before exporting again.',
+    rulesPrivacy: 'Only admins can view real IDs and emails or export participants. Users see anonymous aliases. Billed credits are not CNY payments.',
+  },
 }

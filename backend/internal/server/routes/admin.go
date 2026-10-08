@@ -37,6 +37,10 @@ func RegisterAdminRoutes(
 		// 仪表盘
 		registerDashboardRoutes(admin, h)
 
+		// Private activity identities and award exports use administrator authentication.
+		admin.GET("/activities/leaderboard", panelRateLimiter.Heavy(), h.ActivityLeaderboard.GetAdmin)
+		admin.GET("/activities/leaderboard/export", panelRateLimiter.Heavy(), h.ActivityLeaderboard.Export)
+
 		// 用户管理
 		registerUserManagementRoutes(admin, h)
 

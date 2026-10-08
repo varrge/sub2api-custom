@@ -27,8 +27,13 @@ func TestActivityLeaderboardSettingsRoutesRequireAdminAuthentication(t *testing.
 	stepUp := servermiddleware.StepUpAuthMiddleware(func(c *gin.Context) { c.Next() })
 	RegisterAdminRoutes(router.Group("/api/v1"), handlers, adminAuth, auditLog, stepUp, nil, nil)
 
-	path := "/api/v1/admin/settings/activity-leaderboard"
-	for _, method := range []string{http.MethodGet, http.MethodPut} {
+	for _, endpoint := range []struct{ method, path string }{
+		{http.MethodGet, "/api/v1/admin/settings/activity-leaderboard"},
+		{http.MethodPut, "/api/v1/admin/settings/activity-leaderboard"},
+		{http.MethodGet, "/api/v1/admin/activities/leaderboard"},
+		{http.MethodGet, "/api/v1/admin/activities/leaderboard/export"},
+	} {
+		method, path := endpoint.method, endpoint.path
 		for _, tc := range []struct {
 			name       string
 			auth       string
@@ -37,7 +42,7 @@ func TestActivityLeaderboardSettingsRoutesRequireAdminAuthentication(t *testing.
 			{name: "unauthenticated", wantStatus: http.StatusUnauthorized},
 			{name: "non-admin", auth: "Bearer user-token", wantStatus: http.StatusForbidden},
 		} {
-			t.Run(method+"/"+tc.name, func(t *testing.T) {
+			t.Run(method+path+"/"+tc.name, func(t *testing.T) {
 				recorder := httptest.NewRecorder()
 				request := httptest.NewRequest(method, path, nil)
 				if tc.auth != "" {

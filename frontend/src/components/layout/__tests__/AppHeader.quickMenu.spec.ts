@@ -43,6 +43,12 @@ vi.mock('@/api/activityLeaderboard', () => ({
 
 const routerPush = vi.hoisted(() => vi.fn())
 
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({
+  user: { id: 1 },
+  get isAdmin() { return state.isAdmin },
+}) }))
+vi.mock('@/api/admin/activityLeaderboard', () => ({ getAdminActivityLeaderboard: vi.fn(), exportActivityLeaderboard: vi.fn() }))
+
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: routerPush }),
   useRoute: () => ({

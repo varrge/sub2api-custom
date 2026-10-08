@@ -228,3 +228,29 @@ func TestOllamaCloudUsageSessionRouteOmitsAuditBody(t *testing.T) {
 	require.Equal(t, "<credential-bearing body omitted>", logs[0].RequestBody)
 	require.NotContains(t, logs[0].RequestBody, "audit-canary")
 }
+
+func TestActivityLeaderboardExportIsAuditedWithoutCSVContents(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repository := &auditCaptureRepository{}
+	auditService := service.NewAuditLogService(repository, nil)
+	auditService.Start()
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set(string(ContextKeyUser), AuthSubject{UserID: 77})
+		c.Set(string(ContextKeyUserRole), service.RoleAdmin)
+		c.Next()
+	})
+	router.Use(gin.HandlerFunc(NewAuditLogMiddleware(auditService)))
+	router.GET("/api/v1/admin/activities/leaderboard/export", func(c *gin.Context) { c.Data(http.StatusOK, "text/csv", []byte("151,private-winner@example.test")) })
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/admin/activities/leaderboard/export?scope=top3&campaign_id=activity-test", nil))
+	require.Equal(t, http.StatusOK, recorder.Code)
+	auditService.Stop()
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	require.Len(t, repository.logs, 1)
+	entry := repository.logs[0]
+	require.Equal(t, "admin.activity_leaderboard.export", entry.Action)
+	require.Equal(t, http.StatusOK, entry.StatusCode)
+	require.NotContains(t, entry.RequestBody, "private-winner")
+}

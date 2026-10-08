@@ -245,3 +245,54 @@ func TestActivityLeaderboardCanonicalCampaignIdentity(t *testing.T) {
 	require.Equal(t, a.campaignID(), b.campaignID())
 	require.NotEqual(t, a.cacheKey(), b.cacheKey())
 }
+
+func TestActivityLeaderboardAdminSnapshotSharesRankingWithoutLeakingIdentities(t *testing.T) {
+	now := festivalEnd
+	repo := &activityRepoStub{}
+	for i := 1; i <= 25; i++ {
+		repo.rows = append(repo.rows, ActivitySpending{UserID: int64(i), Email: fmt.Sprintf("person%d@example.test", i), Amount: fmt.Sprint(100 - i)})
+	}
+	s := testActivityService(repo, &now)
+	admin, err := s.GetAdmin(context.Background(), 20)
+	require.NoError(t, err)
+	require.Len(t, admin.Entries, 20)
+	require.Equal(t, 25, admin.ParticipantCount)
+	public, err := s.Get(context.Background(), 25)
+	require.NoError(t, err)
+	require.Equal(t, admin.UpdatedAt, public.UpdatedAt)
+	require.Equal(t, admin.Entries[0].Alias, public.Entries[0].Alias)
+	require.Equal(t, 25, public.Me.Rank)
+	all, err := s.GetAdmin(context.Background(), 0)
+	require.NoError(t, err)
+	require.Len(t, all.Entries, 25)
+	top, err := s.GetAdmin(context.Background(), 3)
+	require.NoError(t, err)
+	require.Len(t, top.Entries, 3)
+	require.Equal(t, int32(1), repo.calls.Load())
+	admin.Entries[0].Email = "mutated"
+	admin.Entries[0].Amount = "mutated"
+	again, err := s.GetAdmin(context.Background(), 20)
+	require.NoError(t, err)
+	require.Equal(t, "person1@example.test", again.Entries[0].Email)
+	require.Equal(t, "99", again.Entries[0].Amount)
+	encoded, err := json.Marshal(public)
+	require.NoError(t, err)
+	for _, private := range []string{"user_id", "email", "example.test"} {
+		require.NotContains(t, string(encoded), private)
+	}
+	now = festivalStart.Add(-time.Hour)
+	settings, ok := s.settings.(*activityConfigStub)
+	require.True(t, ok)
+	cfg := settings.cfg
+	demoEnd := festivalStart
+	cfg.DemoExpiresAt = &demoEnd
+	upcoming, err := s.GetAdmin(context.Background(), 0)
+	require.NoError(t, err)
+	require.Empty(t, upcoming.Entries)
+	require.Zero(t, upcoming.ParticipantCount)
+	cfg.Enabled = false
+	disabled, err := s.GetAdmin(context.Background(), 0)
+	require.NoError(t, err)
+	require.Empty(t, disabled.Entries)
+	require.Equal(t, int32(1), repo.calls.Load())
+}

@@ -4,6 +4,9 @@ import ActivityLeaderboard from '../ActivityLeaderboard.vue'
 import { getActivityLeaderboard, getActivityLeaderboardConfig, type ActivityLeaderboard as LeaderboardData } from '@/api/activityLeaderboard'
 import zh from '@/i18n/locales/zh/activityLeaderboard'
 
+vi.mock('@/api/admin/activityLeaderboard', () => ({ getAdminActivityLeaderboard: vi.fn(), exportActivityLeaderboard: vi.fn() }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isAdmin: false, user: { id: 1 } }) }))
+
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
     locale: { value: 'zh' },

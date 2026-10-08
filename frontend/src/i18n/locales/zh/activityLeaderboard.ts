@@ -41,4 +41,15 @@ export default {
     retry: '重试',
     close: '关闭榜单',
   },
+  activityLeaderboardAdmin: {
+    help: '仅管理员可见真实 ID 和邮箱。发奖时可在用户管理中按邮箱搜索并核对 ID；导出全部名单包含 TOP 20 以外的参与者。',
+    userId: '用户 ID',
+    alias: '匿名编号 {alias}',
+    exportTop3: '导出前三名',
+    exportAll: '导出全部名单',
+    exporting: '导出中…',
+    exportError: '名单导出失败，请重试。',
+    campaignChanged: '活动已变更，榜单已重新加载，请核对后再次导出。',
+    rulesPrivacy: '真实 ID、邮箱与名单导出仅管理员可用；普通用户只看到匿名编号。计费额度不等于人民币实付金额。',
+  },
 }

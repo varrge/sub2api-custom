@@ -28,6 +28,7 @@ type ActivityLeaderboardMetadata struct {
 // ActivitySpending is private repository data. Never serialize user IDs to the public endpoint.
 type ActivitySpending struct {
 	UserID int64
+	Email  string
 	Amount string // PostgreSQL NUMERIC, already ordered at full precision.
 }
 
@@ -60,12 +61,28 @@ type ActivityLeaderboard struct {
 	Me                *ActivityLeaderboardEntry  `json:"me"`
 }
 
+// AdminActivityLeaderboardEntry is never returned by the user-facing endpoint.
+type AdminActivityLeaderboardEntry struct {
+	ActivityLeaderboardEntry
+	UserID int64  `json:"user_id"`
+	Email  string `json:"email"`
+}
+
+type AdminActivityLeaderboard struct {
+	ActivityLeaderboardMetadata
+	UpdatedAt        time.Time                       `json:"updated_at"`
+	RefreshSeconds   int                             `json:"refresh_seconds"`
+	ParticipantCount int                             `json:"participant_count"`
+	Entries          []AdminActivityLeaderboardEntry `json:"entries"`
+}
+
 type activityLeaderboardSnapshot struct {
 	key       string
 	updatedAt time.Time
 	status    string
 	top       []ActivityLeaderboardEntry
 	byUser    map[int64]ActivityLeaderboardEntry
+	admin     []AdminActivityLeaderboardEntry
 }
 
 type ActivityLeaderboardService struct {
@@ -111,7 +128,6 @@ func (s *ActivityLeaderboardService) Get(ctx context.Context, userID int64) (*Ac
 		return nil, err
 	}
 	now := s.now()
-	key := cfg.cacheKey() + ":" + cfg.status(now)
 	result := &ActivityLeaderboard{
 		Enabled: cfg.Enabled, Title: cfg.Title, Subtitle: cfg.Subtitle, RewardDescription: cfg.RewardDescription,
 		CampaignID: cfg.campaignID(), StartsAt: cfg.StartsAt, EndsAt: cfg.EndsAt,
@@ -143,6 +159,60 @@ func (s *ActivityLeaderboardService) Get(ctx context.Context, userID int64) (*Ac
 		}
 		return result, nil
 	}
+	snapshot, err := s.getSnapshot(ctx, cfg, now)
+	if err != nil {
+		return nil, err
+	}
+	result.Status = snapshot.status
+	result.UpdatedAt = snapshot.updatedAt
+	result.ParticipantCount = len(snapshot.byUser)
+	if me, ok := snapshot.byUser[userID]; ok {
+		me.IsMe = true
+		result.Me = &me
+	}
+	// Copy entries so one user's personalized response cannot mutate the shared snapshot.
+	for _, entry := range snapshot.top {
+		entry.IsMe = result.Me != nil && entry.Rank == result.Me.Rank
+		result.Entries = append(result.Entries, entry)
+	}
+	return result, nil
+}
+
+// GetAdmin shares the ranking snapshot with Get, but uses a separate response
+// type so private identities can never leak through the public JSON serializer.
+// A zero limit returns all participants for export; previews use a limit of 20.
+func (s *ActivityLeaderboardService) GetAdmin(ctx context.Context, limit int) (*AdminActivityLeaderboard, error) {
+	cfg, err := s.settings.GetActivityLeaderboardConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+	now := s.now()
+	result := &AdminActivityLeaderboard{
+		ActivityLeaderboardMetadata: ActivityLeaderboardMetadata{ActivityLeaderboardConfig: *cfg, CampaignID: cfg.campaignID(), Status: cfg.status(now)},
+		UpdatedAt:                   now, RefreshSeconds: int(activityLeaderboardTTL.Seconds()),
+		Entries: []AdminActivityLeaderboardEntry{},
+	}
+	// Admin award lists contain real participants only, never preview samples.
+	if result.Status == "disabled" || result.Status == "upcoming" {
+		return result, nil
+	}
+	snapshot, err := s.getSnapshot(ctx, cfg, now)
+	if err != nil {
+		return nil, err
+	}
+	result.Status = snapshot.status
+	result.UpdatedAt = snapshot.updatedAt
+	result.ParticipantCount = len(snapshot.admin)
+	rows := snapshot.admin
+	if limit > 0 && limit < len(rows) {
+		rows = rows[:limit]
+	}
+	result.Entries = append(result.Entries, rows...)
+	return result, nil
+}
+
+func (s *ActivityLeaderboardService) getSnapshot(ctx context.Context, cfg *ActivityLeaderboardConfig, now time.Time) (*activityLeaderboardSnapshot, error) {
+	key := cfg.cacheKey() + ":" + cfg.status(now)
 	snapshot := s.cached(now, key, cfg.status(now))
 	if snapshot == nil {
 		ch := s.refresh.DoChan(key, func() (any, error) {
@@ -165,6 +235,7 @@ func (s *ActivityLeaderboardService) Get(ctx context.Context, userID int64) (*Ac
 			for i, row := range rows {
 				entry := ActivityLeaderboardEntry{Rank: i + 1, Alias: s.alias(cfg.campaignID(), row.UserID), Amount: row.Amount}
 				fresh.byUser[row.UserID] = entry
+				fresh.admin = append(fresh.admin, AdminActivityLeaderboardEntry{ActivityLeaderboardEntry: entry, UserID: row.UserID, Email: row.Email})
 				if i < 20 {
 					fresh.top = append(fresh.top, entry)
 				}
@@ -188,17 +259,5 @@ func (s *ActivityLeaderboardService) Get(ctx context.Context, userID int64) (*Ac
 			}
 		}
 	}
-	result.Status = snapshot.status
-	result.UpdatedAt = snapshot.updatedAt
-	result.ParticipantCount = len(snapshot.byUser)
-	if me, ok := snapshot.byUser[userID]; ok {
-		me.IsMe = true
-		result.Me = &me
-	}
-	// Copy entries so one user's personalized response cannot mutate the shared snapshot.
-	for _, entry := range snapshot.top {
-		entry.IsMe = result.Me != nil && entry.Rank == result.Me.Rank
-		result.Entries = append(result.Entries, entry)
-	}
-	return result, nil
+	return snapshot, nil
 }

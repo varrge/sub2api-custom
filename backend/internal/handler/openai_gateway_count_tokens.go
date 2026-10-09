@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/Wei-Shaw/sub2api/internal/pkg/requestmodel"
 	"net/http"
 	"strconv"
 	"strings"
@@ -47,6 +48,10 @@ func (h *OpenAIGatewayHandler) ResponsesInputTokens(c *gin.Context) {
 			return
 		}
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to read request body")
+		return
+	}
+	if err := requestmodel.ValidateBody(c.Request.URL.Path, c.GetHeader("Content-Type"), body); err != nil {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 		return
 	}
 	if len(body) == 0 || !gjson.ValidBytes(body) {
@@ -142,6 +147,10 @@ func (h *OpenAIGatewayHandler) GrokCountTokens(c *gin.Context) {
 		h.anthropicErrorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to read request body")
 		return
 	}
+	if err := requestmodel.ValidateBody(c.Request.URL.Path, c.GetHeader("Content-Type"), body); err != nil {
+		h.anthropicErrorResponse(c, http.StatusBadRequest, "invalid_request_error", err.Error())
+		return
+	}
 	if len(body) == 0 {
 		h.anthropicErrorResponse(c, http.StatusBadRequest, "invalid_request_error", "Request body is empty")
 		return
@@ -210,6 +219,10 @@ func (h *OpenAIGatewayHandler) CountTokens(c *gin.Context) {
 			return
 		}
 		h.anthropicErrorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to read request body")
+		return
+	}
+	if err := requestmodel.ValidateBody(c.Request.URL.Path, c.GetHeader("Content-Type"), body); err != nil {
+		h.anthropicErrorResponse(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 		return
 	}
 	if len(body) == 0 {

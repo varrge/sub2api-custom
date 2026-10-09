@@ -107,6 +107,7 @@ func TestOpenAIResponsesWebSocket_FirstFrameDuplicateModelKeysRejected(t *testin
 				group:                   wsAllowlistGroup(true, "gpt-5.4"),
 				ingressMode:             mode,
 				firstFrameCloseExpected: true,
+				closeReason:             "model is specified more than once",
 			})
 		})
 	}
@@ -121,6 +122,7 @@ func TestOpenAIResponsesWebSocket_FirstFrameCaseVariantModelKeyRejected(t *testi
 		group:                   wsAllowlistGroup(true, "gpt-5.4"),
 		ingressMode:             service.OpenAIWSIngressModePassthrough,
 		firstFrameCloseExpected: true,
+		closeReason:             "model is specified more than once",
 	})
 }
 
@@ -134,20 +136,32 @@ func TestOpenAIResponsesWebSocket_SubsequentTurnDuplicateModelKeysRejected(t *te
 				group:                   wsAllowlistGroup(true, "gpt-5.4"),
 				ingressMode:             mode,
 				secondTurnCloseExpected: true,
+				closeReason:             "model is specified more than once",
 			})
 		})
 	}
 }
 
-// 重复但同值的 model 键不误伤，连接正常完成两个 turn。
-func TestOpenAIResponsesWebSocket_DuplicateIdenticalModelKeysAllowed(t *testing.T) {
-	got := runOpenAIResponsesWebSocketUsageLogCase(t, openAIResponsesWSUsageLogCase{
-		firstPayload:  `{"type":"response.create","model":"gpt-5.4","model":"gpt-5.4","stream":false}`,
-		secondPayload: `{"type":"response.create","model":"gpt-5.4","stream":false}`,
-		group:         wsAllowlistGroup(true, "gpt-5.4"),
+// Repeated controls are rejected even if they contain identical values.
+func TestOpenAIResponsesWebSocket_DuplicateIdenticalModelKeysRejected(t *testing.T) {
+	runOpenAIResponsesWebSocketUsageLogCase(t, openAIResponsesWSUsageLogCase{
+		firstPayload: `{"type":"response.create","model":"gpt-5.4","model":"gpt-5.4"}`,
+		group:        wsAllowlistGroup(false), firstFrameCloseExpected: true,
+		closeReason: "model is specified more than once",
 	})
-	if len(got.clientEvents) != 2 {
-		t.Fatalf("expected two completed events, got %d", len(got.clientEvents))
+}
+
+func TestOpenAIResponsesWebSocket_SessionUpdateDuplicatesRejected(t *testing.T) {
+	for _, payload := range []string{
+		`{"type":"session.update","session":{"model":"gpt-5.4","Model":"gpt-5.4"}}`,
+		`{"type":"session.update","session":{"model":"gpt-5.4"},"Session":null}`,
+	} {
+		runOpenAIResponsesWebSocketUsageLogCase(t, openAIResponsesWSUsageLogCase{
+			firstPayload:  `{"type":"response.create","model":"gpt-5.4"}`,
+			secondPayload: payload, group: wsAllowlistGroup(false),
+			ingressMode:             service.OpenAIWSIngressModePassthrough,
+			secondTurnCloseExpected: true, closeReason: "specified more than once",
+		})
 	}
 }
 

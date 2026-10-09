@@ -227,6 +227,7 @@ func TestPinnedRevalidationRefreshesLegacyKeyAndNeverSchedules(t *testing.T) {
 func TestPinnedRevalidationUsesFreshEntitlementAndPolicy(t *testing.T) {
 	original := routingKey().ForGroup(routingKey().Groups[1])
 	fresh := routingKey()
+	original.Group.SubscriptionType = service.SubscriptionTypeSubscription
 	fresh.Groups[1].SubscriptionType = service.SubscriptionTypeSubscription
 	fresh.User.Concurrency = 7
 	p := &routingProbe{}
@@ -372,16 +373,18 @@ func TestMultiGroupRoutingHonorsEachGroupsModelAllowlist(t *testing.T) {
 	require.Equal(t, int64(2), *selected.GroupID)
 	require.Equal(t, []int64{2}, p.seen)
 }
-func TestMultiGroupRoutingChecksEveryParsableModelBeforeSelectingGroup(t *testing.T) {
-	key := routingKey()
-	key.Groups[0].ModelAllowlist = service.GroupModelAllowlist{Enabled: true, Models: []string{"gpt-test"}}
-	p := &routingProbe{available: map[int64]bool{1: true, 2: true}}
-	r := &apiKeyGroupRouting{prober: p}
-	selected, err := r.resolve(routingContext("POST", "/v1/responses", `{"model":"gpt-test","Model":"other-model"}`), key)
-	require.NoError(t, err)
-	require.Equal(t, int64(2), *selected.GroupID)
-	require.Equal(t, []int64{2}, p.seen)
+func TestMultiGroupRoutingRejectsAmbiguousModelBeforeProbe(t *testing.T) {
+	for _, body := range []string{"\xef\xbb\xbf" + `{"model":"gpt-test","model":"other-model"}`, "{\"model\":\"gpt-test\",\"model\":\"other-model\",\"input\":\"line\nline\"}", `{"model":"gpt-test","Model":"other-model"}`, `{"model":"gpt-test","model":"gpt-test"}`, `{"model":"gpt-test","model":null}`} {
+		key := routingKey()
+		p := &routingProbe{available: map[int64]bool{1: true, 2: true}}
+		r := &apiKeyGroupRouting{prober: p}
+		selected, err := r.resolve(routingContext("POST", "/v1/responses", body), key)
+		require.ErrorContains(t, err, "specified more than once")
+		require.Nil(t, selected)
+		require.Empty(t, p.seen)
+	}
 }
+
 func TestMultiGroupModelRetrievalUsesCatalogAuthority(t *testing.T) {
 	key := routingKey()
 	r := &apiKeyGroupRouting{keys: &routingKeys{available: []service.Group{*key.Groups[1]}}}
@@ -607,5 +610,21 @@ func TestMultiGroupRoutingSystemOneProtocolIsolation(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, int64(2), *selected.GroupID)
 		require.Equal(t, []int64{2}, p.seen)
+	}
+}
+
+func TestPinnedRevalidationRejectsChangedProtocolOrBillingType(t *testing.T) {
+	for _, mutate := range []func(*service.Group){
+		func(g *service.Group) { g.Platform = service.PlatformCline },
+		func(g *service.Group) { g.SubscriptionType = service.SubscriptionTypeSubscription },
+	} {
+		original := routingKey().ForGroup(routingKey().Groups[1])
+		fresh := routingKey()
+		mutate(fresh.Groups[1])
+		p := &routingProbe{}
+		r := &apiKeyGroupRouting{keys: &routingKeys{key: fresh}, prober: p}
+		_, err := r.revalidatePinned(routingContext("GET", "/v1/responses", ""), original)
+		require.ErrorContains(t, err, "start a new session")
+		require.Empty(t, p.seen)
 	}
 }

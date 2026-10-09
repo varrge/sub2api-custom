@@ -3,6 +3,7 @@ package middleware
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -100,6 +101,14 @@ func writeAPIKeyGroupResolutionError(c *gin.Context, err error, google bool) {
 	}
 	if google {
 		abortWithGoogleError(c, status, message)
+		return
+	}
+	if code == "invalid_request_error" || code == "INVALID_REQUEST_BODY" {
+		payload := gin.H{"error": gin.H{"type": "invalid_request_error", "message": message}}
+		if strings.Contains(c.Request.URL.Path, "/messages") {
+			payload["type"] = "error"
+		}
+		c.AbortWithStatusJSON(status, payload)
 		return
 	}
 	AbortWithError(c, status, code, message)

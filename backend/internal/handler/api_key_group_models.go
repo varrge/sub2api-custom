@@ -103,10 +103,7 @@ func (h *GatewayHandler) MultiGroupModels(c *gin.Context) bool {
 		} else {
 			platforms := []string{group.Platform}
 			if group.Platform == service.PlatformComposite {
-				platforms = []string{service.PlatformOpenAI, service.PlatformAnthropic, service.PlatformGemini, service.PlatformAntigravity, service.PlatformGrok, service.PlatformKimi, service.PlatformZhipu, service.PlatformDeepseek, service.PlatformMiniMax, service.PlatformOpenCodeGo}
-				if !codex {
-					platforms = append(platforms, service.PlatformTypeSafe)
-				}
+				platforms = apiKeyCompositeCatalogPlatforms(!codex)
 			}
 			for _, platform := range platforms {
 				models, useDefaults, err := h.gatewayService.APIKeyGroupModelCatalog(c.Request.Context(), group.ID, platform)
@@ -114,7 +111,7 @@ func (h *GatewayHandler) MultiGroupModels(c *gin.Context) bool {
 					h.errorResponse(c, 503, "api_error", "Failed to load group model catalog")
 					return true
 				}
-				if useDefaults && !service.IsCNProvider(platform) {
+				if useDefaults && (!service.IsMultiProtocolAPIKeyProvider(platform) || platform == service.PlatformOpenCodeGo) {
 					models = append(models, defaultModelIDsForPlatform(platform)...)
 				}
 				groupIDs = append(groupIDs, models...)

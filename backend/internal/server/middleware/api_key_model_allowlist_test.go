@@ -53,8 +53,13 @@ func TestAPIKeyModelAllowlistCoversRequestShapes(t *testing.T) {
 			router.ServeHTTP(w, req)
 			require.Equal(t, tc.allowed, called)
 			if !tc.allowed {
-				require.Equal(t, http.StatusNotFound, w.Code)
-				require.Contains(t, w.Body.String(), "not allowed for this API key")
+				if tc.name == "duplicate key" || tc.name == "case variant" || tc.name == "multipart duplicate" {
+					require.Equal(t, http.StatusBadRequest, w.Code)
+					require.Contains(t, w.Body.String(), "model is specified more than once")
+				} else {
+					require.Equal(t, http.StatusNotFound, w.Code)
+					require.Contains(t, w.Body.String(), "not allowed for this API key")
+				}
 			}
 		})
 	}

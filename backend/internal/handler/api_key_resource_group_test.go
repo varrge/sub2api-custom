@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -52,7 +53,11 @@ func TestStatefulAdmissionRechecksPublicAndFrameModels(t *testing.T) {
 			check := (&OpenAIGatewayHandler{}).statefulAdmissionCheck(c, key, "public")
 			err := check(context.Background(), []byte(payload))
 			require.Error(t, err)
-			require.Contains(t, infraerrors.Message(err), `Model "denied" is not allowed`)
+			if strings.Contains(payload, `"model":"public","model"`) || strings.Contains(payload, `"Session"`) {
+				require.Contains(t, infraerrors.Message(err), "specified more than once")
+			} else {
+				require.Contains(t, infraerrors.Message(err), `Model "denied" is not allowed`)
+			}
 		})
 	}
 }

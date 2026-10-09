@@ -19,7 +19,7 @@ import (
 // 保证校验发生在合成路由改写与调度之前，且只看客户端书写的公开模型名。
 //
 // 行为：
-//   - 快速路径：未绑定分组或白名单未开启时直接放行，不读请求体。
+//   - 快速路径：未绑定分组时直接放行；关闭白名单仍检查请求模型歧义。
 //   - Responses WebSocket 入口跳过（首帧与后续 turn 由 ResponsesWebSocket 逐帧
 //     校验）；Grok Realtime 的升级请求模型固定在查询参数里，仍走中间件校验，
 //     其他路由伪造 Upgrade 头不得绕过校验。
@@ -37,7 +37,7 @@ func GroupModelAllowlist() gin.HandlerFunc {
 			return
 		}
 		apiKey, ok := GetAPIKeyFromContext(c)
-		if !ok || apiKey == nil || apiKey.Group == nil || !apiKey.Group.ModelAllowlistEnabled() {
+		if !ok || apiKey == nil || apiKey.Group == nil {
 			c.Next()
 			return
 		}
@@ -73,6 +73,11 @@ func GroupModelAllowlist() gin.HandlerFunc {
 					models = []string{model}
 				}
 			}
+		}
+
+		if !apiKey.Group.ModelAllowlistEnabled() {
+			c.Next()
+			return
 		}
 
 		blocked := ""
@@ -130,6 +135,14 @@ func groupModelAllowlistModelsFromBody(c *gin.Context) ([]string, bool) {
 		return nil, false
 	}
 	requestmodel.ResetRequestBody(c.Request, body)
+	if err := requestmodel.ValidateBody(c.FullPath(), c.GetHeader("Content-Type"), body); err != nil {
+		response := gin.H{"error": gin.H{"type": "invalid_request_error", "message": err.Error()}}
+		if strings.Contains(c.Request.URL.Path, "/messages") {
+			response["type"] = "error"
+		}
+		c.AbortWithStatusJSON(http.StatusBadRequest, response)
+		return nil, false
+	}
 	return requestmodel.FromBodyCandidates(c.FullPath(), c.GetHeader("Content-Type"), body), true
 }
 

@@ -243,9 +243,10 @@ func TestRequestTypeLive(t *testing.T) {
 }
 
 func TestValidateLiveCallRequestRejectsAmbiguousModel(t *testing.T) {
-	for _, session := range []string{`{"model":"first","model":"last"}`, `{"model":"first","Model":"last"}`, `{"Model":"other"}`} {
+	for _, session := range []string{`{"model":"first","model":"last"}`, `{"model":"first","Model":"last"}`, `{"model":"same","model":"same"}`} {
 		err := ValidateLiveCallRequest(&LiveCallRequest{SDP: "v=0", Session: json.RawMessage(session)})
-		require.ErrorContains(t, err, "one unambiguous model")
+		require.ErrorContains(t, err, "specified more than once")
 	}
-	require.NoError(t, ValidateLiveCallRequest(&LiveCallRequest{SDP: "v=0", Session: json.RawMessage(`{"model":"same","model":"same"}`)}))
+	require.ErrorContains(t, ValidateLiveCallRequest(&LiveCallRequest{SDP: "v=0", Session: json.RawMessage(`{"Model":"other"}`)}), "one unambiguous model")
+	require.NoError(t, ValidateLiveCallRequest(&LiveCallRequest{SDP: "v=0", Session: json.RawMessage(`{"model":"same"}`)}))
 }

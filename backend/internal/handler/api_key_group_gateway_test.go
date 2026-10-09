@@ -84,3 +84,24 @@ func TestAPIKeyGroupProbeAllowsPassiveCodexImageNamespace(t *testing.T) {
 		})
 	}
 }
+
+func TestAPIKeyGroupProbeSchedulesNewOpenAICompatiblePlatforms(t *testing.T) {
+	for _, platform := range []string{service.PlatformCline, service.PlatformCommandCode} {
+		t.Run(platform, func(t *testing.T) {
+			group := &service.Group{ID: 3, Platform: platform, Status: service.StatusActive}
+			key := &service.APIKey{UserID: 1, GroupID: &group.ID, Group: group, User: &service.User{ID: 1}}
+			repo := codexModelsFailoverAccountRepo{accounts: []service.Account{{
+				ID: 72, Platform: platform, Type: service.AccountTypeAPIKey, Status: service.StatusActive, Schedulable: true, Concurrency: 1,
+				Credentials: map[string]any{"api_key": "test-local-key", "model_mapping": map[string]any{"custom-alias": "gpt-5.6-sol"}},
+			}}}
+			gateway := service.NewOpenAIGatewayService(groupProbeAccountRepo{repo}, nil, nil, nil, nil, nil, nil, &config.Config{}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+			h := &GatewayHandler{gatewayService: &service.GatewayService{}, openAIGatewayService: gateway}
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest("POST", "/v1/chat/completions", nil)
+			available, global, err := h.ProbeAPIKeyGroup(c.Request.Context(), key, service.APIKeyGroupRequest{Platform: platform, Path: "/v1/chat/completions", Model: "custom-alias"}, c, []byte(`{"model":"custom-alias"}`))
+			require.NoError(t, err)
+			require.False(t, global)
+			require.True(t, available)
+		})
+	}
+}

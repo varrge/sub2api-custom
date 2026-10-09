@@ -154,9 +154,7 @@ func (h *GatewayHandler) apiKeyModelOptionsCatalog(ctx context.Context, group *s
 	} else {
 		platforms := []string{group.Platform}
 		if group.Platform == service.PlatformComposite {
-			platforms = []string{service.PlatformOpenAI, service.PlatformAnthropic, service.PlatformGemini,
-				service.PlatformAntigravity, service.PlatformGrok, service.PlatformKimi, service.PlatformZhipu,
-				service.PlatformDeepseek, service.PlatformMiniMax, service.PlatformOpenCodeGo, service.PlatformTypeSafe}
+			platforms = apiKeyCompositeCatalogPlatforms(true)
 		}
 		for _, platform := range platforms {
 			catalog, useDefaults, err := h.gatewayService.APIKeyGroupModelCatalogForSelection(ctx, group.ID, platform)
@@ -186,7 +184,7 @@ func (h *GatewayHandler) apiKeyModelOptionsCatalog(ctx context.Context, group *s
 }
 
 func expandAPIKeyModelOptionDefaults(source []string, platform string, useDefaults bool) []string {
-	if service.IsCNProvider(platform) {
+	if service.IsMultiProtocolAPIKeyProvider(platform) && platform != service.PlatformOpenCodeGo {
 		return source
 	}
 	defaults := defaultModelIDsForPlatform(platform)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/requestmodel"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -60,8 +61,8 @@ func (h *GatewayHandler) ProbeAPIKeyGroup(ctx context.Context, key *service.APIK
 		req.Model = ""
 		req.Capability = service.OpenAIEndpointCapabilityChatCompletions
 	}
-	switch req.Platform {
-	case service.PlatformOpenAI, service.PlatformGrok, service.PlatformKimi, service.PlatformZhipu, service.PlatformDeepseek, service.PlatformMiniMax, service.PlatformOpenCodeGo:
+	switch {
+	case domain.UsesOpenAIGateway(req.Platform):
 		if h.openAIGatewayService == nil {
 			return false, false, service.ErrNoAvailableAccounts
 		}

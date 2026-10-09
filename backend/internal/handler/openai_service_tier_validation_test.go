@@ -92,3 +92,58 @@ func TestOpenAIGatewayHandlerChatCompletions_InvalidServiceTierRejected400(t *te
 		require.Contains(t, rec.Body.String(), "invalid service_tier", "body=%s", body)
 	}
 }
+
+func TestGatewayHandlersRejectDuplicateModelBeforeDispatch(t *testing.T) {
+	for _, tc := range []struct {
+		name, path string
+		call       func(*OpenAIGatewayHandler, *gin.Context)
+	}{
+		{"responses", "/v1/responses", (*OpenAIGatewayHandler).Responses},
+		{"input tokens", "/v1/responses/input_tokens", (*OpenAIGatewayHandler).ResponsesInputTokens},
+		{"openai count tokens", "/v1/messages/count_tokens", func(h *OpenAIGatewayHandler, c *gin.Context) {
+			key, _ := middleware2.GetAPIKeyFromContext(c)
+			key.Group.AllowMessagesDispatch = true
+			h.CountTokens(c)
+		}},
+		{"grok count tokens", "/v1/messages/count_tokens", (*OpenAIGatewayHandler).GrokCountTokens},
+		{"anthropic count tokens", "/v1/messages/count_tokens", func(_ *OpenAIGatewayHandler, c *gin.Context) { (&GatewayHandler{}).CountTokens(c) }},
+		{"chat", "/v1/chat/completions", (*OpenAIGatewayHandler).ChatCompletions},
+		{"messages", "/v1/messages", func(h *OpenAIGatewayHandler, c *gin.Context) {
+			apiKey, ok := middleware2.GetAPIKeyFromContext(c)
+			require.True(t, ok)
+			apiKey.Group.AllowMessagesDispatch = true
+			h.Messages(c)
+		}},
+		{"embeddings", "/v1/embeddings", (*OpenAIGatewayHandler).Embeddings},
+		{"search", "/alpha/search", (*OpenAIGatewayHandler).AlphaSearch},
+		{"images", "/v1/images/generations", (*OpenAIGatewayHandler).Images},
+		{"anthropic messages", "/v1/messages", func(_ *OpenAIGatewayHandler, c *gin.Context) { (&GatewayHandler{}).Messages(c) }},
+		{"anthropic chat", "/v1/chat/completions", func(_ *OpenAIGatewayHandler, c *gin.Context) { (&GatewayHandler{}).ChatCompletions(c) }},
+		{"anthropic responses", "/v1/responses", func(_ *OpenAIGatewayHandler, c *gin.Context) { (&GatewayHandler{}).Responses(c) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, body := range []string{`{"model":"gpt-5.4","model":"gpt-5.5","input":[],"messages":[]}`, `{"model":"gpt-5.4","Model":"gpt-5.5","input":[],"messages":[]}`} {
+				rec := runOpenAIHandlerServiceTierTest(t, tc.path, body, tc.call)
+				require.Equal(t, http.StatusBadRequest, rec.Code)
+				require.Contains(t, rec.Body.String(), "model is specified more than once")
+			}
+		})
+	}
+}
+
+func TestCountTokenHandlersRejectLenientDuplicateModels(t *testing.T) {
+	for _, call := range []func(*OpenAIGatewayHandler, *gin.Context){
+		(*OpenAIGatewayHandler).ResponsesInputTokens,
+		(*OpenAIGatewayHandler).GrokCountTokens,
+		func(_ *OpenAIGatewayHandler, c *gin.Context) { (&GatewayHandler{}).CountTokens(c) },
+	} {
+		for _, body := range []string{
+			"\xef\xbb\xbf" + `{"model":"gpt-5.4","model":"gpt-5.5","input":[],"messages":[]}`,
+			"{\"model\":\"gpt-5.4\",\"model\":\"gpt-5.5\",\"input\":\"line\nline\",\"messages\":[]}",
+		} {
+			rec := runOpenAIHandlerServiceTierTest(t, "/v1/responses/input_tokens", body, call)
+			require.Equal(t, http.StatusBadRequest, rec.Code)
+			require.Contains(t, rec.Body.String(), "model is specified more than once")
+		}
+	}
+}

@@ -484,3 +484,46 @@ func TestMultiGroupCatalogTypeSafeOnlyInNativeDirectory(t *testing.T) {
 		}
 	}
 }
+
+func TestMultiGroupCompositeCatalogAndOptionsIncludeNewPlatforms(t *testing.T) {
+	repo := &multiGroupCatalogAccountRepo{gatewayModelsAccountRepoStub{byGroup: map[int64][]service.Account{
+		1: {
+			{Platform: service.PlatformCline, Credentials: map[string]any{"model_mapping": map[string]any{"cline-alias": "anthropic/claude-sonnet-4.6"}}},
+			{Platform: service.PlatformCommandCode, Credentials: map[string]any{"model_mapping": map[string]any{"command-alias": "gpt-5.6-sol"}}},
+		},
+	}}}
+	h := newGatewayModelsHandlerForTest(repo)
+	group := &service.Group{ID: 1, Platform: service.PlatformComposite, Status: service.StatusActive}
+	w := serveMultiGroupCatalog(t, h, "/v1/models", group)
+	var response gatewayModelsResponseForTest
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	ids := make([]string, 0, len(response.Data))
+	for _, model := range response.Data {
+		ids = append(ids, model.ID)
+	}
+	require.Contains(t, ids, "cline-alias")
+	require.Contains(t, ids, "command-alias")
+	options := decodeModelOptions(t, performModelOptions(t, newModelOptionsHandler([]service.Group{*group}), h, false, 7, "", "", `{"group_ids":[1]}`))
+	require.Contains(t, options, apiKeyModelOption{ID: "cline-alias", GroupIDs: []int64{1}})
+	require.Contains(t, options, apiKeyModelOption{ID: "command-alias", GroupIDs: []int64{1}})
+}
+
+func TestMultiGroupNewPlatformsDoNotBorrowDefaultModels(t *testing.T) {
+	for _, platform := range []string{service.PlatformCline, service.PlatformCommandCode} {
+		for _, mapping := range []map[string]any{nil, {"claude-*": "upstream-alias"}} {
+			repo := &multiGroupCatalogAccountRepo{gatewayModelsAccountRepoStub{byGroup: map[int64][]service.Account{
+				1: {{Platform: platform, Credentials: map[string]any{"model_mapping": mapping}}},
+			}}}
+			h := newGatewayModelsHandlerForTest(repo)
+			group := &service.Group{ID: 1, Platform: platform, Status: service.StatusActive}
+			w := serveMultiGroupCatalog(t, h, "/v1/models", group)
+			var response gatewayModelsResponseForTest
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+			for _, model := range response.Data {
+				require.NotContains(t, defaultModelIDsForPlatform(service.PlatformAnthropic), model.ID)
+			}
+			options := decodeModelOptions(t, performModelOptions(t, newModelOptionsHandler([]service.Group{*group}), h, false, 7, "", "", `{"group_ids":[1]}`))
+			require.Empty(t, options, "discovery-only providers must not borrow static Claude defaults")
+		}
+	}
+}

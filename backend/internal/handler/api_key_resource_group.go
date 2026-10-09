@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/requestmodel"
 	middleware "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -24,6 +25,12 @@ func (h *OpenAIGatewayHandler) admitNextWSTurn(c *gin.Context, current *openAIWS
 	freshKey, err := middleware.RevalidateAPIKeyPinnedGroup(c, current.key)
 	if err != nil {
 		return nil, err
+	}
+	// Legacy embeddings of the handler may omit the pinned-group hook. Retain
+	// upstream's price-only refresh there; normal routed sessions already carry
+	// the selected group's freshly validated Key, including non-default groups.
+	if freshKey == current.key && !freshKey.MultiGroupEnabled && h.apiKeyService != nil {
+		freshKey = refreshOpenAIWSTurnBillingAPIKey(c.Request.Context(), h.apiKeyService, freshKey)
 	}
 	subscription, found := middleware.GetSubscriptionFromContext(c)
 	if !found {
@@ -51,6 +58,9 @@ func (h *OpenAIGatewayHandler) statefulAdmissionCheck(c *gin.Context, key *servi
 	pinnedLive := c.Param("call_id") != ""
 	var sessionModels []string
 	return func(ctx context.Context, payload []byte) error {
+		if err := requestmodel.ValidateStatefulFrame(payload); err != nil {
+			return infraerrors.New(http.StatusBadRequest, "invalid_request_error", err.Error())
+		}
 		admission.Request = admission.Request.WithContext(ctx)
 		fresh, err := middleware.RevalidateAPIKeyPinnedGroup(admission, key)
 		if err != nil {

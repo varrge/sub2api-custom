@@ -78,6 +78,9 @@ func (r *apiKeyGroupRouting) revalidatePinned(c *gin.Context, key *service.APIKe
 		if group == nil || !group.IsActive() || !group.IsSubscriptionType() && !fresh.User.CanBindGroup(group.ID, group.IsExclusive) {
 			return nil, groupRoutingError(403, "SESSION_GROUP_UNAVAILABLE", "Session group is no longer eligible; start a new session")
 		}
+		if key.Group != nil && (group.Platform != key.Group.Platform || group.SubscriptionType != key.Group.SubscriptionType) {
+			return nil, groupRoutingError(403, "SESSION_GROUP_UNAVAILABLE", "Session group protocol or billing type changed; start a new session")
+		}
 	} else if len(fresh.ConfiguredGroupIDs()) > 0 {
 		return nil, groupRoutingError(403, "SESSION_GROUP_UNAVAILABLE", "Session group changed; start a new session")
 	}
@@ -128,7 +131,30 @@ func groupRoutingError(status int, code, message string) error {
 }
 
 func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*service.APIKey, error) {
-	_, framePresent := middleware.APIKeyGroupRequestBody(c)
+	frameBody, framePresent := middleware.APIKeyGroupRequestBody(c)
+	// Authentication runs before this resolver. Reject ambiguity before resource
+	// lookup, composite mapping, per-group probing or subscription admission.
+	if framePresent {
+		if err := requestmodel.ValidateStatefulFrame(frameBody); err != nil {
+			return nil, groupRoutingError(http.StatusBadRequest, "invalid_request_error", err.Error())
+		}
+	} else if c.Request.Body != nil && (c.Request.Method == http.MethodPost || c.Request.Method == http.MethodPut || c.Request.Method == http.MethodPatch) {
+		body, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request)
+		if err != nil {
+			status := http.StatusBadRequest
+			message := "Failed to read request body"
+			var large *http.MaxBytesError
+			if errors.As(err, &large) {
+				status = http.StatusRequestEntityTooLarge
+				message = "Request body is too large"
+			}
+			return nil, groupRoutingError(status, "INVALID_REQUEST_BODY", message)
+		}
+		requestmodel.ResetRequestBody(c.Request, body)
+		if err := requestmodel.ValidateBody(c.Request.URL.Path, c.GetHeader("Content-Type"), body); err != nil {
+			return nil, groupRoutingError(http.StatusBadRequest, "invalid_request_error", err.Error())
+		}
+	}
 	if framePresent && r.keys != nil {
 		fresh, err := r.keys.GetByKey(c.Request.Context(), key.Key)
 		if err != nil {

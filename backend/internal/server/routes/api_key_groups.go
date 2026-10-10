@@ -299,6 +299,7 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 	forcedPlatform, _ := middleware.GetForcePlatformFromContext(c)
 	pinnedID := c.GetInt64("api_key_pinned_group_id")
 	reasons := make([]string, 0, len(key.GroupIDs))
+	var groupRPMError error
 	for _, id := range key.ConfiguredGroupIDs() {
 		if pinnedID > 0 && id != pinnedID {
 			continue
@@ -398,6 +399,12 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 		if global {
 			return nil, groupRoutingError(infraerrors.Code(err), infraerrors.Reason(err), infraerrors.Message(err))
 		}
+		if errors.Is(err, service.ErrGroupRPMExceeded) {
+			// This candidate supports the request but is locally rate limited.
+			// Try the remaining groups before returning the business limit.
+			groupRPMError = err
+			continue
+		}
 		if err != nil {
 			return nil, groupRoutingError(503, "GROUP_ROUTING_UNAVAILABLE", err.Error())
 		}
@@ -412,6 +419,9 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 			c.Set(string(middleware.ContextKeySubscription), nil)
 		}
 		return candidate, nil
+	}
+	if groupRPMError != nil {
+		return nil, groupRoutingError(infraerrors.Code(groupRPMError), infraerrors.Reason(groupRPMError), infraerrors.Message(groupRPMError))
 	}
 	code := "NO_AVAILABLE_GROUP"
 	if pinnedID > 0 {

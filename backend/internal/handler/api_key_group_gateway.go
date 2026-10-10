@@ -48,13 +48,19 @@ func (h *GatewayHandler) ProbeAPIKeyGroup(ctx context.Context, key *service.APIK
 			req.Model = mapped
 		}
 	}
+	var groupRPMError error
 	if h.billingCacheService != nil {
 		global, err = h.billingCacheService.CheckAPIKeyGroupRoutingLimits(ctx, key, req.Platform)
 		if err != nil {
 			if global {
 				return false, true, err
 			}
-			return false, false, nil
+			if !errors.Is(err, service.ErrGroupRPMExceeded) {
+				return false, false, nil
+			}
+			// Preserve the local limit only if this group can otherwise serve
+			// the model; an unrelated group's RPM must not mask unavailable capacity.
+			groupRPMError = err
 		}
 	}
 	if req.Platform == service.PlatformGrok && (strings.HasSuffix(req.Path, "/realtime") || strings.Contains(req.Path, "/custom-voices") || strings.HasSuffix(req.Path, "/tts") || strings.HasSuffix(req.Path, "/stt")) {
@@ -79,6 +85,9 @@ func (h *GatewayHandler) ProbeAPIKeyGroup(ctx context.Context, key *service.APIK
 		available, err = h.openAIGatewayService.ProbeAPIKeyGroup(ctx, key, req)
 	default:
 		available, err = h.gatewayService.ProbeAPIKeyGroup(ctx, key, req)
+	}
+	if err == nil && available && groupRPMError != nil {
+		return false, false, groupRPMError
 	}
 	return available, false, err
 }

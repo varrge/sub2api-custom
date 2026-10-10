@@ -20,10 +20,11 @@ import (
 )
 
 type routingProbe struct {
-	seen      []int64
-	models    []string
-	available map[int64]bool
-	globalErr error
+	seen        []int64
+	models      []string
+	available   map[int64]bool
+	globalErr   error
+	groupErrors map[int64]error
 }
 
 func (p *routingProbe) ProbeAPIKeyGroup(_ context.Context, k *service.APIKey, req service.APIKeyGroupRequest, _ *gin.Context, _ []byte) (bool, bool, error) {
@@ -32,7 +33,7 @@ func (p *routingProbe) ProbeAPIKeyGroup(_ context.Context, k *service.APIKey, re
 	if p.globalErr != nil {
 		return false, true, p.globalErr
 	}
-	return p.available[*k.GroupID], false, nil
+	return p.available[*k.GroupID], false, p.groupErrors[*k.GroupID]
 }
 
 type routingSubscriptions struct {
@@ -626,5 +627,56 @@ func TestPinnedRevalidationRejectsChangedProtocolOrBillingType(t *testing.T) {
 		_, err := r.revalidatePinned(routingContext("GET", "/v1/responses", ""), original)
 		require.ErrorContains(t, err, "start a new session")
 		require.Empty(t, p.seen)
+	}
+}
+
+func TestMultiGroupRoutingPreservesGroupRateLimitAndFallback(t *testing.T) {
+	for _, fallback := range []bool{false, true} {
+		t.Run(fmt.Sprint(fallback), func(t *testing.T) {
+			key := routingKey()
+			probe := &routingProbe{available: map[int64]bool{2: fallback}, groupErrors: map[int64]error{1: service.ErrGroupRPMExceeded}}
+			router := &apiKeyGroupRouting{prober: probe}
+			selected, err := router.resolve(routingContext("POST", "/responses", `{"model":"deepseek-v4.1-flash"}`), key)
+			require.Equal(t, []int64{1, 2}, probe.seen)
+			if fallback {
+				require.NoError(t, err)
+				require.Equal(t, int64(2), *selected.GroupID)
+			} else {
+				require.Nil(t, selected)
+				var routingErr *middleware.APIKeyGroupResolutionError
+				require.ErrorAs(t, err, &routingErr)
+				require.Equal(t, 429, routingErr.Status)
+				require.Equal(t, "GROUP_RPM_EXCEEDED", routingErr.Code)
+			}
+		})
+	}
+}
+
+func TestMultiGroupRPMRejectionIsLoggedAsBusinessLimit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	key := routingKey()
+	cfg := &config.Config{RunMode: config.RunModeStandard}
+	keys := service.NewAPIKeyService(&routingAuthRepository{key: key}, nil, nil, nil, nil, nil, cfg)
+	probe := &routingProbe{groupErrors: map[int64]error{2: service.ErrGroupRPMExceeded}}
+	routing := &apiKeyGroupRouting{keys: keys, prober: probe, cfg: cfg}
+	repo := &routingOpsRepository{entries: make(chan *service.OpsInsertErrorLogInput, 1)}
+	ops := service.NewOpsService(repo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := gin.New()
+	router.Use(handler.OpsErrorLoggerMiddleware(ops))
+	router.POST("/responses", routing.wrap(gin.HandlerFunc(middleware.NewAPIKeyAuthMiddleware(keys, nil, cfg))), func(c *gin.Context) { t.Error("limited request reached forwarding handler") })
+	req := httptest.NewRequest(http.MethodPost, "/responses", strings.NewReader(`{"model":"deepseek-v4.1-flash"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+key.Key)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+	require.Equal(t, http.StatusTooManyRequests, recorder.Code)
+	require.Contains(t, recorder.Body.String(), "GROUP_RPM_EXCEEDED")
+	select {
+	case entry := <-repo.entries:
+		require.True(t, entry.IsBusinessLimited)
+		require.Equal(t, "deepseek-v4.1-flash", entry.Model)
+		require.Empty(t, entry.UpstreamModel)
+	case <-time.After(5 * time.Second):
+		t.Fatal("missing ops log")
 	}
 }

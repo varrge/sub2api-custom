@@ -105,3 +105,50 @@ func TestAPIKeyGroupProbeSchedulesNewOpenAICompatiblePlatforms(t *testing.T) {
 		})
 	}
 }
+
+type routingLimitRPMCache struct {
+	service.UserRPMCache
+	used int
+}
+
+func (r *routingLimitRPMCache) GetUserGroupRPM(context.Context, int64, int64) (int, error) {
+	return r.used, nil
+}
+
+func TestAPIKeyGroupProbePreservesGroupRPMReason(t *testing.T) {
+	group := &service.Group{ID: 44, Platform: service.PlatformDeepseek, Status: service.StatusActive, SubscriptionType: service.SubscriptionTypeSubscription, RPMLimit: 5}
+	key := &service.APIKey{UserID: 91, GroupID: &group.ID, Group: group, User: &service.User{ID: 91}}
+	cache := &routingLimitRPMCache{used: 5}
+	billing := service.NewBillingCacheService(nil, nil, nil, nil, cache, nil, &config.Config{}, nil)
+	t.Cleanup(billing.Stop)
+	repo := codexModelsFailoverAccountRepo{accounts: []service.Account{{
+		ID: 99, Platform: service.PlatformDeepseek, Type: service.AccountTypeAPIKey, Status: service.StatusActive, Schedulable: true,
+		Credentials: map[string]any{"api_protocol": "responses", "model_mapping": map[string]any{"deepseek-v4.1-flash": "deepseek-v4.1-flash"}},
+		Extra:       map[string]any{"openai_responses_mode": "force_responses", "openai_responses_supported": true},
+	}}}
+	gateway := service.NewOpenAIGatewayService(groupProbeAccountRepo{repo}, nil, nil, nil, nil, nil, nil, &config.Config{}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	h := &GatewayHandler{gatewayService: &service.GatewayService{}, openAIGatewayService: gateway, billingCacheService: billing}
+	for _, tc := range []struct {
+		name, model        string
+		used               int
+		available, limited bool
+	}{
+		{"below limit", "deepseek-v4.1-flash", 4, true, false},
+		{"at limit", "deepseek-v4.1-flash", 5, false, true},
+		{"unsupported model is not a rate limit", "other-model", 5, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cache.used = tc.used
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest("POST", "/responses", nil)
+			available, global, err := h.ProbeAPIKeyGroup(c.Request.Context(), key, service.APIKeyGroupRequest{Platform: group.Platform, Path: "/responses", Model: tc.model}, c, nil)
+			require.False(t, global)
+			require.Equal(t, tc.available, available)
+			if tc.limited {
+				require.ErrorIs(t, err, service.ErrGroupRPMExceeded)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}

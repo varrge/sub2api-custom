@@ -42,7 +42,7 @@
       <button type="submit" class="btn btn-primary">{{ t('common.search') }}</button>
     </form>
     <div v-if="error" class="gb-notice gb-notice-error flex items-center justify-between gap-3 p-3" role="alert">
-      <span>{{ error }}</span><button type="button" class="underline" @click="loadList">{{ t('common.retry') }}</button>
+      <span>{{ error }}</span><button type="button" class="underline" @click="loadList">{{ t('groupBuy.retry') }}</button>
     </div>
     <template v-else>
       <AdminEntitlementTeamsTable v-if="scope === 'teams'" :items="teams" :loading="loading" @inspect="inspectTeam" />
@@ -62,7 +62,7 @@
         </div>
         <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('groupBuy.memberUsageHint') }}</p>
         <div v-if="membersError" class="gb-notice gb-notice-error p-3" role="alert">
-          {{ membersError }} <button type="button" class="underline" @click="loadMembers">{{ t('common.retry') }}</button>
+          {{ membersError }} <button type="button" class="underline" @click="loadMembers">{{ t('groupBuy.retry') }}</button>
         </div>
         <template v-else>
           <AdminEntitlementMembersTable :items="members" :loading="membersLoading" @inspect-user="inspectUser" />

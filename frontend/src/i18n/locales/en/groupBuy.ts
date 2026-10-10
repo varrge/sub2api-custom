@@ -275,6 +275,25 @@ export default {
     rulesUnsaved: 'Unsaved changes — save the draft first',
     rulesSaved: 'Rule draft saved',
     rulesPublishedSuccess: 'Rules published',
-    rulesInvalid: 'Complete the rules: enable at least one rule with a non-empty title and content; titles up to 120 characters, content up to 50,000 characters, at most 20 rules.'
+    rulesInvalid: 'Complete the rules: enable at least one rule with a non-empty title and content; titles up to 120 characters, content up to 50,000 characters, at most 20 rules.',
+    adjustQuota: 'Adjust quota',
+    batchAdjustQuota: 'Adjust selected quotas',
+    batchAdjustQuotaTitle: 'Adjust quota for {count} month cards',
+    quotaSelectedCount: '{count} month cards selected',
+    quotaSelectionPageHint: 'Only adjustable cards on the current page can be selected',
+    clearSelection: 'Clear selection',
+    selectAllPage: 'Select current page',
+    quotaSetTotal: 'Set total card quota (USD)',
+    quotaSetWeekly: 'Set weekly limit (USD)',
+    quotaNewTotal: 'New total card quota',
+    quotaNewWeekly: 'New weekly limit',
+    quotaAdjustReplaceHint: 'Saving replaces the quota limit directly — it does not add quota or reset usage. Unchecked limits stay unchanged; usage, validity and weekly reset times are unaffected, and a new weekly limit takes effect immediately for the current and future card weeks.',
+    quotaChooseLimit: 'Check at least one limit to adjust.',
+    quotaInvalidAmount: 'Amounts must be positive, at most 1,000,000,000, with up to 8 decimal places.',
+    quotaInvalidLimits: 'Card {code}: new limit is below current usage, or the weekly limit exceeds the total quota.',
+    quotaSaved: 'Updated quota for {count} month cards.',
+    quotaSaveFailed: 'Quota adjustment failed. Please try again.',
+    quotaAdjustAmountHint: 'Amounts must be positive, at most 1,000,000,000, with up to 8 decimal places. A new limit cannot be below current usage, and the weekly limit cannot exceed the total quota.',
+    quotaAdjustManualHint: 'Manually set limits will not be overwritten by later team tier upgrades. In a batch adjustment, if any single card fails, no changes are applied at all.'
   }
 }

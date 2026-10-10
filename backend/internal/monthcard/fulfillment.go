@@ -190,7 +190,7 @@ func (s *Store) Fulfill(ctx context.Context, orderID, userID int64, paidAt time.
 		if err != nil {
 			return nil, err
 		}
-		_, err = tx.ExecContext(ctx, `UPDATE month_card_cards SET total_quota_usd=GREATEST(total_quota_usd,$2),updated_at=NOW() WHERE team_id=$1 AND status<>'revoked'`, team.ID, quota.StringFixed(8))
+		_, err = tx.ExecContext(ctx, `UPDATE month_card_cards SET total_quota_usd=GREATEST(total_quota_usd,$2),updated_at=NOW() WHERE team_id=$1 AND status<>'revoked' AND NOT total_quota_manual`, team.ID, quota.StringFixed(8))
 		if err != nil {
 			return nil, err
 		}

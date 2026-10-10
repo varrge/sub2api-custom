@@ -275,6 +275,25 @@ export default {
     rulesUnsaved: '有未保存的修改，请先保存草稿',
     rulesSaved: '规则草稿已保存',
     rulesPublishedSuccess: '规则已发布',
-    rulesInvalid: '请完善规则：至少启用一篇规则，且每篇标题与内容不能为空；标题不超过 120 字、内容不超过 50000 字、最多 20 篇。'
+    rulesInvalid: '请完善规则：至少启用一篇规则，且每篇标题与内容不能为空；标题不超过 120 字、内容不超过 50000 字、最多 20 篇。',
+    adjustQuota: '调整额度',
+    batchAdjustQuota: '批量调整额度',
+    batchAdjustQuotaTitle: '批量调整 {count} 张月卡的额度',
+    quotaSelectedCount: '已选 {count} 张月卡',
+    quotaSelectionPageHint: '仅可选择当前页中可调整的月卡',
+    clearSelection: '清空选择',
+    selectAllPage: '选择当前页',
+    quotaSetTotal: '设置整卡总额度（美元）',
+    quotaSetWeekly: '设置周限额（美元）',
+    quotaNewTotal: '新的整卡总额度',
+    quotaNewWeekly: '新的周限额',
+    quotaAdjustReplaceHint: '保存为直接替换额度上限，不是追加额度，也不会重置已用量。未勾选的额度保持不变；已用量、有效期与周重置时间均不受影响，新周限额对当前及后续卡周立即生效。',
+    quotaChooseLimit: '请至少勾选一项要调整的额度。',
+    quotaInvalidAmount: '金额须为大于 0 的正数，不超过 1,000,000,000，最多 8 位小数。',
+    quotaInvalidLimits: '卡 {code}：新额度低于已用量，或周限额超过整卡总额度。',
+    quotaSaved: '已更新 {count} 张月卡的额度。',
+    quotaSaveFailed: '额度调整失败，请稍后重试。',
+    quotaAdjustAmountHint: '金额须为大于 0 的正数，不超过 1,000,000,000，最多 8 位小数；新额度不能低于当前已用量，周限额不能超过整卡总额度。',
+    quotaAdjustManualHint: '手动设置的额度不会被后续拼团升档覆盖。批量调整中只要有一张卡失败，本次全部不生效。'
   }
 }

@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/monthcard"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/gin-gonic/gin"
 )
 
@@ -75,4 +77,26 @@ func (h *GroupBuyHandler) AdminSoloEntitlements(c *gin.Context) {
 		return
 	}
 	response.Paginated(c, items, total, f.Page, f.PageSize)
+}
+
+// AdjustEntitlementQuotas is registered only under adminAuth + auditLog.
+func (h *GroupBuyHandler) AdjustEntitlementQuotas(c *gin.Context) {
+	actor, ok := requireAuth(c)
+	if !ok {
+		return
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16*1024)
+	var req monthcard.QuotaAdjustment
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "额度调整参数无效")
+		return
+	}
+	if err := req.Validate(); err != nil {
+		groupBuyResponse(c, nil, err)
+		return
+	}
+	middleware.SetAuditAction(c, "admin.month_card.quota_adjust")
+	middleware.SetAuditExtra(c, map[string]any{"requested_count": len(req.CardIDs)})
+	err := h.store.AdjustQuotas(c.Request.Context(), actor.UserID, req)
+	groupBuyResponse(c, gin.H{"updated_count": len(req.CardIDs)}, err)
 }

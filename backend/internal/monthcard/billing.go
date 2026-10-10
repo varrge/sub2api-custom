@@ -113,12 +113,12 @@ func SettleTx(ctx context.Context, tx *sql.Tx, snapshot *Snapshot, requestID str
 }
 
 func billingCardShare(ctx context.Context, tx *sql.Tx, snap *Snapshot, c Candidate, remaining decimal.Decimal) (decimal.Decimal, error) {
-	var quota, used decimal.Decimal
+	var quota, used, weeklyQuota decimal.Decimal
 	var start, expiry time.Time
 	var status, orderStatus string
 	var pausedUS int64
-	err := tx.QueryRowContext(ctx, `SELECT c.total_quota_usd,c.total_used_usd,c.starts_at,c.expires_at,c.status,o.status,c.paused_us FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id
- WHERE c.id=$1 AND c.user_id=$2 AND c.group_id=$3 FOR UPDATE OF c`, c.ID, snap.UserID, snap.GroupID).Scan(&quota, &used, &start, &expiry, &status, &orderStatus, &pausedUS)
+	err := tx.QueryRowContext(ctx, `SELECT c.total_quota_usd,c.total_used_usd,c.starts_at,c.expires_at,c.status,o.status,c.paused_us,COALESCE(c.weekly_quota_usd,ROUND(c.total_quota_usd/4,8)) FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id
+ WHERE c.id=$1 AND c.user_id=$2 AND c.group_id=$3 FOR UPDATE OF c`, c.ID, snap.UserID, snap.GroupID).Scan(&quota, &used, &start, &expiry, &status, &orderStatus, &pausedUS, &weeklyQuota)
 	if errors.Is(err, sql.ErrNoRows) {
 		return decimal.Zero, nil
 	}
@@ -143,7 +143,7 @@ func billingCardShare(ctx context.Context, tx *sql.Tx, snap *Snapshot, c Candida
 	if err != nil {
 		return decimal.Zero, err
 	}
-	share := decimal.Min(remaining, quota.Sub(used), quota.Div(decimal.NewFromInt(4)).Round(8).Sub(weekly)).Round(8)
+	share := decimal.Min(remaining, quota.Sub(used), weeklyQuota.Sub(weekly)).Round(8)
 	if !share.IsPositive() {
 		return decimal.Zero, nil
 	}

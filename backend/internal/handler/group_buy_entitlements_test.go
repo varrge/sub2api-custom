@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -37,4 +39,23 @@ func TestAdminEntitlementFilters(t *testing.T) {
 			require.Equal(t, 400, w.Code)
 		})
 	}
+}
+
+func TestAdjustEntitlementQuotasRejectsInvalidRequestsBeforeStore(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := &GroupBuyHandler{}
+	for _, body := range []string{`{}`, `{"card_ids":[1]}`, `{"card_ids":[1,1],"weekly_quota_usd":10}`, `{"card_ids":[1],"total_quota_usd":-1}`, `{"card_ids":[1],"weekly_quota_usd":"NaN"}`, `{"card_ids":[1],"weekly_quota_usd":"1e2147483647"}`} {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 30})
+		c.Request = httptest.NewRequest("PATCH", "/", strings.NewReader(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+		h.AdjustEntitlementQuotas(c)
+		require.Equal(t, 400, w.Code, body)
+	}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("PATCH", "/", strings.NewReader(`{}`))
+	h.AdjustEntitlementQuotas(c)
+	require.Equal(t, 401, w.Code)
 }

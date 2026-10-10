@@ -294,6 +294,18 @@ export default {
     quotaSaved: 'Updated quota for {count} month cards.',
     quotaSaveFailed: 'Quota adjustment failed. Please try again.',
     quotaAdjustAmountHint: 'Amounts must be positive, at most 1,000,000,000, with up to 8 decimal places. A new limit cannot be below current usage, and the weekly limit cannot exceed the total quota.',
-    quotaAdjustManualHint: 'Manually set limits will not be overwritten by later team tier upgrades. In a batch adjustment, if any single card fails, no changes are applied at all.'
+    quotaAdjustManualHint: 'Manually set limits will not be overwritten by later team tier upgrades. In a batch adjustment, if any single card fails, no changes are applied at all.',
+    usageResetTitle: 'Reset used quota',
+    batchUsageResetTitle: 'Reset used quota for {count} month cards',
+    resetUsage: 'Reset usage',
+    batchResetUsage: 'Reset usage for selected',
+    resetWeeklyUsage: 'Reset weekly usage to zero',
+    resetTotalUsage: 'Reset total usage to zero',
+    usageResetChoose: 'Check at least one usage to reset.',
+    usageResetSaved: 'Reset used quota for {count} month cards.',
+    usageResetFailed: 'Failed to reset used quota. Please try again.',
+    confirmUsageReset: 'Confirm reset',
+    usageResetScopeHint: 'Only the checked usage amounts are zeroed; quota limits, validity and weekly reset times stay unchanged, consumption history is kept, and deducted balances are not refunded.',
+    usageResetPartialHint: 'Resetting only one usage still leaves the other limit in effect.'
   }
 }

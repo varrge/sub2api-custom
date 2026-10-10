@@ -294,6 +294,18 @@ export default {
     quotaSaved: '已更新 {count} 张月卡的额度。',
     quotaSaveFailed: '额度调整失败，请稍后重试。',
     quotaAdjustAmountHint: '金额须为大于 0 的正数，不超过 1,000,000,000，最多 8 位小数；新额度不能低于当前已用量，周限额不能超过整卡总额度。',
-    quotaAdjustManualHint: '手动设置的额度不会被后续拼团升档覆盖。批量调整中只要有一张卡失败，本次全部不生效。'
+    quotaAdjustManualHint: '手动设置的额度不会被后续拼团升档覆盖。批量调整中只要有一张卡失败，本次全部不生效。',
+    usageResetTitle: '重置已用额度',
+    batchUsageResetTitle: '批量重置 {count} 张月卡的已用额度',
+    resetUsage: '重置已用',
+    batchResetUsage: '批量重置已用',
+    resetWeeklyUsage: '清零本周已用',
+    resetTotalUsage: '清零累计已用',
+    usageResetChoose: '请至少勾选一项要清零的已用额度。',
+    usageResetSaved: '已重置 {count} 张月卡的已用额度。',
+    usageResetFailed: '重置已用额度失败，请稍后重试。',
+    confirmUsageReset: '确认清零',
+    usageResetScopeHint: '仅将勾选的已用额度归零；额度上限、有效期和周重置时间均不变，历史消费记录保留，已扣余额不予退还。',
+    usageResetPartialHint: '仅重置其中一项时，仍可能受另一项剩余额度限制。'
   }
 }

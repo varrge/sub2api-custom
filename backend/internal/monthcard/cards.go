@@ -16,7 +16,7 @@ const cardSelect = `SELECT c.id,c.user_id,c.group_id,c.order_id,c.code,c.group_n
 	LEFT JOIN month_card_teams t ON t.id=c.team_id
 	CROSS JOIN LATERAL (SELECT c.paused_us * INTERVAL '1 microsecond' + CASE WHEN c.frozen_at IS NULL THEN INTERVAL '0' ELSE GREATEST(INTERVAL '0', $1::timestamptz-c.frozen_at) END AS total_pause) pause
 	CROSS JOIN LATERAL (SELECT c.starts_at+LEAST(4,GREATEST(0,FLOOR(EXTRACT(EPOCH FROM (($1::timestamptz-pause.total_pause)-c.starts_at))/604800)))::int*INTERVAL '168 hours' AS window_start) v
-	LEFT JOIN month_card_period_usage w ON w.kind='card' AND w.entitlement_id=c.id AND w.period_kind='weekly' AND w.window_start=v.window_start
+	LEFT JOIN month_card_period_usage w ON w.kind='card' AND w.entitlement_id=c.id AND w.period_kind='weekly' AND w.window_start=v.window_start AND w.generation=c.weekly_usage_generation
 	LEFT JOIN month_card_priorities p ON p.user_id=c.user_id AND p.group_id=c.group_id AND p.kind='card' AND p.reference_id=c.id`
 
 func scanCard(row rowScanner) (*Card, error) {

@@ -25,6 +25,14 @@
       >
         {{ t('groupBuy.batchAdjustQuota') }}
       </button>
+      <button
+        type="button"
+        class="btn btn-secondary btn-sm whitespace-nowrap"
+        :disabled="disabled || count === 0"
+        @click="emit('reset')"
+      >
+        {{ t('groupBuy.batchResetUsage') }}
+      </button>
     </div>
   </div>
 </template>
@@ -34,6 +42,6 @@ import { useI18n } from 'vue-i18n'
 import './glass.css'
 
 defineProps<{ count: number; disabled?: boolean }>()
-const emit = defineEmits<{ adjust: []; clear: [] }>()
+const emit = defineEmits<{ adjust: []; reset: []; clear: [] }>()
 const { t } = useI18n()
 </script>

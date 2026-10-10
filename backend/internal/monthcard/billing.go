@@ -116,9 +116,9 @@ func billingCardShare(ctx context.Context, tx *sql.Tx, snap *Snapshot, c Candida
 	var quota, used, weeklyQuota decimal.Decimal
 	var start, expiry time.Time
 	var status, orderStatus string
-	var pausedUS int64
-	err := tx.QueryRowContext(ctx, `SELECT c.total_quota_usd,c.total_used_usd,c.starts_at,c.expires_at,c.status,o.status,c.paused_us,COALESCE(c.weekly_quota_usd,ROUND(c.total_quota_usd/4,8)) FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id
- WHERE c.id=$1 AND c.user_id=$2 AND c.group_id=$3 FOR UPDATE OF c`, c.ID, snap.UserID, snap.GroupID).Scan(&quota, &used, &start, &expiry, &status, &orderStatus, &pausedUS, &weeklyQuota)
+	var pausedUS, totalGeneration, weeklyGeneration int64
+	err := tx.QueryRowContext(ctx, `SELECT c.total_quota_usd,c.total_used_usd,c.starts_at,c.expires_at,c.status,o.status,c.paused_us,COALESCE(c.weekly_quota_usd,ROUND(c.total_quota_usd/4,8)),c.total_usage_generation,c.weekly_usage_generation FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id
+ WHERE c.id=$1 AND c.user_id=$2 AND c.group_id=$3 FOR UPDATE OF c`, c.ID, snap.UserID, snap.GroupID).Scan(&quota, &used, &start, &expiry, &status, &orderStatus, &pausedUS, &weeklyQuota, &totalGeneration, &weeklyGeneration)
 	if errors.Is(err, sql.ErrNoRows) {
 		return decimal.Zero, nil
 	}
@@ -139,7 +139,17 @@ func billingCardShare(ctx context.Context, tx *sql.Tx, snap *Snapshot, c Candida
 	if c.CardPausedUS < 0 || c.CardPausedUS > pausedUS || !start.Equal(c.StartsAt) || effectiveAt.Before(start) || !effectiveAt.Before(expiry) || !expected.Equal(c.WeeklyWindowStart) {
 		return decimal.Zero, fmt.Errorf("month card snapshot period mismatch")
 	}
-	weekly, err := billingPeriodUsed(ctx, tx, c.Ref, "weekly", c.WeeklyWindowStart, 0, decimal.Zero)
+	if c.TotalGeneration < 0 || c.TotalGeneration > totalGeneration || c.WeeklyGeneration < 0 || c.WeeklyGeneration > weeklyGeneration {
+		return decimal.Zero, fmt.Errorf("month card snapshot generation mismatch")
+	}
+	if c.TotalGeneration != totalGeneration {
+		// A total reset archived this request's allowance. Never charge the new
+		// visible total for requests admitted before that reset.
+		if err := tx.QueryRowContext(ctx, `SELECT quota_usd,used_usd FROM month_card_total_usage_history WHERE card_id=$1 AND generation=$2`, c.ID, c.TotalGeneration).Scan(&quota, &used); err != nil {
+			return decimal.Zero, err
+		}
+	}
+	weekly, err := billingPeriodUsed(ctx, tx, c.Ref, "weekly", c.WeeklyWindowStart, c.WeeklyGeneration, decimal.Zero)
 	if err != nil {
 		return decimal.Zero, err
 	}
@@ -147,10 +157,15 @@ func billingCardShare(ctx context.Context, tx *sql.Tx, snap *Snapshot, c Candida
 	if !share.IsPositive() {
 		return decimal.Zero, nil
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE month_card_cards SET total_used_usd=total_used_usd+$2,updated_at=NOW() WHERE id=$1`, c.ID, share); err != nil {
+	if c.TotalGeneration == totalGeneration {
+		_, err = tx.ExecContext(ctx, `UPDATE month_card_cards SET total_used_usd=total_used_usd+$2,updated_at=NOW() WHERE id=$1`, c.ID, share)
+	} else {
+		_, err = tx.ExecContext(ctx, `UPDATE month_card_total_usage_history SET used_usd=used_usd+$3 WHERE card_id=$1 AND generation=$2`, c.ID, c.TotalGeneration, share)
+	}
+	if err != nil {
 		return decimal.Zero, err
 	}
-	if err := billingIncrementPeriod(ctx, tx, c.Ref, "weekly", c.WeeklyWindowStart, 0, share); err != nil {
+	if err := billingIncrementPeriod(ctx, tx, c.Ref, "weekly", c.WeeklyWindowStart, c.WeeklyGeneration, share); err != nil {
 		return decimal.Zero, err
 	}
 	return share, nil

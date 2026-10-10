@@ -15,6 +15,7 @@
         :count="selectedIds.length"
         :disabled="disabled"
         @adjust="emit('adjustSelected')"
+        @reset="emit('resetSelected')"
         @clear="emit('clearSelection')"
       />
       <table
@@ -147,6 +148,14 @@
                 >
                   {{ t('groupBuy.adjustQuota') }}
                 </button>
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm whitespace-nowrap"
+                  :disabled="disabled || !eligible(card)"
+                  @click="emit('resetUsage', card)"
+                >
+                  {{ t('groupBuy.resetUsage') }}
+                </button>
               </div>
             </td>
           </tr>
@@ -180,6 +189,8 @@ const emit = defineEmits<{
   toggleAll: []
   adjustQuota: [card: AdminMonthCard]
   adjustSelected: []
+  resetUsage: [card: AdminMonthCard]
+  resetSelected: []
   clearSelection: []
 }>()
 const { t } = useI18n()

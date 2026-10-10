@@ -10,7 +10,7 @@
           >
             {{ t('groupBuy.ordersLink') }}
           </RouterLink>
-          <button class="btn btn-secondary" :disabled="loading" @click="load">
+          <button class="btn btn-secondary" :disabled="loading" @click="refresh">
             {{ t('common.refresh') }}
           </button>
         </div>
@@ -147,45 +147,7 @@
           </article>
         </div>
       </template>
-      <template v-else>
-        <form class="flex gap-2" @submit.prevent="loadCards">
-          <input
-            v-model.number="userId"
-            type="number"
-            min="1"
-            class="input min-w-0 flex-1"
-            :placeholder="t('groupBuy.userId')"
-            :aria-label="t('groupBuy.userId')"
-          />
-          <button class="btn btn-primary shrink-0" :disabled="cardsLoading || !userId">
-            {{ t('common.search') }}
-          </button>
-        </form>
-        <p class="gb-notice gb-notice-warn p-3">
-          {{ t('groupBuy.refundHint') }}
-        </p>
-        <div class="grid gap-4 lg:grid-cols-2">
-          <MonthCardCard v-for="card in cards" :key="card.id" :card="card">
-            <div
-              class="mt-4 border-t border-gray-200/60 pt-3 text-sm dark:border-dark-600/60"
-            >
-              <p class="text-gray-700 dark:text-gray-300">{{ t('groupBuy.userId') }}: {{ card.user_id }}</p>
-              <RouterLink
-                :to="{
-                  path: '/admin/orders',
-                  query: { order_id: card.order_id, order_type: 'month_card' }
-                }"
-                class="gb-accent font-medium hover:underline"
-              >
-                {{ t('groupBuy.order') }} #{{ card.order_id }} ·
-                {{ t('groupBuy.ordersLink') }}
-              </RouterLink>
-            </div>
-          </MonthCardCard>
-        </div>
-        <p v-if="!userId" class="text-sm text-gray-500 dark:text-gray-400">{{ t('groupBuy.selectUserHint') }}</p>
-      <AllocationTable v-if="userId" :allocations="allocations" :cards="cards" />
-      </template>
+      <AdminEntitlementsPanel v-else-if="tab === 'cards'" ref="entitlementsPanel" :groups="groups" />
       <BaseDialog
         :show="!!draft"
         :title="t(draft?.id ? 'groupBuy.editProduct' : 'groupBuy.newProduct')"
@@ -414,19 +376,16 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
-import MonthCardCard from './MonthCardCard.vue'
+import AdminEntitlementsPanel from './AdminEntitlementsPanel.vue'
 import AdminCoupons from './AdminCoupons.vue'
 import AdminRulesManager from './AdminRulesManager.vue'
-import AllocationTable from './AllocationTable.vue'
 import QuotaLadder from './QuotaLadder.vue'
 import { adminGroupBuyAPI } from '@/api/groupBuy'
 import adminAPI from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import type {
   GroupBuyProduct,
-  GroupBuyTeam,
-  MonthCard,
-  ChargeAllocation
+  GroupBuyTeam
 } from '@/types/groupBuy'
 import type { AdminGroup } from '@/types'
 import { exactDate, cny, usd } from './model'
@@ -439,13 +398,10 @@ const loading = ref(true)
 const error = ref('')
 const formError = ref('')
 const saving = ref(false)
-const cardsLoading = ref(false)
 const products = ref<GroupBuyProduct[]>([])
 const teams = ref<GroupBuyTeam[]>([])
 const groups = ref<AdminGroup[]>([])
-const cards = ref<MonthCard[]>([])
-const allocations = ref<ChargeAllocation[]>([])
-const userId = ref<number | ''>('')
+const entitlementsPanel = ref<InstanceType<typeof AdminEntitlementsPanel> | null>(null)
 const teamCode = ref('')
 const teamDetail = ref<GroupBuyTeam | null>(null)
 const cancelTarget = ref<GroupBuyTeam | null>(null)
@@ -468,6 +424,10 @@ const productFields = [
   { key: 'recruitment_hours', label: 'recruitmentHours', min: 1, step: 1 },
   { key: 'sort_order', label: 'sortOrder', min: 0, step: 1 }
 ] as const
+function refresh() {
+  if (tab.value === 'cards' && entitlementsPanel.value) void entitlementsPanel.value.refresh()
+  else void load()
+}
 async function load() {
   loading.value = true
   error.value = ''
@@ -483,7 +443,6 @@ async function load() {
       freezePolicyStarts.value = toLocalDateTime(policy.starts_at)
       freezePolicyEnds.value = toLocalDateTime(policy.ends_at)
     }
-    if (userId.value) await loadCards()
   } catch (err) {
     error.value = extractApiErrorMessage(err, t('groupBuy.loadFailed'))
   } finally {
@@ -508,21 +467,6 @@ async function saveFreezePolicy() {
   } catch (err) {
     error.value = extractApiErrorMessage(err, t('groupBuy.freezePolicyFailed'))
   } finally { freezePolicySaving.value = false }
-}
-async function loadCards() {
-  if (!userId.value || !Number.isSafeInteger(userId.value) || userId.value <= 0) return
-  cardsLoading.value = true
-  error.value = ''
-  try {
-    [cards.value, allocations.value] = await Promise.all([
-      adminGroupBuyAPI.cards(userId.value || undefined),
-      adminGroupBuyAPI.allocations(userId.value || undefined)
-    ])
-  } catch (err) {
-    error.value = extractApiErrorMessage(err, t('groupBuy.loadFailed'))
-  } finally {
-    cardsLoading.value = false
-  }
 }
 function editProduct(product?: GroupBuyProduct) {
   formError.value = ''

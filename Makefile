@@ -6,6 +6,8 @@ FRONTEND_CRITICAL_VITEST := \
 	src/api/__tests__/tokenRefresh.spec.ts \
 	src/api/__tests__/keys.bulkUpdate.spec.ts \
 	src/api/__tests__/activityLeaderboard.admin.spec.ts \
+	src/api/__tests__/admin.entitlements.spec.ts \
+	src/features/group-buy/__tests__ \
 	src/components/common/__tests__/ActivityLeaderboard.spec.ts \
 	src/components/common/__tests__/ActivityLeaderboard.admin.spec.ts \
 	src/components/common/__tests__/ActivityLeaderboard.configSync.spec.ts \

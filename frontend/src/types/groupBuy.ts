@@ -57,6 +57,29 @@ export interface MonthCard {
   frozen_at?: string | null
   remaining_seconds?: number
 }
+export interface AdminTeamEntitlement extends GroupBuyTeam {
+  active_cards: number
+  total_quota_usd: number
+  total_used_usd: number
+  weekly_quota_usd: number
+  weekly_used_usd: number
+  expires_at: string | null
+}
+
+export interface AdminMonthCard extends MonthCard {
+  username: string
+  email: string
+}
+
+export type EntitlementValidity = 'active' | 'expired' | 'all'
+
+export interface AdminEntitlementQuery {
+  page: number
+  page_size: number
+  validity: EntitlementValidity
+  search?: string
+  group_id?: number
+}
 export interface EntitlementRef {
   kind: 'card' | 'legacy'
   id: number

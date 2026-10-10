@@ -1,5 +1,9 @@
 import { apiClient } from './client'
+import type { PaginatedResponse } from '@/types'
 import type {
+  AdminEntitlementQuery,
+  AdminMonthCard,
+  AdminTeamEntitlement,
   ChargeAllocation,
   CouponQuote,
   MonthCardCoupon,
@@ -57,6 +61,15 @@ export const groupBuyAPI = {
   }
 }
 export const adminGroupBuyAPI = {
+  async entitlementTeams(params: AdminEntitlementQuery, signal?: AbortSignal) {
+    return (await apiClient.get<PaginatedResponse<AdminTeamEntitlement>>('/admin/group-buy/entitlements/teams', { params, signal })).data
+  },
+  async entitlementTeamCards(code: string, params: AdminEntitlementQuery, signal?: AbortSignal) {
+    return (await apiClient.get<PaginatedResponse<AdminMonthCard>>(`/admin/group-buy/entitlements/teams/${encodeURIComponent(code)}/cards`, { params, signal })).data
+  },
+  async soloEntitlements(params: AdminEntitlementQuery, signal?: AbortSignal) {
+    return (await apiClient.get<PaginatedResponse<AdminMonthCard>>('/admin/group-buy/entitlements/cards', { params, signal })).data
+  },
   async freezePolicy() {
     return (await apiClient.get<{ enabled: boolean; starts_at?: string | null; ends_at?: string | null }>('/admin/group-buy/freeze-policy')).data
   },

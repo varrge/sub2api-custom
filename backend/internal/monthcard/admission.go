@@ -31,8 +31,9 @@ type Snapshot struct {
 
 type Candidate struct {
 	Ref
-	// Captured at admission so later freeze/thaw operations cannot move this
-	// request to a different historical quota window. Omitted for old snapshots.
+	// Captured at admission so resets and freeze/thaw cannot move a request
+	// to a different quota generation or window. Omitted for old snapshots.
+	TotalGeneration    int64      `json:"total_generation,omitempty"`
 	CardPausedUS       int64      `json:"card_paused_us,omitempty"`
 	DailyGeneration    int64      `json:"daily_generation,omitempty"`
 	WeeklyGeneration   int64      `json:"weekly_generation,omitempty"`
@@ -146,7 +147,7 @@ func (s *Store) AdmitIncludingLegacy(ctx context.Context, userID, groupID int64,
 		return nil, ErrDebt
 	}
 	snap := &Snapshot{UserID: userID, GroupID: groupID, StartedAt: at, Candidates: []Candidate{}}
-	rows, err := tx.QueryContext(ctx, `SELECT c.id,c.starts_at,c.expires_at+c.paused_us*INTERVAL '1 microsecond',c.total_quota_usd,c.total_used_usd,c.paused_us,COALESCE(c.weekly_quota_usd,ROUND(c.total_quota_usd/4,8))
+	rows, err := tx.QueryContext(ctx, `SELECT c.id,c.starts_at,c.expires_at+c.paused_us*INTERVAL '1 microsecond',c.total_quota_usd,c.total_used_usd,c.paused_us,COALESCE(c.weekly_quota_usd,ROUND(c.total_quota_usd/4,8)),c.total_usage_generation,c.weekly_usage_generation
  FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id
  WHERE c.user_id=$1 AND c.group_id=$2 AND c.status='active' AND c.frozen_at IS NULL AND (c.thawed_at IS NULL OR c.thawed_at<=$3) AND c.starts_at<=$3 AND c.expires_at+c.paused_us*INTERVAL '1 microsecond'>$3 AND o.status<>'REFUNDED'
  ORDER BY c.id`, userID, groupID, at)
@@ -161,7 +162,7 @@ func (s *Store) AdmitIncludingLegacy(ctx context.Context, userID, groupID int64,
 	for rows.Next() {
 		var r cardRow
 		r.c.Kind = "card"
-		if err := rows.Scan(&r.c.ID, &r.c.StartsAt, &r.c.ExpiresAt, &r.quota, &r.used, &r.c.CardPausedUS, &r.weeklyQuota); err != nil {
+		if err := rows.Scan(&r.c.ID, &r.c.StartsAt, &r.c.ExpiresAt, &r.quota, &r.used, &r.c.CardPausedUS, &r.weeklyQuota, &r.c.TotalGeneration, &r.c.WeeklyGeneration); err != nil {
 			_ = rows.Close()
 			return nil, err
 		}
@@ -178,7 +179,7 @@ func (s *Store) AdmitIncludingLegacy(ctx context.Context, userID, groupID int64,
 		effectiveAt := at.Add(-time.Duration(r.c.CardPausedUS) * time.Microsecond)
 		r.c.WeeklyWindowStart = r.c.StartsAt.Add((effectiveAt.Sub(r.c.StartsAt) / (7 * 24 * time.Hour)) * (7 * 24 * time.Hour))
 		var used decimal.Decimal
-		err := tx.QueryRowContext(ctx, `SELECT used_usd FROM month_card_period_usage WHERE kind='card' AND entitlement_id=$1 AND period_kind='weekly' AND window_start=$2`, r.c.ID, r.c.WeeklyWindowStart).Scan(&used)
+		err := tx.QueryRowContext(ctx, `SELECT used_usd FROM month_card_period_usage WHERE kind='card' AND entitlement_id=$1 AND period_kind='weekly' AND window_start=$2 AND generation=$3`, r.c.ID, r.c.WeeklyWindowStart, r.c.WeeklyGeneration).Scan(&used)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return nil, err
 		}

@@ -140,3 +140,13 @@ export interface QuotaAdjustmentDraft {
   total: string
   weekly: string
 }
+
+export interface UsageResetRequest {
+  card_ids: number[]
+  reset_total: boolean
+  reset_weekly: boolean
+}
+export interface UsageResetDraft {
+  resetTotal: boolean
+  resetWeekly: boolean
+}

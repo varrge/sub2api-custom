@@ -59,3 +59,22 @@ func TestAdjustEntitlementQuotasRejectsInvalidRequestsBeforeStore(t *testing.T) 
 	h.AdjustEntitlementQuotas(c)
 	require.Equal(t, 401, w.Code)
 }
+
+func TestResetEntitlementUsageRejectsInvalidRequestsBeforeStore(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := &GroupBuyHandler{}
+	for _, body := range []string{`{}`, `{"card_ids":[1]}`, `{"card_ids":[1,1],"reset_weekly":true}`, `{"card_ids":[-1],"reset_total":true}`, `{"card_ids":[1],"reset_total":"true"}`, `{"card_ids":[1],"reset_total":true,"padding":"` + strings.Repeat("x", 16*1024) + `"}`} {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 30})
+		c.Request = httptest.NewRequest("POST", "/", strings.NewReader(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+		h.ResetEntitlementUsage(c)
+		require.Equal(t, 400, w.Code)
+	}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/", strings.NewReader(`{}`))
+	h.ResetEntitlementUsage(c)
+	require.Equal(t, 401, w.Code)
+}

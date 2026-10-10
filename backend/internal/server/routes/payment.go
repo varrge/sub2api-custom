@@ -74,6 +74,7 @@ func RegisterPaymentRoutes(
 		adminGroupBuy.GET("/entitlements/teams/:code/cards", h.AdminEntitlementTeamCards)
 		adminGroupBuy.GET("/entitlements/cards", h.AdminSoloEntitlements)
 		adminGroupBuy.PATCH("/entitlements/cards/quotas", h.AdjustEntitlementQuotas)
+		adminGroupBuy.POST("/entitlements/cards/reset-usage", h.ResetEntitlementUsage)
 		adminGroupBuy.GET("/allocations", h.AdminAllocations)
 	}
 	// --- User-facing payment endpoints (authenticated) ---

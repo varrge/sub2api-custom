@@ -37,5 +37,11 @@ func TestEntitlementCustomerRoutesRequireAdmin(t *testing.T) {
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("PATCH", "/api/v1/group-buy/entitlements/cards/quotas", nil))
 	require.Equal(t, http.StatusNotFound, w.Code)
-	require.Equal(t, 4, authCalls)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest("POST", "/api/v1/admin/group-buy/entitlements/cards/reset-usage", nil))
+	require.Equal(t, http.StatusForbidden, w.Code)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest("POST", "/api/v1/group-buy/entitlements/cards/reset-usage", nil))
+	require.Equal(t, http.StatusNotFound, w.Code)
+	require.Equal(t, 5, authCalls)
 }

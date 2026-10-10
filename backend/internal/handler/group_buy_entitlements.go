@@ -100,3 +100,25 @@ func (h *GroupBuyHandler) AdjustEntitlementQuotas(c *gin.Context) {
 	err := h.store.AdjustQuotas(c.Request.Context(), actor.UserID, req)
 	groupBuyResponse(c, gin.H{"updated_count": len(req.CardIDs)}, err)
 }
+
+// ResetEntitlementUsage is restricted to administrators by route middleware.
+func (h *GroupBuyHandler) ResetEntitlementUsage(c *gin.Context) {
+	actor, ok := requireAuth(c)
+	if !ok {
+		return
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16*1024)
+	var req monthcard.UsageReset
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "已用额度重置参数无效")
+		return
+	}
+	if err := req.Validate(); err != nil {
+		groupBuyResponse(c, nil, err)
+		return
+	}
+	middleware.SetAuditAction(c, "admin.month_card.usage_reset")
+	middleware.SetAuditExtra(c, map[string]any{"requested_count": len(req.CardIDs), "reset_total": req.ResetTotal, "reset_weekly": req.ResetWeekly})
+	err := h.store.ResetUsage(c.Request.Context(), actor.UserID, req)
+	groupBuyResponse(c, gin.H{"updated_count": len(req.CardIDs)}, err)
+}

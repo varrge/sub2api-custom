@@ -47,14 +47,14 @@
     <p v-if="quotaSuccess" role="status" class="gb-notice gb-notice-info p-3">{{ quotaSuccess }}</p>
     <template v-if="!error">
       <AdminEntitlementTeamsTable v-if="scope === 'teams'" :items="teams" :loading="loading" @inspect="inspectTeam" />
-      <AdminEntitlementMembersTable v-else :items="soloCards" :loading="loading" :selected-ids="soloSelectedIds" :selectable-ids="soloSelectableIds" :disabled="quotaSaving"
+      <AdminEntitlementMembersTable v-else :items="soloCards" :loading="loading" :selected-ids="soloSelectedIds" :selectable-ids="soloSelectableIds" :disabled="mutationSaving"
         @inspect-user="inspectUser" @toggle-select="toggleSelection('solo', $event)" @toggle-all="toggleAll('solo')" @clear-selection="soloSelectedIds = []"
-        @adjust-quota="openQuota([$event])" @adjust-selected="openSelectedQuotas('solo')" />
+        @adjust-quota="openQuota([$event])" @adjust-selected="openSelectedQuotas('solo')" @reset-usage="openReset([$event])" @reset-selected="openSelectedReset('solo')" />
       <Pagination v-if="total > 0" :total="total" :page="page" :page-size="pageSize" :show-page-size-selector="false"
         @update:page="page = $event" />
     </template>
 
-    <BaseDialog :show="!!selectedTeam" :title="`${t('groupBuy.teamCode')} ${selectedTeam?.code ?? ''}`" width="full" :close-on-escape="!quotaCards.length" @close="closeTeam">
+    <BaseDialog :show="!!selectedTeam" :title="`${t('groupBuy.teamCode')} ${selectedTeam?.code ?? ''}`" width="full" :close-on-escape="!quotaCards.length && !resetCards.length" @close="closeTeam">
       <div v-if="selectedTeam" class="space-y-4">
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -69,9 +69,9 @@
         </div>
         <template v-else>
           <p v-if="quotaSuccess" role="status" class="gb-notice gb-notice-info p-3">{{ quotaSuccess }}</p>
-          <AdminEntitlementMembersTable :items="members" :loading="membersLoading" :selected-ids="memberSelectedIds" :selectable-ids="memberSelectableIds" :disabled="quotaSaving"
+          <AdminEntitlementMembersTable :items="members" :loading="membersLoading" :selected-ids="memberSelectedIds" :selectable-ids="memberSelectableIds" :disabled="mutationSaving"
             @inspect-user="inspectUser" @toggle-select="toggleSelection('members', $event)" @toggle-all="toggleAll('members')" @clear-selection="memberSelectedIds = []"
-            @adjust-quota="openQuota([$event])" @adjust-selected="openSelectedQuotas('members')" />
+            @adjust-quota="openQuota([$event])" @adjust-selected="openSelectedQuotas('members')" @reset-usage="openReset([$event])" @reset-selected="openSelectedReset('members')" />
           <Pagination v-if="memberTotal > 0" :total="memberTotal" :page="memberPage" :page-size="20" :show-page-size-selector="false" @update:page="memberPage = $event" />
         </template>
         <div v-if="selectedUserId" class="space-y-3 border-t border-gray-200 pt-4 dark:border-dark-600">
@@ -93,6 +93,8 @@
     </BaseDialog>
     <AdminQuotaAdjustmentDialog :show="!!quotaCards.length" :cards="quotaCards" :saving="quotaSaving" :error="quotaError"
       v-model:draft="quotaDraft" @close="closeQuota" @save="saveQuota" />
+    <AdminUsageResetDialog :show="!!resetCards.length" :cards="resetCards" :saving="resetSaving" :error="resetError"
+      v-model:draft="resetDraft" @close="closeReset" @save="saveReset" />
   </section>
 </template>
 
@@ -100,13 +102,14 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminGroupBuyAPI } from '@/api/groupBuy'
-import type { QuotaAdjustmentDraft, QuotaAdjustmentRequest, AdminEntitlementQuery, AdminMonthCard, AdminTeamEntitlement, ChargeAllocation, EntitlementValidity, MonthCard } from '@/types/groupBuy'
+import type { UsageResetDraft, QuotaAdjustmentDraft, QuotaAdjustmentRequest, AdminEntitlementQuery, AdminMonthCard, AdminTeamEntitlement, ChargeAllocation, EntitlementValidity, MonthCard } from '@/types/groupBuy'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import AdminEntitlementTeamsTable from './AdminEntitlementTeamsTable.vue'
 import AdminEntitlementMembersTable from './AdminEntitlementMembersTable.vue'
 import AllocationTable from './AllocationTable.vue'
 import AdminQuotaAdjustmentDialog from './AdminQuotaAdjustmentDialog.vue'
+import AdminUsageResetDialog from './AdminUsageResetDialog.vue'
 import { cny } from './model'
 import { extractApiErrorMessage } from '@/utils/apiError'
 
@@ -176,7 +179,7 @@ const membersError = ref('')
 let membersController: AbortController | undefined
 let membersRequest = 0
 function inspectTeam(team: AdminTeamEntitlement) { closeUser(); selectedTeam.value = team; memberPage.value = 1 }
-function closeTeam() { if (quotaCards.value.length) return; memberSelectedIds.value = []; closeUser(); selectedTeam.value = null; membersController?.abort(); ++membersRequest }
+function closeTeam() { if (quotaCards.value.length || resetCards.value.length) return; memberSelectedIds.value = []; closeUser(); selectedTeam.value = null; membersController?.abort(); ++membersRequest }
 async function loadMembers() {
   memberSelectedIds.value = []
   if (!selectedTeam.value) return
@@ -240,11 +243,11 @@ function selection(scope: 'solo' | 'members') {
 }
 function toggleSelection(scope: 'solo' | 'members', id: number) {
   const state = selection(scope)
-  if (quotaSaving.value || !state.eligible.value.includes(id)) return
+  if (mutationSaving.value || !state.eligible.value.includes(id)) return
   state.ids.value = state.ids.value.includes(id) ? state.ids.value.filter(value => value !== id) : [...state.ids.value, id]
 }
 function toggleAll(scope: 'solo' | 'members') {
-  if (quotaSaving.value) return
+  if (mutationSaving.value) return
   const state = selection(scope)
   state.ids.value = state.eligible.value.every(id => state.ids.value.includes(id)) ? [] : [...state.eligible.value]
 }
@@ -257,7 +260,7 @@ const quotaSaving = ref(false)
 const quotaError = ref('')
 const quotaDraft = ref<QuotaAdjustmentDraft>({ setTotal: false, setWeekly: false, total: '', weekly: '' })
 function openQuota(cards: AdminMonthCard[]) {
-  if (quotaSaving.value || !cards.length || cards.some(card => !canAdjust(card))) return
+  if (mutationSaving.value || resetCards.value.length || !cards.length || cards.some(card => !canAdjust(card))) return
   quotaCards.value = cards.map(card => ({ ...card }))
   quotaError.value = ''
   quotaSuccess.value = ''
@@ -302,6 +305,41 @@ async function saveQuota() {
     if (!disposed) quotaError.value = extractApiErrorMessage(err, t('groupBuy.quotaSaveFailed'))
   } finally {
     if (!disposed) quotaSaving.value = false
+  }
+}
+const resetCards = ref<AdminMonthCard[]>([])
+const resetSaving = ref(false)
+const resetError = ref('')
+const resetDraft = ref<UsageResetDraft>({ resetTotal: false, resetWeekly: false })
+const mutationSaving = computed(() => quotaSaving.value || resetSaving.value)
+function openSelectedReset(scope: 'solo' | 'members') {
+  const state = selection(scope)
+  openReset(state.cards.value.filter(card => state.ids.value.includes(card.id)))
+}
+function openReset(cards: AdminMonthCard[]) {
+  if (mutationSaving.value || quotaCards.value.length || !cards.length || cards.some(card => !canAdjust(card))) return
+  resetCards.value = cards.map(card => ({ ...card }))
+  resetError.value = ''
+  quotaSuccess.value = ''
+  resetDraft.value = { resetTotal: false, resetWeekly: false }
+}
+function closeReset() { if (!resetSaving.value) { resetCards.value = []; resetError.value = '' } }
+async function saveReset() {
+  if (mutationSaving.value || !resetCards.value.length) return
+  resetError.value = ''
+  const { resetTotal, resetWeekly } = resetDraft.value
+  if (!resetTotal && !resetWeekly) { resetError.value = t('groupBuy.usageResetChoose'); return }
+  resetSaving.value = true
+  try {
+    const result = await adminGroupBuyAPI.resetUsage({ card_ids: resetCards.value.map(card => card.id), reset_total: resetTotal, reset_weekly: resetWeekly })
+    if (disposed) return
+    resetCards.value = []
+    quotaSuccess.value = t('groupBuy.usageResetSaved', { count: result.updated_count })
+    await Promise.all([loadList(), loadMembers(), selectedUserId.value ? inspectUser(selectedUserId.value) : Promise.resolve()])
+  } catch (err) {
+    if (!disposed) resetError.value = extractApiErrorMessage(err, t('groupBuy.usageResetFailed'))
+  } finally {
+    if (!disposed) resetSaving.value = false
   }
 }
 defineExpose({ refresh: loadList })

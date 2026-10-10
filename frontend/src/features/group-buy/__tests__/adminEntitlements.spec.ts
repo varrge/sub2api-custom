@@ -5,6 +5,7 @@ import AdminEntitlementTeamsTable from '../AdminEntitlementTeamsTable.vue'
 import AdminEntitlementMembersTable from '../AdminEntitlementMembersTable.vue'
 import AllocationTable from '../AllocationTable.vue'
 import AdminQuotaAdjustmentDialog from '../AdminQuotaAdjustmentDialog.vue'
+import AdminUsageResetDialog from '../AdminUsageResetDialog.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import { adminGroupBuyAPI } from '@/api/groupBuy'
@@ -12,7 +13,7 @@ import type { AdminMonthCard, AdminTeamEntitlement } from '@/types/groupBuy'
 
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 vi.mock('@/api/groupBuy', () => ({ adminGroupBuyAPI: {
-  entitlementTeams: vi.fn(), entitlementTeamCards: vi.fn(), soloEntitlements: vi.fn(), adjustQuotas: vi.fn(), cards: vi.fn(), allocations: vi.fn()
+  entitlementTeams: vi.fn(), entitlementTeamCards: vi.fn(), soloEntitlements: vi.fn(), adjustQuotas: vi.fn(), resetUsage: vi.fn(), cards: vi.fn(), allocations: vi.fn()
 } }))
 
 const team: AdminTeamEntitlement = {
@@ -31,6 +32,7 @@ beforeEach(() => {
   vi.resetAllMocks()
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(new Date('2026-10-10T12:00:00Z'))
+  vi.mocked(adminGroupBuyAPI.resetUsage).mockResolvedValue({ updated_count: 1 })
   vi.mocked(adminGroupBuyAPI.adjustQuotas).mockResolvedValue({ updated_count: 1 })
   vi.mocked(adminGroupBuyAPI.entitlementTeams).mockResolvedValue(result([team]))
   vi.mocked(adminGroupBuyAPI.entitlementTeamCards).mockResolvedValue(result([card]))
@@ -263,6 +265,102 @@ describe('admin quota adjustment', () => {
     members.vm.$emit('adjustQuota', { ...card, team_id: null })
     await flushPromises()
     expect(wrapper.getComponent(AdminQuotaAdjustmentDialog).props('show')).toBe(true)
+    wrapper.unmount()
+  })
+})
+
+describe('admin usage reset', () => {
+  async function openMembers() {
+    const wrapper = mount()
+    await flushPromises()
+    wrapper.getComponent(AdminEntitlementTeamsTable).vm.$emit('inspect', team)
+    await flushPromises()
+    return wrapper
+  }
+  it.each([
+    { resetTotal: false, resetWeekly: true },
+    { resetTotal: true, resetWeekly: false },
+    { resetTotal: true, resetWeekly: true }
+  ])('clears only selected counters and refreshes affected views: %o', async draft => {
+    const wrapper = await openMembers()
+    const members = wrapper.getComponent(AdminEntitlementMembersTable)
+    members.vm.$emit('inspectUser', card.user_id)
+    await flushPromises()
+    members.vm.$emit('resetUsage', card)
+    await flushPromises()
+    const dialog = wrapper.getComponent(AdminUsageResetDialog)
+    expect(dialog.props('cards')).toEqual([card])
+    expect(dialog.props('draft')).toEqual({ resetTotal: false, resetWeekly: false })
+    dialog.vm.$emit('save')
+    await flushPromises()
+    expect(adminGroupBuyAPI.resetUsage).not.toHaveBeenCalled()
+    expect(dialog.props('error')).toBe('groupBuy.usageResetChoose')
+    dialog.vm.$emit('update:draft', draft)
+    dialog.vm.$emit('save')
+    dialog.vm.$emit('save')
+    await flushPromises()
+    expect(adminGroupBuyAPI.resetUsage).toHaveBeenCalledWith({ card_ids: [11], reset_total: draft.resetTotal, reset_weekly: draft.resetWeekly })
+    expect(adminGroupBuyAPI.resetUsage).toHaveBeenCalledTimes(1)
+    expect(adminGroupBuyAPI.adjustQuotas).not.toHaveBeenCalled()
+    expect(dialog.props('show')).toBe(false)
+    expect(adminGroupBuyAPI.entitlementTeams).toHaveBeenCalledTimes(2)
+    expect(adminGroupBuyAPI.entitlementTeamCards).toHaveBeenCalledTimes(2)
+    expect(adminGroupBuyAPI.cards).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
+  })
+  it('resets a selected batch, ignores ineligible cards, and blocks closing and other changes while saving', async () => {
+    const frozen = { ...card, id: 12, status: 'frozen' as const }
+    const revoked = { ...card, id: 13, status: 'revoked' as const }
+    vi.mocked(adminGroupBuyAPI.entitlementTeamCards).mockResolvedValue(result([card, frozen, revoked]))
+    let finish: (value: { updated_count: number }) => void = () => {}
+    vi.mocked(adminGroupBuyAPI.resetUsage).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    const wrapper = await openMembers()
+    const members = wrapper.getComponent(AdminEntitlementMembersTable)
+    members.vm.$emit('resetUsage', revoked)
+    await flushPromises()
+    const dialog = wrapper.getComponent(AdminUsageResetDialog)
+    expect(dialog.props('show')).toBe(false)
+    members.vm.$emit('toggleAll')
+    members.vm.$emit('resetSelected')
+    await flushPromises()
+    expect(dialog.props('cards').map((item: AdminMonthCard) => item.id)).toEqual([11, 12])
+    dialog.vm.$emit('update:draft', { resetTotal: true, resetWeekly: true })
+    dialog.vm.$emit('save')
+    await flushPromises()
+    expect(dialog.props('saving')).toBe(true)
+    expect(members.props('disabled')).toBe(true)
+    dialog.vm.$emit('close')
+    members.vm.$emit('adjustQuota', card)
+    wrapper.findAllComponents(BaseDialog)[0].vm.$emit('close')
+    await flushPromises()
+    expect(dialog.props('show')).toBe(true)
+    expect(wrapper.getComponent(AdminQuotaAdjustmentDialog).props('show')).toBe(false)
+    finish({ updated_count: 2 })
+    await flushPromises()
+    expect(adminGroupBuyAPI.resetUsage).toHaveBeenCalledWith({ card_ids: [11, 12], reset_total: true, reset_weekly: true })
+    expect(members.props('selectedIds')).toEqual([])
+    expect(members.props('disabled')).toBe(false)
+    wrapper.unmount()
+  })
+  it('supports solo cards and retains the chosen reset on a server failure', async () => {
+    vi.mocked(adminGroupBuyAPI.resetUsage).mockRejectedValueOnce(new Error('card expired'))
+    const wrapper = mount()
+    await flushPromises()
+    await wrapper.findAll('[role="tab"]')[1].trigger('click')
+    await flushPromises()
+    wrapper.getComponent(AdminEntitlementMembersTable).vm.$emit('resetUsage', { ...card, team_id: null })
+    await flushPromises()
+    const dialog = wrapper.getComponent(AdminUsageResetDialog)
+    dialog.vm.$emit('update:draft', { resetTotal: false, resetWeekly: true })
+    dialog.vm.$emit('save')
+    await flushPromises()
+    expect(dialog.props('show')).toBe(true)
+    expect(dialog.props('error')).toBeTruthy()
+    expect(dialog.props('draft')).toEqual({ resetTotal: false, resetWeekly: true })
+    expect(dialog.props('saving')).toBe(false)
+    dialog.vm.$emit('close')
+    await flushPromises()
+    expect(dialog.props('show')).toBe(false)
     wrapper.unmount()
   })
 })

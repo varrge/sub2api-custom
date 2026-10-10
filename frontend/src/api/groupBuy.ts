@@ -3,6 +3,7 @@ import type { PaginatedResponse } from '@/types'
 import type {
   AdminEntitlementQuery,
   QuotaAdjustmentRequest,
+  UsageResetRequest,
   AdminMonthCard,
   AdminTeamEntitlement,
   ChargeAllocation,
@@ -62,6 +63,9 @@ export const groupBuyAPI = {
   }
 }
 export const adminGroupBuyAPI = {
+  async resetUsage(request: UsageResetRequest) {
+    return (await apiClient.post<{ updated_count: number }>('/admin/group-buy/entitlements/cards/reset-usage', request)).data
+  },
   async adjustQuotas(request: QuotaAdjustmentRequest) {
     return (await apiClient.patch<{ updated_count: number }>('/admin/group-buy/entitlements/cards/quotas', request)).data
   },

@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { apiClient } from '../client'
 import { adminGroupBuyAPI } from '../groupBuy'
 
-vi.mock('../client', () => ({ apiClient: { get: vi.fn(), patch: vi.fn() } }))
+vi.mock('../client', () => ({ apiClient: { get: vi.fn(), patch: vi.fn(), post: vi.fn() } }))
 beforeEach(() => { vi.clearAllMocks(); vi.mocked(apiClient.get).mockResolvedValue({ data: { items: [], total: 0, page: 1, page_size: 20, pages: 0 } }) })
 
 it('requests paginated entitlements only through the admin namespace', async () => {
@@ -21,4 +21,11 @@ it('saves exact decimal limits using the admin quota endpoint', async () => {
   const request = { card_ids: [11, 12], weekly_quota_usd: '100.12345678' }
   expect(await adminGroupBuyAPI.adjustQuotas(request)).toEqual({ updated_count: 2 })
   expect(apiClient.patch).toHaveBeenCalledWith('/admin/group-buy/entitlements/cards/quotas', request)
+})
+
+it('clears selected usage counters through the admin reset endpoint', async () => {
+  vi.mocked(apiClient.post).mockResolvedValue({ data: { updated_count: 2 } })
+  const request = { card_ids: [11, 12], reset_weekly: true, reset_total: false }
+  expect(await adminGroupBuyAPI.resetUsage(request)).toEqual({ updated_count: 2 })
+  expect(apiClient.post).toHaveBeenCalledWith('/admin/group-buy/entitlements/cards/reset-usage', request)
 })

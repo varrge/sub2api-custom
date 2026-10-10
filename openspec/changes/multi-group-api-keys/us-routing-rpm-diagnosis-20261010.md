@@ -36,3 +36,20 @@ GOTOOLCHAIN=auto GOFLAGS=-p=2 go test -C backend ./internal/handler ./internal/s
 ```
 
 本地修复尚未发布、打 tag 或部署。上线后仍需观察：真实容量不足继续返回 503；业务限流为 429。若用户需要更高吞吐，调整 RPM 是独立的运营配置决策。
+
+## 中国候选部署
+
+2026-10-10 用户随后授权部署中国并开启穿透，已完成。
+
+- 源码提交：5cc2544d8b99b243113dec713ef54e33b2b0621a。
+- 版本：0.2.15-custom.4-candidate.routing.5cc2544d8。
+- 入口：<http://127.0.0.1:18081/keys>，原中国验收账号继续使用。
+- 远端备份及构建记录：/home/yinan/sub2api-staging/routing-20261010T111944Z。
+- 回滚镜像：sub2api-restore:routing-20261010t111944z；不自动回滚数据库。
+- 仅替换 sub2api-multigroup-cn 应用；其他容器 ID/启动时间不变，隔离网络 internal=true，无公开端口。
+- 新增迁移：242_drop_platform_check_constraints、249_month_card_quota_adjustments、250_month_card_usage_resets。已有迁移校验和一致，升级后记录符合预期。
+- 数据库 dump 64,657,325 字节，pg_restore --list 校验通过。核心表记录数不变。
+- 前端生产构建、后端 linux/amd64 嵌入式构建通过。容器健康且零重启，二进制摘要与构建一致。
+- 穿透 /health、/keys、/admin/ops 和公开版本接口均 HTTP 200，实际版本符合候选版本。
+- SSH 控制 socket：/private/tmp/sub2api-cn-routing-20261010.sock。本机监听 127.0.0.1:18081，目标 172.26.0.4:8080。
+- 美国生产未操作；未发布正式 tag/Release。中国保持隔离，本轮未执行真实供应商调用。

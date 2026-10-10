@@ -192,3 +192,30 @@ func TestSeedanceGroupProbeRequiresSeedanceCapability(t *testing.T) {
 		}
 	}
 }
+
+// Reproduce a multi-group key requesting a model owned only by its last group.
+func TestAPIKeyGroupProbeSkipsExplicitlyUnsupportedDeepseekModel(t *testing.T) {
+	group := &Group{ID: 101, Platform: PlatformOpenAI, Status: StatusActive}
+	key := &APIKey{ID: 1, UserID: 2, GroupID: &group.ID, Group: group, User: &User{ID: 2}}
+	for _, tc := range []struct {
+		name        string
+		mapping     map[string]any
+		passthrough bool
+		want        bool
+	}{
+		{name: "earlier_gpt_only_group", mapping: map[string]any{"gpt-5": "gpt-5"}, want: false},
+		{name: "last_deepseek_group", mapping: map[string]any{"deepseek-v4.1-flash": "deepseek-v4.1-flash"}, want: true},
+		{name: "passthrough_overrides_mapping", mapping: map[string]any{"gpt-5": "gpt-5"}, passthrough: true, want: true},
+		{name: "empty_mapping_is_unrestricted", want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			account := Account{ID: 3, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Credentials: map[string]any{"model_mapping": tc.mapping}, Extra: map[string]any{"openai_passthrough": tc.passthrough}}
+			acquired := []int64{}
+			svc := &OpenAIGatewayService{accountRepo: schedulerTestOpenAIAccountRepo{accounts: []Account{account}}, cache: &schedulerTestGatewayCache{}, cfg: &config.Config{}, concurrencyService: NewConcurrencyService(schedulerTestConcurrencyCache{acquiredIDs: &acquired})}
+			available, err := svc.ProbeAPIKeyGroup(t.Context(), key, APIKeyGroupRequest{Model: "deepseek-v4.1-flash", Platform: PlatformOpenAI, Path: "/v1/chat/completions"})
+			require.NoError(t, err)
+			require.Equal(t, tc.want, available)
+			require.Empty(t, acquired)
+		})
+	}
+}

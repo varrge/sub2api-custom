@@ -127,3 +127,16 @@ export interface ChargeAllocation {
   started_at: string
   created_at: string
 }
+
+// Decimal strings preserve the entered precision through JSON and database writes.
+export interface QuotaAdjustmentRequest {
+  card_ids: number[]
+  total_quota_usd?: string
+  weekly_quota_usd?: string
+}
+export interface QuotaAdjustmentDraft {
+  setTotal: boolean
+  setWeekly: boolean
+  total: string
+  weekly: string
+}

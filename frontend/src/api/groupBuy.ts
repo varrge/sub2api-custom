@@ -2,6 +2,7 @@ import { apiClient } from './client'
 import type { PaginatedResponse } from '@/types'
 import type {
   AdminEntitlementQuery,
+  QuotaAdjustmentRequest,
   AdminMonthCard,
   AdminTeamEntitlement,
   ChargeAllocation,
@@ -61,6 +62,9 @@ export const groupBuyAPI = {
   }
 }
 export const adminGroupBuyAPI = {
+  async adjustQuotas(request: QuotaAdjustmentRequest) {
+    return (await apiClient.patch<{ updated_count: number }>('/admin/group-buy/entitlements/cards/quotas', request)).data
+  },
   async entitlementTeams(params: AdminEntitlementQuery, signal?: AbortSignal) {
     return (await apiClient.get<PaginatedResponse<AdminTeamEntitlement>>('/admin/group-buy/entitlements/teams', { params, signal })).data
   },

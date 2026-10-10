@@ -10,7 +10,7 @@ import (
 // passed once so every card returned by this call uses the same instant.
 const cardSelect = `SELECT c.id,c.user_id,c.group_id,c.order_id,c.code,c.group_name,c.platform,c.product_name,
 	COALESCE(t.code,''),CASE WHEN c.status='revoked' OR o.status='REFUNDED' THEN 'revoked' WHEN c.status='frozen' THEN 'frozen' WHEN c.expires_at + pause.total_pause <=$1 THEN 'expired' ELSE c.status END,
-	c.team_id,c.total_quota_usd,c.total_used_usd,ROUND(c.total_quota_usd/4,8),COALESCE(w.used_usd,0),
+	c.team_id,c.total_quota_usd,c.total_used_usd,COALESCE(c.weekly_quota_usd,ROUND(c.total_quota_usd/4,8)),COALESCE(w.used_usd,0),
 	c.starts_at,c.expires_at + pause.total_pause,v.window_start + pause.total_pause,LEAST(v.window_start+INTERVAL '168 hours',c.expires_at)+pause.total_pause,COALESCE(p.priority,2147483647),c.frozen_at,c.paused_us,GREATEST(0,FLOOR(EXTRACT(EPOCH FROM(c.expires_at+pause.total_pause-$1::timestamptz))))::bigint
 	FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id
 	LEFT JOIN month_card_teams t ON t.id=c.team_id

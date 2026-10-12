@@ -10,6 +10,7 @@ type APIKeyAuthSnapshot struct {
 	GroupIDs              []int64                    `json:"group_ids"`
 	Groups                []*APIKeyAuthGroupSnapshot `json:"groups"`
 	ModelAllowlist        GroupModelAllowlist        `json:"model_allowlist"`
+	ModelGroupRoutes      APIKeyModelGroupRoutes     `json:"model_group_routes"`
 	MultiGroupEnabled     bool                       `json:"multi_group_enabled"`
 	UserGroupRPMOverrides map[int64]*int             `json:"user_group_rpm_overrides"`
 	GroupID               *int64                     `json:"group_id,omitempty"`

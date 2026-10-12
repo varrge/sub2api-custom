@@ -61,6 +61,8 @@ func TestAPIKeyModelAccessHTTP(t *testing.T) {
 		`{}`, `{"model":"target","entries":[{"id":4,"revision":"` + revision + `"}]}`,
 		`{"model":"target","entries":[{"id":4,"revision":"` + revision + `","allowed":null}]}`,
 		`{"model":"target","entries":[{"id":4,"revision":"` + revision + `","allowed":"false"}]}`,
+		`{"model":"target","entries":[{"id":4,"revision":"` + revision + `","allowed":true,"group_ids":[]}]}`,
+		`{"model":"target","entries":[{"id":4,"revision":"` + revision + `","allowed":true,"group_ids":"2"}]}`,
 	} {
 		require.Equal(t, http.StatusBadRequest, request(http.MethodPut, body, 42).Code, body)
 		require.Nil(t, repo.entries)
@@ -71,6 +73,9 @@ func TestAPIKeyModelAccessHTTP(t *testing.T) {
 	require.Equal(t, http.StatusOK, result.Code)
 	require.Equal(t, int64(42), repo.userID)
 	require.False(t, repo.entries[0].Allowed)
+	result = request(http.MethodPut, `{"model":"target","entries":[{"id":4,"revision":"`+revision+`","allowed":true,"group_ids":[2]}]}`, 42)
+	require.Equal(t, http.StatusOK, result.Code)
+	require.Equal(t, []int64{2}, *repo.entries[0].GroupIDs)
 	repo.err = service.ErrAPIKeyModelAccessConflict
 	require.Equal(t, http.StatusConflict, request(http.MethodPut, string(payload), 42).Code)
 }

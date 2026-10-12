@@ -48,6 +48,8 @@ func (APIKey) Fields() []ent.Field {
 		field.Bool("multi_group_enabled").Default(false),
 		field.JSON("model_allowlist", domain.GroupModelAllowlist{}).
 			Default(domain.GroupModelAllowlist{}),
+		field.JSON("model_group_routes", map[string][]int64{}).
+			Default(map[string][]int64{}),
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusActive),

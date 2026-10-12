@@ -79,7 +79,7 @@ func (h *OpenAIGatewayHandler) statefulAdmissionCheck(c *gin.Context, key *servi
 		models := append([]string{requestedModel}, sessionModels...)
 		models = append(models, frameModels...)
 		for _, model := range models {
-			if !fresh.AllowsModel(model) {
+			if !fresh.AllowsModelInSelectedGroup(model) {
 				return infraerrors.New(http.StatusNotFound, "MODEL_NOT_ALLOWED", fmt.Sprintf("Model %q is not allowed for this API key", model))
 			}
 			if fresh.Group != nil && !fresh.Group.ModelAllowlist.Allows(model) {

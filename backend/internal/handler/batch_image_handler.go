@@ -158,6 +158,7 @@ func (h *BatchImageHandler) Models(c *gin.Context) {
 	key, _ := middleware.GetAPIKeyFromContext(c)
 	multi := key.MultiGroupEnabled || len(key.GroupIDs) > 1
 	if multi {
+		owner.ModelGroupAllowed = key.AllowsModelInGroup
 		got, err = h.service.ListModelsForGroups(c.Request.Context(), owner, key.Groups)
 	} else {
 		got, err = h.service.ListModels(c.Request.Context(), owner)
@@ -170,7 +171,7 @@ func (h *BatchImageHandler) Models(c *gin.Context) {
 	if !multi && key.Group != nil {
 		got.Data = filterBatchImageModelsByAllowlist(got.Data, key.Group.ModelAllowlist)
 	}
-	if key.ModelAllowlist.Enabled {
+	if key.HasModelRestrictions() {
 		filtered := make([]service.BatchImagePublicModel, 0, len(got.Data))
 		for _, model := range got.Data {
 			if key.AllowsModel(model.ID) {

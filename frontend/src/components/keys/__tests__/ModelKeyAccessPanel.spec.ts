@@ -24,6 +24,10 @@ const row = (overrides: Partial<ModelAccessRow> = {}): ModelAccessRow => ({
   group_ids: [1],
   allowed: true,
   originalAllowed: true,
+  selected_group_ids: [1],
+  original_selected_group_ids: [1],
+  groupsModified: false,
+  modified: false,
   catalogState: 'listed',
   ...overrides
 })
@@ -46,6 +50,7 @@ const mountPanel = (props: Partial<InstanceType<typeof ModelKeyAccessPanel>['$pr
       allowedCount: 0,
       addedCount: 0,
       removedCount: 0,
+      groupChangedCount: 0,
       dirty: false,
       switchPending: false,
       ...props
@@ -54,6 +59,27 @@ const mountPanel = (props: Partial<InstanceType<typeof ModelKeyAccessPanel>['$pr
   })
 
 describe('ModelKeyAccessPanel', () => {
+  it('renders selected group tags and emits group-only changes', async () => {
+    const wrapper = mountPanel({ selectedModel: 'm', rows: [row({
+      groups: [{ id: 1, name: 'Pool', platform: 'openai' }, { id: 2, name: 'Official', platform: 'openai' }],
+      group_ids: [1, 2], selected_group_ids: [2], original_selected_group_ids: [1, 2], groupsModified: true, modified: true
+    })], groupChangedCount: 1, dirty: true })
+    const tags = wrapper.findAll('[data-test="group-tag"]')
+    expect(tags.map(tag => tag.attributes('aria-pressed'))).toEqual(['false', 'true'])
+    await tags[0].trigger('click')
+    await tags[1].trigger('click')
+    expect(wrapper.emitted('toggle-group')).toEqual([[1, 1, true], [1, 2, false]])
+    expect(wrapper.findAll('[data-test="modified-badge"]')).toHaveLength(1)
+    expect(wrapper.text()).toContain('modelKeyAccess.groupsChanged {"count":1}')
+    expect(wrapper.get('[data-test="save"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('disables group selection while blocked, loading, saving or switching', () => {
+    for (const props of [{ rows: [row({ allowed: false })] }, { loading: true }, { saving: true }, { switchPending: true }]) {
+      const wrapper = mountPanel({ selectedModel: 'm', rows: [row()], ...props })
+      expect(wrapper.get('[data-test="group-tag"]').attributes('disabled')).toBeDefined()
+    }
+  })
   it('shows an empty state until a model is selected and selects models from the list', async () => {
     const wrapper = mountPanel({ models: ['claude-sonnet-4', 'gpt-5'] })
     expect(wrapper.text()).toContain('modelKeyAccess.noModelSelectedTitle')
@@ -78,7 +104,7 @@ describe('ModelKeyAccessPanel', () => {
       allowedCount: 1,
       rows: [
         row(),
-        row({ id: 2, name: 'Draft key', allowed: true, originalAllowed: false, catalogState: 'unlisted' })
+        row({ id: 2, name: 'Draft key', allowed: true, originalAllowed: false, modified: true, catalogState: 'unlisted' })
       ]
     })
     expect(wrapper.findAll('[data-test="modified-badge"]')).toHaveLength(1)

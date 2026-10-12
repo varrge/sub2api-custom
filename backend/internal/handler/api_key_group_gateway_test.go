@@ -33,11 +33,22 @@ func TestAPIKeyGroupProbeAppliesEndpointPolicyBeforeScheduling(t *testing.T) {
 func TestMultiGroupFallbackHonorsTargetPolicy(t *testing.T) {
 	group := &service.Group{ID: 2, Status: service.StatusActive, ModelAllowlist: service.GroupModelAllowlist{Enabled: true, Models: []string{"allowed"}}}
 	key := &service.APIKey{MultiGroupEnabled: true, GroupIDs: []int64{1, 2}, User: &service.User{}}
-	require.Error(t, validateAPIKeyFallbackGroup(key, group, "denied", []byte(`{"model":"denied"}`), true))
-	require.Error(t, validateAPIKeyFallbackGroup(key, group, "allowed", []byte(`{"model":"allowed","Model":"denied"}`), true))
-	require.NoError(t, validateAPIKeyFallbackGroup(key, group, "allowed", []byte(`{"model":"allowed"}`), true))
+	require.Error(t, validateAPIKeyFallbackGroup(key, group, "denied", "denied", []byte(`{"model":"denied"}`), true))
+	require.Error(t, validateAPIKeyFallbackGroup(key, group, "allowed", "allowed", []byte(`{"model":"allowed","Model":"denied"}`), true))
+	require.NoError(t, validateAPIKeyFallbackGroup(key, group, "allowed", "allowed", []byte(`{"model":"allowed"}`), true))
 	group.ClaudeCodeOnly = true
-	require.Error(t, validateAPIKeyFallbackGroup(key, group, "allowed", nil, false))
+	require.Error(t, validateAPIKeyFallbackGroup(key, group, "allowed", "allowed", nil, false))
+}
+
+func TestAPIKeyModelGroupsFallbackCannotUseUncheckedPublicAliasGroup(t *testing.T) {
+	group := &service.Group{ID: 2, Status: service.StatusActive}
+	key := &service.APIKey{MultiGroupEnabled: true, GroupIDs: []int64{1, 2}, User: &service.User{}, ModelGroupRoutes: service.APIKeyModelGroupRoutes{"public-alias": {1}}}
+	// Composite routing has already rewritten the body. Its upstream ID cannot
+	// replace the original public ID when checking a fallback group.
+	err := validateAPIKeyFallbackGroup(key, group, "upstream-model", "public-alias", []byte(`{"model":"upstream-model"}`), true)
+	require.ErrorContains(t, err, "not selected")
+	key.ModelGroupRoutes["public-alias"] = []int64{1, 2}
+	require.NoError(t, validateAPIKeyFallbackGroup(key, group, "upstream-model", "public-alias", []byte(`{"model":"upstream-model"}`), true))
 }
 
 type groupProbeAccountRepo struct {

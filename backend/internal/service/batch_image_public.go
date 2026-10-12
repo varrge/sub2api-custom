@@ -81,6 +81,8 @@ type BatchImageOwner struct {
 	APIKeyID     int64
 	GroupID      *int64
 	Subscription *UserSubscription
+	// Only used when merging the model directory, never persisted in jobs.
+	ModelGroupAllowed func(string, int64) bool `json:"-"`
 }
 
 type BatchImagePublicService struct {
@@ -1514,7 +1516,7 @@ func (s *BatchImagePublicService) ListModelsForGroups(ctx context.Context, owner
 			return nil, err
 		}
 		for _, model := range models.Data {
-			if !group.ModelAllowlist.Allows(model.ID) {
+			if !group.ModelAllowlist.Allows(model.ID) || owner.ModelGroupAllowed != nil && !owner.ModelGroupAllowed(model.ID, group.ID) {
 				continue
 			}
 			identity := model.Provider + "\x00" + model.ID

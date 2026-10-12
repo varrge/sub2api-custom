@@ -28,6 +28,8 @@ type APIKeyModelAccessEntry struct {
 	ID       int64  `json:"id"`
 	Revision string `json:"revision"`
 	Allowed  bool   `json:"allowed"`
+	// Omission preserves the model's current group routing (legacy clients).
+	GroupIDs *[]int64 `json:"group_ids,omitempty"`
 }
 
 type APIKeyModelAccessGroup struct {
@@ -38,14 +40,15 @@ type APIKeyModelAccessGroup struct {
 
 // Deliberately excludes the credential, IP history and billing data.
 type APIKeyModelAccessKey struct {
-	ID             int64                    `json:"id"`
-	Name           string                   `json:"name"`
-	Status         string                   `json:"status"`
-	ExpiresAt      *time.Time               `json:"expires_at"`
-	GroupIDs       []int64                  `json:"group_ids"`
-	Groups         []APIKeyModelAccessGroup `json:"groups"`
-	ModelAllowlist GroupModelAllowlist      `json:"model_allowlist"`
-	Revision       string                   `json:"revision"`
+	ID               int64                    `json:"id"`
+	Name             string                   `json:"name"`
+	Status           string                   `json:"status"`
+	ExpiresAt        *time.Time               `json:"expires_at"`
+	GroupIDs         []int64                  `json:"group_ids"`
+	Groups           []APIKeyModelAccessGroup `json:"groups"`
+	ModelAllowlist   GroupModelAllowlist      `json:"model_allowlist"`
+	ModelGroupRoutes APIKeyModelGroupRoutes   `json:"model_group_routes"`
+	Revision         string                   `json:"revision"`
 }
 
 type APIKeyModelAccessSnapshot struct {
@@ -64,7 +67,9 @@ func APIKeyModelAccessRevision(key *APIKey) string {
 	data, _ := json.Marshal(struct {
 		ID, UserID int64
 		Policy     GroupModelAllowlist
-	}{key.ID, key.UserID, policy})
+		Groups     []int64
+		Routes     APIKeyModelGroupRoutes
+	}{key.ID, key.UserID, policy, key.ConfiguredGroupIDs(), CloneAPIKeyModelGroupRoutes(key.ModelGroupRoutes)})
 	digest := sha256.Sum256(data)
 	return hex.EncodeToString(digest[:])
 }
@@ -124,6 +129,9 @@ func ValidateAPIKeyModelAccessEntries(entries []APIKeyModelAccessEntry) error {
 			return infraerrors.BadRequest("INVALID_MODEL_ACCESS_ENTRIES", "Each key requires a unique positive ID and a valid revision")
 		}
 		seen[entry.ID] = true
+		if entry.GroupIDs != nil && (len(*entry.GroupIDs) > 1000 || entry.Allowed && len(*entry.GroupIDs) == 0) {
+			return infraerrors.BadRequest("INVALID_MODEL_GROUPS", "An allowed model requires at least one selected group, with at most 1000 groups")
+		}
 	}
 	return nil
 }
@@ -142,6 +150,7 @@ func modelAccessKeys(keys []APIKey) []APIKeyModelAccessKey {
 			ID: key.ID, Name: key.Name, Status: key.Status, ExpiresAt: key.ExpiresAt,
 			GroupIDs: append([]int64{}, key.ConfiguredGroupIDs()...), Groups: groups,
 			ModelAllowlist: cloneAPIKeyModelAllowlist(key.ModelAllowlist), Revision: APIKeyModelAccessRevision(key),
+			ModelGroupRoutes: CloneAPIKeyModelGroupRoutes(key.ModelGroupRoutes),
 		})
 	}
 	return out

@@ -768,6 +768,7 @@ export interface ApiKeyModelOptions {
 }
 
 export interface ApiKey {
+  model_group_routes?: Record<string, number[]>
   model_allowlist_revision?: string
   id: number
   user_id: number

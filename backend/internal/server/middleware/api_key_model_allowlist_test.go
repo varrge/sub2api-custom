@@ -1,12 +1,14 @@
 package middleware
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -75,6 +77,30 @@ func TestDisabledAPIKeyModelAllowlistDoesNotReadBody(t *testing.T) {
 	require.Equal(t, `{"model":"x"}`, string(body))
 }
 
+func TestAPIKeyModelGroupsEnforceSelectedGroupAndPreserveHistoricalReads(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		selected   int64
+		historical bool
+		allowed    bool
+	}{
+		{"selected", 2, false, true}, {"unchecked", 1, false, false},
+		{"owned historical resource", 1, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest("POST", "/v1/responses", strings.NewReader(`{"model":"target"}`))
+			c.Request.Header.Set("Content-Type", "application/json")
+			key := &service.APIKey{GroupID: &tc.selected, GroupIDs: []int64{1, 2}, ModelGroupRoutes: service.APIKeyModelGroupRoutes{"target": {2}}}
+			require.True(t, enforceAPIKeyModelAllowlist(c, key), "global model access precedes selection")
+			if tc.historical {
+				SetAPIKeyHistoricalResource(c)
+			}
+			require.Equal(t, tc.allowed, enforceAPIKeySelectedModelGroups(c, key))
+		})
+	}
+}
+
 func TestAPIKeyModelAllowlistRejectsUncheckedPublicAliases(t *testing.T) {
 	for _, model := range []string{"gpt-5.4-high", "CHEAP", "claude-sonnet-4-6-thinking"} {
 		c, _ := gin.CreateTestContext(httptest.NewRecorder())
@@ -83,4 +109,27 @@ func TestAPIKeyModelAllowlistRejectsUncheckedPublicAliases(t *testing.T) {
 		key := &service.APIKey{ModelAllowlist: service.GroupModelAllowlist{Enabled: true, Models: []string{"gpt-5.4", "cheap", "claude-sonnet-4-6"}}}
 		require.False(t, enforceAPIKeyModelAllowlist(c, key), model)
 	}
+}
+
+func TestAPIKeyModelGroupsSingleGroupCannotUseSchedulerFallback(t *testing.T) {
+	groupID, fallbackID := int64(1), int64(2)
+	group := &service.Group{ID: groupID, Platform: service.PlatformAnthropic,
+		Status: service.StatusActive, Hydrated: true, ClaudeCodeOnly: true, FallbackGroupID: &fallbackID}
+	key := &service.APIKey{GroupID: &groupID, Group: group,
+		ModelGroupRoutes: service.APIKeyModelGroupRoutes{"target": {groupID}}}
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"target"}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), ctxkey.Group, group))
+	require.True(t, enforceAPIKeySelectedModelGroups(c, key))
+
+	// Both real scheduler entry points must stop before resolving or contacting
+	// the unchecked fallback group, even when this is a legacy single-group key.
+	gateway := &service.GatewayService{}
+	account, err := gateway.SelectAccountForModelWithExclusions(c.Request.Context(), &groupID, "", "target", nil)
+	require.ErrorIs(t, err, service.ErrClaudeCodeOnly)
+	require.Nil(t, account)
+	selection, err := gateway.SelectAccountWithLoadAwareness(c.Request.Context(), &groupID, "", "target", nil, "", 0)
+	require.ErrorIs(t, err, service.ErrClaudeCodeOnly)
+	require.Nil(t, selection)
 }

@@ -15,6 +15,7 @@ export interface ModelAccessKey {
   groups: ModelAccessGroup[]
   group_ids: number[]
   model_allowlist: ApiKeyModelAllowlist
+  model_group_routes?: Record<string, number[]>
   revision: string
 }
 
@@ -27,6 +28,10 @@ export interface ModelAccessRow {
   group_ids: number[]
   allowed: boolean
   originalAllowed: boolean
+  selected_group_ids: number[]
+  original_selected_group_ids: number[]
+  groupsModified: boolean
+  modified: boolean
   catalogState: 'listed' | 'unlisted' | 'unknown'
 }
 
@@ -34,6 +39,7 @@ export interface ModelAccessEntry {
   id: number
   revision: string
   allowed: boolean
+  group_ids?: number[]
 }
 
 export const modelKeyAccessAPI = {

@@ -476,7 +476,7 @@ func applyOpenAIImagesDefaults(req *OpenAIImagesRequest) {
 		req.Model = strings.TrimSpace(req.Model)
 		return
 	}
-	req.Model = "gpt-image-2"
+	req.Model = requestmodel.DefaultOpenAIImagesModel
 }
 
 func isOpenAIImageGenerationModel(model string) bool {

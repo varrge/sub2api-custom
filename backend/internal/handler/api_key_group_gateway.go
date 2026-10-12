@@ -93,7 +93,14 @@ func (h *GatewayHandler) ProbeAPIKeyGroup(ctx context.Context, key *service.APIK
 }
 
 // Existing deterministic fallbacks must pass the target group's policy too.
-func validateAPIKeyFallbackGroup(key *service.APIKey, group *service.Group, model string, body []byte, claudeClient bool) error {
+func validateAPIKeyFallbackGroup(key *service.APIKey, group *service.Group, model, publicModel string, body []byte, claudeClient bool) error {
+	if key != nil && len(key.ModelGroupRoutes) > 0 {
+		// The body/model may have been rewritten by a Composite route. Key
+		// routing selections always apply to the original public model only.
+		if group == nil || !key.AllowsModelInGroup(publicModel, group.ID) {
+			return errors.New("fallback group is not selected for this model")
+		}
+	}
 	if key == nil || !key.MultiGroupEnabled {
 		return nil
 	}

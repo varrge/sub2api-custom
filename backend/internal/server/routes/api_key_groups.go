@@ -168,7 +168,7 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 		}
 		key = fresh
 	}
-	if body, present := middleware.APIKeyGroupRequestBody(c); present && key.ModelAllowlist.Enabled {
+	if body, present := middleware.APIKeyGroupRequestBody(c); present && key.HasModelRestrictions() {
 		for _, model := range requestmodel.FromBodyCandidates(c.Request.URL.Path, "application/json", body) {
 			if !key.AllowsModel(model) {
 				return nil, groupRoutingError(404, "MODEL_NOT_ALLOWED", fmt.Sprintf("Model %q is not allowed for this API key", model))
@@ -300,10 +300,24 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 	pinnedID := c.GetInt64("api_key_pinned_group_id")
 	reasons := make([]string, 0, len(key.GroupIDs))
 	var groupRPMError error
+	modelGroupCandidates := 0
 	for _, id := range key.ConfiguredGroupIDs() {
 		if pinnedID > 0 && id != pinnedID {
 			continue
 		}
+		modelGroupAllowed := true
+		if !deferred {
+			for _, requested := range modelCandidates {
+				if !key.AllowsModelInGroup(requested, id) {
+					modelGroupAllowed = false
+					break
+				}
+			}
+		}
+		if !modelGroupAllowed {
+			continue // Never probe, admit or charge an unchecked group.
+		}
+		modelGroupCandidates++
 		var group *service.Group
 		for _, g := range key.Groups {
 			if g != nil && g.ID == id {
@@ -422,6 +436,11 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 	}
 	if groupRPMError != nil {
 		return nil, groupRoutingError(infraerrors.Code(groupRPMError), infraerrors.Reason(groupRPMError), infraerrors.Message(groupRPMError))
+	}
+	if modelGroupCandidates == 0 && !deferred {
+		service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalModelConfiguration)
+		middleware.MarkIngressRejected(c, middleware.IngressRejectModelNotAllowed)
+		return nil, groupRoutingError(404, "MODEL_NOT_ALLOWED", "No selected group is allowed for this model; review the key's model groups or start a new session")
 	}
 	code := "NO_AVAILABLE_GROUP"
 	if pinnedID > 0 {

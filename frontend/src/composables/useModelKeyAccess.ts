@@ -37,6 +37,7 @@ export function useModelKeyAccess() {
   const groupFilter = ref<number | null>(null)
   const keys = ref<ModelAccessKey[]>([])
   const draft = ref<Record<number, boolean>>({})
+  const groupDraft = ref<Record<number, number[]>>({})
   const catalog = ref<Map<string, Set<number>>>(new Map())
   const customModels = ref<string[]>([])
   const switchPending = ref(false)
@@ -53,7 +54,7 @@ export function useModelKeyAccess() {
   })
   const allModels = computed(() => [...new Set([
     ...catalog.value.keys(), ...customModels.value,
-    ...keys.value.flatMap(key => key.model_allowlist.models ?? [])
+    ...keys.value.flatMap(key => [...(key.model_allowlist.models ?? []), ...Object.keys(key.model_group_routes ?? {})])
   ])].sort())
   const models = computed(() => allModels.value.filter(model => model.toLowerCase().includes(modelSearch.value.trim().toLowerCase())))
 
@@ -63,12 +64,21 @@ export function useModelKeyAccess() {
   })
   const allRows = computed<ModelAccessRow[]>(() => eligibleKeys.value.map(key => {
     const sourceGroups = catalog.value.get(selectedModel.value)!
-    const originalAllowed = modelPolicyAllows(key.model_allowlist, selectedModel.value)
+    const saved = key.model_group_routes?.[selectedModel.value]
+    const eligibleGroups = key.group_ids.filter(id => sourceGroups.has(id))
+    const originalGroups = eligibleGroups.filter(id => saved === undefined || saved.includes(id))
+    const originalAllowed = modelPolicyAllows(key.model_allowlist, selectedModel.value) &&
+      (saved === undefined || originalGroups.length > 0)
+    const selectedGroups = groupDraft.value[key.id] ?? originalGroups
+    const groupsModified = selectedGroups.length !== originalGroups.length || selectedGroups.some((id, i) => id !== originalGroups[i])
+    const allowed = draft.value[key.id] ?? originalAllowed
     return {
       id: key.id, name: key.name, status: key.status, expires_at: key.expires_at,
       groups: key.groups.filter(group => sourceGroups.has(group.id)),
-      group_ids: key.group_ids.filter(id => sourceGroups.has(id)),
-      allowed: draft.value[key.id] ?? originalAllowed, originalAllowed,
+      group_ids: eligibleGroups,
+      selected_group_ids: selectedGroups, original_selected_group_ids: originalGroups,
+      groupsModified, modified: groupsModified || allowed !== originalAllowed,
+      allowed, originalAllowed,
       catalogState: 'listed'
     }
   }))
@@ -81,10 +91,12 @@ export function useModelKeyAccess() {
   const allowedCount = computed(() => selectedModel.value ? allRows.value.filter(row => row.allowed).length : 0)
   const addedCount = computed(() => allRows.value.filter(row => row.allowed && !row.originalAllowed).length)
   const removedCount = computed(() => allRows.value.filter(row => !row.allowed && row.originalAllowed).length)
-  const dirty = computed(() => !!selectedModel.value && addedCount.value + removedCount.value > 0)
+  const groupChangedCount = computed(() => allRows.value.filter(row => row.groupsModified).length)
+  const dirty = computed(() => !!selectedModel.value && allRows.value.some(row => row.modified))
 
   function resetDraft() {
-    draft.value = Object.fromEntries(eligibleKeys.value.map(key => [key.id, modelPolicyAllows(key.model_allowlist, selectedModel.value)]))
+    draft.value = {}
+    groupDraft.value = {}
   }
 
   async function load() {
@@ -165,12 +177,25 @@ export function useModelKeyAccess() {
 
   function toggleKey(id: number, allowed: boolean) {
     if (!selectedModel.value || saving.value || loading.value || switchPending.value || !eligibleKeys.value.some(key => key.id === id)) return
+    const row = allRows.value.find(row => row.id === id)!
+    if (allowed && row.selected_group_ids.length === 0) groupDraft.value[id] = [...row.group_ids]
     draft.value[id] = allowed
+  }
+
+  function toggleGroup(id: number, groupID: number, checked: boolean) {
+    if (!selectedModel.value || saving.value || loading.value || switchPending.value) return
+    const row = allRows.value.find(row => row.id === id)
+    if (!row?.allowed || !row.group_ids.includes(groupID)) return
+    const selected = new Set(row.selected_group_ids)
+    if (checked) selected.add(groupID)
+    else selected.delete(groupID)
+    groupDraft.value[id] = row.group_ids.filter(group => selected.has(group))
+    if (selected.size === 0) draft.value[id] = false
   }
 
   function setVisible(allowed: boolean) {
     if (!selectedModel.value || saving.value || loading.value || switchPending.value) return
-    draft.value = { ...draft.value, ...Object.fromEntries(rows.value.map(row => [row.id, allowed])) }
+    for (const row of rows.value) toggleKey(row.id, allowed)
   }
 
   function discard() {
@@ -184,18 +209,25 @@ export function useModelKeyAccess() {
     if (!dirty.value) return true
     saving.value = true
     error.value = ''
-    const revisions = new Map(keys.value.map(key => [key.id, key.revision]))
+    const originals = new Map(keys.value.map(key => [key.id, key]))
     try {
       // Submit every eligible key, including rows hidden by search/group filters.
       // Keys with no group offering this model remain completely untouched.
       const result = await modelKeyAccessAPI.update(selectedModel.value, allRows.value.map(row => ({
-        id: row.id, allowed: row.allowed, revision: revisions.get(row.id)!
+        id: row.id,
+        // An unavailable saved group can make an unchanged row look blocked.
+        // Preserve that row's stored global policy while saving another key.
+        allowed: row.modified ? row.allowed : modelPolicyAllows(originals.get(row.id)!.model_allowlist, selectedModel.value),
+        revision: originals.get(row.id)!.revision,
+        // Omission leaves hidden/unchanged routing intact, including groups
+        // temporarily absent from the catalog. A checkbox edit fixes the set.
+        ...(row.groupsModified ? { group_ids: [...row.selected_group_ids] } : {})
       })))
       if (!alive) return false
       const committed = new Map(result.keys.map(key => [key.id, key]))
       keys.value = keys.value.map(key => {
         const next = committed.get(key.id)
-        return next ? { ...key, model_allowlist: next.model_allowlist, revision: next.revision } : key
+        return next ? { ...key, model_allowlist: next.model_allowlist, model_group_routes: next.model_group_routes, revision: next.revision } : key
       })
       resetDraft()
       app.showSuccess(t('modelKeyAccess.saved'))
@@ -256,7 +288,7 @@ export function useModelKeyAccess() {
 
   return {
     loading, saving, error, catalogWarning, selectedModel, modelSearch, keySearch, groupFilter,
-    models, rows, groups, totalCount, allowedCount, addedCount, removedCount, dirty, switchPending,
-    selectModel, toggleKey, setVisible, save, discard, reload, resolveSwitch
+    models, rows, groups, totalCount, allowedCount, addedCount, removedCount, groupChangedCount, dirty, switchPending,
+    selectModel, toggleKey, toggleGroup, setVisible, save, discard, reload, resolveSwitch
   }
 }

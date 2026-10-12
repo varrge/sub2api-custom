@@ -87,6 +87,36 @@ func TestMultiGroupCatalogUnionsPerGroupCustomListsDespiteTemporaryLimits(t *tes
 	require.Equal(t, []string{"first", "shared", "second"}, ids)
 }
 
+func TestMultiGroupCatalogAppliesModelGroupsBeforeMerging(t *testing.T) {
+	repo := &multiGroupCatalogAccountRepo{gatewayModelsAccountRepoStub{byGroup: map[int64][]service.Account{
+		1: {{ID: 1, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey, Credentials: map[string]any{"model_mapping": map[string]any{"shared": "gpt-3.5-turbo", "first-only": "gpt-3.5-turbo"}}}},
+		2: {{ID: 2, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey, Credentials: map[string]any{"model_mapping": map[string]any{"shared": "gpt-5.6-sol"}}}},
+	}}}
+	h := newGatewayModelsHandlerForTest(repo)
+	key := &service.APIKey{MultiGroupEnabled: true, GroupIDs: []int64{1, 2}, Groups: []*service.Group{{ID: 1, Platform: service.PlatformOpenAI}, {ID: 2, Platform: service.PlatformOpenAI}},
+		ModelGroupRoutes: service.APIKeyModelGroupRoutes{"shared": {2}, "first-only": {2}}}
+	for _, path := range []string{"/v1/models", "/v1/models?client_version=test"} {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, path, nil)
+		c.Set(string(middleware.ContextKeyAPIKey), key)
+		require.True(t, h.MultiGroupModels(c))
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		require.NotContains(t, w.Body.String(), "first-only", "a catalog in an unchecked group cannot advertise this model")
+		if strings.Contains(path, "client_version") {
+			var response codexModelsResponseForTest
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+			require.Len(t, response.Models, 1)
+			require.Equal(t, []string{"text", "image"}, response.Models[0].InputModalities, "metadata must come from the selected group")
+		} else {
+			var response gatewayModelsResponseForTest
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+			require.Len(t, response.Data, 1)
+			require.Equal(t, "shared", response.Data[0].ID)
+		}
+	}
+}
+
 func TestMultiGroupGoogleCatalogNormalizesNamesAndDoesNotFallbackToOtherPlatforms(t *testing.T) {
 	repo := &multiGroupCatalogAccountRepo{gatewayModelsAccountRepoStub{byGroup: map[int64][]service.Account{
 		1: {{Platform: service.PlatformOpenAI, Credentials: map[string]any{"model_mapping": map[string]any{"gpt-5.6-sol": "gpt-5.6-sol"}}}},

@@ -53,6 +53,9 @@ func (k *APIKey) AllowsModel(model string) bool {
 	if k == nil {
 		return false
 	}
+	if !k.modelHasConfiguredGroup(model) {
+		return false
+	}
 	if !k.ModelAllowlist.Enabled {
 		return true
 	}

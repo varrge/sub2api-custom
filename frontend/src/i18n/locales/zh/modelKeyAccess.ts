@@ -33,6 +33,8 @@ export default {
     columnGroup: '分组',
     columnStatus: '状态',
     noGroups: '无分组',
+    groupsHint: '点击分组标签切换选择，亮起表示已选。此模型仅使用已选分组，顺序沿用 Key 的分组顺序；取消最后一项将禁止调用。',
+    groupsChanged: '调整分组 {count} 个 Key',
     modifiedBadge: '已修改',
     expiresAt: '到期：{time}',
 

@@ -98,6 +98,7 @@
                 {{ t('modelKeyAccess.stats', { total: totalCount, allowed: allowedCount }) }}
                 <span class="text-gray-400 dark:text-dark-500">· {{ t('modelKeyAccess.filterNote') }}</span>
               </p>
+              <p class="text-xs text-gray-400 dark:text-dark-500">{{ t('modelKeyAccess.groupsHint') }}</p>
             </header>
 
             <!-- Filters: display only, never narrow the save scope -->
@@ -164,7 +165,7 @@
                   <div class="flex flex-wrap items-center gap-2">
                     <span class="min-w-0 break-all font-medium text-gray-900 dark:text-white">{{ row.name }}</span>
                     <span
-                      v-if="row.allowed !== row.originalAllowed"
+                      v-if="row.modified"
                       class="badge badge-warning shrink-0"
                       data-test="modified-badge"
                     >
@@ -172,13 +173,21 @@
                     </span>
                   </div>
                   <div class="mt-1 flex flex-wrap gap-1">
-                    <span
+                    <button
                       v-for="group in row.groups"
                       :key="group.id"
-                      class="badge badge-gray max-w-full whitespace-normal"
+                      type="button"
+                      class="badge max-w-full cursor-pointer justify-center border whitespace-normal transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus-visible:ring-offset-dark-800"
+                      :class="row.selected_group_ids.includes(group.id)
+                        ? 'border-primary-800 bg-primary-800 text-white enabled:hover:bg-primary-900 dark:border-primary-700 dark:bg-primary-700 dark:enabled:hover:bg-primary-800'
+                        : 'border-gray-200 bg-gray-100 text-gray-600 enabled:hover:bg-gray-200 dark:border-dark-600 dark:bg-dark-700 dark:text-dark-300 dark:enabled:hover:bg-dark-600'"
+                      :aria-pressed="row.selected_group_ids.includes(group.id)"
+                      :disabled="busy || !row.allowed"
+                      data-test="group-tag"
+                      @click="emit('toggle-group', row.id, group.id, !row.selected_group_ids.includes(group.id))"
                     >
                       <span class="min-w-0 break-all">{{ group.name }}</span>
-                    </span>
+                    </button>
                     <span v-if="!row.groups.length" class="text-xs text-gray-400 dark:text-dark-500">
                       {{ t('modelKeyAccess.noGroups') }}
                     </span>
@@ -220,6 +229,9 @@
                 </span>
                 <span v-if="removedCount" class="font-medium text-red-500 dark:text-red-400">
                   {{ t('modelKeyAccess.removed', { count: removedCount }) }}
+                </span>
+                <span v-if="groupChangedCount" class="font-medium text-primary-600 dark:text-primary-400">
+                  {{ t('modelKeyAccess.groupsChanged', { count: groupChangedCount }) }}
                 </span>
               </p>
               <p v-else class="text-gray-500 dark:text-dark-400">{{ t('modelKeyAccess.noChanges') }}</p>
@@ -336,6 +348,7 @@ const props = defineProps<{
   allowedCount: number
   addedCount: number
   removedCount: number
+  groupChangedCount: number
   dirty: boolean
   switchPending: boolean
 }>()
@@ -346,6 +359,7 @@ const emit = defineEmits<{
   'update:groupFilter': [value: number | null]
   'select-model': [model: string]
   'toggle-key': [id: number, allowed: boolean]
+  'toggle-group': [id: number, groupID: number, checked: boolean]
   'set-visible': [allowed: boolean]
   save: []
   discard: []
@@ -355,7 +369,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const busy = computed(() => props.loading || props.saving)
+const busy = computed(() => props.loading || props.saving || props.switchPending)
 
 // A non-empty search that is not already selected can be used as a full model ID.
 const manualModelId = computed(() => {

@@ -47,10 +47,10 @@ func (h *OpenAIGatewayHandler) Live(c *gin.Context) {
 	}
 	model := strings.TrimSpace(gjson.GetBytes(request.Session, "model").String())
 	if model == "" {
-		model = "gpt-live"
+		model = requestmodel.DefaultLiveModel
 	}
 	requestedModel := clientRequestedModel(c, model)
-	if !apiKey.AllowsModel(requestedModel) {
+	if !apiKey.AllowsModelInSelectedGroup(requestedModel) {
 		h.errorResponse(c, http.StatusNotFound, "invalid_request_error", "Model is not allowed for this API key")
 		return
 	}
@@ -254,7 +254,7 @@ func (h *OpenAIGatewayHandler) LiveSideband(c *gin.Context) {
 	if model == "" {
 		model = record.Model // Calls created before public-model persistence.
 	}
-	if !apiKey.AllowsModel(model) {
+	if !apiKey.AllowsModelInSelectedGroup(model) {
 		h.errorResponse(c, http.StatusNotFound, "invalid_request_error", "Model is not allowed for this API key")
 		return
 	}

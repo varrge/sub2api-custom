@@ -33,6 +33,8 @@ export default {
     columnGroup: 'Groups',
     columnStatus: 'Status',
     noGroups: 'No groups',
+    groupsHint: 'Click group labels to toggle selection; highlighted labels are selected. This model only uses selected groups in the key’s existing order. Deselecting the last group blocks this model.',
+    groupsChanged: 'Groups changed for {count} keys',
     modifiedBadge: 'Modified',
     expiresAt: 'Expires: {time}',
 

@@ -134,6 +134,12 @@ func (_c *APIKeyCreate) SetNillableModelAllowlist(v *domain.GroupModelAllowlist)
 	return _c
 }
 
+// SetModelGroupRoutes sets the "model_group_routes" field.
+func (_c *APIKeyCreate) SetModelGroupRoutes(v map[string][]int64) *APIKeyCreate {
+	_c.mutation.SetModelGroupRoutes(v)
+	return _c
+}
+
 // SetStatus sets the "status" field.
 func (_c *APIKeyCreate) SetStatus(v string) *APIKeyCreate {
 	_c.mutation.SetStatus(v)
@@ -430,6 +436,10 @@ func (_c *APIKeyCreate) defaults() error {
 		v := apikey.DefaultModelAllowlist
 		_c.mutation.SetModelAllowlist(v)
 	}
+	if _, ok := _c.mutation.ModelGroupRoutes(); !ok {
+		v := apikey.DefaultModelGroupRoutes
+		_c.mutation.SetModelGroupRoutes(v)
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := apikey.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -504,6 +514,9 @@ func (_c *APIKeyCreate) check() error {
 	}
 	if _, ok := _c.mutation.ModelAllowlist(); !ok {
 		return &ValidationError{Name: "model_allowlist", err: errors.New(`ent: missing required field "APIKey.model_allowlist"`)}
+	}
+	if _, ok := _c.mutation.ModelGroupRoutes(); !ok {
+		return &ValidationError{Name: "model_group_routes", err: errors.New(`ent: missing required field "APIKey.model_group_routes"`)}
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "APIKey.status"`)}
@@ -598,6 +611,10 @@ func (_c *APIKeyCreate) createSpec() (*APIKey, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ModelAllowlist(); ok {
 		_spec.SetField(apikey.FieldModelAllowlist, field.TypeJSON, value)
 		_node.ModelAllowlist = value
+	}
+	if value, ok := _c.mutation.ModelGroupRoutes(); ok {
+		_spec.SetField(apikey.FieldModelGroupRoutes, field.TypeJSON, value)
+		_node.ModelGroupRoutes = value
 	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(apikey.FieldStatus, field.TypeString, value)
@@ -882,6 +899,18 @@ func (u *APIKeyUpsert) SetModelAllowlist(v domain.GroupModelAllowlist) *APIKeyUp
 // UpdateModelAllowlist sets the "model_allowlist" field to the value that was provided on create.
 func (u *APIKeyUpsert) UpdateModelAllowlist() *APIKeyUpsert {
 	u.SetExcluded(apikey.FieldModelAllowlist)
+	return u
+}
+
+// SetModelGroupRoutes sets the "model_group_routes" field.
+func (u *APIKeyUpsert) SetModelGroupRoutes(v map[string][]int64) *APIKeyUpsert {
+	u.Set(apikey.FieldModelGroupRoutes, v)
+	return u
+}
+
+// UpdateModelGroupRoutes sets the "model_group_routes" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateModelGroupRoutes() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldModelGroupRoutes)
 	return u
 }
 
@@ -1349,6 +1378,20 @@ func (u *APIKeyUpsertOne) SetModelAllowlist(v domain.GroupModelAllowlist) *APIKe
 func (u *APIKeyUpsertOne) UpdateModelAllowlist() *APIKeyUpsertOne {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.UpdateModelAllowlist()
+	})
+}
+
+// SetModelGroupRoutes sets the "model_group_routes" field.
+func (u *APIKeyUpsertOne) SetModelGroupRoutes(v map[string][]int64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetModelGroupRoutes(v)
+	})
+}
+
+// UpdateModelGroupRoutes sets the "model_group_routes" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateModelGroupRoutes() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateModelGroupRoutes()
 	})
 }
 
@@ -2029,6 +2072,20 @@ func (u *APIKeyUpsertBulk) SetModelAllowlist(v domain.GroupModelAllowlist) *APIK
 func (u *APIKeyUpsertBulk) UpdateModelAllowlist() *APIKeyUpsertBulk {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.UpdateModelAllowlist()
+	})
+}
+
+// SetModelGroupRoutes sets the "model_group_routes" field.
+func (u *APIKeyUpsertBulk) SetModelGroupRoutes(v map[string][]int64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetModelGroupRoutes(v)
+	})
+}
+
+// UpdateModelGroupRoutes sets the "model_group_routes" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateModelGroupRoutes() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateModelGroupRoutes()
 	})
 }
 

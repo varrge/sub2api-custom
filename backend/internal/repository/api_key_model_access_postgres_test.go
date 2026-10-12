@@ -149,4 +149,55 @@ func TestAPIKeyModelAccessPostgres(t *testing.T) {
 	}
 	require.Equal(t, []string{"changed"}, read(a.ID).ModelAllowlist.Models)
 	require.False(t, strings.Contains(service.APIKeyModelAccessRevision(read(a.ID)), a.Key))
+
+	t.Run("model group selections persist atomically and reach auth", func(t *testing.T) {
+		g1, err := client.Group.Create().SetName("first").Save(ctx)
+		require.NoError(t, err)
+		g2, err := client.Group.Create().SetName("second").Save(ctx)
+		require.NoError(t, err)
+		key := makeKey(owner.ID, "group-routes", service.GroupModelAllowlist{})
+		key.GroupIDs = []int64{g1.ID, g2.ID}
+		require.NoError(t, repo.Update(ctx, key, service.APIKeyUpdateFields{GroupIDs: true}))
+		key = read(key.ID)
+		chosen := []int64{g2.ID}
+		e := entry(key, true)
+		e.GroupIDs = &chosen
+		keys, changed, err := repo.UpdateModelAccess(ctx, owner.ID, "target", []service.APIKeyModelAccessEntry{e})
+		require.NoError(t, err)
+		require.Len(t, changed, 1, "group-only edits must invalidate credentials")
+		require.Equal(t, chosen, keys[0].ModelGroupRoutes["target"])
+		auth, err := repo.GetByKeyForAuth(ctx, key.Key)
+		require.NoError(t, err)
+		require.False(t, auth.AllowsModelInGroup("target", g1.ID))
+		require.True(t, auth.AllowsModelInGroup("target", g2.ID))
+		snapshot, err := repo.ListModelAccessKeys(ctx, owner.ID)
+		require.NoError(t, err)
+		for _, listed := range snapshot {
+			if listed.ID == key.ID {
+				require.Equal(t, chosen, listed.ModelGroupRoutes["target"])
+				require.Empty(t, listed.Key)
+			}
+		}
+		// An ordinary key edit and an old model editor both preserve routes.
+		stale := read(key.ID)
+		stale.Name = "renamed"
+		require.NoError(t, repo.Update(ctx, stale, service.APIKeyUpdateFields{Name: true}))
+		_, _, err = repo.UpdateModelAccess(ctx, owner.ID, "other", []service.APIKeyModelAccessEntry{entry(read(key.ID), false)})
+		require.NoError(t, err)
+		require.Equal(t, chosen, read(key.ID).ModelGroupRoutes["target"])
+		// A new group binding invalidates the revision before any routing write.
+		old := entry(read(key.ID), true)
+		old.GroupIDs = &chosen
+		require.NoError(t, client.APIKey.UpdateOneID(key.ID).SetGroupIds([]int64{g1.ID}).Exec(ctx))
+		_, _, err = repo.UpdateModelAccess(ctx, owner.ID, "target", []service.APIKeyModelAccessEntry{old})
+		require.ErrorIs(t, err, service.ErrAPIKeyModelAccessConflict)
+		require.False(t, read(key.ID).AllowsModel("target"), "a removed selected group cannot open another group")
+		// A late invalid selection rolls back earlier policy and route edits.
+		first := read(a.ID)
+		invalid := entry(read(key.ID), true)
+		invalid.GroupIDs = &chosen // second group is no longer bound
+		_, _, err = repo.UpdateModelAccess(ctx, owner.ID, "new", []service.APIKeyModelAccessEntry{entry(first, true), invalid})
+		require.Error(t, err)
+		require.Equal(t, service.APIKeyModelAccessRevision(first), service.APIKeyModelAccessRevision(read(a.ID)))
+	})
 }

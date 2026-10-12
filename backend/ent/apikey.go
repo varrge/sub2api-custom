@@ -41,6 +41,8 @@ type APIKey struct {
 	MultiGroupEnabled bool `json:"multi_group_enabled,omitempty"`
 	// ModelAllowlist holds the value of the "model_allowlist" field.
 	ModelAllowlist domain.GroupModelAllowlist `json:"model_allowlist,omitempty"`
+	// ModelGroupRoutes holds the value of the "model_group_routes" field.
+	ModelGroupRoutes map[string][]int64 `json:"model_group_routes,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
 	// Last usage time of this API key
@@ -128,7 +130,7 @@ func (*APIKey) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case apikey.FieldGroupIds, apikey.FieldModelAllowlist, apikey.FieldIPWhitelist, apikey.FieldIPBlacklist:
+		case apikey.FieldGroupIds, apikey.FieldModelAllowlist, apikey.FieldModelGroupRoutes, apikey.FieldIPWhitelist, apikey.FieldIPBlacklist:
 			values[i] = new([]byte)
 		case apikey.FieldMultiGroupEnabled:
 			values[i] = new(sql.NullBool)
@@ -225,6 +227,14 @@ func (_m *APIKey) assignValues(columns []string, values []any) error {
 			} else if value != nil && len(*value) > 0 {
 				if err := json.Unmarshal(*value, &_m.ModelAllowlist); err != nil {
 					return fmt.Errorf("unmarshal field model_allowlist: %w", err)
+				}
+			}
+		case apikey.FieldModelGroupRoutes:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field model_group_routes", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.ModelGroupRoutes); err != nil {
+					return fmt.Errorf("unmarshal field model_group_routes: %w", err)
 				}
 			}
 		case apikey.FieldStatus:
@@ -416,6 +426,9 @@ func (_m *APIKey) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("model_allowlist=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ModelAllowlist))
+	builder.WriteString(", ")
+	builder.WriteString("model_group_routes=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ModelGroupRoutes))
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)

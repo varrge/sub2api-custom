@@ -98,6 +98,7 @@
                 {{ t('modelKeyAccess.stats', { total: totalCount, allowed: allowedCount }) }}
                 <span class="text-gray-400 dark:text-dark-500">· {{ t('modelKeyAccess.filterNote') }}</span>
               </p>
+              <p class="text-xs text-gray-400 dark:text-dark-500">{{ t('modelKeyAccess.groupsHint') }}</p>
             </header>
 
             <!-- Filters: display only, never narrow the save scope -->
@@ -164,7 +165,7 @@
                   <div class="flex flex-wrap items-center gap-2">
                     <span class="min-w-0 break-all font-medium text-gray-900 dark:text-white">{{ row.name }}</span>
                     <span
-                      v-if="row.allowed !== row.originalAllowed"
+                      v-if="row.modified"
                       class="badge badge-warning shrink-0"
                       data-test="modified-badge"
                     >
@@ -172,13 +173,24 @@
                     </span>
                   </div>
                   <div class="mt-1 flex flex-wrap gap-1">
-                    <span
+                    <label
                       v-for="group in row.groups"
                       :key="group.id"
-                      class="badge badge-gray max-w-full whitespace-normal"
+                      class="badge badge-gray inline-flex max-w-full cursor-pointer items-center gap-1.5 whitespace-normal transition-colors has-[:checked]:bg-primary-50 has-[:checked]:text-primary-700 has-[:checked]:ring-1 has-[:checked]:ring-primary-500/50 dark:has-[:checked]:bg-primary-900/20 dark:has-[:checked]:text-primary-300"
+                      :class="{ 'cursor-not-allowed opacity-60': busy || !row.allowed }"
+                      data-test="group-tag"
                     >
+                      <input
+                        type="checkbox"
+                        class="h-3.5 w-3.5 shrink-0 rounded border-gray-300 text-primary-600 accent-primary-600 focus-visible:ring-2 focus-visible:ring-primary-500/30 disabled:cursor-not-allowed dark:border-dark-500"
+                        :checked="row.selected_group_ids.includes(group.id)"
+                        :disabled="busy || !row.allowed"
+                        :aria-label="group.name"
+                        data-test="group-checkbox"
+                        @change="onToggleGroup(row.id, group.id, $event)"
+                      />
                       <span class="min-w-0 break-all">{{ group.name }}</span>
-                    </span>
+                    </label>
                     <span v-if="!row.groups.length" class="text-xs text-gray-400 dark:text-dark-500">
                       {{ t('modelKeyAccess.noGroups') }}
                     </span>
@@ -220,6 +232,9 @@
                 </span>
                 <span v-if="removedCount" class="font-medium text-red-500 dark:text-red-400">
                   {{ t('modelKeyAccess.removed', { count: removedCount }) }}
+                </span>
+                <span v-if="groupChangedCount" class="font-medium text-primary-600 dark:text-primary-400">
+                  {{ t('modelKeyAccess.groupsChanged', { count: groupChangedCount }) }}
                 </span>
               </p>
               <p v-else class="text-gray-500 dark:text-dark-400">{{ t('modelKeyAccess.noChanges') }}</p>
@@ -336,6 +351,7 @@ const props = defineProps<{
   allowedCount: number
   addedCount: number
   removedCount: number
+  groupChangedCount: number
   dirty: boolean
   switchPending: boolean
 }>()
@@ -346,6 +362,7 @@ const emit = defineEmits<{
   'update:groupFilter': [value: number | null]
   'select-model': [model: string]
   'toggle-key': [id: number, allowed: boolean]
+  'toggle-group': [id: number, groupID: number, checked: boolean]
   'set-visible': [allowed: boolean]
   save: []
   discard: []
@@ -355,7 +372,11 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const busy = computed(() => props.loading || props.saving)
+const busy = computed(() => props.loading || props.saving || props.switchPending)
+
+const onToggleGroup = (id: number, groupID: number, event: Event) => {
+  emit('toggle-group', id, groupID, (event.target as HTMLInputElement).checked)
+}
 
 // A non-empty search that is not already selected can be used as a full model ID.
 const manualModelId = computed(() => {

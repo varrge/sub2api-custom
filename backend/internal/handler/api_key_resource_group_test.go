@@ -86,6 +86,24 @@ func TestStatefulAdmissionRetainsSessionModelAndUsesFreshRestrictions(t *testing
 	require.False(t, key.ModelAllowlist.Enabled, "the connection's original snapshot must remain immutable")
 }
 
+func TestStatefulAdmissionModelGroupRevocationRejectsModelLessFrames(t *testing.T) {
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodGet, "/v1/realtime", nil)
+	id := int64(1)
+	key := &service.APIKey{User: &service.User{ID: 1}, GroupID: &id, GroupIDs: []int64{1, 2}, Group: &service.Group{ID: 1}, ModelGroupRoutes: service.APIKeyModelGroupRoutes{"public": {1}}}
+	fresh := *key
+	middleware.InstallAPIKeyPinnedRevalidator(c, func(*gin.Context, *service.APIKey) (*service.APIKey, error) { return &fresh, nil })
+	billing := service.NewBillingCacheService(nil, nil, nil, nil, nil, nil, &config.Config{RunMode: config.RunModeSimple}, nil)
+	t.Cleanup(billing.Stop)
+	check := (&OpenAIGatewayHandler{billingCacheService: billing}).statefulAdmissionCheck(c, key, "public")
+	require.NoError(t, check(context.Background(), []byte(`{"type":"response.create"}`)))
+	fresh.ModelGroupRoutes = service.APIKeyModelGroupRoutes{"public": {2}}
+	err := check(context.Background(), []byte(`{"type":"input_audio_buffer.append","audio":"AA=="}`))
+	require.Equal(t, http.StatusNotFound, infraerrors.Code(err))
+	require.Equal(t, "public", blockedAPIKeyModelCandidate(&fresh, []string{"public"}), "Responses WebSocket later turns use the same selected-group check")
+	require.Equal(t, []int64{1}, key.ModelGroupRoutes["public"])
+}
+
 func TestImageTaskPinnedLookupSurvivesUnboundGroupAndRejectsOtherKey(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	store := &asyncImageMemoryStore{tasks: map[string]*service.ImageTaskRecord{}}

@@ -142,6 +142,32 @@ func TestLiveModelLimitChecksDefaultAndOriginalPublicModel(t *testing.T) {
 	}
 }
 
+func TestLiveModelGroupRestrictionRejectsUncheckedDefaultAndSideband(t *testing.T) {
+	id := int64(1)
+	key := &service.APIKey{ID: 2, UserID: 1, GroupID: &id, GroupIDs: []int64{1, 2},
+		Group:            &service.Group{ID: 1, Platform: service.PlatformOpenAI, AllowLive: true},
+		ModelGroupRoutes: service.APIKeyModelGroupRoutes{"gpt-live": {2}}}
+	for _, sideband := range []bool{false, true} {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/live", bytes.NewBufferString(`{"sdp":"v=0","session":{}}`))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Set(string(middleware.ContextKeyAPIKey), key)
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 1})
+		if sideband {
+			c.Request = httptest.NewRequest(http.MethodGet, "/v1/live/call-test", nil)
+			c.Params = gin.Params{{Key: "call_id", Value: "call-test"}}
+			record := &service.LiveCallRecord{CallID: "call-test", APIKeyID: 2, UserID: 1, GroupID: id, Model: "gpt-live", RequestedModel: "gpt-live"}
+			gateway := service.NewOpenAIGatewayService(nil, nil, nil, nil, nil, nil, liveModelLimitStore{record: record}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+			(&OpenAIGatewayHandler{gatewayService: gateway}).LiveSideband(c)
+		} else {
+			(&OpenAIGatewayHandler{}).Live(c)
+		}
+		require.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+		require.Contains(t, w.Body.String(), "not allowed for this API key")
+	}
+}
+
 type liveModelLimitStore struct {
 	service.GatewayCache
 	service.LiveCallStore

@@ -40,6 +40,100 @@ describe('model policy semantics', () => {
   })
 })
 describe('model access editor', () => {
+  it('shows an unavailable saved selection as blocked without overwriting it when another key is saved', async () => {
+    const restricted = { ...key(1), model_group_routes: { target: [99] } }
+    mocks.list.mockResolvedValue({ keys: [restricted, key(2)] })
+    const { state, wrapper } = await setup()
+    state.selectModel('target')
+    expect(state.rows.value[0].allowed).toBe(false)
+    expect(state.rows.value[0].selected_group_ids).toEqual([])
+    expect(state.dirty.value).toBe(false)
+    state.toggleKey(2, false)
+    mocks.update.mockResolvedValue({ keys: [restricted, { ...key(2, false) }], updated_count: 1 })
+    await state.save()
+    expect(mocks.update).toHaveBeenCalledWith('target', [
+      { id: 1, allowed: true, revision: 'revision-1' }, { id: 2, allowed: false, revision: 'revision-2' }
+    ])
+    state.toggleKey(1, true)
+    expect(state.rows.value[0].selected_group_ids).toEqual([1])
+    expect(state.rows.value[0].groupsModified).toBe(true)
+    wrapper.unmount()
+  })
+  it('saves group-only edits including hidden rows and keeps selections after reload', async () => {
+    const second = { id: 2, name: 'Official', platform: 'openai' }
+    const mixed = { ...key(1), groups: [...key(1).groups, second], group_ids: [1, 2] }
+    mocks.list.mockResolvedValue({ keys: [mixed, key(2)] })
+    mocks.groups.mockResolvedValue([{ id: 1 }, { id: 2 }])
+    mocks.options.mockResolvedValue({ models: [{ id: 'target', group_ids: [1, 2] }] })
+    const { state, wrapper } = await setup()
+    state.selectModel('target')
+    expect(state.rows.value[0].selected_group_ids).toEqual([1, 2])
+    state.toggleGroup(1, 1, false)
+    expect(state.dirty.value).toBe(true)
+    expect(state.groupChangedCount.value).toBe(1)
+    expect(state.addedCount.value + state.removedCount.value).toBe(0)
+    state.keySearch.value = 'Key 2'
+    mocks.update.mockResolvedValue({ keys: [{ ...mixed, model_group_routes: { target: [2] }, revision: 'new' }, key(2)], updated_count: 1 })
+    expect(await state.save()).toBe(true)
+    expect(mocks.update).toHaveBeenCalledWith('target', [
+      { id: 1, allowed: true, group_ids: [2], revision: 'revision-1' },
+      { id: 2, allowed: true, revision: 'revision-2' }
+    ])
+    state.keySearch.value = ''
+    expect(state.rows.value[0].selected_group_ids).toEqual([2])
+    expect(state.dirty.value).toBe(false)
+    wrapper.unmount()
+  })
+  it('disabling the last group blocks the model, and switching it back on selects supported groups', async () => {
+    const { state, wrapper } = await setup()
+    state.selectModel('target')
+    state.toggleGroup(1, 1, false)
+    expect(state.rows.value[0].allowed).toBe(false)
+    expect(state.rows.value[0].selected_group_ids).toEqual([])
+    mocks.update.mockRejectedValue({ status: 409 })
+    expect(await state.save()).toBe(false)
+    expect(state.rows.value[0].selected_group_ids).toEqual([])
+    expect(state.dirty.value).toBe(true)
+    state.toggleKey(1, true)
+    expect(state.rows.value[0].selected_group_ids).toEqual([1])
+    expect(state.dirty.value).toBe(false)
+    wrapper.unmount()
+  })
+  it('preserves saved restrictions on master toggle and never includes unsupported or newly bound groups', async () => {
+    const second = { id: 2, name: 'Official', platform: 'openai' }
+    const third = { id: 3, name: 'No target', platform: 'openai' }
+    mocks.list.mockResolvedValue({ keys: [{ ...key(1), groups: [...key(1).groups, second, third], group_ids: [1, 2, 3], model_group_routes: { target: [2, 3] } }] })
+    mocks.groups.mockResolvedValue([{ id: 1 }, { id: 2 }, { id: 3 }])
+    mocks.options.mockResolvedValue({ models: [{ id: 'target', group_ids: [1, 2] }] })
+    const { state, wrapper } = await setup()
+    state.selectModel('target')
+    expect(state.rows.value[0].selected_group_ids).toEqual([2])
+    state.toggleGroup(1, 3, true)
+    expect(state.dirty.value).toBe(false)
+    state.toggleKey(1, false)
+    state.toggleGroup(1, 1, true)
+    expect(state.rows.value[0].selected_group_ids).toEqual([2])
+    mocks.update.mockResolvedValue({ keys: [], updated_count: 1 })
+    await state.save()
+    expect(mocks.update).toHaveBeenCalledWith('target', [{ id: 1, allowed: false, revision: 'revision-1' }])
+    wrapper.unmount()
+  })
+  it('guards group-only edits on model switching and restores on discard', async () => {
+    const second = { id: 2, name: 'Official', platform: 'openai' }
+    mocks.list.mockResolvedValue({ keys: [{ ...key(1), groups: [...key(1).groups, second], group_ids: [1, 2] }] })
+    mocks.groups.mockResolvedValue([{ id: 1 }, { id: 2 }])
+    mocks.options.mockResolvedValue({ models: [{ id: 'target', group_ids: [1, 2] }] })
+    const { state, wrapper } = await setup()
+    state.selectModel('target'); state.toggleGroup(1, 1, false); state.selectModel('other')
+    expect(state.switchPending.value).toBe(true)
+    state.toggleGroup(1, 2, false)
+    expect(state.rows.value[0].selected_group_ids).toEqual([2])
+    await state.resolveSwitch('cancel')
+    state.discard()
+    expect(state.rows.value[0].selected_group_ids).toEqual([1, 2])
+    expect(state.dirty.value).toBe(false)
+    wrapper.unmount()
+  })
   it('preserves catalog, saved and manual model choices while filtering keys', async () => {
     mocks.groups.mockResolvedValue([{ id: 1 }, { id: 2 }])
     mocks.options.mockImplementation(async (ids: number[]) => ({ models: [

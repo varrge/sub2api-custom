@@ -138,8 +138,8 @@ func TestFromBodyForRouteNonLivePrefersTopLevelModel(t *testing.T) {
 }
 
 func TestFromBodyForRouteFallsBackWhenPreferredFieldMissing(t *testing.T) {
-	if got := FromBodyForRoute("/v1/live", "application/json", []byte(`{"model":"top-level"}`)); got != "top-level" {
-		t.Fatalf("live without session.model should fall back to model, got %q", got)
+	if got := FromBodyForRoute("/v1/live", "application/json", []byte(`{"model":"top-level"}`)); got != DefaultLiveModel {
+		t.Fatalf("live without session.model should use its effective default, got %q", got)
 	}
 	if got := FromBodyForRoute("/v1/messages", "application/json", []byte(`{"session":{"model":"session-model"}}`)); got != "session-model" {
 		t.Fatalf("non-live without model should fall back to session.model, got %q", got)

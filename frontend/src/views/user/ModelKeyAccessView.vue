@@ -7,6 +7,7 @@
       @update:group-filter="groupFilter = $event"
       @select-model="selectModel"
       @toggle-key="toggleKey"
+      @toggle-group="toggleGroup"
       @set-visible="setVisible"
       @save="save"
       @discard="discard"
@@ -24,5 +25,5 @@ import { useModelKeyAccess } from '@/composables/useModelKeyAccess'
 
 const access = useModelKeyAccess()
 const state = reactive(access)
-const { modelSearch, keySearch, groupFilter, selectModel, toggleKey, setVisible, save, discard, reload, resolveSwitch } = access
+const { modelSearch, keySearch, groupFilter, selectModel, toggleKey, toggleGroup, setVisible, save, discard, reload, resolveSwitch } = access
 </script>

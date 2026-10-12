@@ -35,6 +35,9 @@ var liveRequestRoutes = map[string]bool{
 	"/backend-api/codex/realtime/calls": true,
 }
 
+const DefaultLiveModel = "gpt-live"
+const DefaultOpenAIImagesModel = "gpt-image-2"
+
 // IsLiveRequestRoute 报告该路由模板的 handler 是否只读取 session.model。
 func IsLiveRequestRoute(routePath string) bool {
 	return liveRequestRoutes[strings.TrimSpace(routePath)]
@@ -150,31 +153,66 @@ func ValidateStatefulFrame(body []byte) error {
 }
 
 // FromBodyCandidates 按入口返回所有可被下游解析器绑定的模型值：
-// Live 入口取 session 候选（为空回落顶层候选），其余入口取顶层候选
-// （为空回落 session 候选）。候选包含重复键、大小写变体的全部出现。
+// Live 入口取 session 候选，缺少精确 session.model 时首先校验默认模型；
+// 图片入口同理处理顶层 model。其他入口顶层候选为空时回落 session 候选。
+// 候选包含重复键、大小写变体的全部出现。
 func FromBodyCandidates(routePath, contentType string, body []byte) []string {
 	var topLevel, session []string
+	live := IsLiveRequestRoute(routePath)
+	liveHasExactModel := false
+	imageHasExactModel := false
 	if isMultipartContentType(contentType) {
 		// 声明为 multipart 的请求体只做 multipart 解析——gjson 的部分扫描
 		// 会在 multipart 字节流里误匹配 session JSON 内的 model 字段。
 		models, sessions := multipartModelCandidates(contentType, body)
 		topLevel = models
+		imageHasExactModel = len(models) > 0
 		session = sessionModelCandidates(sessions)
+		if live {
+			for _, raw := range sessions {
+				model := gjson.Get(raw, "model")
+				liveHasExactModel = liveHasExactModel || model.Type == gjson.String && strings.TrimSpace(model.String()) != ""
+			}
+		}
 	} else {
 		topLevel = jsonModelCandidates(body)
 		session = jsonSessionModelCandidates(body)
+		if live {
+			gjson.ParseBytes(body).ForEach(func(key, value gjson.Result) bool {
+				if strings.EqualFold(key.String(), "session") {
+					model := value.Get("model")
+					liveHasExactModel = liveHasExactModel || model.Type == gjson.String && strings.TrimSpace(model.String()) != ""
+				}
+				return true
+			})
+		} else if isImagesRequestRoute(routePath) {
+			imageHasExactModel = strings.TrimSpace(gjson.GetBytes(body, "model").String()) != ""
+		}
 	}
 
-	if IsLiveRequestRoute(routePath) {
-		if len(session) > 0 {
+	if live {
+		if liveHasExactModel {
 			return session
 		}
-		return topLevel
+		// Live only reads session.model. A top-level hint must not replace its
+		// effective default during admission or Composite routing.
+		return append([]string{DefaultLiveModel}, session...)
+	}
+	if isImagesRequestRoute(routePath) && !imageHasExactModel {
+		return append([]string{DefaultOpenAIImagesModel}, topLevel...)
 	}
 	if len(topLevel) > 0 {
 		return topLevel
 	}
-	return session
+	if len(session) > 0 {
+		return session
+	}
+	return nil
+}
+
+func isImagesRequestRoute(routePath string) bool {
+	path := strings.TrimSuffix(strings.TrimRight(routePath, "/"), "/async")
+	return strings.HasSuffix(path, "/images/generations") || strings.HasSuffix(path, "/images/edits")
 }
 
 // FromBody 从 JSON 或 multipart 请求体提取客户端请求的模型名（首个候选）；
@@ -210,7 +248,23 @@ func JSONModelPath(body []byte) (string, string) {
 // session.model 优先，其余入口顶层 model 优先。
 func JSONModelPathForRoute(routePath string, body []byte) (string, string) {
 	if IsLiveRequestRoute(routePath) {
-		return jsonModelWithPaths(body, []string{"session.model", "model"})
+		model, path := DefaultLiveModel, "session.model"
+		gjson.ParseBytes(body).ForEach(func(key, value gjson.Result) bool {
+			if strings.EqualFold(key.String(), "session") {
+				path = key.String() + ".model"
+				if candidate := value.Get("model"); candidate.Type == gjson.String && strings.TrimSpace(candidate.String()) != "" {
+					model = strings.TrimSpace(candidate.String())
+				}
+			}
+			return true
+		})
+		return model, path
+	}
+	if isImagesRequestRoute(routePath) {
+		if model := strings.TrimSpace(gjson.GetBytes(body, "model").String()); model != "" {
+			return model, "model"
+		}
+		return DefaultOpenAIImagesModel, "model"
 	}
 	return jsonModelWithPaths(body, []string{"model", "session.model"})
 }

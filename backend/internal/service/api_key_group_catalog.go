@@ -67,7 +67,8 @@ func (s *GatewayService) APIKeyCompositeModelAliases(ctx context.Context, groupI
 type APIKeyGroupCatalog struct {
 	Group        *Group
 	ModelIDs     []string
-	ManifestBody []byte // Optional discovered manifest after account mapping and group filtering.
+	ManifestBody []byte            // Optional discovered manifest after account mapping and group filtering.
+	ModelAllowed func(string) bool // Optional key policy, applied before merging metadata.
 }
 
 // FetchAPIKeyGroupCodexModelsManifest applies the pinned-discovery policy before
@@ -138,7 +139,7 @@ func (s *GatewayService) BuildAPIKeyCodexModelsManifest(ctx context.Context, cat
 			if err := json.Unmarshal(model, &identity); err != nil {
 				return nil, err
 			}
-			if identity.Slug != "" && !seen[identity.Slug] {
+			if identity.Slug != "" && !seen[identity.Slug] && (catalog.ModelAllowed == nil || catalog.ModelAllowed(identity.Slug)) {
 				seen[identity.Slug] = true
 				models = append(models, model)
 			}

@@ -33,6 +33,8 @@ export default {
     columnGroup: 'Groups',
     columnStatus: 'Status',
     noGroups: 'No groups',
+    groupsHint: 'This model only uses checked groups, in the key’s existing group order. Unchecking the last group blocks this model for the key.',
+    groupsChanged: 'Groups changed for {count} keys',
     modifiedBadge: 'Modified',
     expiresAt: 'Expires: {time}',
 

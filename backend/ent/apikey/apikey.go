@@ -36,6 +36,8 @@ const (
 	FieldMultiGroupEnabled = "multi_group_enabled"
 	// FieldModelAllowlist holds the string denoting the model_allowlist field in the database.
 	FieldModelAllowlist = "model_allowlist"
+	// FieldModelGroupRoutes holds the string denoting the model_group_routes field in the database.
+	FieldModelGroupRoutes = "model_group_routes"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldLastUsedAt holds the string denoting the last_used_at field in the database.
@@ -112,6 +114,7 @@ var Columns = []string{
 	FieldGroupIds,
 	FieldMultiGroupEnabled,
 	FieldModelAllowlist,
+	FieldModelGroupRoutes,
 	FieldStatus,
 	FieldLastUsedAt,
 	FieldIPWhitelist,
@@ -164,6 +167,8 @@ var (
 	DefaultMultiGroupEnabled bool
 	// DefaultModelAllowlist holds the default value on creation for the "model_allowlist" field.
 	DefaultModelAllowlist domain.GroupModelAllowlist
+	// DefaultModelGroupRoutes holds the default value on creation for the "model_group_routes" field.
+	DefaultModelGroupRoutes map[string][]int64
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.

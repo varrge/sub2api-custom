@@ -36,6 +36,7 @@ func (h *GatewayHandler) MultiGroupModels(c *gin.Context) bool {
 		if group == nil || codex && group.Platform == service.PlatformTypeSafe {
 			continue
 		}
+		modelAllowed := func(model string) bool { return key.AllowsModelInGroup(model, group.ID) }
 		if !google && group.Platform == service.PlatformOpenAI && group.CodexModelsManifestConfig.Enabled {
 			if h.openAIGatewayService == nil {
 				writeOpenAIModelsError(c, http.StatusInternalServerError, "api_error", "OpenAI model discovery is not configured")
@@ -64,7 +65,7 @@ func (h *GatewayHandler) MultiGroupModels(c *gin.Context) bool {
 				setOpsSelectedAccount(c, account.ID, account.Platform)
 			}
 			if codex {
-				catalogs = append(catalogs, service.APIKeyGroupCatalog{Group: group, ManifestBody: response.Body})
+				catalogs = append(catalogs, service.APIKeyGroupCatalog{Group: group, ManifestBody: response.Body, ModelAllowed: modelAllowed})
 			} else {
 				var catalog struct {
 					Data []json.RawMessage `json:"data"`
@@ -81,7 +82,7 @@ func (h *GatewayHandler) MultiGroupModels(c *gin.Context) bool {
 						writeOpenAIModelsError(c, http.StatusBadGateway, "upstream_error", "Invalid model catalogue entry")
 						return true
 					}
-					if model.ID != "" && !seen[model.ID] {
+					if model.ID != "" && !seen[model.ID] && modelAllowed(model.ID) {
 						seen[model.ID] = true
 						models = append(models, raw)
 					}
@@ -133,13 +134,13 @@ func (h *GatewayHandler) MultiGroupModels(c *gin.Context) bool {
 		} else {
 			sort.Strings(groupIDs)
 		}
-		catalogs = append(catalogs, service.APIKeyGroupCatalog{Group: group, ModelIDs: groupIDs})
+		catalogs = append(catalogs, service.APIKeyGroupCatalog{Group: group, ModelIDs: groupIDs, ModelAllowed: modelAllowed})
 		for _, id := range groupIDs {
 			id = strings.TrimSpace(id)
 			if google {
 				id = strings.TrimPrefix(id, "models/")
 			}
-			if id != "" && !seen[id] {
+			if id != "" && !seen[id] && modelAllowed(id) {
 				seen[id] = true
 				ids = append(ids, id)
 				models = append(models, gin.H{"id": id, "object": "model", "type": "model", "display_name": id, "created": 0, "owned_by": "sub2api"})

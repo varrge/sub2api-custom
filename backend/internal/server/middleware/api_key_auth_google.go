@@ -118,7 +118,7 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 		}
 		var groupResolved bool
 		apiKey, groupResolved = resolveAPIKeyRequestGroup(c, apiKey, true)
-		if !groupResolved {
+		if !groupResolved || !enforceAPIKeySelectedModelGroups(c, apiKey) {
 			return
 		}
 		if code, message, ok := validateAPIKeyGroupAvailable(apiKey); !ok && !SkipAPIKeyGroupEnforcement(c) {

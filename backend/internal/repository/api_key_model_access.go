@@ -39,7 +39,7 @@ func (r *apiKeyRepository) updateWithModelAccessRevision(ctx context.Context, ke
 func (r *apiKeyRepository) ListModelAccessKeys(ctx context.Context, userID int64) ([]service.APIKey, error) {
 	entities, err := r.activeQuery().Where(apikey.UserIDEQ(userID)).
 		Select(apikey.FieldID, apikey.FieldUserID, apikey.FieldName, apikey.FieldStatus,
-			apikey.FieldExpiresAt, apikey.FieldGroupID, apikey.FieldGroupIds, apikey.FieldModelAllowlist).
+			apikey.FieldExpiresAt, apikey.FieldGroupID, apikey.FieldGroupIds, apikey.FieldModelAllowlist, apikey.FieldModelGroupRoutes).
 		Order(dbent.Asc(apikey.FieldID)).Limit(service.MaxAPIKeyModelAccessKeys + 1).All(ctx)
 	if err != nil {
 		return nil, err
@@ -96,13 +96,23 @@ func (r *apiKeyRepository) UpdateModelAccess(ctx context.Context, userID int64, 
 		if err != nil {
 			return nil, nil, err
 		}
-		if key.AllowsModel(model) != entry.Allowed {
+		routes := service.CloneAPIKeyModelGroupRoutes(key.ModelGroupRoutes)
+		if entry.GroupIDs != nil {
+			routes, err = service.SetAPIKeyModelGroups(key, model, *entry.GroupIDs)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		nextKey := *key
+		nextKey.ModelAllowlist, nextKey.ModelGroupRoutes = next, routes
+		if service.APIKeyModelAccessRevision(key) != service.APIKeyModelAccessRevision(&nextKey) {
 			if err := tx.APIKey.UpdateOneID(key.ID).
-				SetModelAllowlist(service.DomainGroupModelAllowlist(next)).SetUpdatedAt(time.Now()).Exec(ctx); err != nil {
+				SetModelAllowlist(service.DomainGroupModelAllowlist(next)).SetModelGroupRoutes(routes).SetUpdatedAt(time.Now()).Exec(ctx); err != nil {
 				return nil, nil, err
 			}
 			changed = append(changed, key.Key)
 			key.ModelAllowlist = next
+			key.ModelGroupRoutes = routes
 		}
 		keys = append(keys, *key)
 	}

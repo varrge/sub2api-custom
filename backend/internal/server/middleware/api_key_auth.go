@@ -162,7 +162,7 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		}
 		var groupResolved bool
 		apiKey, groupResolved = resolveAPIKeyRequestGroup(c, apiKey, false)
-		if !groupResolved {
+		if !groupResolved || !enforceAPIKeySelectedModelGroups(c, apiKey) {
 			return
 		}
 		if !SkipAPIKeyGroupEnforcement(c) && abortIfAPIKeyGroupUnavailable(c, apiKey) {

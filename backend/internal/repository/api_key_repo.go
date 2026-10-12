@@ -56,6 +56,7 @@ func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) erro
 		SetGroupIds(key.GroupIDs).
 		SetMultiGroupEnabled(key.MultiGroupEnabled).
 		SetModelAllowlist(service.DomainGroupModelAllowlist(key.ModelAllowlist)).
+		SetModelGroupRoutes(service.CloneAPIKeyModelGroupRoutes(key.ModelGroupRoutes)).
 		SetUserID(key.UserID).
 		SetKey(key.Key).
 		SetName(key.Name).
@@ -157,6 +158,7 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 			apikey.FieldGroupIds,
 			apikey.FieldMultiGroupEnabled,
 			apikey.FieldModelAllowlist,
+			apikey.FieldModelGroupRoutes,
 			apikey.FieldName,
 			apikey.FieldStatus,
 			apikey.FieldIPWhitelist,
@@ -972,6 +974,7 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 		GroupIDs:          append([]int64{}, m.GroupIds...),
 		MultiGroupEnabled: m.MultiGroupEnabled,
 		ModelAllowlist:    service.GroupModelAllowlistFromDomain(m.ModelAllowlist),
+		ModelGroupRoutes:  service.CloneAPIKeyModelGroupRoutes(m.ModelGroupRoutes),
 		Quota:             m.Quota,
 		QuotaUsed:         m.QuotaUsed,
 		ExpiresAt:         m.ExpiresAt,

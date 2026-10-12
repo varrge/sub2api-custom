@@ -33,9 +33,10 @@ func (h *APIKeyHandler) UpdateModelAccess(c *gin.Context) {
 	var req struct {
 		Model   string `json:"model"`
 		Entries []struct {
-			ID       int64  `json:"id"`
-			Revision string `json:"revision"`
-			Allowed  *bool  `json:"allowed"`
+			ID       int64    `json:"id"`
+			Revision string   `json:"revision"`
+			Allowed  *bool    `json:"allowed"`
+			GroupIDs *[]int64 `json:"group_ids"`
 		} `json:"entries"`
 	}
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2<<20)
@@ -49,7 +50,7 @@ func (h *APIKeyHandler) UpdateModelAccess(c *gin.Context) {
 			response.BadRequest(c, "Each key requires an explicit allowed value")
 			return
 		}
-		entries = append(entries, service.APIKeyModelAccessEntry{ID: entry.ID, Revision: entry.Revision, Allowed: *entry.Allowed})
+		entries = append(entries, service.APIKeyModelAccessEntry{ID: entry.ID, Revision: entry.Revision, Allowed: *entry.Allowed, GroupIDs: entry.GroupIDs})
 	}
 	result, err := h.apiKeyService.UpdateModelAccess(c.Request.Context(), subject.UserID, req.Model, entries)
 	if err != nil {

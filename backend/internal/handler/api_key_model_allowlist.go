@@ -12,11 +12,11 @@ import (
 )
 
 func blockedAPIKeyModelCandidate(key *service.APIKey, models []string) string {
-	if key == nil || !key.ModelAllowlist.Enabled {
+	if key == nil || !key.HasModelRestrictions() {
 		return ""
 	}
 	for _, model := range models {
-		if !key.AllowsModel(model) {
+		if !key.AllowsModelInSelectedGroup(model) {
 			return model
 		}
 	}
@@ -25,7 +25,7 @@ func blockedAPIKeyModelCandidate(key *service.APIKey, models []string) string {
 
 func apiKeyModelLimitEnabled(c *gin.Context) bool {
 	key, ok := middleware.GetAPIKeyFromContext(c)
-	return ok && key != nil && key.ModelAllowlist.Enabled
+	return ok && key != nil && key.HasModelRestrictions()
 }
 
 // Conditional source requests must not validate a representation belonging to
@@ -39,7 +39,7 @@ func modelCatalogSourceETag(c *gin.Context) string {
 
 func filterAPIKeyModelCatalog(c *gin.Context, body []byte) ([]byte, error) {
 	key, ok := middleware.GetAPIKeyFromContext(c)
-	if !ok || key == nil || !key.ModelAllowlist.Enabled {
+	if !ok || key == nil || !key.HasModelRestrictions() {
 		return body, nil
 	}
 	var envelope map[string]json.RawMessage

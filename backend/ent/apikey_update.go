@@ -161,6 +161,12 @@ func (_u *APIKeyUpdate) SetNillableModelAllowlist(v *domain.GroupModelAllowlist)
 	return _u
 }
 
+// SetModelGroupRoutes sets the "model_group_routes" field.
+func (_u *APIKeyUpdate) SetModelGroupRoutes(v map[string][]int64) *APIKeyUpdate {
+	_u.mutation.SetModelGroupRoutes(v)
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *APIKeyUpdate) SetStatus(v string) *APIKeyUpdate {
 	_u.mutation.SetStatus(v)
@@ -648,6 +654,9 @@ func (_u *APIKeyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.ModelAllowlist(); ok {
 		_spec.SetField(apikey.FieldModelAllowlist, field.TypeJSON, value)
 	}
+	if value, ok := _u.mutation.ModelGroupRoutes(); ok {
+		_spec.SetField(apikey.FieldModelGroupRoutes, field.TypeJSON, value)
+	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(apikey.FieldStatus, field.TypeString, value)
 	}
@@ -999,6 +1008,12 @@ func (_u *APIKeyUpdateOne) SetNillableModelAllowlist(v *domain.GroupModelAllowli
 	if v != nil {
 		_u.SetModelAllowlist(*v)
 	}
+	return _u
+}
+
+// SetModelGroupRoutes sets the "model_group_routes" field.
+func (_u *APIKeyUpdateOne) SetModelGroupRoutes(v map[string][]int64) *APIKeyUpdateOne {
+	_u.mutation.SetModelGroupRoutes(v)
 	return _u
 }
 
@@ -1518,6 +1533,9 @@ func (_u *APIKeyUpdateOne) sqlSave(ctx context.Context) (_node *APIKey, err erro
 	}
 	if value, ok := _u.mutation.ModelAllowlist(); ok {
 		_spec.SetField(apikey.FieldModelAllowlist, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.ModelGroupRoutes(); ok {
+		_spec.SetField(apikey.FieldModelGroupRoutes, field.TypeJSON, value)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(apikey.FieldStatus, field.TypeString, value)

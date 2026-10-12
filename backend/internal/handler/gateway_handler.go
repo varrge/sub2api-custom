@@ -1038,7 +1038,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 							_ = h.antigravityGatewayService.WriteMappedClaudeError(c, account, promptTooLongErr.StatusCode, promptTooLongErr.RequestID, promptTooLongErr.Body)
 							return
 						}
-						if err := validateAPIKeyFallbackGroup(apiKey, fallbackGroup, reqModel, body, isClaudeCodeClient); err != nil {
+						if err := validateAPIKeyFallbackGroup(apiKey, fallbackGroup, reqModel, clientRequestedModel(c, reqModel), body, isClaudeCodeClient); err != nil {
 							h.errorResponse(c, http.StatusForbidden, "permission_error", err.Error())
 							return
 						}

@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <div class="mx-auto max-w-6xl space-y-5">
+    <div class="mx-auto max-w-6xl space-y-5 2xl:max-w-[104rem]">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
@@ -59,11 +59,11 @@
           >
             {{ t('groupBuy.browse') }}
           </button>
-          <div class="grid gap-5 md:grid-cols-2">
+          <div class="grid items-start gap-5 md:grid-cols-2">
             <TeamCard :team="detail" :now="now" @join="join" />
           </div>
         </div>
-        <div v-else-if="filteredTeams.length" class="grid gap-5 md:grid-cols-2">
+        <div v-else-if="filteredTeams.length" class="grid items-start gap-5 md:grid-cols-2 2xl:grid-cols-3">
           <TeamCard
             v-for="team in filteredTeams"
             :key="team.id"

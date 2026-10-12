@@ -22,3 +22,19 @@ UI 由 Kimi 以 --yolo 模式完成，保存及展示逻辑由主代理实现。
 - 独立审查完成，无遗留阻断问题。
 
 本次尚未部署、合并发布分支或打 tag。
+
+
+## 中国验收部署
+
+2026-10-12 用户授权后已部署中国隔离验收站。
+
+- 版本：0.2.15-custom.5-candidate.announcement.061c9b6d0；源码 061c9b6d0ebf67e75cb8d80dcabe2bdb2798faeb。
+- 入口：<http://127.0.0.1:18081/admin/group-buy>，选择「拼团公告」；大厅 <http://127.0.0.1:18081/group-buy>。
+- 远端备份与构建记录：/home/yinan/sub2api-staging/announcement-20261012T031608Z。
+- 回滚镜像：sub2api-restore:announcement-20261012t031608z。备份 dump 64,382,049 字节且校验通过。
+- 仅重建 sub2api-multigroup-cn 的应用；其他容器、核心数据记录数和迁移记录不变。隔离网络 internal=true，无公开端口。
+- 容器 healthy、零重启，运行二进制摘要和候选版本一致。
+- 实际 API 验证管理员保存、用户回读、恢复默认、无效输入不覆盖、匿名 401/普通用户写入 403；测试完成后恢复原公告。
+- 实际浏览器在 1440px 和 375px 验证页签、多行编辑与预览、大厅呈现，无横向溢出和页面脚本错误；浏览器预览没有保存测试文案。
+- 穿透监听 127.0.0.1:18081，目标 172.26.0.4:8080，控制 socket /private/tmp/sub2api-cn-announcement-20261012.sock。
+- 临时验证凭据文件已删除。未操作美国生产，未合并或打 tag。

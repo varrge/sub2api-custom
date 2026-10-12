@@ -137,25 +137,8 @@
       </div>
     </div>
 
-    <details class="gb-team-card__details mt-3 mb-3">
-      <summary class="gb-accent">{{ t('groupBuy.tierLadderTitle') }}</summary>
-      <p class="mt-2 text-xs text-emerald-600 dark:text-emerald-400">
-        {{
-          t('groupBuy.bonus', {
-            amount: usd(
-              Math.max(0, team.current_quota_usd - team.product.base_quota_usd)
-            )
-          })
-        }}
-      </p>
-      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-        {{ t('groupBuy.toFull', { count: remainingMembers(team).full }) }}
-      </p>
-      <QuotaLadder class="mt-3" :product="team.product" />
-    </details>
-
     <div
-      class="gb-team-card__footer mt-auto flex flex-col gap-3 border-t border-gray-200/70 pt-3 dark:border-dark-600/70"
+      class="gb-team-card__footer mt-3 flex flex-col gap-3 border-t border-gray-200/70 pt-3 dark:border-dark-600/70"
     >
       <div class="flex min-w-0 items-baseline gap-2">
         <strong
@@ -202,7 +185,6 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import type { GroupBuyTeam } from '@/types/groupBuy'
-import QuotaLadder from './QuotaLadder.vue'
 import {
   canJoin,
   cny,
@@ -332,21 +314,6 @@ async function copy(value: string) {
 }
 .dark .gb-team-card__quota-value--boost {
   color: rgb(52 211 153);
-}
-.gb-team-card__details > summary {
-  cursor: pointer;
-  user-select: none;
-  font-size: 0.8125rem;
-  font-weight: 500;
-}
-.gb-team-card__details > summary:hover {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.gb-team-card__details > summary:focus-visible {
-  outline: 2px solid rgb(var(--primary-text-500) / 0.6);
-  outline-offset: 2px;
-  border-radius: 0.25rem;
 }
 .gb-team-card__action {
   flex: 1 1 0%;

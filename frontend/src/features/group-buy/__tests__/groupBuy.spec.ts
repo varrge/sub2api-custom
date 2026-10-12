@@ -24,7 +24,6 @@ describe('group buy purchase and quota boundaries', () => {
     expect(remainingMembers(team)).toEqual({ next: 2, full: 6 })
     const wrapper = mount(TeamCard, { props: { team, now: Date.parse('2099-01-02T15:00:00Z') }, global: global() })
     expect(wrapper.text()).toContain('下一档每卡 $1,000.00，还差 2 人')
-    expect(wrapper.text()).toContain('距离满团还差 6 人')
     expect(wrapper.text()).toContain('每张卡月总额度')
   })
   it.each([{ ...team, joined: true }, { ...team, status: 'closed' as const }, { ...team, status: 'cancelled' as const }, { ...team, member_count: 10 }, { ...team, closes_at: '2000-01-01T00:00:00Z' }])('disables duplicate or unavailable team checkout', current => {

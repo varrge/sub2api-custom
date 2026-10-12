@@ -12,10 +12,10 @@ const replace = vi.hoisted(() => vi.fn())
 vi.mock('vue-router', () => ({ useRoute: () => route, useRouter: () => ({ push, replace }) }))
 vi.mock('vue-i18n', async () => ({ ...await vi.importActual<typeof import('vue-i18n')>('vue-i18n'), useI18n: () => ({ t: (key: string) => key }) }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showSuccess: vi.fn(), showError: vi.fn() }) }))
-vi.mock('@/api/groupBuy', () => ({ groupBuyAPI: { teams: vi.fn(), team: vi.fn() } }))
+vi.mock('@/api/groupBuy', () => ({ groupBuyAPI: { teams: vi.fn(), team: vi.fn(), announcement: vi.fn() } }))
 const team = { id: 1, code: 'REAL-TEAM', status: 'recruiting', joined: false, closes_at: '2099-01-01T00:00:00Z', member_count: 4, product: { group_id: 10, group_name: 'Real group', max_members: 10 } } as GroupBuyTeam
 const options = { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, RouterLink: true } } }
-beforeEach(() => { route.query = {}; vi.clearAllMocks() })
+beforeEach(() => { route.query = {}; vi.clearAllMocks(); vi.mocked(groupBuyAPI.announcement).mockResolvedValue({content: ''}) })
 
 describe('hall live data and share links', () => {
   it('removes full and expired teams from recruitment and forwards selected team to existing checkout', async () => {
@@ -45,4 +45,28 @@ describe('hall live data and share links', () => {
     expect(wrapper.text()).not.toContain('groupBuy.noTeams')
     wrapper.unmount()
   })
+})
+
+it('renders custom announcement as escaped multiline text and reloads the default after reset', async () => {
+  vi.mocked(groupBuyAPI.teams).mockResolvedValue([])
+  vi.mocked(groupBuyAPI.announcement).mockResolvedValue({content: '公告\n<script>alert(1)</script>'})
+  const wrapper = shallowMount(GroupBuyHallView, options)
+  await flushPromises()
+  expect(wrapper.get('.gb-notice-info').text()).toContain('公告\n<script>alert(1)</script>')
+  expect(wrapper.find('script').exists()).toBe(false)
+  vi.mocked(groupBuyAPI.announcement).mockResolvedValue({content: ''})
+  await wrapper.get('button').trigger('click')
+  await flushPromises()
+  expect(wrapper.get('.gb-notice-info').text()).toContain('groupBuy.subtitle')
+  expect(wrapper.get('.gb-notice-info').text()).toContain('groupBuy.rules')
+  wrapper.unmount()
+})
+it('keeps team browsing available when announcement loading fails', async () => {
+  vi.mocked(groupBuyAPI.announcement).mockRejectedValue(new Error('offline'))
+  vi.mocked(groupBuyAPI.teams).mockResolvedValue([team])
+  const wrapper = shallowMount(GroupBuyHallView, options)
+  await flushPromises()
+  expect(wrapper.findAllComponents(TeamCard)).toHaveLength(1)
+  expect(wrapper.get('.gb-notice-info').text()).toContain('groupBuy.rules')
+  wrapper.unmount()
 })

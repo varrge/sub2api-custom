@@ -150,3 +150,7 @@ export interface UsageResetDraft {
   resetTotal: boolean
   resetWeekly: boolean
 }
+
+export interface GroupBuyAnnouncement {
+  content: string
+}

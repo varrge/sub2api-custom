@@ -18,8 +18,11 @@
         </div>
       </div>
       <div class="gb-notice gb-notice-info p-4">
-        <p>{{ t('groupBuy.subtitle') }}</p>
-        <p>{{ t('groupBuy.rules') }}</p>
+        <p v-if="announcement.trim()" class="whitespace-pre-wrap break-words">{{ announcement }}</p>
+        <template v-else>
+          <p>{{ t('groupBuy.subtitle') }}</p>
+          <p>{{ t('groupBuy.rules') }}</p>
+        </template>
       </div>
       <form class="gb-panel grid grid-cols-[minmax(0,1fr)_auto] gap-3 p-3 sm:grid-cols-[minmax(0,16rem)_minmax(0,1fr)_auto] sm:p-4" @submit.prevent="lookup()">
         <select
@@ -97,6 +100,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const teams = ref<GroupBuyTeam[]>([])
+const announcement = ref('')
 const detail = ref<GroupBuyTeam | null>(null)
 const groupId = ref(0)
 const code = ref('')
@@ -127,10 +131,21 @@ const filteredTeams = computed(() =>
     (team) => !groupId.value || team.product.group_id === groupId.value
   )
 )
+let announcementRequest = 0
+async function loadAnnouncement() {
+  const request = ++announcementRequest
+  try {
+    const value = await groupBuyAPI.announcement()
+    if (request === announcementRequest) announcement.value = value.content
+  } catch {
+    // A notice outage must not block team browsing; keep the last known notice.
+  }
+}
 async function load() {
   loading.value = true
   error.value = ''
   try {
+    void loadAnnouncement()
     teams.value = await groupBuyAPI.teams()
     if (typeof route.query.team_code === 'string') {
       code.value = route.query.team_code

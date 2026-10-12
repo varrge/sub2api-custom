@@ -4,7 +4,7 @@
     data-testid="team-card"
   >
     <div class="flex min-w-0 items-start gap-3">
-      <span class="gb-team-card__icon" aria-hidden="true">
+      <span class="gb-pill-teal gb-team-card__icon" aria-hidden="true">
         <svg
           viewBox="0 0 24 24"
           fill="none"
@@ -30,7 +30,10 @@
           </h2>
           <span
             class="gb-pill gb-team-card__status shrink-0"
-            :class="`gb-team-card__status--${status}`"
+            :class="[
+              `gb-team-card__status--${status}`,
+              { 'gb-pill-teal': status === 'full' }
+            ]"
           >
             {{ t(`groupBuy.${status}`) }}
           </span>
@@ -50,7 +53,10 @@
           >
             {{ t('groupBuy.teamCode') }} {{ team.code }}
           </button>
-          <span v-if="status === 'recruiting'" class="gb-team-card__countdown">
+          <span
+            v-if="status === 'recruiting'"
+            class="gb-pill gb-pill-teal shrink-0 tabular-nums font-semibold"
+          >
             {{ t('groupBuy.remaining', { time: countdown }) }}
           </span>
         </div>
@@ -101,7 +107,7 @@
       </p>
     </div>
 
-    <div class="gb-team-card__quotas mt-3">
+    <div class="gb-strip gb-team-card__quotas mt-3">
       <div class="min-w-0">
         <p class="gb-label">{{ t('groupBuy.perCard') }}</p>
         <strong
@@ -132,7 +138,7 @@
     </div>
 
     <details class="gb-team-card__details mt-3 mb-3">
-      <summary>{{ t('groupBuy.tierLadderTitle') }}</summary>
+      <summary class="gb-accent">{{ t('groupBuy.tierLadderTitle') }}</summary>
       <p class="mt-2 text-xs text-emerald-600 dark:text-emerald-400">
         {{
           t('groupBuy.bonus', {
@@ -185,7 +191,7 @@
     <RouterLink
       v-if="team.joined"
       to="/my-group-buy"
-      class="gb-team-card__accent mt-2 block text-center text-xs font-medium hover:underline"
+      class="gb-accent mt-2 block text-center text-xs font-medium hover:underline"
     >
       {{ t('groupBuy.viewCards') }}
     </RouterLink>
@@ -262,13 +268,9 @@ async function copy(value: string) {
 }
 </script>
 <style scoped>
-/* 本卡局部淡紫主题，仅作用于拼团大厅队伍卡，不影响全局样式 */
+/* 仅保留布局/尺寸类局部样式，配色全部复用 glass.css 的 gb-* 主题类 */
 .gb-team-card {
   container-type: inline-size;
-  border-color: rgb(221 214 254 / 0.65);
-}
-.dark .gb-team-card {
-  border-color: rgb(139 92 246 / 0.28);
 }
 .gb-team-card__icon {
   display: inline-flex;
@@ -278,12 +280,6 @@ async function copy(value: string) {
   width: 2.25rem;
   height: 2.25rem;
   border-radius: 0.625rem;
-  background: rgb(237 233 254 / 0.8);
-  color: rgb(124 58 237);
-}
-.dark .gb-team-card__icon {
-  background: rgb(139 92 246 / 0.18);
-  color: rgb(196 181 253);
 }
 .gb-team-card__code {
   flex: 1 1 auto;
@@ -294,23 +290,6 @@ async function copy(value: string) {
   overflow-wrap: normal;
   text-align: left;
 }
-.gb-team-card__countdown {
-  flex-shrink: 0;
-  border-radius: 9999px;
-  padding: 0.25rem 0.75rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  background: rgb(245 243 255 / 0.9);
-  border: 1px solid rgb(221 214 254 / 0.8);
-  color: rgb(109 40 217);
-}
-.dark .gb-team-card__countdown {
-  background: rgb(139 92 246 / 0.16);
-  border-color: rgb(139 92 246 / 0.35);
-  color: rgb(196 181 253);
-}
 .gb-team-card__status--recruiting {
   background: rgb(236 253 245 / 0.9);
   color: rgb(4 120 87);
@@ -318,14 +297,6 @@ async function copy(value: string) {
 .dark .gb-team-card__status--recruiting {
   background: rgb(6 95 70 / 0.4);
   color: rgb(110 231 183);
-}
-.gb-team-card__status--full {
-  background: rgb(237 233 254 / 0.9);
-  color: rgb(109 40 217);
-}
-.dark .gb-team-card__status--full {
-  background: rgb(139 92 246 / 0.2);
-  color: rgb(196 181 253);
 }
 .gb-team-card__status--closed,
 .gb-team-card__status--cancelled {
@@ -337,21 +308,11 @@ async function copy(value: string) {
   background: rgb(46 46 53 / 0.6);
   color: rgb(161 161 170);
 }
-.gb-team-card .gb-progress-fill {
-  background: linear-gradient(90deg, #8b5cf6 0%, #c4b5fd 100%);
-}
 .gb-team-card__quotas {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;
-  border-radius: 0.75rem;
   padding: 0.625rem 0.75rem;
-  background: rgb(245 243 255 / 0.65);
-  border: 1px solid rgb(237 233 254 / 0.9);
-}
-.dark .gb-team-card__quotas {
-  background: rgb(139 92 246 / 0.08);
-  border-color: rgb(139 92 246 / 0.22);
 }
 .gb-team-card__quota-value {
   display: block;
@@ -365,6 +326,7 @@ async function copy(value: string) {
 .dark .gb-team-card__quota-value {
   color: #f8fafc;
 }
+/* 额度增加保持绿色语义 */
 .gb-team-card__quota-value--boost {
   color: rgb(5 150 105);
 }
@@ -376,33 +338,15 @@ async function copy(value: string) {
   user-select: none;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: rgb(109 40 217);
-}
-.dark .gb-team-card__details > summary {
-  color: rgb(196 181 253);
 }
 .gb-team-card__details > summary:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 .gb-team-card__details > summary:focus-visible {
-  outline: 2px solid rgb(139 92 246 / 0.6);
+  outline: 2px solid rgb(var(--primary-text-500) / 0.6);
   outline-offset: 2px;
   border-radius: 0.25rem;
-}
-.gb-team-card__accent {
-  color: rgb(109 40 217);
-}
-.dark .gb-team-card__accent {
-  color: rgb(196 181 253);
-}
-.gb-team-card .btn-primary {
-  background-image: linear-gradient(to bottom, #a78bfa, #8b5cf6);
-  box-shadow: 0 4px 10px rgb(139 92 246 / 0.25);
-}
-.gb-team-card .btn-primary:hover:not(:disabled) {
-  filter: brightness(1.05);
-  box-shadow: 0 6px 14px rgb(139 92 246 / 0.3);
 }
 .gb-team-card__action {
   flex: 1 1 0%;

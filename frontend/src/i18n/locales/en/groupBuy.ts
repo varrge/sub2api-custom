@@ -1,5 +1,20 @@
 export default {
   groupBuy: {
+    "announcement": "Hall announcement",
+    "announcementTitle": "Hall announcement",
+    "announcementHint": "Edit the notice at the top of the group-buy hall. Refresh the hall after saving to see your changes.",
+    "announcementContent": "Announcement content",
+    "announcementPlaceholder": "Enter your announcement. Line breaks are supported.",
+    "announcementPreview": "Hall preview",
+    "announcementDefaultHint": "Leave blank to use the default notice. Save after restoring defaults.",
+    "announcementReset": "Restore defaults",
+    "announcementSave": "Save announcement",
+    "announcementTooLong": "Announcement must not exceed 5,000 characters",
+    "announcementLoadFailed": "Could not load the announcement. Please retry.",
+    "announcementSaveFailed": "Could not save the announcement. Please retry.",
+    "announcementSaved": "Announcement saved",
+    "announcementUnsaved": "Save your announcement changes before refreshing.",
+
     "entitlementActiveHint": "Usage and quotas are summed across active cards. Each member spends their own quota independently.",
     "noEntitlementTeams": "No team month-card entitlements found",
     "teamProduct": "Team / product",

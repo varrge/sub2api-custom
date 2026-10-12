@@ -1,6 +1,7 @@
 import { apiClient } from './client'
 import type { PaginatedResponse } from '@/types'
 import type {
+  GroupBuyAnnouncement,
   AdminEntitlementQuery,
   QuotaAdjustmentRequest,
   UsageResetRequest,
@@ -17,6 +18,9 @@ import type {
 } from '@/types/groupBuy'
 
 export const groupBuyAPI = {
+  async announcement() {
+    return (await apiClient.get<GroupBuyAnnouncement>('/group-buy/announcement')).data
+  },
   async previewCoupon(selection: MonthCardSelection, code: string) {
     return (await apiClient.post<CouponQuote>('/group-buy/coupons/preview', {
       product_id: selection.product.id,
@@ -63,6 +67,12 @@ export const groupBuyAPI = {
   }
 }
 export const adminGroupBuyAPI = {
+  async announcement() {
+    return (await apiClient.get<GroupBuyAnnouncement>('/admin/group-buy/announcement')).data
+  },
+  async saveAnnouncement(announcement: GroupBuyAnnouncement) {
+    return (await apiClient.put<GroupBuyAnnouncement>('/admin/group-buy/announcement', announcement)).data
+  },
   async resetUsage(request: UsageResetRequest) {
     return (await apiClient.post<{ updated_count: number }>('/admin/group-buy/entitlements/cards/reset-usage', request)).data
   },

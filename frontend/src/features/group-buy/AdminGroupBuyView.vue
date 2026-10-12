@@ -17,7 +17,7 @@
       </div>
       <div class="gb-tabs" role="tablist">
         <button
-          v-for="key in ['products', 'teams', 'cards', 'coupons', 'ruleManagement'] as const"
+          v-for="key in ['products', 'teams', 'cards', 'coupons', 'ruleManagement', 'announcement'] as const"
           :key="key"
           class="gb-tab"
           :class="{ 'gb-tab-active': tab === key }"
@@ -31,7 +31,7 @@
       <p v-if="error" class="gb-notice gb-notice-error p-3" role="alert">
         {{ error }}
       </p>
-      <section v-if="tab !== 'ruleManagement'" class="card space-y-3 p-4">
+      <section v-if="tab !== 'ruleManagement' && tab !== 'announcement'" class="card space-y-3 p-4">
         <h2 class="font-semibold">{{ t('groupBuy.freezePolicy') }}</h2>
         <p class="text-sm text-gray-500">{{ t('groupBuy.freezePolicyHint') }}</p>
         <label class="flex items-center gap-2 text-sm">
@@ -50,7 +50,8 @@
           {{ freezePolicySaving ? t('common.loading') : t('groupBuy.saveFreezePolicy') }}
         </button>
       </section>
-      <div v-if="loading" class="py-10 text-center">
+      <AdminAnnouncementPanel v-if="tab === 'announcement'" ref="announcementPanel" />
+      <div v-else-if="loading" class="py-10 text-center">
         {{ t('common.loading') }}
       </div>
       <template v-else-if="tab === 'products'">
@@ -379,6 +380,7 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import AdminEntitlementsPanel from './AdminEntitlementsPanel.vue'
 import AdminCoupons from './AdminCoupons.vue'
 import AdminRulesManager from './AdminRulesManager.vue'
+import AdminAnnouncementPanel from './AdminAnnouncementPanel.vue'
 import QuotaLadder from './QuotaLadder.vue'
 import { adminGroupBuyAPI } from '@/api/groupBuy'
 import adminAPI from '@/api/admin'
@@ -393,7 +395,8 @@ import { extractApiErrorMessage } from '@/utils/apiError'
 import './glass.css'
 const { t } = useI18n()
 const app = useAppStore()
-const tab = ref<'products' | 'teams' | 'cards' | 'coupons' | 'ruleManagement'>('products')
+const tab = ref<'products' | 'teams' | 'cards' | 'coupons' | 'ruleManagement' | 'announcement'>('products')
+const announcementPanel = ref<InstanceType<typeof AdminAnnouncementPanel> | null>(null)
 const loading = ref(true)
 const error = ref('')
 const formError = ref('')
@@ -425,7 +428,8 @@ const productFields = [
   { key: 'sort_order', label: 'sortOrder', min: 0, step: 1 }
 ] as const
 function refresh() {
-  if (tab.value === 'cards' && entitlementsPanel.value) void entitlementsPanel.value.refresh()
+  if (tab.value === 'announcement' && announcementPanel.value) void announcementPanel.value.refresh()
+  else if (tab.value === 'cards' && entitlementsPanel.value) void entitlementsPanel.value.refresh()
   else void load()
 }
 async function load() {

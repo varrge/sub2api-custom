@@ -1,5 +1,20 @@
 export default {
   groupBuy: {
+    "announcement": "拼团公告",
+    "announcementTitle": "拼团公告",
+    "announcementHint": "编辑拼团大厅顶部的公告，保存后刷新大厅即可查看。",
+    "announcementContent": "公告内容",
+    "announcementPlaceholder": "输入公告内容，支持换行",
+    "announcementPreview": "大厅预览",
+    "announcementDefaultHint": "留空使用默认说明。恢复默认后需保存。",
+    "announcementReset": "恢复默认",
+    "announcementSave": "保存公告",
+    "announcementTooLong": "公告不能超过 5000 个字符",
+    "announcementLoadFailed": "公告加载失败，请重试",
+    "announcementSaveFailed": "公告保存失败，请重试",
+    "announcementSaved": "公告已保存",
+    "announcementUnsaved": "有未保存的修改，请先保存公告再刷新。",
+
     "entitlementActiveHint": "以下用量和额度为有效月卡的合计，各成员独立使用自己的额度。",
     "noEntitlementTeams": "没有符合条件的拼团月卡权益",
     "teamProduct": "拼团 / 商品",

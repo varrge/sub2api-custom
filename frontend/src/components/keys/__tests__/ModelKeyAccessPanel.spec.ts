@@ -59,15 +59,16 @@ const mountPanel = (props: Partial<InstanceType<typeof ModelKeyAccessPanel>['$pr
   })
 
 describe('ModelKeyAccessPanel', () => {
-  it('renders selected group checkboxes and emits group-only changes', async () => {
+  it('renders selected group tags and emits group-only changes', async () => {
     const wrapper = mountPanel({ selectedModel: 'm', rows: [row({
       groups: [{ id: 1, name: 'Pool', platform: 'openai' }, { id: 2, name: 'Official', platform: 'openai' }],
       group_ids: [1, 2], selected_group_ids: [2], original_selected_group_ids: [1, 2], groupsModified: true, modified: true
     })], groupChangedCount: 1, dirty: true })
-    const boxes = wrapper.findAll<HTMLInputElement>('[data-test="group-checkbox"]')
-    expect(boxes.map(box => box.element.checked)).toEqual([false, true])
-    await boxes[0].setValue(true)
-    expect(wrapper.emitted('toggle-group')).toEqual([[1, 1, true]])
+    const tags = wrapper.findAll('[data-test="group-tag"]')
+    expect(tags.map(tag => tag.attributes('aria-pressed'))).toEqual(['false', 'true'])
+    await tags[0].trigger('click')
+    await tags[1].trigger('click')
+    expect(wrapper.emitted('toggle-group')).toEqual([[1, 1, true], [1, 2, false]])
     expect(wrapper.findAll('[data-test="modified-badge"]')).toHaveLength(1)
     expect(wrapper.text()).toContain('modelKeyAccess.groupsChanged {"count":1}')
     expect(wrapper.get('[data-test="save"]').attributes('disabled')).toBeUndefined()
@@ -76,7 +77,7 @@ describe('ModelKeyAccessPanel', () => {
   it('disables group selection while blocked, loading, saving or switching', () => {
     for (const props of [{ rows: [row({ allowed: false })] }, { loading: true }, { saving: true }, { switchPending: true }]) {
       const wrapper = mountPanel({ selectedModel: 'm', rows: [row()], ...props })
-      expect(wrapper.get('[data-test="group-checkbox"]').attributes('disabled')).toBeDefined()
+      expect(wrapper.get('[data-test="group-tag"]').attributes('disabled')).toBeDefined()
     }
   })
   it('shows an empty state until a model is selected and selects models from the list', async () => {

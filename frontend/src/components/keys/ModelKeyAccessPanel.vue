@@ -173,24 +173,21 @@
                     </span>
                   </div>
                   <div class="mt-1 flex flex-wrap gap-1">
-                    <label
+                    <button
                       v-for="group in row.groups"
                       :key="group.id"
-                      class="badge badge-gray inline-flex max-w-full cursor-pointer items-center gap-1.5 whitespace-normal transition-colors has-[:checked]:bg-primary-50 has-[:checked]:text-primary-700 has-[:checked]:ring-1 has-[:checked]:ring-primary-500/50 dark:has-[:checked]:bg-primary-900/20 dark:has-[:checked]:text-primary-300"
-                      :class="{ 'cursor-not-allowed opacity-60': busy || !row.allowed }"
+                      type="button"
+                      class="badge max-w-full cursor-pointer justify-center border whitespace-normal transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus-visible:ring-offset-dark-800"
+                      :class="row.selected_group_ids.includes(group.id)
+                        ? 'border-primary-800 bg-primary-800 text-white enabled:hover:bg-primary-900 dark:border-primary-700 dark:bg-primary-700 dark:enabled:hover:bg-primary-800'
+                        : 'border-gray-200 bg-gray-100 text-gray-600 enabled:hover:bg-gray-200 dark:border-dark-600 dark:bg-dark-700 dark:text-dark-300 dark:enabled:hover:bg-dark-600'"
+                      :aria-pressed="row.selected_group_ids.includes(group.id)"
+                      :disabled="busy || !row.allowed"
                       data-test="group-tag"
+                      @click="emit('toggle-group', row.id, group.id, !row.selected_group_ids.includes(group.id))"
                     >
-                      <input
-                        type="checkbox"
-                        class="h-3.5 w-3.5 shrink-0 rounded border-gray-300 text-primary-600 accent-primary-600 focus-visible:ring-2 focus-visible:ring-primary-500/30 disabled:cursor-not-allowed dark:border-dark-500"
-                        :checked="row.selected_group_ids.includes(group.id)"
-                        :disabled="busy || !row.allowed"
-                        :aria-label="group.name"
-                        data-test="group-checkbox"
-                        @change="onToggleGroup(row.id, group.id, $event)"
-                      />
                       <span class="min-w-0 break-all">{{ group.name }}</span>
-                    </label>
+                    </button>
                     <span v-if="!row.groups.length" class="text-xs text-gray-400 dark:text-dark-500">
                       {{ t('modelKeyAccess.noGroups') }}
                     </span>
@@ -373,10 +370,6 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const busy = computed(() => props.loading || props.saving || props.switchPending)
-
-const onToggleGroup = (id: number, groupID: number, event: Event) => {
-  emit('toggle-group', id, groupID, (event.target as HTMLInputElement).checked)
-}
 
 // A non-empty search that is not already selected can be used as a full model ID.
 const manualModelId = computed(() => {

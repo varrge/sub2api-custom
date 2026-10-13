@@ -220,10 +220,11 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			)
 			if subErr != nil {
 				if !skipBilling {
-					if errors.Is(subErr, service.ErrBillingServiceUnavailable) {
-						AbortWithError(c, 503, "BILLING_SERVICE_ERROR", subErr.Error())
+					if !service.IsSubscriptionAccessDenied(subErr) {
+						AbortWithError(c, 503, "BILLING_SERVICE_ERROR", "Subscription admission is unavailable")
 						return
 					}
+					MarkIngressRejected(c, IngressRejectSubscriptionUnavailable)
 					AbortWithError(c, 403, "SUBSCRIPTION_NOT_FOUND", "No active subscription found for this group")
 					return
 				}
@@ -269,6 +270,9 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 					_, validateErr = subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
 				}
 				if validateErr != nil {
+					if service.IsSubscriptionAccessDenied(validateErr) {
+						MarkIngressRejected(c, IngressRejectSubscriptionUnavailable)
+					}
 					code := "SUBSCRIPTION_INVALID"
 					status := 403
 					if errors.Is(validateErr, service.ErrDailyLimitExceeded) ||

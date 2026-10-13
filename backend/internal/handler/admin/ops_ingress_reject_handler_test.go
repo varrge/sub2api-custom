@@ -39,3 +39,15 @@ func TestGetIngressRejectHealthAvailable(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code)
 	require.Contains(t, recorder.Body.String(), `"capacity":8192`)
 }
+
+func TestListIngressRejectsAcceptsBusinessDenialReasons(t *testing.T) {
+	for _, reason := range []string{"subscription_unavailable", "model_not_allowed"} {
+		t.Run(reason, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/admin/ops/ingress-rejections?reason="+reason, nil)
+			newIngressRejectHandlerForTest().ListIngressRejects(c)
+			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		})
+	}
+}

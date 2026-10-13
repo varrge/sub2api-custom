@@ -1120,6 +1120,7 @@ export default {
         pricePlaceholder: 'optional'
       },
       modelPricing: {
+        tierMultipliersHint: 'Fast/priority token prices use Standard prices × the Fast multiplier; Flex works the same way. Leave blank to use the model defaults. With Free Fast enabled, customers still pay Standard prices.',
         title: 'Group model prices (optional overrides)',
         description: 'For shared base prices, leave this empty to inherit channel or default prices and set only the group multiplier. Import prices in bulk or add overrides when this group needs its own prices. Long-context tiers use official presets. Audio supports per-request tiers such as realtime, tts, and stt.',
         longContext: 'Enable long-context tier pricing',

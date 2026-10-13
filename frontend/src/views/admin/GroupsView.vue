@@ -1508,6 +1508,7 @@
             <div class="min-w-0 flex-1">
               <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.groups.modelPricing.title") }}</h4>
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.groups.modelPricing.description") }}</p>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.groups.modelPricing.tierMultipliersHint") }}</p>
             </div>
             <BulkPricingImport :platform="createForm.platform" :entries="createForm.model_pricing" @update="createForm.model_pricing = $event" />
             <button type="button" class="btn btn-secondary shrink-0 whitespace-nowrap" @click="addGroupPricing(createForm.model_pricing)">
@@ -1519,7 +1520,7 @@
             <span><span class="block text-sm text-gray-700 dark:text-gray-300">{{ t("admin.groups.modelPricing.longContext") }}</span><span class="block text-xs text-gray-500">{{ t("admin.groups.modelPricing.longContextHint") }}</span></span>
           </label>
           <div class="mt-3 space-y-2">
-            <PricingEntryCard v-for="(entry, index) in createForm.model_pricing" :key="index" :entry="entry" :platform="createForm.platform" hide-token-intervals @update="createForm.model_pricing[index] = $event" @remove="createForm.model_pricing.splice(index, 1)" />
+            <PricingEntryCard v-for="(entry, index) in createForm.model_pricing" :key="index" :entry="entry" :platform="createForm.platform" hide-token-intervals enable-tier-multipliers @update="createForm.model_pricing[index] = $event" @remove="createForm.model_pricing.splice(index, 1)" />
           </div>
         </div>
 
@@ -3185,6 +3186,7 @@
             <div class="min-w-0 flex-1">
               <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.groups.modelPricing.title") }}</h4>
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.groups.modelPricing.description") }}</p>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.groups.modelPricing.tierMultipliersHint") }}</p>
             </div>
             <BulkPricingImport :platform="editForm.platform" :entries="editForm.model_pricing" @update="editForm.model_pricing = $event" />
             <button type="button" class="btn btn-secondary shrink-0 whitespace-nowrap" @click="addGroupPricing(editForm.model_pricing)">
@@ -3196,7 +3198,7 @@
             <span><span class="block text-sm text-gray-700 dark:text-gray-300">{{ t("admin.groups.modelPricing.longContext") }}</span><span class="block text-xs text-gray-500">{{ t("admin.groups.modelPricing.longContextHint") }}</span></span>
           </label>
           <div class="mt-3 space-y-2">
-            <PricingEntryCard v-for="(entry, index) in editForm.model_pricing" :key="index" :entry="entry" :platform="editForm.platform" hide-token-intervals @update="editForm.model_pricing[index] = $event" @remove="editForm.model_pricing.splice(index, 1)" />
+            <PricingEntryCard v-for="(entry, index) in editForm.model_pricing" :key="index" :entry="entry" :platform="editForm.platform" hide-token-intervals enable-tier-multipliers @update="editForm.model_pricing[index] = $event" @remove="editForm.model_pricing.splice(index, 1)" />
           </div>
         </div>
 
@@ -4367,6 +4369,7 @@ import {
   createDefaultTimePricingForm,
   formIntervalsToAPI,
   formReasoningEffortMultipliersToAPI,
+  isValidPositiveMultiplier,
   mTokToPerToken,
   perTokenToMTok,
   toNullableNumber,
@@ -4453,6 +4456,8 @@ const emptyGroupPricing = (): PricingFormEntry => ({
   cache_write_price: null,
   cache_write_1h_price: null,
   cache_read_price: null,
+  fast_multiplier: null,
+  flex_multiplier: null,
   reasoning_effort_multipliers: null,
   image_input_price: null,
   image_output_price: null,
@@ -4475,6 +4480,8 @@ const groupPricingFromAPI = (
     cache_write_price: perTokenToMTok(entry.cache_write_price),
     cache_write_1h_price: perTokenToMTok(entry.cache_write_1h_price),
     cache_read_price: perTokenToMTok(entry.cache_read_price),
+    fast_multiplier: entry.fast_multiplier ?? null,
+    flex_multiplier: entry.flex_multiplier ?? null,
     reasoning_effort_multipliers: entry.reasoning_effort_multipliers
       ? { ...entry.reasoning_effort_multipliers }
       : null,
@@ -4500,6 +4507,8 @@ const groupPricingToAPI = (
       cache_write_price: mTokToPerToken(entry.cache_write_price),
       cache_write_1h_price: mTokToPerToken(entry.cache_write_1h_price),
       cache_read_price: mTokToPerToken(entry.cache_read_price),
+      fast_multiplier: toNullableNumber(entry.fast_multiplier),
+      flex_multiplier: toNullableNumber(entry.flex_multiplier),
       reasoning_effort_multipliers: formReasoningEffortMultipliersToAPI(
         entry.reasoning_effort_multipliers,
       ),
@@ -6002,8 +6011,13 @@ const validateProfitControlForm = (form: ProfitControlFormState): boolean => {
   return true;
 };
 
-const validateGroupReasoningMultipliers = (pricing: PricingFormEntry[]): boolean => {
+const validateGroupPricingMultipliers = (pricing: PricingFormEntry[]): boolean => {
   for (const entry of pricing) {
+    if (!isValidPositiveMultiplier(entry.fast_multiplier) ||
+        !isValidPositiveMultiplier(entry.flex_multiplier)) {
+      appStore.showError(`${entry.models.join(", ") || t("admin.channels.form.unnamed")}: ${t("admin.channels.form.multiplierPositive")}`);
+      return false;
+    }
     const error = validateReasoningEffortMultipliers(entry.reasoning_effort_multipliers, t);
     if (error) {
       appStore.showError(`${entry.models.join(", ") || t("admin.channels.form.unnamed")}: ${error}`);
@@ -6031,7 +6045,7 @@ const handleCreateGroup = async () => {
   if (!validateTemporaryRateForm(createForm)) {
     return;
   }
-  if (!validateGroupReasoningMultipliers(createForm.model_pricing)) return;
+  if (!validateGroupPricingMultipliers(createForm.model_pricing)) return;
   // 模型白名单：开启且没有任何条目时阻止提交，与后端 400 对齐。
   if (
     createModelAllowlistState.enabled &&
@@ -6386,7 +6400,7 @@ const handleUpdateGroup = async () => {
   if (!validateTemporaryRateForm(editForm)) {
     return;
   }
-  if (!validateGroupReasoningMultipliers(editForm.model_pricing)) return;
+  if (!validateGroupPricingMultipliers(editForm.model_pricing)) return;
   // 模型白名单：开启且没有任何条目时阻止提交，与后端 400 对齐。
   if (
     editModelAllowlistState.enabled &&

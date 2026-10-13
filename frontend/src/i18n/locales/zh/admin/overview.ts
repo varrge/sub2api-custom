@@ -1118,6 +1118,7 @@ export default {
       },
       modelPricing: {
         title: '分组模型价格（可选覆盖）',
+        tierMultipliersHint: 'Fast/priority 的 Token 单价为标准单价 × Fast 倍率，Flex 同理；留空使用模型默认倍率。若分组启用免费 Fast，客户仍按标准价计费。',
         description: '使用统一基础价时无需逐个填写：留空沿用渠道或默认价格，仅设置分组倍率即可。需要本组独立价格时可批量填入，或手动添加覆盖规则。长上下文阶梯沿用官方/预设价卡。音频支持 realtime、tts、stt 按次层级。',
         longContext: '启用长上下文阶梯定价',
         longContextHint: '勾选后按渠道区间或官方预设阶梯计费；关闭后默认按第一档，账号显式开启时除外。',

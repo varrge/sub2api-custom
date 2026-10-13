@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand/v2"
@@ -42,6 +43,12 @@ var (
 	ErrSubscriptionNilInput        = infraerrors.BadRequest("SUBSCRIPTION_NIL_INPUT", "subscription input cannot be nil")
 	ErrAdjustWouldExpire           = infraerrors.BadRequest("ADJUST_WOULD_EXPIRE", "adjustment would result in expired subscription (remaining days must be > 0)")
 )
+
+// IsSubscriptionAccessDenied identifies expected local entitlement failures.
+// Storage errors and malformed billing snapshots must remain operational errors.
+func IsSubscriptionAccessDenied(err error) bool {
+	return errors.Is(err, ErrSubscriptionNotFound) || errors.Is(err, ErrSubscriptionExpired) || errors.Is(err, ErrSubscriptionSuspended)
+}
 
 // SubscriptionService 订阅服务
 type SubscriptionService struct {

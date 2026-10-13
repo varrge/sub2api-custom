@@ -301,6 +301,7 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 	reasons := make([]string, 0, len(key.GroupIDs))
 	var groupRPMError error
 	modelGroupCandidates := 0
+	modelDeniedGroups, subscriptionDeniedGroups := 0, 0
 	for _, id := range key.ConfiguredGroupIDs() {
 		if pinnedID > 0 && id != pinnedID {
 			continue
@@ -340,6 +341,7 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 			}
 		}
 		if !modelAllowed {
+			modelDeniedGroups++
 			reasons = append(reasons, fmt.Sprintf("%d: model not allowed", id))
 			continue
 		}
@@ -394,6 +396,9 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 			if errors.Is(err, service.ErrBillingServiceUnavailable) {
 				return nil, groupRoutingError(503, "BILLING_SERVICE_ERROR", err.Error())
 			}
+			if service.IsSubscriptionAccessDenied(err) {
+				subscriptionDeniedGroups++
+			}
 			reasons = append(reasons, fmt.Sprintf("%d: %s", id, err.Error()))
 			continue
 		}
@@ -442,6 +447,20 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 		middleware.MarkIngressRejected(c, middleware.IngressRejectModelNotAllowed)
 		return nil, groupRoutingError(404, "MODEL_NOT_ALLOWED", "No selected group is allowed for this model; review the key's model groups or start a new session")
 	}
+	// Only aggregate a terminal denial. An expired earlier candidate must not
+	// suppress a later successful request or an actual capacity/technical failure.
+	if !deferred && modelGroupCandidates > 0 {
+		if modelDeniedGroups == modelGroupCandidates {
+			service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalModelConfiguration)
+			middleware.MarkIngressRejected(c, middleware.IngressRejectModelNotAllowed)
+			return nil, groupRoutingError(403, "MODEL_NOT_ALLOWED", "No selected group allows this model")
+		}
+		if subscriptionDeniedGroups > 0 && modelDeniedGroups+subscriptionDeniedGroups == modelGroupCandidates {
+			middleware.MarkIngressRejected(c, middleware.IngressRejectSubscriptionUnavailable)
+			return nil, groupRoutingError(403, "SUBSCRIPTION_NOT_FOUND", "No active subscription found for a group supporting this model")
+		}
+	}
+
 	code := "NO_AVAILABLE_GROUP"
 	if pinnedID > 0 {
 		code = "SESSION_GROUP_UNAVAILABLE"
@@ -464,6 +483,9 @@ func (r *apiKeyGroupRouting) admit(ctx context.Context, key *service.APIKey) (*s
 	}
 	sub, err := r.subscriptions.GetActiveSubscription(ctx, key.UserID, key.Group.ID)
 	if err != nil {
+		if !service.IsSubscriptionAccessDenied(err) {
+			return nil, service.ErrBillingServiceUnavailable.WithCause(err)
+		}
 		return nil, err
 	}
 	maintenance, err := r.subscriptions.ValidateAndCheckLimits(sub, key.Group)

@@ -194,10 +194,11 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 					apiKey.Group.ID,
 				)
 				if err != nil {
-					if errors.Is(err, service.ErrBillingServiceUnavailable) {
-						abortWithGoogleError(c, 503, err.Error())
+					if !service.IsSubscriptionAccessDenied(err) {
+						abortWithGoogleError(c, 503, "Subscription admission is unavailable")
 						return
 					}
+					MarkIngressRejected(c, IngressRejectSubscriptionUnavailable)
 					abortWithGoogleError(c, 403, "No active subscription found for this group")
 					return
 				}
@@ -213,6 +214,9 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 					_, err = subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
 				}
 				if err != nil {
+					if service.IsSubscriptionAccessDenied(err) {
+						MarkIngressRejected(c, IngressRejectSubscriptionUnavailable)
+					}
 					status := 403
 					if errors.Is(err, service.ErrDailyLimitExceeded) ||
 						errors.Is(err, service.ErrWeeklyLimitExceeded) ||

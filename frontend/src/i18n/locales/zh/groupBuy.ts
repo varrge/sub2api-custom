@@ -317,13 +317,13 @@ export default {
     batchUsageResetTitle: '批量重置 {count} 张月卡的已用额度',
     resetUsage: '重置已用',
     batchResetUsage: '批量重置已用',
-    resetWeeklyUsage: '清零本周已用',
+    resetWeeklyUsage: '清零本周已用，并从累计已用中扣除',
     resetTotalUsage: '清零累计已用',
     usageResetChoose: '请至少勾选一项要清零的已用额度。',
     usageResetSaved: '已重置 {count} 张月卡的已用额度。',
     usageResetFailed: '重置已用额度失败，请稍后重试。',
     confirmUsageReset: '确认清零',
-    usageResetScopeHint: '仅将勾选的已用额度归零；额度上限、有效期和周重置时间均不变，历史消费记录保留，已扣余额不予退还。',
-    usageResetPartialHint: '仅重置其中一项时，仍可能受另一项剩余额度限制。'
+    usageResetScopeHint: '清零本周已用会同步扣减累计已用，最低为 0；勾选清零累计已用则累计直接归零。额度上限、有效期和周重置时间均不变，历史消费记录保留，已扣余额不予退还。',
+    usageResetPartialHint: '未结算的请求仍按原周期结算；实际重置以保存时的已用量为准。仅清零累计已用不会清零本周已用。'
   }
 }

@@ -680,3 +680,157 @@ func TestMultiGroupRPMRejectionIsLoggedAsBusinessLimit(t *testing.T) {
 		t.Fatal("missing ops log")
 	}
 }
+
+func TestMultiGroupRoutingGeminiCacheCreation(t *testing.T) {
+	for _, firstPlatform := range []string{service.PlatformAntigravity, service.PlatformComposite, service.PlatformGemini} {
+		t.Run(firstPlatform, func(t *testing.T) {
+			key := routingKey()
+			key.Groups[0].Platform = firstPlatform
+			key.Groups[1].Platform = service.PlatformGemini
+			if firstPlatform == service.PlatformGemini {
+				key.Groups[0].ModelAllowlist = service.GroupModelAllowlist{Enabled: true, Models: []string{"another-model"}}
+			}
+			probe := &routingProbe{available: map[int64]bool{1: true, 2: true}}
+			r := &apiKeyGroupRouting{prober: probe}
+			selected, err := r.resolve(routingContext("POST", "/v1beta/cachedContents", `{"model":"models/gemini-2.5-pro","ttl":"3600s"}`), key)
+			require.NoError(t, err)
+			require.Equal(t, int64(2), *selected.GroupID)
+			require.Equal(t, []int64{2}, probe.seen)
+			require.Equal(t, []string{"gemini-2.5-pro"}, probe.models)
+		})
+	}
+}
+
+func TestMultiGroupRoutingGeminiCacheRejectsDisabledModelBeforeProbe(t *testing.T) {
+	for _, globalAllowlist := range []bool{false, true} {
+		key := routingKey()
+		for _, group := range key.Groups {
+			group.Platform = service.PlatformGemini
+		}
+		key.ModelAllowlist = service.GroupModelAllowlist{Enabled: globalAllowlist, Models: []string{"gemini-2.5-pro"}}
+		key.ModelGroupRoutes = service.APIKeyModelGroupRoutes{"gemini-2.5-pro": {}}
+		probe := &routingProbe{available: map[int64]bool{1: true, 2: true}}
+		selected, err := (&apiKeyGroupRouting{prober: probe}).resolve(routingContext("POST", "/v1beta/cachedContents", `{"model":"models/gemini-2.5-pro"}`), key)
+		require.Error(t, err)
+		require.Nil(t, selected)
+		require.Empty(t, probe.seen)
+	}
+}
+
+func TestMultiGroupRoutingGeminiCacheListingUsesBoundGroupsWithoutAdmission(t *testing.T) {
+	key := routingKey()
+	key.Groups[0].Platform = service.PlatformAntigravity
+	key.Groups[1].Platform = service.PlatformGemini
+	key.Groups[1].SubscriptionType = service.SubscriptionTypeSubscription
+	key.User.Balance = 0
+	key.Status = service.StatusAPIKeyQuotaExhausted
+	probe := &routingProbe{}
+	r := &apiKeyGroupRouting{prober: probe, subscriptions: &routingSubscriptions{debt: service.ErrAccountUsageDebt}}
+	c := routingContext("GET", "/v1beta/cachedContents", "")
+	selected, err := r.resolve(c, key)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), *selected.GroupID)
+	require.Len(t, selected.Groups, 1)
+	require.Empty(t, probe.seen)
+	require.True(t, middleware.SkipAPIKeyGroupEnforcement(c))
+	require.Len(t, key.Groups, 2)
+}
+
+func TestGeminiCacheModelPrefixPermissionAtGoogleIngress(t *testing.T) {
+	for _, multi := range []bool{false, true} {
+		key := routingKey()
+		for _, group := range key.Groups {
+			group.Platform = service.PlatformGemini
+		}
+		if !multi {
+			key.MultiGroupEnabled = false
+			key.GroupIDs = []int64{1}
+			key.Groups = key.Groups[:1]
+		}
+		key.ModelAllowlist = service.GroupModelAllowlist{Enabled: true, Mode: "deny", Models: []string{"gemini-2.5-pro"}}
+		cfg := &config.Config{RunMode: config.RunModeStandard}
+		keys := service.NewAPIKeyService(&routingAuthRepository{key: key}, nil, nil, nil, nil, nil, cfg)
+		probe := &routingProbe{available: map[int64]bool{1: true, 2: true}}
+		routing := &apiKeyGroupRouting{keys: keys, prober: probe, cfg: cfg}
+		router := gin.New()
+		router.POST("/v1beta/cachedContents", routing.wrap(middleware.APIKeyAuthWithSubscriptionGoogle(keys, nil, cfg)), middleware.GroupModelAllowlist(), func(c *gin.Context) { c.Status(200) })
+		for _, body := range []string{`{"model":"models/gemini-2.5-pro"}`, `{"model":"models/allowed","Model":"models/other"}`} {
+			req := httptest.NewRequest("POST", "/v1beta/cachedContents", strings.NewReader(body))
+			req.Header.Set("Authorization", "Bearer "+key.Key)
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+			require.Contains(t, []int{400, 404}, w.Code, w.Body.String())
+			require.Empty(t, probe.seen)
+		}
+	}
+}
+
+type routingGeminiCacheRepo struct {
+	service.GeminiCachedContentRepository
+	record *service.GeminiCachedContent
+}
+
+func (r routingGeminiCacheRepo) GetForOwner(_ context.Context, keyID int64, publicID string) (*service.GeminiCachedContent, error) {
+	if r.record.APIKeyID != keyID || r.record.PublicID != publicID {
+		return nil, service.ErrGeminiCachedContentNotFound
+	}
+	return r.record, nil
+}
+
+func TestGeminiCacheIngressRestoresOriginalGroupAndHistoryAuthority(t *testing.T) {
+	for _, method := range []string{http.MethodGet, http.MethodDelete, http.MethodPatch, http.MethodPost} {
+		t.Run(method, func(t *testing.T) {
+			key := routingKey()
+			for _, g := range key.Groups {
+				g.Platform = service.PlatformGemini
+			}
+			record := &service.GeminiCachedContent{PublicID: "owned", APIKeyID: key.ID, GroupID: 2, AccountID: 99, Model: "mapped-model", ChannelUsage: service.ChannelUsageFields{OriginalModel: "public-alias"}, ExpireTime: time.Now().Add(time.Hour)}
+			historical := method == http.MethodGet || method == http.MethodDelete
+			if historical {
+				key.User.Balance = 0
+				key.Status = service.StatusAPIKeyQuotaExhausted
+				key.GroupIDs = []int64{1}
+				key.Groups = key.Groups[:1]
+				key.ModelGroupRoutes = service.APIKeyModelGroupRoutes{"public-alias": {}}
+			}
+			cfg := &config.Config{RunMode: config.RunModeStandard}
+			keys := service.NewAPIKeyService(&routingAuthRepository{key: key}, nil, nil, nil, nil, nil, cfg)
+			cache := service.NewGeminiCachedContentService(routingGeminiCacheRepo{record: record}, nil, cfg)
+			h := handler.ProvideGatewayHandler(nil, nil, nil, nil, nil, nil, nil, nil, keys, nil, nil, nil, nil, cfg, nil, nil, cache)
+			probe := &routingProbe{available: map[int64]bool{1: true, 2: true}}
+			routing := &apiKeyGroupRouting{keys: keys, prober: probe, cfg: cfg, handlers: &handler.Handlers{Gateway: h}}
+			router := gin.New()
+			router.Use(routing.wrap(middleware.APIKeyAuthWithSubscriptionGoogle(keys, nil, cfg)), middleware.GroupModelAllowlist(), middleware.RequireGroupAssignment(nil, middleware.GoogleErrorWriter))
+			endpoint := "/v1beta/cachedContents/:cacheID"
+			path := "/v1beta/cachedContents/owned"
+			body := `{"ttl":"7200s"}`
+			if method == http.MethodPost {
+				endpoint, path = "/v1beta/models/*modelAction", "/v1beta/models/public-alias:generateContent"
+				body = `{"cachedContent":"cachedContents/owned"}`
+			}
+			router.Handle(method, endpoint, func(c *gin.Context) {
+				selected, _ := middleware.GetAPIKeyFromContext(c)
+				require.Equal(t, int64(2), *selected.GroupID)
+				if method == http.MethodGet {
+					h.GeminiCachedContentsGet(c)
+				} else {
+					c.Status(200)
+				}
+			})
+			req := httptest.NewRequest(method, path, strings.NewReader(body))
+			req.Header.Set("Authorization", "Bearer "+key.Key)
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+			require.Equal(t, 200, w.Code, w.Body.String())
+			if historical {
+				require.Empty(t, probe.seen)
+			} else {
+				require.Equal(t, []int64{2}, probe.seen)
+				require.Equal(t, []string{"public-alias"}, probe.models)
+			}
+			require.Equal(t, int64(1), *key.GroupID)
+		})
+	}
+}

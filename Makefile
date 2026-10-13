@@ -12,6 +12,7 @@ FRONTEND_CRITICAL_VITEST := \
 	src/components/common/__tests__/ActivityLeaderboard.admin.spec.ts \
 	src/components/common/__tests__/ActivityLeaderboard.configSync.spec.ts \
 	src/components/layout/__tests__/AppHeader.quickMenu.spec.ts \
+	src/composables/__tests__/useModelWhitelist.spec.ts \
 	src/components/account/__tests__/OpenAIReferralCell.spec.ts \
 	src/components/account/__tests__/OpenAIReferralCell.transport.spec.ts \
 	src/components/account/__tests__/OpenAIQuotaResetCell.spark_shadow.spec.ts \

@@ -335,3 +335,16 @@ func TestValidateBodyLenientControlsBeforeRouting(t *testing.T) {
 	}
 	require.NoError(t, ValidateBody("/v1/responses", "application/json", []byte("{\"model\":\"a\",\"input\":\"line\nline\"}")))
 }
+
+func TestGeminiCacheModelBoundaryPreservesAmbiguityChecks(t *testing.T) {
+	body := []byte(`{"model":"models/gemini-2.5-pro"}`)
+	require.Equal(t, []string{"gemini-2.5-pro"}, FromBodyCandidates("/v1beta/cachedContents", "application/json", body))
+	require.Equal(t, []string{"models/gemini-2.5-pro"}, FromBodyCandidates("/v1/chat/completions", "application/json", body))
+	for _, body := range []string{
+		`{"model":"models/allowed","model":"models/denied"}`,
+		`{"model":"models/allowed","Model":"models/denied"}`,
+		`{"model":"models/allowed","model":null}`,
+	} {
+		require.Error(t, ValidateBody("/v1beta/cachedContents", "application/json", []byte(body)))
+	}
+}

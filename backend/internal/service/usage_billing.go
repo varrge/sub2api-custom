@@ -18,6 +18,7 @@ var ErrUsageBillingRequestConflict = errors.New("usage billing request fingerpri
 
 // UsageBillingCommand describes one billable request that must be applied at most once.
 type UsageBillingCommand struct {
+	FixedChargeReservationID string
 	// BatchImageID binds accepted asynchronous work to its persisted owner. It
 	// permits accounting against the original soft-deleted key/account only
 	// after the repository verifies that immutable job identity.
@@ -142,6 +143,9 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 	}
 	if c.MonthCardSnapshot != nil {
 		raw += fmt.Sprintf("|month_card:%0.10f|%s", c.MonthCardCost, c.MonthCardSnapshot.Fingerprint())
+	}
+	if c.FixedChargeReservationID != "" {
+		raw += "|fixed_charge:" + c.FixedChargeReservationID
 	}
 	if c.BatchImageID != "" {
 		raw += "|batch_image:" + c.BatchImageID

@@ -219,3 +219,46 @@ func TestAPIKeyGroupProbeSkipsExplicitlyUnsupportedDeepseekModel(t *testing.T) {
 		})
 	}
 }
+
+type geminiCacheProbeAccounts struct {
+	AccountRepository
+	accounts []Account
+}
+
+func (r geminiCacheProbeAccounts) ListSchedulableByGroupIDAndPlatforms(context.Context, int64, []string) ([]Account, error) {
+	return r.accounts, nil
+}
+
+func TestAPIKeyGroupProbeGeminiCacheCapabilityAndBoundAccount(t *testing.T) {
+	group := &Group{ID: 101, Platform: PlatformGemini, Status: StatusActive}
+	key := &APIKey{ID: 1, UserID: 2, GroupID: &group.ID, Group: group, User: &User{ID: 2}}
+	for _, tc := range []struct {
+		name        string
+		platform    string
+		accountType string
+		credentials map[string]any
+		want        bool
+	}{
+		{"official key", PlatformGemini, AccountTypeAPIKey, map[string]any{"api_key": "key"}, true},
+		{"custom key opt in", PlatformGemini, AccountTypeAPIKey, map[string]any{"api_key": "key", "base_url": "https://gateway.example", "explicit_cache_upstream": true}, true},
+		{"custom key opt out", PlatformGemini, AccountTypeAPIKey, map[string]any{"api_key": "key", "base_url": "https://gateway.example"}, false},
+		{"vertex service account", PlatformGemini, AccountTypeServiceAccount, nil, true},
+		{"vertex api key", PlatformGemini, AccountTypeServiceAccount, map[string]any{"auth_mode": "apikey", "api_key": "key"}, false},
+		{"oauth", PlatformGemini, AccountTypeOAuth, nil, false},
+		{"antigravity mixed", PlatformAntigravity, AccountTypeOAuth, nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			account := Account{ID: 3, Platform: tc.platform, Type: tc.accountType, Status: StatusActive, Schedulable: true, Concurrency: 1, Credentials: tc.credentials, Extra: map[string]any{"mixed_scheduling": true}}
+			svc := &GatewayService{accountRepo: geminiCacheProbeAccounts{accounts: []Account{account}}, cfg: &config.Config{}}
+			req := APIKeyGroupRequest{Model: "gemini-2.5-pro", Platform: PlatformGemini, Path: "/v1beta/cachedContents"}
+			available, err := svc.ProbeAPIKeyGroup(t.Context(), key, req)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, available)
+			req.Path = "/v1beta/models/gemini-2.5-pro:generateContent"
+			req.BoundAccountID = account.ID + 1
+			available, err = svc.ProbeAPIKeyGroup(t.Context(), key, req)
+			require.NoError(t, err)
+			require.False(t, available, "another account cannot replace the cache owner")
+		})
+	}
+}

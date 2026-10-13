@@ -16,8 +16,9 @@ func TestMonthCardBillingCommandNeverUsesLegacyForeignKey(t *testing.T) {
 	// Even an accidentally nonzero aggregate ID must not enter the old FK.
 	sub := &UserSubscription{ID: 99, UserID: 1, GroupID: 2, MonthCardSnapshot: snap}
 	log := &UsageLog{SubscriptionID: &sub.ID}
-	p := &postUsageBillingParams{Subscription: sub, IsSubscriptionBill: true, Cost: &CostBreakdown{ActualCost: 3, TotalCost: 2}, User: &User{ID: 1}, APIKey: &APIKey{ID: 4}, Account: &Account{ID: 5}}
+	p := &postUsageBillingParams{FixedChargeReservationID: "cache-hold", Subscription: sub, IsSubscriptionBill: true, Cost: &CostBreakdown{ActualCost: 3, TotalCost: 2}, User: &User{ID: 1}, APIKey: &APIKey{ID: 4}, Account: &Account{ID: 5}}
 	cmd := buildUsageBillingCommand("card", log, p)
+	require.Equal(t, "cache-hold", cmd.FixedChargeReservationID)
 	require.Same(t, snap, cmd.MonthCardSnapshot)
 	require.Equal(t, 3.0, cmd.MonthCardCost)
 	require.Zero(t, cmd.SubscriptionCost)

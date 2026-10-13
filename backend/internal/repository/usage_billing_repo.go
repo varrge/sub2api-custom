@@ -239,6 +239,9 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		if err != nil {
 			return err
 		}
+		if err := monthcard.CompleteFixedChargeTx(ctx, tx, cmd.FixedChargeReservationID, cmd.MonthCardSnapshot, cmd.APIKeyID); err != nil {
+			return err
+		}
 		result.MonthCardSettlement = settlement
 		result.NewBalance = settlement.NewBalance
 		result.BalanceOverdrafted = settlement.NewBalance != nil && *settlement.NewBalance < 0

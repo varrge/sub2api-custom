@@ -201,6 +201,11 @@ func FromBodyCandidates(routePath, contentType string, body []byte) []string {
 	if isImagesRequestRoute(routePath) && !imageHasExactModel {
 		return append([]string{DefaultOpenAIImagesModel}, topLevel...)
 	}
+	if IsGeminiCachedContentsRoute(routePath) {
+		for i, model := range topLevel {
+			topLevel[i] = strings.TrimPrefix(model, "models/")
+		}
+	}
 	if len(topLevel) > 0 {
 		return topLevel
 	}
@@ -208,6 +213,12 @@ func FromBodyCandidates(routePath, contentType string, body []byte) []string {
 		return session
 	}
 	return nil
+}
+
+// IsGeminiCachedContentsRoute identifies the native explicit-cache boundary.
+func IsGeminiCachedContentsRoute(routePath string) bool {
+	path := strings.TrimRight(routePath, "/")
+	return path == "/v1beta/cachedContents" || strings.HasPrefix(path, "/v1beta/cachedContents/")
 }
 
 func isImagesRequestRoute(routePath string) bool {

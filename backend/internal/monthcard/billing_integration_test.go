@@ -45,7 +45,7 @@ func billingDB(t *testing.T) *sql.DB {
 	_, err = db.Exec(`CREATE TABLE users(id BIGINT PRIMARY KEY,balance NUMERIC(20,8) NOT NULL DEFAULT 0,deleted_at TIMESTAMPTZ,updated_at TIMESTAMPTZ DEFAULT NOW());
  CREATE TABLE groups(id BIGINT PRIMARY KEY,name TEXT,platform TEXT,deleted_at TIMESTAMPTZ,daily_limit_usd NUMERIC(20,8),weekly_limit_usd NUMERIC(20,8),monthly_limit_usd NUMERIC(20,8));
  CREATE TABLE payment_orders(id BIGINT PRIMARY KEY,status TEXT NOT NULL DEFAULT 'COMPLETED');
- CREATE TABLE api_keys(id BIGINT PRIMARY KEY,user_id BIGINT,group_id BIGINT);
+ CREATE TABLE api_keys(id BIGINT PRIMARY KEY,user_id BIGINT,group_id BIGINT,quota_used NUMERIC(20,8) DEFAULT 0,usage_5h NUMERIC(20,8) DEFAULT 0,usage_1d NUMERIC(20,8) DEFAULT 0,usage_7d NUMERIC(20,8) DEFAULT 0,window_5h_start TIMESTAMPTZ,window_1d_start TIMESTAMPTZ,window_7d_start TIMESTAMPTZ);
  CREATE TABLE user_subscriptions(id BIGINT PRIMARY KEY,user_id BIGINT,group_id BIGINT,starts_at TIMESTAMPTZ,expires_at TIMESTAMPTZ,status TEXT DEFAULT 'active',deleted_at TIMESTAMPTZ,updated_at TIMESTAMPTZ DEFAULT NOW(),daily_window_start TIMESTAMPTZ,weekly_window_start TIMESTAMPTZ,monthly_window_start TIMESTAMPTZ,daily_usage_usd NUMERIC(20,10) DEFAULT 0,weekly_usage_usd NUMERIC(20,10) DEFAULT 0,monthly_usage_usd NUMERIC(20,10) DEFAULT 0);
  CREATE TABLE usage_billing_dedup(id BIGSERIAL PRIMARY KEY,request_id TEXT,api_key_id BIGINT,request_fingerprint TEXT,UNIQUE(request_id,api_key_id));
  CREATE TABLE usage_billing_dedup_archive(LIKE usage_billing_dedup INCLUDING ALL);
@@ -53,7 +53,7 @@ func billingDB(t *testing.T) *sql.DB {
  INSERT INTO groups(id,name,platform) VALUES(1,'month cards','openai'),(2,'other group','openai');
  INSERT INTO api_keys(id,user_id,group_id) VALUES(1,1,1),(2,1,1),(3,2,1),(4,1,2);`)
 	require.NoError(t, err)
-	for _, name := range []string{"238_month_card_core.sql", "239_month_card_billing.sql", "240_month_card_freeze.sql", "241_month_card_freeze_policy.sql", "249_month_card_quota_adjustments.sql", "250_month_card_usage_resets.sql"} {
+	for _, name := range []string{"238_month_card_core.sql", "239_month_card_billing.sql", "240_month_card_freeze.sql", "241_month_card_freeze_policy.sql", "249_month_card_quota_adjustments.sql", "250_month_card_usage_resets.sql", "252_month_card_fixed_charge_reservations.sql"} {
 		b, err := os.ReadFile(filepath.Join("..", "..", "migrations", name))
 		require.NoError(t, err)
 		_, err = db.Exec(string(b))

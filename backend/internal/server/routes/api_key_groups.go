@@ -179,6 +179,9 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 	// Resource lookups are ownership checks and must precede group/credit checks.
 	if r.handlers != nil {
 		resolvers := []func(*gin.Context, *service.APIKey) (*service.APIKey, bool, error){}
+		if r.handlers.Gateway != nil {
+			resolvers = append(resolvers, r.handlers.Gateway.ResolveAPIKeyPinnedGroup)
+		}
 		if r.handlers.OpenAIGateway != nil {
 			resolvers = append(resolvers, r.handlers.OpenAIGateway.ResolveAPIKeyPinnedGroup)
 		}
@@ -216,6 +219,9 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 			break
 		}
 	}
+	if c.Request.Method == http.MethodGet && strings.TrimRight(c.Request.URL.Path, "/") == "/v1beta/cachedContents" {
+		return r.geminiCacheCatalog(c, key)
+	}
 	if !multi || len(key.ConfiguredGroupIDs()) == 0 {
 		if key.GroupID != nil && c.Request.Method == http.MethodGet && strings.HasSuffix(strings.TrimRight(c.Request.URL.Path, "/"), "/responses") {
 			if framePresent {
@@ -249,8 +255,11 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 		requestmodel.ResetRequestBody(c.Request, body)
 		model = requestmodel.FromBodyForRoute(path, c.GetHeader("Content-Type"), body)
 	}
-	if strings.Contains(path, "/v1beta/") {
+	if strings.Contains(path, "/v1beta/models/") {
 		model = compositeGeminiModelFromParams(c)
+	}
+	if pinnedModel := c.GetString("api_key_resource_model"); model == "" && pinnedModel != "" {
+		model = pinnedModel
 	}
 	if model == "" && strings.HasSuffix(path, "/realtime") {
 		model = "grok-voice-latest"
@@ -284,6 +293,9 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 		}
 	}
 	modelCandidates := []string{model}
+	if pinnedModel := c.GetString("api_key_resource_model"); pinnedModel != "" {
+		modelCandidates = append(modelCandidates, pinnedModel)
+	}
 	if len(body) > 0 {
 		modelCandidates = append(modelCandidates, requestmodel.FromBodyCandidates(path, c.GetHeader("Content-Type"), body)...)
 	}
@@ -352,6 +364,10 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 		}
 		candidateCtx := context.WithValue(clearAPIKeyGroupRoute(c.Request.Context()), ctxkey.Group, group)
 		candidateCtx = service.WithAPIKeySelectedGroup(candidateCtx, id)
+		if requestmodel.IsGeminiCachedContentsRoute(path) && group.Platform != service.PlatformGemini {
+			reasons = append(reasons, fmt.Sprintf("%d: explicit caching requires a Gemini group", id))
+			continue
+		}
 		platform := group.Platform
 		if forcedPlatform != "" {
 			if group.Platform != forcedPlatform {
@@ -406,7 +422,7 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 		if mapped, ok := service.ResolvedUpstreamModelFromContext(candidateCtx); ok && mapped != "" {
 			probeModel = mapped
 		}
-		req := service.APIKeyGroupRequest{Model: probeModel, Platform: platform, Path: path, WebSocket: c.Request.Method == http.MethodGet && strings.HasSuffix(path, "/responses"), ForcePlatform: forcedPlatform != ""}
+		req := service.APIKeyGroupRequest{Model: probeModel, Platform: platform, Path: path, WebSocket: c.Request.Method == http.MethodGet && strings.HasSuffix(path, "/responses"), ForcePlatform: forcedPlatform != "", BoundAccountID: c.GetInt64("api_key_cached_content_account_id")}
 		prober := r.prober
 		if strings.Contains(path, "/images/batches") && r.handlers != nil && r.handlers.BatchImage != nil {
 			prober = r.handlers.BatchImage
@@ -538,6 +554,9 @@ func apiKeyGroupSupportsPath(platform, path, method string) bool {
 	if platform == service.PlatformTypeSafe {
 		return false
 	}
+	if requestmodel.IsGeminiCachedContentsRoute(path) {
+		return platform == service.PlatformGemini
+	}
 	if strings.Contains(path, "/v1beta/") {
 		return platform == service.PlatformGemini || platform == service.PlatformAntigravity
 	}
@@ -555,4 +574,31 @@ func apiKeyGroupSupportsPath(platform, path, method string) bool {
 	default:
 		return true
 	}
+}
+
+// Cache listings are owner reads across currently bound Gemini groups. They do
+// not schedule accounts or require remaining credit/subscription entitlement.
+func (r *apiKeyGroupRouting) geminiCacheCatalog(c *gin.Context, key *service.APIKey) (*service.APIKey, error) {
+	selected := *key
+	selected.Groups = nil
+	for _, id := range key.ConfiguredGroupIDs() {
+		var group *service.Group
+		for _, candidate := range key.Groups {
+			if candidate != nil && candidate.ID == id {
+				group = candidate
+				break
+			}
+		}
+		if group == nil && key.Group != nil && key.Group.ID == id {
+			group = key.Group
+		}
+		if group != nil && group.Platform == service.PlatformGemini {
+			selected.Groups = append(selected.Groups, group)
+		}
+	}
+	if len(selected.Groups) == 0 {
+		return nil, groupRoutingError(400, "CACHE_GROUP_UNAVAILABLE", "No selected Gemini group supports explicit context caching")
+	}
+	middleware.SetAPIKeyGroupCatalog(c)
+	return selected.ForGroup(selected.Groups[0]), nil
 }

@@ -2,11 +2,12 @@ package service
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
-	"strings"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/requestmodel"
 )
 
 // APIKeyGroupRequest describes only the routing inputs; it never represents an
@@ -20,6 +21,7 @@ type APIKeyGroupRequest struct {
 	ImageCapability OpenAIImagesCapability
 	Capability      OpenAIEndpointCapability
 	WebSocket       bool
+	BoundAccountID  int64
 }
 
 type apiKeyGroupScopeKey struct{}
@@ -55,6 +57,10 @@ func (s *GatewayService) ProbeAPIKeyGroup(ctx context.Context, key *APIKey, req 
 	ctx = s.withRPMPrefetch(ctx, accounts)
 	for i := range accounts {
 		a := &accounts[i]
+		if (requestmodel.IsGeminiCachedContentsRoute(req.Path) || req.BoundAccountID > 0) && !IsGeminiExplicitCacheAccount(a) ||
+			req.BoundAccountID > 0 && a.ID != req.BoundAccountID {
+			continue
+		}
 		if !s.isAccountSchedulableForSelection(a) || !s.isAccountAllowedForPlatform(a, req.Platform, mixed) ||
 			!s.isModelSupportedByAccountWithContext(ctx, a, model) || !s.isAccountSchedulableForModelSelection(ctx, a, model) ||
 			!s.isAccountSchedulableForQuota(a) || !s.isAccountSchedulableForWindowCost(ctx, a, false) ||

@@ -10,4 +10,4 @@
 
 验证覆盖真实 PostgreSQL 的 55→25、8 位小数精度、重复重置、不存在本周记录、累计小于本周、冻结与批量操作、审计回滚、迟到请求和幂等结算。前端验证单张/批量预览及已有保存流程。
 
-本次改动位于 `fix/monthcard-weekly-reset-total`，尚未部署或发布 tag。
+本次改动位于 `fix/monthcard-weekly-reset-total`，2026-10-13 已部署中国测试实例，尚未合并或发布 tag。部署、备份与回滚信息见 [中国部署记录](../../../notes/month-card-weekly-reset-cn-deployment.md)。

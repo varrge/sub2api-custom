@@ -31,8 +31,8 @@
           <p class="text-xs">
             <span class="gb-label">{{ t('groupBuy.totalUsage') }}:</span>
             {{ usd(single.total_used_usd) }}
-            <span v-if="draft.resetTotal" class="gb-accent-sky font-medium">
-              → {{ usd(0) }}
+            <span v-if="draft.resetTotal || draft.resetWeekly" class="gb-accent-sky font-medium">
+              → {{ usd(totalAfterReset(single)) }}
             </span>
             / {{ usd(single.total_quota_usd) }}
           </p>
@@ -56,7 +56,7 @@
             <span class="gb-code">{{ card.code }}</span>
             <span>
               {{ t('groupBuy.totalUsage') }}: {{ usd(card.total_used_usd) }}
-              <span v-if="draft.resetTotal" class="gb-accent-sky font-medium">→ {{ usd(0) }}</span>
+              <span v-if="draft.resetTotal || draft.resetWeekly" class="gb-accent-sky font-medium">→ {{ usd(totalAfterReset(card)) }}</span>
               / {{ usd(card.total_quota_usd) }}
             </span>
             <span>
@@ -138,6 +138,10 @@ const { t } = useI18n()
 
 const isBulk = computed(() => props.cards.length > 1)
 const single = computed(() => (props.cards.length === 1 ? props.cards[0] : null))
+
+function totalAfterReset(card: AdminMonthCard) {
+  return props.draft.resetTotal ? 0 : Math.max(0, card.total_used_usd - card.weekly_used_usd)
+}
 
 function patch(partial: Partial<UsageResetDraft>) {
   emit('update:draft', { ...props.draft, ...partial })

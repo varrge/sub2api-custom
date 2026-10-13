@@ -9,8 +9,8 @@ import (
 	"github.com/lib/pq"
 )
 
-// UsageReset clears selected counters without changing caps, validity, billing
-// history or balance. One transaction covers every card and its audit record.
+// UsageReset clears weekly usage and removes that amount from total usage, or
+// clears total usage outright. Caps, validity, billing history and balance stay intact.
 type UsageReset struct {
 	CardIDs     []int64 `json:"card_ids"`
 	ResetTotal  bool    `json:"reset_total"`
@@ -117,11 +117,16 @@ func (s *Store) ResetUsage(ctx context.Context, actorID int64, r UsageReset) err
 			card.ID, actorID, r.ResetTotal, r.ResetWeekly, window); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE month_card_cards SET
-			total_used_usd=CASE WHEN $2 THEN 0 ELSE total_used_usd END,
+		// Read the settled weekly amount under the same locks and use DB decimals.
+		// The total may already be below weekly usage after a total-only reset.
+		if _, err := tx.ExecContext(ctx, `UPDATE month_card_cards c SET
+			total_used_usd=CASE WHEN $2 THEN 0 WHEN $3 THEN GREATEST(0,c.total_used_usd-COALESCE((
+				SELECT w.used_usd FROM month_card_period_usage w WHERE w.kind='card' AND w.entitlement_id=c.id
+				AND w.period_kind='weekly' AND w.window_start=$4 AND w.generation=c.weekly_usage_generation
+			),0)) ELSE c.total_used_usd END,
 			total_usage_generation=total_usage_generation+CASE WHEN $2 THEN 1 ELSE 0 END,
 			weekly_usage_generation=weekly_usage_generation+CASE WHEN $3 THEN 1 ELSE 0 END,updated_at=NOW() WHERE id=$1`,
-			card.ID, r.ResetTotal, r.ResetWeekly); err != nil {
+			card.ID, r.ResetTotal, r.ResetWeekly, window); err != nil {
 			return err
 		}
 	}

@@ -20,7 +20,7 @@ func TestUsageResetSelectiveCountersLateRequestsAndDedup(t *testing.T) {
 		total, weekly         bool
 		wantTotal, wantWeekly float64
 	}{
-		{"weekly", false, true, 10, 2}, {"total", true, false, 2, 10}, {"both", true, true, 2, 2},
+		{"weekly", false, true, 5, 2}, {"total", true, false, 2, 10}, {"both", true, true, 2, 2},
 	} {
 		t.Run(mode.name, func(t *testing.T) {
 			db := billingDB(t)
@@ -74,6 +74,48 @@ func TestUsageResetSelectiveCountersLateRequestsAndDedup(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWeeklyUsageResetPreservesPreviousCycleAndSettlesPendingRequests(t *testing.T) {
+	db := billingDB(t)
+	ctx := t.Context()
+	start := time.Now().UTC().Add(-8 * 24 * time.Hour).Truncate(time.Microsecond)
+	billingCard(t, db, 1, 400, 0, start)
+	s := monthcard.NewStore(db)
+	previous, err := s.Admit(ctx, 1, 1, start.Add(time.Hour))
+	require.NoError(t, err)
+	_, err = billingApply(db, previous, "previous-week", 1, 25)
+	require.NoError(t, err)
+	current, err := s.Admit(ctx, 1, 1, time.Now())
+	require.NoError(t, err)
+	_, err = billingApply(db, current, "current-week", 1, 30)
+	require.NoError(t, err)
+	reset := monthcard.UsageReset{CardIDs: []int64{1}, ResetWeekly: true}
+	require.NoError(t, s.ResetUsage(ctx, 2, reset))
+	cards, err := s.ListCards(ctx, 1)
+	require.NoError(t, err)
+	require.Equal(t, 25.0, cards[0].TotalUsedUSD)
+	require.Zero(t, cards[0].WeeklyUsedUSD)
+	require.Equal(t, 400.0, cards[0].TotalQuotaUSD)
+	require.Equal(t, 100.0, cards[0].WeeklyQuotaUSD)
+	// A duplicate reset at zero cannot subtract the prior generation again.
+	require.NoError(t, s.ResetUsage(ctx, 2, reset))
+	fresh, err := s.Admit(ctx, 1, 1, time.Now())
+	require.NoError(t, err)
+	_, err = billingApply(db, fresh, "fresh-week", 1, 2)
+	require.NoError(t, err)
+	// Only completed usage was cleared. Pending work still settles in its
+	// original week/generation without refilling the new weekly counter.
+	for _, snap := range []*monthcard.Snapshot{previous, current} {
+		_, err = billingApply(db, snap, "late-"+snap.StartedAt.String(), 1, 3)
+		require.NoError(t, err)
+	}
+	cards, err = s.ListCards(ctx, 1)
+	require.NoError(t, err)
+	require.Equal(t, 33.0, cards[0].TotalUsedUSD)
+	require.Equal(t, 2.0, cards[0].WeeklyUsedUSD)
+	require.Equal(t, 100.0, billingFloat(t, db, `SELECT balance FROM users WHERE id=1`))
+	require.Equal(t, 63.0, billingFloat(t, db, `SELECT SUM(amount_usd) FROM month_card_allocations`))
 }
 
 func TestUsageResetZeroRepeatedAndOldTotalCap(t *testing.T) {

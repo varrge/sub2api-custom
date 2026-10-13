@@ -270,6 +270,23 @@ describe('admin quota adjustment', () => {
 })
 
 describe('admin usage reset', () => {
+  it.each([false, true])('previews weekly reset subtraction for single/bulk cards (bulk=%s)', async bulk => {
+    const example = { ...card, total_quota_usd: 400, total_used_usd: 55, weekly_used_usd: 30 }
+    const wrapper = shallowMount(AdminUsageResetDialog, {
+      props: { show: true, cards: bulk ? [example, { ...example, id: 12, total_used_usd: 5 }] : [example],
+        saving: false, error: '', draft: { resetTotal: false, resetWeekly: true } },
+      global: { stubs: { BaseDialog: { template: '<div><slot /><slot name="footer" /></div>' } } }
+    })
+    const totalText = () => wrapper.findAll('p, li').filter(node => node.text().includes('groupBuy.totalUsage')).map(node => node.text().replace(/\s+/g, ' '))
+    expect(totalText()[0]).toContain('$55.00 → $25.00 / $400.00')
+    if (bulk) expect(totalText()[1]).toContain('$5.00 → $0.00 / $400.00')
+    await wrapper.setProps({ draft: { resetTotal: true, resetWeekly: true } })
+    expect(totalText()[0]).toContain('$55.00 → $0.00 / $400.00')
+    await wrapper.setProps({ draft: { resetTotal: false, resetWeekly: false } })
+    expect(wrapper.text()).not.toContain('→')
+    wrapper.unmount()
+  })
+
   async function openMembers() {
     const wrapper = mount()
     await flushPromises()
@@ -281,7 +298,7 @@ describe('admin usage reset', () => {
     { resetTotal: false, resetWeekly: true },
     { resetTotal: true, resetWeekly: false },
     { resetTotal: true, resetWeekly: true }
-  ])('clears only selected counters and refreshes affected views: %o', async draft => {
+  ])('submits the selected reset and refreshes affected views: %o', async draft => {
     const wrapper = await openMembers()
     const members = wrapper.getComponent(AdminEntitlementMembersTable)
     members.vm.$emit('inspectUser', card.user_id)

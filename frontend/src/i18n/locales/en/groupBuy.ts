@@ -317,13 +317,13 @@ export default {
     batchUsageResetTitle: 'Reset used quota for {count} month cards',
     resetUsage: 'Reset usage',
     batchResetUsage: 'Reset usage for selected',
-    resetWeeklyUsage: 'Reset weekly usage to zero',
+    resetWeeklyUsage: 'Clear weekly usage and subtract it from total usage',
     resetTotalUsage: 'Reset total usage to zero',
     usageResetChoose: 'Check at least one usage to reset.',
     usageResetSaved: 'Reset used quota for {count} month cards.',
     usageResetFailed: 'Failed to reset used quota. Please try again.',
     confirmUsageReset: 'Confirm reset',
-    usageResetScopeHint: 'Only the checked usage amounts are zeroed; quota limits, validity and weekly reset times stay unchanged, consumption history is kept, and deducted balances are not refunded.',
-    usageResetPartialHint: 'Resetting only one usage still leaves the other limit in effect.'
+    usageResetScopeHint: 'Clearing weekly usage also subtracts it from total usage, down to zero. Selecting clear total usage sets the total to zero. Quota limits, validity and weekly reset times stay unchanged; consumption history is kept and deducted balances are not refunded.',
+    usageResetPartialHint: 'Pending requests still settle against their original period. The reset uses the usage at save time. Clearing only total usage leaves weekly usage unchanged.'
   }
 }

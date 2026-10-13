@@ -19,6 +19,62 @@ func TestUsageResetValidation(t *testing.T) {
 	require.NoError(t, (UsageReset{CardIDs: []int64{1, 2}, ResetWeekly: true}).Validate())
 }
 
+func TestWeeklyUsageResetSubtractsCurrentWindowExactlyAndOnlyOnce(t *testing.T) {
+	s, db := corePostgres(t)
+	ctx := t.Context()
+	p := coreSave(t, s, coreProduct())
+	a := coreBuy(t, s, db, 1, p, "solo", "")
+	b := coreBuy(t, s, db, 2, p, "solo", "")
+	// Use a later window so a previous cycle must stay in the total.
+	now := a.StartsAt.Add(8 * 24 * time.Hour)
+	s.now = func() time.Time { return now }
+	_, err := db.Exec(`UPDATE month_card_cards SET total_quota_usd=400,total_used_usd=55.00000003;
+		INSERT INTO month_card_period_usage(kind,entitlement_id,period_kind,window_start,used_usd)
+		SELECT 'card',id,'weekly',starts_at,25.00000001 FROM month_card_cards;
+		INSERT INTO month_card_period_usage(kind,entitlement_id,period_kind,window_start,used_usd)
+		SELECT 'card',id,'weekly',starts_at+INTERVAL '168 hours',30.00000002 FROM month_card_cards`)
+	require.NoError(t, err)
+	reset := UsageReset{CardIDs: []int64{a.ID, b.ID}, ResetWeekly: true}
+	for range 2 {
+		require.NoError(t, s.ResetUsage(ctx, 30, reset))
+		for _, card := range []*Card{a, b} {
+			var total string
+			require.NoError(t, db.QueryRow(`SELECT total_used_usd::text FROM month_card_cards WHERE id=$1`, card.ID).Scan(&total))
+			require.Equal(t, "25.00000001", total)
+			current, err := s.GetCardByOrder(ctx, card.OrderID)
+			require.NoError(t, err)
+			require.Zero(t, current.WeeklyUsedUSD)
+			require.Equal(t, 400.0, current.TotalQuotaUSD)
+		}
+	}
+	var audits int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM month_card_usage_resets WHERE reset_weekly AND NOT reset_total
+		AND previous_total_used_usd=55.00000003 AND previous_weekly_used_usd=30.00000002`).Scan(&audits))
+	require.Equal(t, 2, audits)
+}
+
+func TestWeeklyUsageResetHandlesEmptyWeekAndPreviouslyClearedTotal(t *testing.T) {
+	s, db := corePostgres(t)
+	p := coreSave(t, s, coreProduct())
+	card := coreBuy(t, s, db, 1, p, "solo", "")
+	_, err := db.Exec(`UPDATE month_card_cards SET total_used_usd=25`)
+	require.NoError(t, err)
+	reset := UsageReset{CardIDs: []int64{card.ID}, ResetWeekly: true}
+	require.NoError(t, s.ResetUsage(t.Context(), 30, reset))
+	current, err := s.GetCardByOrder(t.Context(), card.OrderID)
+	require.NoError(t, err)
+	require.Equal(t, 25.0, current.TotalUsedUSD)
+	_, err = db.Exec(`UPDATE month_card_cards SET total_used_usd=5;
+		INSERT INTO month_card_period_usage(kind,entitlement_id,period_kind,window_start,generation,used_usd)
+		SELECT 'card',id,'weekly',starts_at,weekly_usage_generation,30 FROM month_card_cards`)
+	require.NoError(t, err)
+	require.NoError(t, s.ResetUsage(t.Context(), 30, reset))
+	current, err = s.GetCardByOrder(t.Context(), card.OrderID)
+	require.NoError(t, err)
+	require.Zero(t, current.TotalUsedUSD)
+	require.Zero(t, current.WeeklyUsedUSD)
+}
+
 func TestUsageResetAtomicityAuditAndEligibility(t *testing.T) {
 	s, db := corePostgres(t)
 	ctx := context.Background()
@@ -80,7 +136,7 @@ func TestUsageResetFrozenWindowAggregatesAndMigration(t *testing.T) {
 	c, err := s.GetCardByOrder(ctx, a.OrderID)
 	require.NoError(t, err)
 	require.Zero(t, c.WeeklyUsedUSD)
-	require.Equal(t, 20.0, c.TotalUsedUSD)
+	require.Zero(t, c.TotalUsedUSD)
 	var previous float64
 	require.NoError(t, db.QueryRow(`SELECT previous_weekly_used_usd FROM month_card_usage_resets WHERE card_id=$1`, a.ID).Scan(&previous))
 	require.Equal(t, 20.0, previous)
@@ -88,7 +144,7 @@ func TestUsageResetFrozenWindowAggregatesAndMigration(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, teams, 1)
 	require.Equal(t, 2, teams[0].ActiveCards)
-	require.Equal(t, 40.0, teams[0].TotalUsedUSD)
+	require.Equal(t, 20.0, teams[0].TotalUsedUSD)
 	require.Zero(t, teams[0].WeeklyUsedUSD)
 	cards, n, err := s.ListAdminEntitlementCards(ctx, *a.TeamID, adminFilter())
 	require.NoError(t, err)

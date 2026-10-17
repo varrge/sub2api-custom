@@ -157,6 +157,9 @@ func TestAPIKeyGroupProbePreservesGroupRPMReason(t *testing.T) {
 			require.Equal(t, tc.available, available)
 			if tc.limited {
 				require.ErrorIs(t, err, service.ErrGroupRPMExceeded)
+			} else if !tc.available {
+				var rejection *service.APIKeyGroupModelUnavailableError
+				require.ErrorAs(t, err, &rejection)
 			} else {
 				require.NoError(t, err)
 			}

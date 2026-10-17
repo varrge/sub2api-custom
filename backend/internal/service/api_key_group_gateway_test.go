@@ -213,7 +213,12 @@ func TestAPIKeyGroupProbeSkipsExplicitlyUnsupportedDeepseekModel(t *testing.T) {
 			acquired := []int64{}
 			svc := &OpenAIGatewayService{accountRepo: schedulerTestOpenAIAccountRepo{accounts: []Account{account}}, cache: &schedulerTestGatewayCache{}, cfg: &config.Config{}, concurrencyService: NewConcurrencyService(schedulerTestConcurrencyCache{acquiredIDs: &acquired})}
 			available, err := svc.ProbeAPIKeyGroup(t.Context(), key, APIKeyGroupRequest{Model: "deepseek-v4.1-flash", Platform: PlatformOpenAI, Path: "/v1/chat/completions"})
-			require.NoError(t, err)
+			if tc.want {
+				require.NoError(t, err)
+			} else {
+				var rejection *APIKeyGroupModelUnavailableError
+				require.ErrorAs(t, err, &rejection)
+			}
 			require.Equal(t, tc.want, available)
 			require.Empty(t, acquired)
 		})
@@ -226,6 +231,10 @@ type geminiCacheProbeAccounts struct {
 }
 
 func (r geminiCacheProbeAccounts) ListSchedulableByGroupIDAndPlatforms(context.Context, int64, []string) ([]Account, error) {
+	return r.accounts, nil
+}
+
+func (r geminiCacheProbeAccounts) ListModelAvailabilityCandidates(context.Context, *int64, []string, bool) ([]Account, error) {
 	return r.accounts, nil
 }
 
@@ -259,6 +268,56 @@ func TestAPIKeyGroupProbeGeminiCacheCapabilityAndBoundAccount(t *testing.T) {
 			available, err = svc.ProbeAPIKeyGroup(t.Context(), key, req)
 			require.NoError(t, err)
 			require.False(t, available, "another account cannot replace the cache owner")
+		})
+	}
+}
+
+func TestAPIKeyGroupProbeGPT55RetirementDiagnosis(t *testing.T) {
+	limitedUntil := time.Now().Add(time.Hour)
+	oauth := Account{ID: 1, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Concurrency: 1}
+	api := oauth
+	api.ID, api.Type = 2, AccountTypeAPIKey
+	limitedAPI := api
+	limitedAPI.RateLimitResetAt = &limitedUntil
+	replacement := oauth
+	replacement.Credentials = map[string]any{"model_mapping": map[string]any{"gpt-5.5": "gpt-6.1-sol"}}
+	alias := oauth
+	alias.Credentials = map[string]any{"model_mapping": map[string]any{"legacy": "gpt-5.5"}}
+	compact := oauth
+	compact.Credentials = map[string]any{"compact_model_mapping": map[string]any{"gpt-5.5": "gpt-6.1-sol"}}
+	limitedCompact := compact
+	limitedCompact.RateLimitResetAt = &limitedUntil
+	retiredCompact := oauth
+	retiredCompact.Credentials = map[string]any{"compact_model_mapping": map[string]any{"gpt-6.1-sol": "gpt-5.5"}}
+	for _, tc := range []struct {
+		name, model, path  string
+		accounts           []Account
+		available, retired bool
+	}{
+		{"oauth", "gpt-5.5", "/v1/responses", []Account{oauth}, false, true},
+		{"api", "gpt-5.5", "/v1/responses", []Account{api}, true, false},
+		{"mixed", "gpt-5.5", "/v1/responses", []Account{oauth, api}, true, false},
+		{"mixed limited", "gpt-5.5", "/v1/responses", []Account{oauth, limitedAPI}, false, false},
+		{"replacement", "gpt-5.5", "/v1/responses", []Account{replacement}, true, false},
+		{"mapped alias", "legacy", "/v1/responses", []Account{alias}, false, true},
+		{"compact replacement", "gpt-5.5", "/v1/responses/compact", []Account{compact}, true, false},
+		{"compact limited replacement", "gpt-5.5", "/v1/responses/compact", []Account{limitedCompact}, false, false},
+		{"compact retired target", "gpt-6.1-sol", "/v1/responses/compact", []Account{retiredCompact}, false, true},
+		{"empty pool", "gpt-5.5", "/v1/responses", nil, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			group := &Group{ID: 1, Platform: PlatformOpenAI, Status: StatusActive}
+			key := &APIKey{ID: 1, UserID: 2, GroupID: &group.ID, Group: group}
+			svc := &OpenAIGatewayService{accountRepo: schedulerTestOpenAIAccountRepo{accounts: tc.accounts}, cache: &schedulerTestGatewayCache{}, cfg: &config.Config{}}
+			available, err := svc.ProbeAPIKeyGroup(t.Context(), key, APIKeyGroupRequest{Model: tc.model, Platform: PlatformOpenAI, Path: tc.path})
+			require.Equal(t, tc.available, available)
+			if tc.retired {
+				var rejection *APIKeyGroupModelUnavailableError
+				require.ErrorAs(t, err, &rejection)
+				require.True(t, rejection.Diagnosis.HasRetiredSubscriptionModel)
+			} else {
+				require.NoError(t, err, "temporary limits must remain capacity failures")
+			}
 		})
 	}
 }

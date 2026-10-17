@@ -557,3 +557,114 @@ func TestMultiGroupNewPlatformsDoNotBorrowDefaultModels(t *testing.T) {
 		}
 	}
 }
+
+func TestMultiGroupCatalogAndModelOptionsGPT55Retirement(t *testing.T) {
+	oauth := service.Account{ID: 1, Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth}
+	api := oauth
+	api.ID, api.Type = 2, service.AccountTypeAPIKey
+	for _, tc := range []struct {
+		name     string
+		accounts []service.Account
+		mapping  map[string]any
+		allow    []string
+		want     []string
+		absent   []string
+	}{
+		{name: "oauth defaults", accounts: []service.Account{oauth}, want: []string{"gpt-6.1-sol"}, absent: []string{"gpt-5.5"}},
+		{name: "api defaults", accounts: []service.Account{api}, want: []string{"gpt-5.5"}},
+		{name: "mixed defaults", accounts: []service.Account{oauth, api}, want: []string{"gpt-5.5"}},
+		{name: "mapped targets", accounts: []service.Account{oauth}, mapping: map[string]any{"legacy": "gpt-5.5", "gpt-5.5": "gpt-6.1-sol"}, want: []string{"gpt-5.5"}, absent: []string{"legacy"}},
+		{name: "wildcard targets", accounts: []service.Account{oauth}, mapping: map[string]any{"legacy*": "gpt-5.5", "gpt-*": "gpt-6.1-sol"}, allow: []string{"legacy-alias", "gpt-5.5"}, absent: []string{"legacy-alias"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			accounts := append([]service.Account(nil), tc.accounts...)
+			if tc.mapping != nil {
+				accounts[0].Credentials = map[string]any{"model_mapping": tc.mapping}
+			}
+			repo := &multiGroupCatalogAccountRepo{gatewayModelsAccountRepoStub{byGroup: map[int64][]service.Account{1: accounts}}}
+			group := &service.Group{ID: 1, Platform: service.PlatformOpenAI}
+			if tc.allow != nil {
+				group.ModelAllowlist = service.GroupModelAllowlist{Enabled: true, Models: tc.allow}
+			}
+			h := newGatewayModelsHandlerForTest(repo)
+			w := serveMultiGroupCatalog(t, h, "/v1/models", group)
+			var response gatewayModelsResponseForTest
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+			ids := make([]string, 0, len(response.Data))
+			for _, model := range response.Data {
+				ids = append(ids, model.ID)
+			}
+			options, err := h.apiKeyModelOptionsCatalog(t.Context(), group)
+			require.NoError(t, err)
+			for _, want := range tc.want {
+				require.Contains(t, ids, want)
+				require.Contains(t, options, want)
+			}
+			for _, absent := range tc.absent {
+				require.NotContains(t, ids, absent)
+				require.NotContains(t, options, absent)
+			}
+			if tc.name == "wildcard targets" {
+				require.Contains(t, options, "gpt-5.5", "expand the wildcard before testing its mapped target")
+			}
+		})
+	}
+}
+
+func TestMultiGroupCatalogRetiredGroupDoesNotHideLaterAPIKey(t *testing.T) {
+	repo := &multiGroupCatalogAccountRepo{gatewayModelsAccountRepoStub{byGroup: map[int64][]service.Account{
+		1: {{Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth}},
+		2: {{Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey}},
+	}}}
+	h := newGatewayModelsHandlerForTest(repo)
+	w := serveMultiGroupCatalog(t, h, "/v1/models", &service.Group{ID: 1, Platform: service.PlatformOpenAI}, &service.Group{ID: 2, Platform: service.PlatformOpenAI})
+	var response gatewayModelsResponseForTest
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	count := 0
+	for _, model := range response.Data {
+		if model.ID == "gpt-5.5" {
+			count++
+		}
+	}
+	require.Equal(t, 1, count)
+}
+
+func TestMultiGroupCompositeCatalogFiltersActualRetiredTargets(t *testing.T) {
+	routes := multiGroupCatalogRoutes{routes: []service.CompositeModelRoute{
+		{GroupID: 1, Enabled: true, PublicModel: "retired-alias", TargetPlatform: service.PlatformOpenAI, UpstreamModel: "gpt-5.5"},
+		{GroupID: 1, Enabled: true, PublicModel: "gpt-5.5", TargetPlatform: service.PlatformOpenAI, UpstreamModel: "gpt-6.1-sol"},
+		{GroupID: 1, Enabled: true, PublicModel: "shared", Endpoint: service.CompositeRouteEndpointResponses, TargetPlatform: service.PlatformOpenAI, UpstreamModel: "gpt-5.5"},
+		{GroupID: 1, Enabled: true, PublicModel: "shared", Endpoint: service.CompositeRouteEndpointChatCompletions, TargetPlatform: service.PlatformOpenAI, UpstreamModel: "gpt-6.1-sol"},
+	}}
+	for _, api := range []bool{false, true} {
+		t.Run(map[bool]string{false: "oauth", true: "api"}[api], func(t *testing.T) {
+			typ := service.AccountTypeOAuth
+			if api {
+				typ = service.AccountTypeAPIKey
+			}
+			repo := &multiGroupCatalogAccountRepo{gatewayModelsAccountRepoStub{byGroup: map[int64][]service.Account{
+				1: {{Platform: service.PlatformOpenAI, Type: typ}},
+			}}}
+			h := newGatewayModelsHandlerForTest(repo, routes)
+			group := &service.Group{ID: 1, Platform: service.PlatformComposite}
+			w := serveMultiGroupCatalog(t, h, "/v1/models", group)
+			var response gatewayModelsResponseForTest
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+			ids := make([]string, 0, len(response.Data))
+			for _, model := range response.Data {
+				ids = append(ids, model.ID)
+			}
+			options, err := h.apiKeyModelOptionsCatalog(t.Context(), group)
+			require.NoError(t, err)
+			for _, list := range [][]string{ids, options} {
+				require.Contains(t, list, "gpt-5.5", "explicit replacement keeps the public name usable")
+				require.Contains(t, list, "shared", "another endpoint's valid target keeps the alias visible")
+				if api {
+					require.Contains(t, list, "retired-alias")
+				} else {
+					require.NotContains(t, list, "retired-alias")
+				}
+			}
+		})
+	}
+}

@@ -24,6 +24,23 @@ type APIKeyGroupRequest struct {
 	BoundAccountID  int64
 }
 
+// APIKeyGroupModelUnavailableError is a persistent model rejection. Routing
+// aggregates it across all candidate groups before marking a client failure.
+type APIKeyGroupModelUnavailableError struct {
+	Diagnosis ModelAvailabilityDiagnosis
+}
+
+func (*APIKeyGroupModelUnavailableError) Error() string {
+	return "no configured account supports this model"
+}
+
+func apiKeyGroupModelAvailabilityError(diagnosis ModelAvailabilityDiagnosis) error {
+	if diagnosis.HasAccountsInPool && !diagnosis.HasModelSupport {
+		return &APIKeyGroupModelUnavailableError{Diagnosis: diagnosis}
+	}
+	return nil
+}
+
 type apiKeyGroupScopeKey struct{}
 
 // WithAPIKeySelectedGroup prevents lower-level legacy routing from silently
@@ -70,7 +87,7 @@ func (s *GatewayService) ProbeAPIKeyGroup(ctx context.Context, key *APIKey, req 
 		}
 		return true, nil
 	}
-	return false, nil
+	return false, apiKeyGroupModelAvailabilityError(s.DiagnoseModelAvailabilityForPlatform(ctx, key.GroupID, model, req.Platform))
 }
 
 func (s *OpenAIGatewayService) ProbeAPIKeyGroup(ctx context.Context, key *APIKey, req APIKeyGroupRequest) (bool, error) {
@@ -137,7 +154,7 @@ func (s *OpenAIGatewayService) ProbeAPIKeyGroup(ctx context.Context, key *APIKey
 		}
 		return true, nil
 	}
-	return false, nil
+	return false, apiKeyGroupModelAvailabilityError(s.diagnoseModelAvailabilityForPlatform(ctx, key.GroupID, model, req.Platform, schedule.RequireCompact))
 }
 
 func apiKeyGroupTokenRequest(req APIKeyGroupRequest) bool {

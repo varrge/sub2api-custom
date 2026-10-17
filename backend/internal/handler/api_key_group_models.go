@@ -134,6 +134,11 @@ func (h *GatewayHandler) MultiGroupModels(c *gin.Context) bool {
 		} else {
 			sort.Strings(groupIDs)
 		}
+		groupIDs, err := h.gatewayService.FilterAPIKeyGroupModelCatalog(c.Request.Context(), group, groupIDs, endpoint)
+		if err != nil {
+			h.errorResponse(c, 503, "api_error", "Failed to load group model catalog")
+			return true
+		}
 		catalogs = append(catalogs, service.APIKeyGroupCatalog{Group: group, ModelIDs: groupIDs, ModelAllowed: modelAllowed})
 		for _, id := range groupIDs {
 			id = strings.TrimSpace(id)

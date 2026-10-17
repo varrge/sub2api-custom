@@ -23,6 +23,12 @@ func (s *OpenAIGatewayService) DiagnoseModelAvailabilityForPlatform(
 	requestedModel string,
 	platform string,
 ) ModelAvailabilityDiagnosis {
+	return s.diagnoseModelAvailabilityForPlatform(ctx, groupID, requestedModel, platform, false)
+}
+
+func (s *OpenAIGatewayService) diagnoseModelAvailabilityForPlatform(
+	ctx context.Context, groupID *int64, requestedModel, platform string, requireCompact bool,
+) ModelAvailabilityDiagnosis {
 	if s == nil {
 		return ModelAvailabilityDiagnosis{HasAccountsInPool: true, HasModelSupport: true}
 	}
@@ -56,11 +62,14 @@ func (s *OpenAIGatewayService) DiagnoseModelAvailabilityForPlatform(
 	diag := ModelAvailabilityDiagnosis{}
 	for i := range accounts {
 		diag.HasAccountsInPool = true
+		if isRetiredOpenAISubscriptionModel(&accounts[i], resolveOpenAIAccountUpstreamModelForRequest(&accounts[i], requestedModel, requireCompact)) {
+			diag.HasRetiredSubscriptionModel = true
+		}
 		// Mirrors the per-candidate filter used during account selection
 		// (openai_account_scheduler.isAccountRequestCompatible): empty
 		// model_mapping accepts everything; otherwise the explicit / wildcard
 		// mapping must match.
-		if accounts[i].IsModelSupported(requestedModel) {
+		if supportsOpenAIRequestModel(&accounts[i], requestedModel, requireCompact) {
 			diag.HasModelSupport = true
 			return diag
 		}

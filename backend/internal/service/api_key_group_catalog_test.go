@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -99,4 +100,74 @@ func TestAPIKeyCodexManifestTreatsEmptyDiscoveredCatalogAsAuthoritative(t *testi
 	})
 	require.NoError(t, err)
 	require.JSONEq(t, `{"models":[]}`, string(body))
+}
+
+type apiKeyCatalogChannelRepo struct {
+	ChannelRepository
+	channel Channel
+	group   *Group
+}
+
+func (r apiKeyCatalogChannelRepo) ListAll(context.Context) ([]Channel, error) {
+	return []Channel{r.channel}, nil
+}
+
+func (r apiKeyCatalogChannelRepo) GetGroupPlatforms(context.Context, []int64) (map[int64]string, error) {
+	return map[int64]string{r.group.ID: r.group.Platform}, nil
+}
+
+func TestAPIKeyGroupCatalogRetirementFollowsChannelMapping(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		platform       string
+		public, routed string
+		channel        map[string]string
+		account        map[string]any
+		want           bool
+	}{
+		{name: "channel replacement", platform: PlatformOpenAI, public: "gpt-5.5", channel: map[string]string{"gpt-5.5": "gpt-6.1-sol"}, want: true},
+		{name: "channel retired target", platform: PlatformOpenAI, public: "gpt-6.1-sol", channel: map[string]string{"gpt-6.1-sol": "gpt-5.5"}},
+		{name: "channel wildcard retired target", platform: PlatformOpenAI, public: "gpt-6.1-sol", channel: map[string]string{"gpt-6*": "gpt-5.5"}},
+		{name: "account replacement after channel", platform: PlatformOpenAI, public: "gpt-6.1-sol", channel: map[string]string{"gpt-6.1-sol": "gpt-5.5"}, account: map[string]any{"gpt-5.5": "gpt-6.1-sol"}, want: true},
+		{name: "account retirement after channel", platform: PlatformOpenAI, public: "gpt-5.5", channel: map[string]string{"gpt-5.5": "gpt-6.1-sol"}, account: map[string]any{"gpt-6.1-sol": "gpt-5.5"}},
+		{name: "composite then channel replacement", platform: PlatformComposite, public: "public-alias", routed: "gpt-5.5", channel: map[string]string{"public-alias": "gpt-5.5", "gpt-5.5": "gpt-6.1-sol"}, want: true},
+		{name: "composite then channel retirement", platform: PlatformComposite, public: "public-alias", routed: "gpt-6.1-sol", channel: map[string]string{"public-alias": "gpt-6.1-sol", "gpt-6.1-sol": "gpt-5.5"}},
+		{name: "composite channel account replacement", platform: PlatformComposite, public: "public-alias", routed: "channel-input", channel: map[string]string{"channel-input": "gpt-5.5"}, account: map[string]any{"gpt-5.5": "gpt-6.1-sol"}, want: true},
+		{name: "composite channel account retirement", platform: PlatformComposite, public: "public-alias", routed: "channel-input", channel: map[string]string{"channel-input": "gpt-6.1-sol"}, account: map[string]any{"gpt-6.1-sol": "gpt-5.5"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			group := &Group{ID: 1, Platform: tc.platform}
+			account := Account{ID: 1, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Concurrency: 1,
+				Credentials: map[string]any{"model_mapping": tc.account}}
+			channel := NewChannelService(apiKeyCatalogChannelRepo{channel: Channel{ID: 1, Status: StatusActive, GroupIDs: []int64{group.ID},
+				ModelMapping: map[string]map[string]string{PlatformOpenAI: tc.channel}}, group: group}, nil, nil, nil, nil)
+			svc := &GatewayService{accountRepo: apiKeyCatalogPatternAccountRepo{accounts: []Account{account}}, channelService: channel}
+			probeModel := tc.public
+			if tc.platform == PlatformComposite {
+				svc.compositeResolver = NewCompositeRouteResolver(compositeRouteRepoStub{routes: []CompositeModelRoute{{
+					GroupID: group.ID, Enabled: true, PublicModel: tc.public, TargetPlatform: PlatformOpenAI, UpstreamModel: tc.routed,
+				}}})
+				probeModel = tc.routed
+			}
+			for _, endpoints := range [][]string{{""}, {"", CompositeRouteEndpointGemini}} {
+				models, err := svc.FilterAPIKeyGroupModelCatalog(t.Context(), group, []string{tc.public}, endpoints...)
+				require.NoError(t, err)
+				if tc.want {
+					require.Equal(t, []string{tc.public}, models, "catalog and management must retain the public name")
+				} else {
+					require.Empty(t, models)
+				}
+			}
+			probe := &OpenAIGatewayService{accountRepo: schedulerTestOpenAIAccountRepo{accounts: []Account{account}}, channelService: channel, cache: &schedulerTestGatewayCache{}, cfg: &config.Config{}}
+			available, err := probe.ProbeAPIKeyGroup(t.Context(), &APIKey{UserID: 1, GroupID: &group.ID, Group: group}, APIKeyGroupRequest{Model: probeModel, Platform: PlatformOpenAI, Path: "/v1/responses"})
+			require.Equal(t, tc.want, available, "catalog must agree with routing")
+			if tc.want {
+				require.NoError(t, err)
+			} else {
+				var rejection *APIKeyGroupModelUnavailableError
+				require.ErrorAs(t, err, &rejection)
+				require.True(t, rejection.Diagnosis.HasRetiredSubscriptionModel)
+			}
+		})
+	}
 }

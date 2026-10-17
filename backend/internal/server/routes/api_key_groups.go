@@ -314,6 +314,8 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 	var groupRPMError error
 	modelGroupCandidates := 0
 	modelDeniedGroups, subscriptionDeniedGroups := 0, 0
+	modelUnavailableGroups := 0
+	var modelDiagnosis service.ModelAvailabilityDiagnosis
 	for _, id := range key.ConfiguredGroupIDs() {
 		if pinnedID > 0 && id != pinnedID {
 			continue
@@ -440,6 +442,12 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 			groupRPMError = err
 			continue
 		}
+		var unavailable *service.APIKeyGroupModelUnavailableError
+		if errors.As(err, &unavailable) {
+			modelUnavailableGroups++
+			modelDiagnosis.HasRetiredSubscriptionModel = modelDiagnosis.HasRetiredSubscriptionModel || unavailable.Diagnosis.HasRetiredSubscriptionModel
+			continue
+		}
 		if err != nil {
 			return nil, groupRoutingError(503, "GROUP_ROUTING_UNAVAILABLE", err.Error())
 		}
@@ -475,6 +483,12 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 			middleware.MarkIngressRejected(c, middleware.IngressRejectSubscriptionUnavailable)
 			return nil, groupRoutingError(403, "SUBSCRIPTION_NOT_FOUND", "No active subscription found for a group supporting this model")
 		}
+	}
+
+	if modelUnavailableGroups > 0 && modelUnavailableGroups+modelDeniedGroups == modelGroupCandidates {
+		service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalModelConfiguration)
+		middleware.MarkIngressRejected(c, middleware.IngressRejectModelNotAllowed)
+		return nil, groupRoutingError(404, "model_not_found", modelDiagnosis.ModelNotFoundMessage(model))
 	}
 
 	code := "NO_AVAILABLE_GROUP"

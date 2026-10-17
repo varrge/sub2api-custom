@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/smartwalle/alipay/v3"
@@ -13,8 +14,8 @@ import (
 )
 
 func TestAlipayRefundLostResponseReusesProviderRequestAndQueriesAfterRestart(t *testing.T) {
-	originalRefund, originalQuery := alipayTradeRefund, alipayRefundQuery
-	t.Cleanup(func() { alipayTradeRefund, alipayRefundQuery = originalRefund, originalQuery })
+	originalRefund, originalQuery := alipayTradeRefund, alipayTradeFastPayRefundQuery
+	t.Cleanup(func() { alipayTradeRefund, alipayTradeFastPayRefundQuery = originalRefund, originalQuery })
 	var ids []string
 	alipayTradeRefund = func(_ context.Context, _ *alipay.Client, req alipay.TradeRefund) (*alipay.TradeRefundRsp, error) {
 		ids = append(ids, req.OutRequestNo)
@@ -23,9 +24,9 @@ func TestAlipayRefundLostResponseReusesProviderRequestAndQueriesAfterRestart(t *
 		}
 		return &alipay.TradeRefundRsp{FundChange: "N"}, nil
 	}
-	alipayRefundQuery = func(_ context.Context, _ *alipay.Client, req alipay.TradeFastPayRefundQuery) (*alipay.TradeFastPayRefundQueryRsp, error) {
+	alipayTradeFastPayRefundQuery = func(_ context.Context, _ *alipay.Client, req alipay.TradeFastPayRefundQuery) (*alipay.TradeFastPayRefundQueryRsp, error) {
 		require.Equal(t, ids[0], req.OutRequestNo)
-		return &alipay.TradeFastPayRefundQueryRsp{RefundStatus: "REFUND_SUCCESS"}, nil
+		return &alipay.TradeFastPayRefundQueryRsp{Error: alipay.Error{Code: alipay.CodeSuccess}, RefundStatus: "REFUND_SUCCESS"}, nil
 	}
 	prov := &Alipay{client: &alipay.Client{}}
 	req := payment.RefundRequest{OrderID: "sub2_monthcard", Amount: "198.00", Reason: "full team"}
@@ -35,22 +36,57 @@ func TestAlipayRefundLostResponseReusesProviderRequestAndQueriesAfterRestart(t *
 	resp, err := prov.Refund(context.Background(), req)
 	require.NoError(t, err)
 	require.Len(t, ids, 2)
+	require.Equal(t, "sub2_monthcard-refund-19800", ids[0])
 	require.Equal(t, ids[0], ids[1])
 	require.Equal(t, ids[0], resp.RefundID)
 	require.Equal(t, payment.ProviderStatusPending, resp.Status)
-	resp, err = prov.QueryRefund(context.Background(), payment.RefundQueryRequest{OrderID: req.OrderID, Amount: req.Amount})
+	restarted := &Alipay{client: &alipay.Client{}}
+	resp, err = restarted.QueryRefund(context.Background(), payment.RefundQueryRequest{OrderID: req.OrderID, Amount: req.Amount})
 	require.NoError(t, err)
 	require.Equal(t, payment.ProviderStatusSuccess, resp.Status)
 }
 
-func TestAlipayRefundQueryUnsubmittedRequestIsRetryable(t *testing.T) {
-	original := alipayRefundQuery
-	t.Cleanup(func() { alipayRefundQuery = original })
-	alipayRefundQuery = func(context.Context, *alipay.Client, alipay.TradeFastPayRefundQuery) (*alipay.TradeFastPayRefundQueryRsp, error) {
-		return &alipay.TradeFastPayRefundQueryRsp{}, nil
+func TestAlipayRefundQueryReconstructedRequestRespectsGrace(t *testing.T) {
+	original := alipayTradeFastPayRefundQuery
+	t.Cleanup(func() { alipayTradeFastPayRefundQuery = original })
+	alipayTradeFastPayRefundQuery = func(_ context.Context, _ *alipay.Client, req alipay.TradeFastPayRefundQuery) (*alipay.TradeFastPayRefundQueryRsp, error) {
+		require.Equal(t, "sub2_test-refund-19800", req.OutRequestNo)
+		return &alipay.TradeFastPayRefundQueryRsp{Error: alipay.Error{Code: alipay.CodeSuccess}}, nil
 	}
 	prov := &Alipay{client: &alipay.Client{}}
-	resp, err := prov.QueryRefund(context.Background(), payment.RefundQueryRequest{OrderID: "sub2_test", Amount: "198"})
-	require.NoError(t, err)
-	require.Equal(t, payment.ProviderStatusFailed, resp.Status)
+	for _, tc := range []struct {
+		name        string
+		requestedAt time.Time
+		wantStatus  string
+	}{
+		{name: "unknown request time", wantStatus: payment.ProviderStatusPending},
+		{name: "recent request", requestedAt: time.Now().Add(-time.Minute), wantStatus: payment.ProviderStatusPending},
+		{name: "unsubmitted request after grace is retryable", requestedAt: time.Now().Add(-alipayRefundQueryNotFoundGrace - time.Minute), wantStatus: payment.ProviderStatusFailed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resp, err := prov.QueryRefund(context.Background(), payment.RefundQueryRequest{OrderID: "sub2_test", Amount: "198", RequestedAt: tc.requestedAt})
+			require.NoError(t, err)
+			require.Equal(t, "sub2_test-refund-19800", resp.RefundID)
+			require.Equal(t, tc.wantStatus, resp.Status)
+		})
+	}
+}
+
+func TestAlipayRefundQueryReconstructionRequiresValidOrderAndAmount(t *testing.T) {
+	original := alipayTradeFastPayRefundQuery
+	t.Cleanup(func() { alipayTradeFastPayRefundQuery = original })
+	alipayTradeFastPayRefundQuery = func(context.Context, *alipay.Client, alipay.TradeFastPayRefundQuery) (*alipay.TradeFastPayRefundQueryRsp, error) {
+		t.Fatal("invalid reconstruction must not query the provider")
+		return nil, nil
+	}
+	prov := &Alipay{client: &alipay.Client{}}
+	for _, req := range []payment.RefundQueryRequest{
+		{OrderID: "sub2_test"},
+		{OrderID: "sub2_test", Amount: "0"},
+		{OrderID: "sub2_test", Amount: "NaN"},
+		{Amount: "198.00"},
+	} {
+		_, err := prov.QueryRefund(context.Background(), req)
+		require.Error(t, err)
+	}
 }

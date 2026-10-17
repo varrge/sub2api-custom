@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -21,6 +22,17 @@ type ModelAvailabilityDiagnosis struct {
 	// HasModelSupport is true if at least one account's model mapping admits
 	// the requested model.
 	HasModelSupport bool
+	// HasRetiredSubscriptionModel records a ChatGPT upstream blocked by model
+	// retirement, so an unsupported request can include migration guidance.
+	HasRetiredSubscriptionModel bool
+}
+
+// ModelNotFoundMessage describes a persistent rejection using the public model.
+func (d ModelAvailabilityDiagnosis) ModelNotFoundMessage(model string) string {
+	if d.HasRetiredSubscriptionModel {
+		return fmt.Sprintf("Model %q targets GPT-5.5, which retired from Codex with ChatGPT sign-in on October 14, 2026. Select an available replacement such as GPT-6.1 Sol or GPT-6 Luna, or configure an API-key upstream that supports GPT-5.5.", model)
+	}
+	return fmt.Sprintf("Model %q is not supported by any configured account", model)
 }
 
 // ModelAvailabilityDiagnoser is implemented by gateway services that can

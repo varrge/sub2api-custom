@@ -329,6 +329,14 @@ func (s *PaymentService) RecoverMonthCardOrders(ctx context.Context) error {
 }
 
 func (s *PaymentService) recoverInterruptedMonthCardRefund(ctx context.Context, order *dbent.PaymentOrder) error {
+	detail, err := s.latestRefundPendingDetail(ctx, order.ID)
+	if err != nil {
+		return err
+	}
+	if detail.RequestedAt.IsZero() {
+		// Before the first pending audit, the durable REFUNDING claim records the attempt time.
+		detail.RequestedAt = order.UpdatedAt
+	}
 	prov, err := s.getRefundProvider(ctx, order)
 	if err != nil {
 		return err
@@ -339,10 +347,10 @@ func (s *PaymentService) recoverInterruptedMonthCardRefund(ctx context.Context, 
 	// Query first: provider idempotency caches can expire during a long outage.
 	// A successful existing refund must be finalized locally without resending.
 	if query, ok := prov.(payment.RefundQueryProvider); ok {
-		detail := s.latestRefundPendingDetail(ctx, order.ID)
 		resp, queryErr := query.QueryRefund(ctx, payment.RefundQueryRequest{
 			TradeNo: order.PaymentTradeNo, OrderID: order.OutTradeNo, RefundID: detail.RefundID,
-			Amount: formatGatewayRefundAmount(plan.GatewayAmount, order),
+			Amount:      formatGatewayRefundAmount(plan.GatewayAmount, order),
+			RequestedAt: detail.RequestedAt,
 		})
 		if queryErr == nil && resp != nil {
 			switch resp.Status {
@@ -350,7 +358,7 @@ func (s *PaymentService) recoverInterruptedMonthCardRefund(ctx context.Context, 
 				_, err = s.finishMonthCardRefund(ctx, plan)
 				return err
 			case payment.ProviderStatusPending:
-				_, err = s.markRefundPending(ctx, plan, resp)
+				_, err = s.markRefundPending(ctx, plan, resp, detail.RequestedAt)
 				return err
 			}
 		}

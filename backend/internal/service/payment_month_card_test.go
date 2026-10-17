@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/monthcard"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -60,11 +62,31 @@ func TestMonthCardPurchaseSnapshotMatchesPaidOrder(t *testing.T) {
 
 func TestMonthCardPaymentInputCannotBecomeRecharge(t *testing.T) {
 	svc := &PaymentService{}
-	for _, kind := range []string{payment.OrderTypeMonthCard, "unknown"} {
+	for kind, reason := range map[string]string{payment.OrderTypeMonthCard: "INVALID_MONTH_CARD", "unknown": "INVALID_ORDER_TYPE"} {
 		_, err := svc.validateOrderInput(context.Background(), CreateOrderRequest{OrderType: kind, Amount: 198}, &PaymentConfig{})
-		require.Error(t, err)
+		require.Equal(t, reason, infraerrors.Reason(err))
 	}
 	require.Error(t, svc.prepareMonthCardOrder(context.Background(), &CreateOrderRequest{}))
+}
+
+func TestMonthCardPreparedPaymentInputAccepted(t *testing.T) {
+	svc := &PaymentService{}
+	for _, mode := range []string{"solo", "create", "join"} {
+		for _, coupon := range []bool{false, true} {
+			for _, balanceDisabled := range []bool{false, true} {
+				purchase := &monthcard.Purchase{Mode: mode, Product: monthcard.Product{ID: 7, GroupID: 3, PriceCNY: 198}}
+				req := CreateOrderRequest{OrderType: payment.OrderTypeMonthCard, Amount: 198, Mode: mode, monthCardPurchase: purchase}
+				if coupon {
+					req.CouponCode = "SAVE10"
+					req.Amount = 178.2
+					purchase.Discount = &monthcard.CouponQuote{CouponID: 1, Code: "SAVE10", OriginalCNY: 198, DiscountCNY: 19.8, AmountCNY: 178.2}
+				}
+				plan, err := svc.validateOrderInput(context.Background(), req, &PaymentConfig{BalanceDisabled: balanceDisabled, MaxAmount: 100})
+				require.NoError(t, err, "mode=%s coupon=%t balanceDisabled=%t", mode, coupon, balanceDisabled)
+				require.Nil(t, plan)
+			}
+		}
+	}
 }
 
 func newMonthCardPaymentTestOrder(t *testing.T, client *dbent.Client, status string, createdAt ...time.Time) *dbent.PaymentOrder {
@@ -116,6 +138,21 @@ func TestMonthCardUnpaidOrderCannotFulfill(t *testing.T) {
 	require.ErrorContains(t, svc.ExecuteMonthCardFulfillment(context.Background(), order.ID), "has not been paid")
 }
 
+func TestMonthCardAdminRetryUsesMonthCardFulfillment(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentOrderLifecycleTestClient(t)
+	order := newMonthCardPaymentTestOrder(t, client, OrderStatusFailed)
+	_, err := client.PaymentOrder.UpdateOneID(order.ID).SetPaidAt(time.Now()).Save(ctx)
+	require.NoError(t, err)
+	svc := &PaymentService{entClient: client}
+	// Reaching the unavailable month-card store proves retry uses the card path.
+	require.ErrorContains(t, svc.RetryFulfillment(ctx, order.ID), "month card store is unavailable")
+	require.Equal(t, 1, countRefundAuditsForTest(t, ctx, client, order.ID, "RECHARGE_RETRY"))
+	u, err := client.User.Get(ctx, order.UserID)
+	require.NoError(t, err)
+	require.Zero(t, u.Balance)
+}
+
 func TestMonthCardWeChatResumePreservesSignedPurchase(t *testing.T) {
 	svc := NewPaymentResumeService([]byte("month-card-test-signing-key-32-bytes"))
 	claims := WeChatPaymentResumeClaims{OpenID: "test-openid", OrderType: payment.OrderTypeMonthCard, ProductID: 7, Mode: "join", TeamCode: "TEAMCODE", CouponCode: "SAVE10", RulesAccepted: true, RulesPublication: 7, ConsentUserID: 42}
@@ -141,13 +178,51 @@ func TestMonthCardWeChatResumePreservesSignedPurchase(t *testing.T) {
 
 type monthCardIdempotentRefundStub struct {
 	refundProviderTestDouble
-	requests []payment.RefundRequest
+	requests     []payment.RefundRequest
+	beforeRefund func()
 }
 
 func (p *monthCardIdempotentRefundStub) SupportsIdempotentRefund() bool { return true }
 func (p *monthCardIdempotentRefundStub) Refund(_ context.Context, req payment.RefundRequest) (*payment.RefundResponse, error) {
+	if p.beforeRefund != nil {
+		p.beforeRefund()
+	}
 	p.requests = append(p.requests, req)
 	return &payment.RefundResponse{RefundID: "stable-refund", Status: payment.ProviderStatusPending}, nil
+}
+
+func TestMonthCardRefundPersistsClaimBeforeProviderCallWithoutBalanceDeduction(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentOrderLifecycleTestClient(t)
+	order := createCompletedRefundableOrderForTest(t, ctx, client, "month-card-refund-claim")
+	_, err := client.PaymentOrder.UpdateOneID(order.ID).SetOrderType(payment.OrderTypeMonthCard).Save(ctx)
+	require.NoError(t, err)
+	prov := &monthCardIdempotentRefundStub{beforeRefund: func() {
+		claimed, err := client.PaymentOrder.Get(ctx, order.ID)
+		require.NoError(t, err)
+		require.Equal(t, OrderStatusRefunding, claimed.Status)
+		require.Equal(t, 100.0, claimed.RefundAmount)
+		require.Equal(t, "approved month card refund", psStringValue(claimed.RefundReason))
+		require.True(t, claimed.ForceRefund)
+	}}
+	t.Cleanup(replacePaymentProviderFactoryForTest(t, prov))
+	svc := &PaymentService{entClient: client, loadBalancer: &captureLoadBalancer{}}
+	plan, early, err := svc.PrepareRefund(ctx, order.ID, 0, "approved month card refund", true, true)
+	require.NoError(t, err)
+	require.Nil(t, early)
+	require.Equal(t, payment.DeductionTypeNone, plan.DeductionType)
+	result, err := svc.ExecuteRefund(ctx, plan)
+	require.NoError(t, err)
+	require.False(t, result.Success)
+	require.Len(t, prov.requests, 1)
+	detail, err := svc.latestRefundPendingDetail(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, payment.DeductionTypeNone, detail.DeductionType)
+	require.Zero(t, detail.BalanceDeducted)
+	require.Zero(t, detail.SubDaysDeducted)
+	_, err = svc.ExecuteRefund(ctx, plan)
+	require.Equal(t, "CONFLICT", infraerrors.Reason(err))
+	require.Len(t, prov.requests, 1)
 }
 
 func TestMonthCardRecoveryResendsRefundInterruptedBeforeProviderCall(t *testing.T) {
@@ -188,11 +263,13 @@ func TestMonthCardRefundConfirmationRejectsUnattemptedOrLegacyOrder(t *testing.T
 
 type monthCardQueryRefundStub struct {
 	monthCardIdempotentRefundStub
-	queryCalls int
+	queryCalls    int
+	queryRequests []payment.RefundQueryRequest
 }
 
-func (p *monthCardQueryRefundStub) QueryRefund(context.Context, payment.RefundQueryRequest) (*payment.RefundResponse, error) {
+func (p *monthCardQueryRefundStub) QueryRefund(_ context.Context, req payment.RefundQueryRequest) (*payment.RefundResponse, error) {
 	p.queryCalls++
+	p.queryRequests = append(p.queryRequests, req)
 	return &payment.RefundResponse{RefundID: "existing-refund", Status: payment.ProviderStatusPending}, nil
 }
 
@@ -214,6 +291,72 @@ func TestMonthCardRecoveryQueriesExistingRefundBeforeAnyResend(t *testing.T) {
 	saved, err := client.PaymentOrder.Get(ctx, o.ID)
 	require.NoError(t, err)
 	require.Equal(t, OrderStatusRefundPending, saved.Status)
+}
+
+func TestMonthCardRefundRecoveryPreservesRequestedAt(t *testing.T) {
+	for _, hasAudit := range []bool{false, true} {
+		t.Run(strconv.FormatBool(hasAudit), func(t *testing.T) {
+			ctx := context.Background()
+			client := newPaymentOrderLifecycleTestClient(t)
+			order := createCompletedRefundableOrderForTest(t, ctx, client, "month-card-refund-time")
+			order, err := client.PaymentOrder.UpdateOneID(order.ID).SetOrderType(payment.OrderTypeMonthCard).
+				SetStatus(OrderStatusRefunding).SetRefundAmount(order.Amount).SetRefundReason("interrupted refund").
+				SetUpdatedAt(time.Now().UTC().Add(-48 * time.Hour).Truncate(time.Microsecond)).Save(ctx)
+			require.NoError(t, err)
+			requestedAt := order.UpdatedAt
+			if hasAudit {
+				requestedAt = requestedAt.Add(-time.Hour)
+				_, err = client.PaymentAuditLog.Create().SetOrderID(strconv.FormatInt(order.ID, 10)).
+					SetAction("REFUND_PENDING").SetOperator("admin").SetCreatedAt(requestedAt).
+					SetDetail(`{"refundID":"original-refund","deductionRollbackOK":true}`).Save(ctx)
+				require.NoError(t, err)
+			}
+			prov := &monthCardQueryRefundStub{}
+			t.Cleanup(replacePaymentProviderFactoryForTest(t, prov))
+			svc := &PaymentService{entClient: client, loadBalancer: &captureLoadBalancer{}}
+			require.NoError(t, svc.recoverInterruptedMonthCardRefund(ctx, order))
+			require.Len(t, prov.queryRequests, 1)
+			require.True(t, prov.queryRequests[0].RequestedAt.Equal(requestedAt))
+			if hasAudit {
+				require.Equal(t, "original-refund", prov.queryRequests[0].RefundID)
+			} else {
+				require.Empty(t, prov.queryRequests[0].RefundID)
+			}
+			require.Empty(t, prov.requests)
+			// A later reconciliation must retain the original grace-period clock.
+			result, err := svc.QueryAndFinalizeRefund(ctx, order.ID)
+			require.NoError(t, err)
+			require.False(t, result.Success)
+			require.Len(t, prov.queryRequests, 2)
+			require.True(t, prov.queryRequests[1].RequestedAt.Equal(requestedAt))
+		})
+	}
+}
+
+func TestMonthCardRefundRecoveryRejectsUnreadablePendingAudit(t *testing.T) {
+	for _, supportsQuery := range []bool{false, true} {
+		t.Run(strconv.FormatBool(supportsQuery), func(t *testing.T) {
+			ctx := context.Background()
+			client := newPaymentOrderLifecycleTestClient(t)
+			order := createPendingRefundOrderWithDetailForTest(t, ctx, client, "month-card-bad-refund-audit", `not-json`)
+			order, err := client.PaymentOrder.UpdateOneID(order.ID).SetOrderType(payment.OrderTypeMonthCard).
+				SetStatus(OrderStatusRefunding).SetUpdatedAt(time.Now().UTC().Add(-time.Hour)).Save(ctx)
+			require.NoError(t, err)
+			prov := &monthCardQueryRefundStub{}
+			var factory payment.Provider = &prov.monthCardIdempotentRefundStub
+			if supportsQuery {
+				factory = prov
+			}
+			t.Cleanup(replacePaymentProviderFactoryForTest(t, factory))
+			svc := &PaymentService{entClient: client, loadBalancer: &captureLoadBalancer{}}
+			require.ErrorContains(t, svc.recoverInterruptedMonthCardRefund(ctx, order), "parse refund pending audit")
+			require.Zero(t, prov.queryCalls)
+			require.Empty(t, prov.requests)
+			saved, err := client.PaymentOrder.Get(ctx, order.ID)
+			require.NoError(t, err)
+			require.Equal(t, OrderStatusRefunding, saved.Status)
+		})
+	}
 }
 
 func TestMonthCardDiscountSnapshotPreservesProductPrice(t *testing.T) {

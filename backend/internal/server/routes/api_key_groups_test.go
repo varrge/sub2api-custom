@@ -834,3 +834,48 @@ func TestGeminiCacheIngressRestoresOriginalGroupAndHistoryAuthority(t *testing.T
 		})
 	}
 }
+
+func TestMultiGroupRoutingAggregatesPermanentModelRejections(t *testing.T) {
+	retired := &service.APIKeyGroupModelUnavailableError{Diagnosis: service.ModelAvailabilityDiagnosis{HasAccountsInPool: true, HasRetiredSubscriptionModel: true}}
+	unsupported := &service.APIKeyGroupModelUnavailableError{Diagnosis: service.ModelAvailabilityDiagnosis{HasAccountsInPool: true}}
+	for _, tc := range []struct {
+		name            string
+		secondError     error
+		secondAvailable bool
+		wantStatus      int
+	}{
+		{"all retired", retired, false, 404},
+		{"retired and unsupported", unsupported, false, 404},
+		{"later available", nil, true, 200},
+		{"later temporarily unavailable", nil, false, 503},
+		{"later group rpm", service.ErrGroupRPMExceeded, false, 429},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			probe := &routingProbe{available: map[int64]bool{2: tc.secondAvailable}, groupErrors: map[int64]error{1: retired, 2: tc.secondError}}
+			router := &apiKeyGroupRouting{prober: probe}
+			c := routingContext(http.MethodPost, "/v1/responses", `{"model":"public-alias"}`)
+			selected, err := router.resolve(c, routingKey())
+			require.Equal(t, []int64{1, 2}, probe.seen)
+			if tc.wantStatus == 200 {
+				require.NoError(t, err)
+				require.Equal(t, int64(2), *selected.GroupID)
+			} else {
+				var routingErr *middleware.APIKeyGroupResolutionError
+				require.ErrorAs(t, err, &routingErr)
+				require.Equal(t, tc.wantStatus, routingErr.Status)
+			}
+			require.Equal(t, tc.wantStatus == 404, c.GetBool(service.OpsClientBusinessLimitedKey))
+			if tc.wantStatus == 404 {
+				var routingErr *middleware.APIKeyGroupResolutionError
+				require.ErrorAs(t, err, &routingErr)
+				require.Equal(t, "model_not_found", routingErr.Code)
+				reason, marked := middleware.GetIngressRejectReason(c)
+				require.True(t, marked)
+				require.Equal(t, middleware.IngressRejectModelNotAllowed, reason)
+				require.ErrorContains(t, err, `Model "public-alias" targets GPT-5.5`)
+				require.ErrorContains(t, err, "October 14, 2026")
+				require.ErrorContains(t, err, "API-key upstream")
+			}
+		})
+	}
+}

@@ -180,7 +180,7 @@ func (h *GatewayHandler) apiKeyModelOptionsCatalog(ctx context.Context, group *s
 			models[i] = strings.TrimPrefix(strings.TrimSpace(models[i]), "models/")
 		}
 	}
-	return models, nil
+	return h.gatewayService.FilterAPIKeyGroupModelCatalog(ctx, group, models, "", service.CompositeRouteEndpointGemini)
 }
 
 func expandAPIKeyModelOptionDefaults(source []string, platform string, useDefaults bool) []string {

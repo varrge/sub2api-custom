@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"sort"
 	"strings"
+
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
 // APIKeyCompositeModelAliases adds concrete public route names to a directory.
@@ -24,11 +26,7 @@ func (s *GatewayService) APIKeyCompositeModelAliases(ctx context.Context, groupI
 			active = append(active, route)
 		}
 	}
-	endpoints := []string{endpoint}
-	if endpoint == "" {
-		endpoints = []string{CompositeRouteEndpointMessages, CompositeRouteEndpointResponses,
-			CompositeRouteEndpointChatCompletions, CompositeRouteEndpointEmbeddings, CompositeRouteEndpointImages}
-	}
+	endpoints := apiKeyModelCatalogEndpoints(endpoint)
 	seen := make(map[string]bool)
 	aliases := make([]string, 0)
 	for _, route := range active {
@@ -61,6 +59,78 @@ func (s *GatewayService) APIKeyCompositeModelAliases(ctx context.Context, groupI
 	}
 	sort.Strings(aliases)
 	return aliases, nil
+}
+
+func apiKeyModelCatalogEndpoints(endpoint string) []string {
+	if endpoint != "" {
+		return []string{endpoint}
+	}
+	return []string{CompositeRouteEndpointMessages, CompositeRouteEndpointResponses,
+		CompositeRouteEndpointChatCompletions, CompositeRouteEndpointEmbeddings, CompositeRouteEndpointImages}
+}
+
+// FilterAPIKeyGroupModelCatalog runs after defaults, wildcard selections and
+// Composite aliases expand, so retirement follows Composite -> channel -> account
+// mapping while preserving the original public names.
+func (s *GatewayService) FilterAPIKeyGroupModelCatalog(ctx context.Context, group *Group, models []string, endpoints ...string) ([]string, error) {
+	if group == nil || group.Platform != PlatformOpenAI && group.Platform != PlatformComposite || len(models) == 0 {
+		return models, nil
+	}
+	platforms := []string{PlatformOpenAI}
+	if group.Platform == PlatformComposite {
+		platforms = domain.ConcretePlatformIDs()
+	}
+	accounts, err := s.accountRepo.ListModelAvailabilityCandidates(ctx, &group.ID, platforms, false)
+	if err != nil {
+		return nil, err
+	}
+	retiredTarget := func(model string) bool {
+		mapping, _ := s.ResolveChannelMappingAndRestrict(ctx, &group.ID, model)
+		if mapping.MappedModel != "" {
+			model = mapping.MappedModel
+		}
+		return openAIModelRetiredForAccounts(accounts, model)
+	}
+	if group.Platform == PlatformOpenAI {
+		filtered := make([]string, 0, len(models))
+		for _, model := range models {
+			if !retiredTarget(model) {
+				filtered = append(filtered, model)
+			}
+		}
+		return filtered, nil
+	}
+	var routes []CompositeModelRoute
+	if s.compositeResolver != nil && s.compositeResolver.repo != nil {
+		routes, err = s.compositeResolver.repo.ListByGroup(ctx, group.ID, false)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if len(endpoints) == 0 {
+		endpoints = []string{""}
+	}
+	filtered := make([]string, 0, len(models))
+	for _, model := range models {
+		retired, available := false, false
+		for _, endpoint := range endpoints {
+			for _, targetEndpoint := range apiKeyModelCatalogEndpoints(endpoint) {
+				platform, target, resolved := resolveCompositeCatalogModelTarget(model, accounts, routes, true, targetEndpoint)
+				if !resolved {
+					continue
+				}
+				if platform == PlatformOpenAI && retiredTarget(target) {
+					retired = true
+				} else {
+					available = true
+				}
+			}
+		}
+		if !retired || available {
+			filtered = append(filtered, model)
+		}
+	}
+	return filtered, nil
 }
 
 // APIKeyGroupCatalog retains the group that supplies each model's metadata.

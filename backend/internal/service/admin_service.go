@@ -292,8 +292,9 @@ type CreateGroupInput struct {
 	// OpenAI Messages 调度配置（仅 openai 平台使用）
 	AllowMessagesDispatch       bool
 	AllowLive                   bool
-	ForceOpenAIFast             bool
+	ForcedServiceTier           string
 	FreeOpenAIFast              bool
+	FreeOpenAIUltrafast         bool
 	DefaultMappedModel          string
 	RequireOAuthOnly            bool
 	RequirePrivacySet           bool
@@ -378,8 +379,9 @@ type UpdateGroupInput struct {
 	// OpenAI Messages 调度配置（仅 openai 平台使用）
 	AllowMessagesDispatch       *bool
 	AllowLive                   *bool
-	ForceOpenAIFast             *bool
+	ForcedServiceTier           *string
 	FreeOpenAIFast              *bool
+	FreeOpenAIUltrafast         *bool
 	DefaultMappedModel          *string
 	RequireOAuthOnly            *bool
 	RequirePrivacySet           *bool

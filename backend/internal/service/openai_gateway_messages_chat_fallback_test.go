@@ -6,12 +6,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai_compat"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -487,4 +489,62 @@ func TestForwardAsAnthropic_ResponsesSupportedAccountStillUsesResponsesEndpoint(
 	require.Empty(t, upstream.lastReq.Header.Get("version"))
 	require.Empty(t, upstream.lastReq.Header.Get("OpenAI-Beta"))
 	require.Equal(t, "ok", gjson.Get(rec.Body.String(), "content.0.text").String())
+}
+
+func TestForwardAsAnthropic_ForceChatCompletionsGroupServiceTier(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, tt := range []struct {
+		name, model, forced, action, want string
+	}{
+		{name: "follow", model: "gpt-5.6-sol"},
+		{name: "standard", model: "gpt-5.6-sol", forced: "default", want: "default"},
+		{name: "fast", model: "gpt-5.6-sol", forced: "priority", want: "priority"},
+		{name: "ultrafast", model: "gpt-5.6-sol", forced: "ultrafast", want: "ultrafast"},
+		{name: "unsupported", model: "gpt-5.4", forced: "ultrafast"},
+		{name: "filtered", model: "gpt-5.6-sol", forced: "ultrafast", action: BetaPolicyActionFilter},
+		{name: "blocked", model: "gpt-5.6-sol", forced: "ultrafast", action: BetaPolicyActionBlock},
+	} {
+		for _, stream := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/stream=%t", tt.name, stream), func(t *testing.T) {
+				body := []byte(fmt.Sprintf(`{"model":%q,"max_tokens":32,"messages":[{"role":"user","content":"hi"}],"stream":%t}`, tt.model, stream))
+				rec := httptest.NewRecorder()
+				c, _ := gin.CreateTestContext(rec)
+				c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(body))
+				responseBody := `{"id":"chatcmpl_tier","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":2}}`
+				contentType := "application/json"
+				if stream {
+					contentType = "text/event-stream"
+					responseBody = "data: " + `{"id":"chatcmpl_tier","choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":2}}` + "\n\ndata: [DONE]\n\n"
+				}
+				upstream := &httpUpstreamRecorder{resp: &http.Response{StatusCode: http.StatusOK,
+					Header: http.Header{"Content-Type": []string{contentType}}, Body: io.NopCloser(strings.NewReader(responseBody))}}
+				settings := DefaultOpenAIFastPolicySettings()
+				if tt.action != "" {
+					settings = &OpenAIFastPolicySettings{Rules: []OpenAIFastPolicyRule{{ServiceTier: "ultrafast", Action: tt.action, Scope: BetaPolicyScopeAll}}}
+				}
+				svc := newOpenAIGatewayServiceWithSettings(t, settings)
+				svc.cfg, svc.httpUpstream = rawChatCompletionsTestConfig(), upstream
+				ctx := context.WithValue(context.Background(), ctxkey.Group, &Group{
+					ID: 1, Hydrated: true, Status: StatusActive, Platform: PlatformOpenAI, ForcedServiceTier: tt.forced,
+				})
+				result, err := svc.ForwardAsAnthropic(ctx, c, forceChatMessagesFallbackAccount(), body, "", "")
+				if tt.action == BetaPolicyActionBlock {
+					var blocked *OpenAIFastBlockedError
+					require.ErrorAs(t, err, &blocked)
+					require.Equal(t, http.StatusForbidden, rec.Code)
+					require.Equal(t, "forbidden_error", gjson.Get(rec.Body.String(), "error.type").String())
+					require.Nil(t, upstream.lastReq)
+					return
+				}
+				require.NoError(t, err)
+				require.Equal(t, tt.want, gjson.GetBytes(upstream.lastBody, "service_tier").String())
+				require.NotNil(t, result)
+				if tt.want == "" {
+					require.Nil(t, result.ServiceTier)
+				} else {
+					require.Equal(t, &tt.want, result.ServiceTier)
+				}
+			})
+		}
+	}
 }

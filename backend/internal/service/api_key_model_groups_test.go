@@ -49,7 +49,7 @@ func TestAPIKeyModelGroupsAuthSnapshotIsolation(t *testing.T) {
 	svc := &APIKeyService{}
 	key := &APIKey{ID: 1, UserID: 2, User: &User{ID: 2}, GroupIDs: []int64{1, 2}, ModelGroupRoutes: APIKeyModelGroupRoutes{"target": {2}}}
 	snapshot := svc.snapshotFromAPIKey(context.Background(), key)
-	require.Equal(t, 29, snapshot.Version)
+	require.Equal(t, apiKeyAuthSnapshotVersion, snapshot.Version)
 	key.ModelGroupRoutes["target"][0] = 1
 	materialized := svc.snapshotToAPIKey("secret", snapshot)
 	require.Equal(t, []int64{2}, materialized.ModelGroupRoutes["target"])

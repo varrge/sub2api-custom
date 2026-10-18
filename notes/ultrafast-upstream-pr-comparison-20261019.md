@@ -2,7 +2,13 @@
 
 检索官方仓库 `Wei-Shaw/sub2api` 的全部状态 PR，关键词包括 `ultrafast`、`ultra fast`、`ultrafast_multiplier`、`超快`、`service tier multiplier`；获取 #8203 的文件差异并核对计费、请求改写、表单和迁移代码。存在相关 PR，因此按本次要求先对比，没有重复创建或向他人发送评论。
 
-## 最直接相关：#8203（开放，未合并）
+## 后续处理：已合入本地自定义分支
+
+用户确认后，已将 #8203 的来源提交合入 `feat/ultrafast-pricing`，同时保留独立倍率及未知模型默认 1 倍。迁移使用未占用的 254 编号，鉴权缓存升至 30，保留自定义多分组配置并按本地 schema 重新生成 Ent。迁移回填只在首次新增列时执行，重复运行不会恢复旧强制 Fast 状态。评审中另修复了创建 API 的显式空档位优先级，以及 Messages → Chat Completions 路径遗漏的分组档位／全局策略应用，并补齐流式与非流式回归。免费 Ultrafast 只改变实际扣款，具体配置与组合示例见 [操作说明](../docs/custom-ultrafast-pricing.md)。此为本地集成，不表示官方 PR 已被上游合并；未部署生产。
+
+以下对比保留检索时的两份实现状态。
+
+## 最直接相关：#8203（检索时开放、未合并）
 
 - [PR #8203：按分组强制 OpenAI 服务档位](https://github.com/Wei-Shaw/sub2api/pull/8203)
 - 本次读取的 head：`7c064ede617d7e3e94a81b90af4835fae6f72efd`，49 个文件。
@@ -28,7 +34,7 @@
 - [#8203 默认倍率与 GPT-6.1 Sol 修正](https://github.com/Wei-Shaw/sub2api/blob/7c064ede617d7e3e94a81b90af4835fae6f72efd/backend/internal/service/billing_service.go)
 - [#8203 免费档位的用户扣款处理](https://github.com/Wei-Shaw/sub2api/blob/7c064ede617d7e3e94a81b90af4835fae6f72efd/backend/internal/service/openai_gateway_usage.go)
 
-结论：#8203 与本地功能互补，不能用它替代独立倍率。若未来合并，应保留 nullable 自定义倍率优先级，避免其无条件 `UltrafastMultiplier = 6` 覆盖运营者填写的数值；强制档位和免费补贴仍应与价格卡分开。自定义版本已有其他迁移，不能直接照搬该 PR 的迁移编号。
+结论：#8203 与本地功能互补，不能用它替代独立倍率。合入时已保留 nullable 自定义倍率优先级，避免其无条件 `UltrafastMultiplier = 6` 覆盖运营者填写的数值；强制档位和免费补贴仍应与价格卡分开。自定义版本已有其他迁移，不能直接照搬该 PR 的迁移编号。
 
 ## 其他相关 PR
 

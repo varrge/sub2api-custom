@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 29 // v29: API key per-model group routing
+const apiKeyAuthSnapshotVersion = 30 // v30: forced service tier and free Ultrafast
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -505,8 +505,9 @@ func snapshotFromGroup(group *Group) *APIKeyAuthGroupSnapshot {
 		SupportedModelScopes:            group.SupportedModelScopes,
 		AllowMessagesDispatch:           group.AllowMessagesDispatch,
 		AllowLive:                       group.AllowLive,
-		ForceOpenAIFast:                 group.ForceOpenAIFast,
+		ForcedServiceTier:               group.ForcedServiceTier,
 		FreeOpenAIFast:                  group.FreeOpenAIFast,
+		FreeOpenAIUltrafast:             group.FreeOpenAIUltrafast,
 		DefaultMappedModel:              group.DefaultMappedModel,
 		MessagesDispatchModelConfig:     group.MessagesDispatchModelConfig,
 		ModelAllowlist:                  group.ModelAllowlist,
@@ -576,8 +577,9 @@ func snapshotToGroup(group *APIKeyAuthGroupSnapshot) *Group {
 		SupportedModelScopes:            group.SupportedModelScopes,
 		AllowMessagesDispatch:           group.AllowMessagesDispatch,
 		AllowLive:                       group.AllowLive,
-		ForceOpenAIFast:                 group.ForceOpenAIFast,
+		ForcedServiceTier:               group.ForcedServiceTier,
 		FreeOpenAIFast:                  group.FreeOpenAIFast,
+		FreeOpenAIUltrafast:             group.FreeOpenAIUltrafast,
 		DefaultMappedModel:              group.DefaultMappedModel,
 		MessagesDispatchModelConfig:     group.MessagesDispatchModelConfig,
 		ModelAllowlist:                  group.ModelAllowlist,

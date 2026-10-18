@@ -1586,7 +1586,7 @@
             </div>
           </div>
         </div>
-        <!-- OpenAI Fast 开关（OpenAI 与 Composite 平台） -->
+        <!-- OpenAI 服务档位（OpenAI 与 Composite 平台） -->
         <div
           v-if="supportsGroupOpenAIFast(createForm.platform)"
           class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4"
@@ -1596,12 +1596,13 @@
           </h4>
           <div class="flex items-center justify-between gap-4">
             <label class="text-sm text-gray-600 dark:text-gray-400">
-              {{ t("admin.groups.openaiFast.force") }}
+              {{ t("admin.groups.openaiFast.tier") }}
             </label>
-            <Toggle
-              data-testid="create-force-openai-fast"
-              :aria-label="t('admin.groups.openaiFast.force')"
-              v-model="createForm.force_openai_fast"
+            <Select
+              data-testid="create-forced-service-tier"
+              :aria-label="t('admin.groups.openaiFast.tier')"
+              v-model="createForm.forced_service_tier"
+              :options="openaiForcedServiceTierOptions"
             />
           </div>
           <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -1619,6 +1620,19 @@
           </div>
           <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
             {{ t("admin.groups.openaiFast.freeHint") }}
+          </p>
+          <div class="flex items-center justify-between gap-4 mt-4">
+            <label class="text-sm text-gray-600 dark:text-gray-400">
+              {{ t("admin.groups.openaiFast.freeUltrafast") }}
+            </label>
+            <Toggle
+              data-testid="create-free-openai-ultrafast"
+              :aria-label="t('admin.groups.openaiFast.freeUltrafast')"
+              v-model="createForm.free_openai_ultrafast"
+            />
+          </div>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {{ t("admin.groups.openaiFast.freeUltrafastHint") }}
           </p>
         </div>
 
@@ -3264,7 +3278,7 @@
             </div>
           </div>
         </div>
-        <!-- OpenAI Fast 开关（OpenAI 与 Composite 平台） -->
+        <!-- OpenAI 服务档位（OpenAI 与 Composite 平台） -->
         <div
           v-if="supportsGroupOpenAIFast(editForm.platform)"
           class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4"
@@ -3274,12 +3288,13 @@
           </h4>
           <div class="flex items-center justify-between gap-4">
             <label class="text-sm text-gray-600 dark:text-gray-400">
-              {{ t("admin.groups.openaiFast.force") }}
+              {{ t("admin.groups.openaiFast.tier") }}
             </label>
-            <Toggle
-              data-testid="edit-force-openai-fast"
-              :aria-label="t('admin.groups.openaiFast.force')"
-              v-model="editForm.force_openai_fast"
+            <Select
+              data-testid="edit-forced-service-tier"
+              :aria-label="t('admin.groups.openaiFast.tier')"
+              v-model="editForm.forced_service_tier"
+              :options="openaiForcedServiceTierOptions"
             />
           </div>
           <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -3297,6 +3312,19 @@
           </div>
           <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
             {{ t("admin.groups.openaiFast.freeHint") }}
+          </p>
+          <div class="flex items-center justify-between gap-4 mt-4">
+            <label class="text-sm text-gray-600 dark:text-gray-400">
+              {{ t("admin.groups.openaiFast.freeUltrafast") }}
+            </label>
+            <Toggle
+              data-testid="edit-free-openai-ultrafast"
+              :aria-label="t('admin.groups.openaiFast.freeUltrafast')"
+              v-model="editForm.free_openai_ultrafast"
+            />
+          </div>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {{ t("admin.groups.openaiFast.freeUltrafastHint") }}
           </p>
         </div>
 
@@ -4336,6 +4364,7 @@ import type {
   CompositeRouteDecision,
   CompositeRouteEndpoint,
   CompositeRouteMatchType,
+  ForcedServiceTier,
   GroupI18n,
   GroupPlatform,
   SubscriptionType,
@@ -4401,6 +4430,7 @@ import {
 } from "./groupsMessagesDispatch";
 import {
   normalizeGroupOpenAIFast,
+  normalizeForcedServiceTier,
   supportsGroupOpenAIFast,
 } from "./groupsOpenAIFast";
 import {
@@ -4736,6 +4766,25 @@ const compositeRouteMatchOptions = computed(() => [
   { value: "prefix", label: t("admin.groups.compositeRoutes.match.prefix") },
 ]);
 
+const openaiForcedServiceTierOptions = computed(() => [
+  {
+    value: "",
+    label: t("admin.groups.openaiFast.tierFollow"),
+  },
+  {
+    value: "default",
+    label: t("admin.groups.openaiFast.tierStandard"),
+  },
+  {
+    value: "priority",
+    label: t("admin.groups.openaiFast.tierFast"),
+  },
+  {
+    value: "ultrafast",
+    label: t("admin.groups.openaiFast.tierUltrafast"),
+  },
+]);
+
 const editStatusOptions = computed(() => [
   { value: "active", label: t("admin.accounts.status.active") },
   { value: "inactive", label: t("admin.accounts.status.inactive") },
@@ -5033,8 +5082,9 @@ const createForm = reactive({
   weekly_limit_usd: null as number | null,
   monthly_limit_usd: null as number | null,
   long_context_pricing_enabled: true,
-  force_openai_fast: false,
+  forced_service_tier: "" as ForcedServiceTier,
   free_openai_fast: false,
+  free_openai_ultrafast: false,
   model_pricing: [] as PricingFormEntry[],
   // 图片生成计费配置
   allow_image_generation: false,
@@ -5403,8 +5453,9 @@ const editForm = reactive({
   weekly_limit_usd: null as number | null,
   monthly_limit_usd: null as number | null,
   long_context_pricing_enabled: true,
-  force_openai_fast: false,
+  forced_service_tier: "" as ForcedServiceTier,
   free_openai_fast: false,
+  free_openai_ultrafast: false,
   model_pricing: [] as PricingFormEntry[],
   // 图片生成计费配置
   allow_image_generation: false,
@@ -5899,8 +5950,9 @@ const closeCreateModal = () => {
   createForm.video_price_1080p = null;
   createForm.video_model_prices = createVideoModelPricesForm();
   createForm.long_context_pricing_enabled = true;
-  createForm.force_openai_fast = false;
+  createForm.forced_service_tier = "";
   createForm.free_openai_fast = false;
+  createForm.free_openai_ultrafast = false;
   createForm.model_pricing = [];
   createForm.web_search_price_per_call = null;
   createForm.search_price_per_1k = null;
@@ -6075,13 +6127,17 @@ const handleCreateGroup = async () => {
     // 构建请求数据，包含模型路由配置
     const requestData = {
       ...createGroupForm,
-      force_openai_fast: normalizeGroupOpenAIFast(
+      forced_service_tier: normalizeForcedServiceTier(
         createForm.platform,
-        createForm.force_openai_fast,
+        createForm.forced_service_tier,
       ),
       free_openai_fast: normalizeGroupOpenAIFast(
         createForm.platform,
         createForm.free_openai_fast,
+      ),
+      free_openai_ultrafast: normalizeGroupOpenAIFast(
+        createForm.platform,
+        createForm.free_openai_ultrafast,
       ),
       model_pricing: groupPricingToAPI(
         createForm.model_pricing,
@@ -6243,8 +6299,9 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.monthly_limit_usd = group.monthly_limit_usd;
   editForm.long_context_pricing_enabled =
     group.long_context_pricing_enabled ?? true;
-  editForm.force_openai_fast = group.force_openai_fast ?? false;
+  editForm.forced_service_tier = group.forced_service_tier ?? "";
   editForm.free_openai_fast = group.free_openai_fast ?? false;
+  editForm.free_openai_ultrafast = group.free_openai_ultrafast ?? false;
   editForm.model_pricing = groupPricingFromAPI(group.model_pricing);
   editForm.allow_image_generation = group.allow_image_generation ?? false;
   editForm.allow_batch_image_generation =
@@ -6381,8 +6438,9 @@ const closeEditModal = () => {
   editForm.video_price_1080p = null;
   editForm.video_model_prices = createVideoModelPricesForm();
   editForm.long_context_pricing_enabled = true;
-  editForm.force_openai_fast = false;
+  editForm.forced_service_tier = "";
   editForm.free_openai_fast = false;
+  editForm.free_openai_ultrafast = false;
   editForm.model_pricing = [];
   editForm.web_search_price_per_call = null;
   editForm.search_price_per_1k = null;
@@ -6441,13 +6499,17 @@ const handleUpdateGroup = async () => {
     // 转换 fallback_group_id: null -> 0 (后端使用 0 表示清除)
     const payload = {
       ...editForm,
-      force_openai_fast: normalizeGroupOpenAIFast(
+      forced_service_tier: normalizeForcedServiceTier(
         editForm.platform,
-        editForm.force_openai_fast,
+        editForm.forced_service_tier,
       ),
       free_openai_fast: normalizeGroupOpenAIFast(
         editForm.platform,
         editForm.free_openai_fast,
+      ),
+      free_openai_ultrafast: normalizeGroupOpenAIFast(
+        editForm.platform,
+        editForm.free_openai_ultrafast,
       ),
       model_pricing: groupPricingToAPI(
         editForm.model_pricing,

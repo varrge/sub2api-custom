@@ -53,6 +53,7 @@ func TestGroupUltrafastPricingRoundTripAndBilling(t *testing.T) {
 	custom := 1.5
 	group := &service.Group{Name: t.Name(), Platform: service.PlatformOpenAI,
 		RateMultiplier: 0.8, Status: service.StatusActive, SubscriptionType: service.SubscriptionTypeStandard,
+		ForcedServiceTier: service.OpenAIFastTierUltrafast, FreeOpenAIUltrafast: true,
 		ModelPricing: []service.ChannelModelPricing{{Models: []string{"gpt-6.1-sol"}, BillingMode: service.BillingModeToken, UltrafastMultiplier: &custom}},
 	}
 	require.NoError(t, repo.Create(ctx, group))
@@ -60,9 +61,15 @@ func TestGroupUltrafastPricingRoundTripAndBilling(t *testing.T) {
 	resolver := service.NewModelPricingResolver(nil, billing)
 	for _, multiplier := range []*float64{&custom, nil} {
 		group.ModelPricing[0].UltrafastMultiplier = multiplier
+		if multiplier == nil {
+			group.ForcedServiceTier = ""
+			group.FreeOpenAIUltrafast = false
+		}
 		require.NoError(t, repo.Update(ctx, group))
 		loaded, err := repo.GetByID(ctx, group.ID)
 		require.NoError(t, err)
+		require.Equal(t, group.ForcedServiceTier, loaded.ForcedServiceTier)
+		require.Equal(t, group.FreeOpenAIUltrafast, loaded.FreeOpenAIUltrafast)
 		require.Len(t, loaded.ModelPricing, 1)
 		require.Equal(t, multiplier, loaded.ModelPricing[0].UltrafastMultiplier)
 		cost, err := billing.CalculateTokenCostForRequest(service.TokenCostRequest{

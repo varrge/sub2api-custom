@@ -46,7 +46,7 @@ func TestOpenAIGatewayServiceRecordUsage_GPT61SolSubscriptionLongContext(t *test
 		for _, groupMode := range []string{"无分组", "分组关闭", "分组开启"} {
 			for _, accountEnabled := range []bool{false, true} {
 				for _, accountType := range []string{AccountTypeOAuth, AccountTypeSetupToken, AccountTypeAPIKey} {
-					for _, tier := range []string{"", "priority"} {
+					for _, tier := range []string{"", "priority", "ultrafast"} {
 						name := fmt.Sprintf("目录=%t/%s/账号开关=%t/%s/%s", catalog, groupMode, accountEnabled, accountType, tier)
 						t.Run(name, func(t *testing.T) {
 							usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
@@ -86,6 +86,8 @@ func TestOpenAIGatewayServiceRecordUsage_GPT61SolSubscriptionLongContext(t *test
 							}
 							if tier == "priority" {
 								tierFactor = 2
+							} else if tier == "ultrafast" {
+								tierFactor = 6
 							}
 							log := usageRepo.lastLog
 							require.NotNil(t, log)

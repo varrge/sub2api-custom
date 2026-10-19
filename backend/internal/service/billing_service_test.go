@@ -1501,7 +1501,7 @@ func TestCalculateCost_LargeTokenCount(t *testing.T) {
 func TestServiceTierCostMultiplier(t *testing.T) {
 	require.InDelta(t, 2.0, serviceTierCostMultiplier("priority"), 1e-12)
 	require.InDelta(t, 2.0, serviceTierCostMultiplier(" Priority "), 1e-12)
-	require.InDelta(t, 2.0, serviceTierCostMultiplier("ultrafast"), 1e-12)
+	require.InDelta(t, 1.0, serviceTierCostMultiplier("ultrafast"), 1e-12)
 	require.InDelta(t, 0.5, serviceTierCostMultiplier("flex"), 1e-12)
 	require.InDelta(t, 1.0, serviceTierCostMultiplier(""), 1e-12)
 	require.InDelta(t, 1.0, serviceTierCostMultiplier("default"), 1e-12)
@@ -2155,6 +2155,23 @@ func TestAstraUltrafastPricingUsesSixTimesStandard(t *testing.T) {
 			}
 		}
 	}
+	for _, svc := range []*BillingService{newTestBillingService(), NewBillingService(&config.Config{}, &PricingService{}), NewBillingService(&config.Config{}, catalog)} {
+		for _, model := range []string{"gpt-6.1-sol", "gpt-6.1-sol-max", "openai/gpt-6.1-sol"} {
+			for _, n := range []int{271999, 272000, 272001} {
+				tokens := UsageTokens{InputTokens: n - 3000, CacheReadTokens: 2000, CacheCreationTokens: 1000, OutputTokens: 500}
+				cost, err := svc.CalculateCostWithServiceTier(model, tokens, 1, "ultrafast")
+				require.NoError(t, err)
+				im, om := 1.0, 1.0
+				if n > 272000 {
+					im, om = 2, 1.5
+				}
+				require.InDelta(t, float64(n-3000)*12e-6*im, cost.InputCost, 1e-10)
+				require.InDelta(t, 2000*0.6e-6*im, cost.CacheReadCost, 1e-10)
+				require.InDelta(t, 1000*15e-6*im, cost.CacheCreationCost, 1e-10)
+				require.InDelta(t, 500*60e-6*om, cost.OutputCost, 1e-10)
+			}
+		}
+	}
 	svc := newTestBillingService()
 	for _, custom := range []float64{0, 1e-6} {
 		fast := 3.0
@@ -2167,7 +2184,7 @@ func TestAstraUltrafastPricingUsesSixTimesStandard(t *testing.T) {
 	}
 	p, err := svc.GetModelPricing("gpt-6-sol")
 	require.NoError(t, err)
-	require.Equal(t, 2.0, configuredServiceTierMultiplier("ultrafast", p))
+	require.Equal(t, 1.0, configuredServiceTierMultiplier("ultrafast", p))
 }
 
 func TestGPT61SolExplicitZeroCacheWriteAcrossTiers(t *testing.T) {

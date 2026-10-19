@@ -39,6 +39,10 @@ FRONTEND_CRITICAL_VITEST := \
 	src/components/user/profile/__tests__/ProfileIdentityBindingsSection.spec.ts \
 	src/views/admin/__tests__/SettingsView.spec.ts \
 	src/views/admin/__tests__/GroupsView.duplicate.spec.ts \
+	src/views/admin/__tests__/GroupsView.openaiServiceTier.spec.ts \
+	src/views/admin/__tests__/groupsOpenAIFast.spec.ts \
+	src/views/admin/__tests__/ChannelsView.ultrafastPricing.spec.ts \
+	src/components/admin/channel/__tests__/PricingEntryCard.timePricing.spec.ts \
 	src/features/channel-monitor-v2/__tests__/designSystem.structure.spec.ts \
 	src/features/channel-monitor-v2/__tests__/monitorFormat.spec.ts \
 	src/features/channel-monitor-v2/__tests__/monitorZoom.spec.ts \

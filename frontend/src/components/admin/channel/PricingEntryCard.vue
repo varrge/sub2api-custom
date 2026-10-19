@@ -145,7 +145,7 @@
             </div>
           </div>
 
-          <div v-if="enableTierMultipliers" class="mt-3 grid max-w-md grid-cols-1 gap-2 sm:grid-cols-2">
+          <div v-if="enableTierMultipliers" class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
             <div>
               <label class="text-xs text-gray-400">{{ t('admin.channels.form.fastMultiplier') }}</label>
               <input :value="entry.fast_multiplier" @input="emitField('fast_multiplier', ($event.target as HTMLInputElement).value)"
@@ -156,6 +156,13 @@
               <input :value="entry.flex_multiplier" @input="emitField('flex_multiplier', ($event.target as HTMLInputElement).value)"
                 type="number" step="any" min="0.000001" class="input mt-0.5 text-sm" :placeholder="t('admin.channels.form.multiplierPlaceholder')" />
             </div>
+            <label class="text-xs text-gray-400">
+              {{ t('admin.channels.form.ultrafastMultiplier') }}
+              <input :value="entry.ultrafast_multiplier" @input="emitField('ultrafast_multiplier', ($event.target as HTMLInputElement).value)"
+                :aria-label="t('admin.channels.form.ultrafastMultiplier')"
+                type="number" step="any" min="0.000001" class="input mt-0.5 text-sm" :placeholder="t('admin.channels.form.multiplierPlaceholder')" />
+            </label>
+            <p class="text-xs text-gray-400 sm:col-span-3">{{ t('admin.channels.form.ultrafastMultiplierHint') }}</p>
           </div>
 
           <!-- Channel token intervals; the group long-context toggle controls whether tiers apply. -->

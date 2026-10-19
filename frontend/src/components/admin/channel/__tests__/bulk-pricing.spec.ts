@@ -43,9 +43,10 @@ describe('bulk default prices', () => {
     const entries = [
       blank(['CLAUDE-A'], { input_price: 0 }), blank(['claude-b*']),
       blank(['image-a'], { billing_mode: 'image', per_request_price: 0.1 }),
-      blank(['claude-c'], { fast_multiplier: 2 })
+      blank(['claude-c'], { fast_multiplier: 2 }),
+      blank(['gpt-6.1-sol'], { ultrafast_multiplier: 1 })
     ]
-    for (const model of ['claude-a', 'claude-b-2026', 'image-a', 'claude-c', '*']) {
+    for (const model of ['claude-a', 'claude-b-2026', 'image-a', 'claude-c', 'gpt-6.1-sol', '*']) {
       expect(canImportDefaultPricing(model, entries)).toBe(false)
     }
     expect(canImportDefaultPricing('claude-d', entries)).toBe(true)

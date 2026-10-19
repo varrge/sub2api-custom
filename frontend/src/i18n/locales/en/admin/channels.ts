@@ -164,6 +164,8 @@ export default {
         pricePlaceholder: 'Default',
         fastMultiplier: 'Fast Multiplier',
         flexMultiplier: 'Flex Multiplier',
+        ultrafastMultiplier: 'Ultrafast Multiplier',
+        ultrafastMultiplierHint: 'Leave Ultrafast blank for the model default: 6× for GPT-6.1 Sol / GPT-6 Astra, 2× for GPT-5.6 Sol, and no surcharge for models without built-in Ultrafast pricing. Set 1 for standard-tier prices. Independent of Fast. Only affects Ultrafast billing; does not enable or change the requested tier.',
         reasoningEffortMultipliers: 'Custom Reasoning Effort Multipliers (optional)',
         reasoningEffortMultipliersHint: 'Apply the multiplier for the final forwarded reasoning effort to the entire request cost and quota usage. Unconfigured levels use 1×. These multiply with other billing multipliers.',
         reasoningEffortMultiplierLabel: '{effort} reasoning effort multiplier',

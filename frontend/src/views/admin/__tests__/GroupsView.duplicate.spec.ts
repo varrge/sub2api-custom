@@ -176,8 +176,9 @@ function mountView() {
   })
 }
 
-function tierInput(wrapper: ReturnType<typeof mountView>, tier: 'fast' | 'flex') {
+function tierInput(wrapper: ReturnType<typeof mountView>, tier: 'fast' | 'flex' | 'ultrafast') {
   const input = wrapper.findAll('input').find(field =>
+    field.attributes('aria-label') === `admin.channels.form.${tier}Multiplier` ||
     field.element.parentElement?.querySelector('label')?.textContent === `admin.channels.form.${tier}Multiplier`
   )
   expect(input, `group model pricing must show a ${tier} price multiplier input`).toBeDefined()
@@ -391,14 +392,14 @@ describe('GroupsView duplicate action', () => {
     }))
     wrapper.unmount()
   })
-  it('loads, edits, and saves Fast and reasoning multipliers for group pricing', async () => {
+  it('loads, edits, and saves service tier and reasoning multipliers for group pricing', async () => {
     const group = {
       ...sourceGroup,
       model_pricing: [{
         platform: 'openai', models: ['example-model'], billing_mode: 'token',
         input_price: 3e-6, output_price: 15e-6, cache_write_price: null, cache_read_price: null,
         image_input_price: null, image_output_price: null, per_request_price: null,
-        fast_multiplier: 2.5, flex_multiplier: 0.5,
+        fast_multiplier: 2.5, flex_multiplier: 0.5, ultrafast_multiplier: 3,
         reasoning_effort_multipliers: { high: 1.5, max: 3 }, intervals: [], time_pricing: null,
       }],
     }
@@ -416,6 +417,8 @@ describe('GroupsView duplicate action', () => {
     expect(tierInput(wrapper, 'fast').element.value).toBe('2.5')
     expect(tierInput(wrapper, 'flex').element.value).toBe('0.5')
     await tierInput(wrapper, 'fast').setValue('1.5')
+    expect(tierInput(wrapper, 'ultrafast').element.value).toBe('3')
+    await tierInput(wrapper, 'ultrafast').setValue('1')
 
     expect(wrapper.get<HTMLInputElement>('[data-reasoning-effort="high"]').element.value).toBe('1.5')
     await wrapper.get('[data-reasoning-effort="high"]').setValue('0.5')
@@ -423,16 +426,17 @@ describe('GroupsView duplicate action', () => {
     await wrapper.get('#edit-group-form').trigger('submit')
     await flushPromises()
     expect(updateGroup).toHaveBeenCalledWith(42, expect.objectContaining({
-      model_pricing: [expect.objectContaining({ fast_multiplier: 1.5, flex_multiplier: 0.5, reasoning_effort_multipliers: { high: 0.5 } })],
+      model_pricing: [expect.objectContaining({ fast_multiplier: 1.5, flex_multiplier: 0.5, ultrafast_multiplier: 1, reasoning_effort_multipliers: { high: 0.5 } })],
     }))
     // Reopen from the API response to verify values survive a save and reload.
     await wrapper.findAll('button').find(button => button.text() === 'common.edit')!.trigger('click')
     await flushPromises()
     expect(tierInput(wrapper, 'fast').element.value).toBe('1.5')
+    expect(tierInput(wrapper, 'ultrafast').element.value).toBe('1')
     wrapper.unmount()
   })
 
-  it.each(['create', 'edit'] as const)('validates and clears Fast/Flex overrides when using the %s form', async mode => {
+  it.each(['create', 'edit'] as const)('validates and clears Fast/Flex/Ultrafast overrides when using the %s form', async mode => {
     const wrapper = mountView()
     await flushPromises()
     const action = mode === 'create' ? 'admin.groups.createGroup' : 'common.edit'
@@ -447,7 +451,7 @@ describe('GroupsView duplicate action', () => {
     const save = mode === 'create' ? vi.mocked(adminAPI.groups.create) : updateGroup
     save.mockClear()
     save.mockResolvedValue(sourceGroup)
-    for (const tier of ['fast', 'flex'] as const) {
+    for (const tier of ['fast', 'flex', 'ultrafast'] as const) {
       for (const value of ['0', '-1']) {
         await tierInput(wrapper, tier).setValue(value)
         await wrapper.get(`#${mode}-group-form`).trigger('submit')
@@ -459,6 +463,7 @@ describe('GroupsView duplicate action', () => {
     if (mode === 'create') {
       await tierInput(wrapper, 'fast').setValue('1.5')
       await tierInput(wrapper, 'flex').setValue('0.4')
+      await tierInput(wrapper, 'ultrafast').setValue('3.5')
     }
     await wrapper.get(`#${mode}-group-form`).trigger('submit')
     await flushPromises()
@@ -467,6 +472,7 @@ describe('GroupsView duplicate action', () => {
     expect(payload).toMatchObject({ model_pricing: [expect.objectContaining({
       fast_multiplier: mode === 'create' ? 1.5 : null,
       flex_multiplier: mode === 'create' ? 0.4 : null,
+      ultrafast_multiplier: mode === 'create' ? 3.5 : null,
     })] })
     wrapper.unmount()
   })

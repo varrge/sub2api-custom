@@ -449,13 +449,14 @@ func TestPricingRequestToService_TimePricingNil(t *testing.T) {
 	require.Nil(t, got[0].TimePricing)
 }
 
-// Fast/Flex 和区间倍率只用于渠道售价；思考等级倍率可在账号统计规则中独立配置。
+// Fast/Flex/Ultrafast 和区间倍率只用于渠道售价；思考等级倍率可在账号统计规则中独立配置。
 func TestPricingRequestToService_MultipliersGatedByFlag(t *testing.T) {
 	req := channelModelPricingRequest{
 		Models:                     []string{"gpt-5"},
 		BillingMode:                "token",
 		FastMultiplier:             float64Ptr(2.5),
 		FlexMultiplier:             float64Ptr(0.5),
+		UltrafastMultiplier:        float64Ptr(3.5),
 		ReasoningEffortMultipliers: map[string]float64{"high": 1.5, "max": 3},
 		Intervals: []pricingIntervalRequest{{
 			MinTokens:            272000,
@@ -469,6 +470,8 @@ func TestPricingRequestToService_MultipliersGatedByFlag(t *testing.T) {
 	allowed := pricingRequestToService([]channelModelPricingRequest{req}, true)
 	require.Equal(t, float64Ptr(2.5), allowed[0].FastMultiplier)
 	require.Equal(t, float64Ptr(0.5), allowed[0].FlexMultiplier)
+	require.Equal(t, float64Ptr(3.5), allowed[0].UltrafastMultiplier)
+	require.Equal(t, float64Ptr(3.5), pricingToResponse(&allowed[0]).UltrafastMultiplier)
 	require.Equal(t, req.ReasoningEffortMultipliers, allowed[0].ReasoningEffortMultipliers)
 	require.Equal(t, float64Ptr(2), allowed[0].Intervals[0].InputMultiplier)
 	require.Equal(t, float64Ptr(1.5), allowed[0].Intervals[0].OutputMultiplier)
@@ -478,6 +481,7 @@ func TestPricingRequestToService_MultipliersGatedByFlag(t *testing.T) {
 	dropped := pricingRequestToService([]channelModelPricingRequest{req}, false)
 	require.Nil(t, dropped[0].FastMultiplier)
 	require.Nil(t, dropped[0].FlexMultiplier)
+	require.Nil(t, dropped[0].UltrafastMultiplier)
 	require.Equal(t, req.ReasoningEffortMultipliers, dropped[0].ReasoningEffortMultipliers)
 	require.Nil(t, dropped[0].Intervals[0].InputMultiplier)
 	require.Nil(t, dropped[0].Intervals[0].OutputMultiplier)

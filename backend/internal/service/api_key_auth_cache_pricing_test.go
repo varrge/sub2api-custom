@@ -12,7 +12,7 @@ func TestAPIKeyAuthSnapshotGroupPricingRoundtrip(t *testing.T) {
 	groupID := int64(50)
 	inputPrice := 1e-6
 	outputPrice := 2e-6
-	fastMultiplier, flexMultiplier := 1.5, 0.4
+	fastMultiplier, flexMultiplier, ultrafastMultiplier := 1.5, 0.4, 3.5
 	apiKey := &APIKey{
 		ID: 82, UserID: 40, GroupID: &groupID, Key: "sk-pricing-roundtrip", Status: StatusActive,
 		User: &User{ID: 40, Status: StatusActive},
@@ -22,7 +22,7 @@ func TestAPIKeyAuthSnapshotGroupPricingRoundtrip(t *testing.T) {
 			ModelPricing: []ChannelModelPricing{{
 				Models: []string{"claude-sonnet-*"}, BillingMode: BillingModeToken,
 				InputPrice: &inputPrice, OutputPrice: &outputPrice,
-				FastMultiplier: &fastMultiplier, FlexMultiplier: &flexMultiplier,
+				FastMultiplier: &fastMultiplier, FlexMultiplier: &flexMultiplier, UltrafastMultiplier: &ultrafastMultiplier,
 			}},
 		},
 	}
@@ -53,7 +53,7 @@ func TestAPIKeyAuthSnapshotGroupPricingRoundtrip(t *testing.T) {
 	for _, tc := range []struct {
 		tier       string
 		multiplier float64
-	}{{"default", 1}, {"fast", fastMultiplier}, {"priority", fastMultiplier}, {"flex", flexMultiplier}} {
+	}{{"default", 1}, {"fast", fastMultiplier}, {"priority", fastMultiplier}, {"flex", flexMultiplier}, {"ultrafast", ultrafastMultiplier}} {
 		t.Run(tc.tier, func(t *testing.T) {
 			cost, err := billing.CalculateCostUnified(CostInput{
 				Model: "claude-sonnet-4", Group: materialized.Group, GroupID: &groupID,

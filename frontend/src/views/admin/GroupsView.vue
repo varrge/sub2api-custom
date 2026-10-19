@@ -4460,6 +4460,7 @@ const emptyGroupPricing = (): PricingFormEntry => ({
   cache_read_price: null,
   fast_multiplier: null,
   flex_multiplier: null,
+  ultrafast_multiplier: null,
   reasoning_effort_multipliers: null,
   image_input_price: null,
   image_output_price: null,
@@ -4484,6 +4485,7 @@ const groupPricingFromAPI = (
     cache_read_price: perTokenToMTok(entry.cache_read_price),
     fast_multiplier: entry.fast_multiplier ?? null,
     flex_multiplier: entry.flex_multiplier ?? null,
+    ultrafast_multiplier: entry.ultrafast_multiplier ?? null,
     reasoning_effort_multipliers: entry.reasoning_effort_multipliers
       ? { ...entry.reasoning_effort_multipliers }
       : null,
@@ -4511,6 +4513,7 @@ const groupPricingToAPI = (
       cache_read_price: mTokToPerToken(entry.cache_read_price),
       fast_multiplier: toNullableNumber(entry.fast_multiplier),
       flex_multiplier: toNullableNumber(entry.flex_multiplier),
+      ultrafast_multiplier: toNullableNumber(entry.ultrafast_multiplier),
       reasoning_effort_multipliers: formReasoningEffortMultipliersToAPI(
         entry.reasoning_effort_multipliers,
       ),
@@ -6019,7 +6022,8 @@ const validateProfitControlForm = (form: ProfitControlFormState): boolean => {
 const validateGroupPricingMultipliers = (pricing: PricingFormEntry[]): boolean => {
   for (const entry of pricing) {
     if (!isValidPositiveMultiplier(entry.fast_multiplier) ||
-        !isValidPositiveMultiplier(entry.flex_multiplier)) {
+        !isValidPositiveMultiplier(entry.flex_multiplier) ||
+        !isValidPositiveMultiplier(entry.ultrafast_multiplier)) {
       appStore.showError(`${entry.models.join(", ") || t("admin.channels.form.unnamed")}: ${t("admin.channels.form.multiplierPositive")}`);
       return false;
     }

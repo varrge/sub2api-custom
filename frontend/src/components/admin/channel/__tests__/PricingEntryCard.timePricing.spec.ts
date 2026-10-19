@@ -80,15 +80,17 @@ describe('PricingEntryCard time pricing visibility', () => {
 })
 
 describe('PricingEntryCard request multipliers', () => {
-  it('shows Fast and Flex controls only when explicitly enabled', () => {
+  it('shows Fast, Flex and Ultrafast controls only when explicitly enabled', () => {
     const hidden = shallowMount(PricingEntryCard, { props: { entry: createEntry() } })
     expect(hidden.text()).not.toContain('admin.channels.form.fastMultiplier')
+    expect(hidden.text()).not.toContain('admin.channels.form.ultrafastMultiplier')
 
     const shown = shallowMount(PricingEntryCard, {
       props: { entry: createEntry(), enableTierMultipliers: true },
     })
     expect(shown.text()).toContain('admin.channels.form.fastMultiplier')
     expect(shown.text()).toContain('admin.channels.form.flexMultiplier')
+    expect(shown.text()).toContain('admin.channels.form.ultrafastMultiplier')
     expect(shown.text()).toContain('admin.channels.form.reasoningEffortMultipliers')
   })
 

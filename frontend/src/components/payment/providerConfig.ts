@@ -18,6 +18,7 @@ export interface ConfigFieldDef {
 export interface TypeOption {
   value: string
   label: string
+  labelKey?: string
   [key: string]: unknown
 }
 
@@ -46,6 +47,12 @@ export const PROVIDER_SUPPORTED_TYPES: Record<string, string[]> = {
 
 /** Available payment modes for EasyPay providers. */
 export const EASYPAY_PAYMENT_MODES = ['qrcode', 'popup'] as const
+
+/** How an EasyPay notification is trusted before local fulfillment. */
+export const EASYPAY_NOTIFICATION_CONFIRMATION_MODES: TypeOption[] = [
+  { value: 'upstream', label: 'Signature + order query', labelKey: 'admin.settings.payment.confirmModeUpstream' },
+  { value: 'signed_callback', label: 'Signed callback only', labelKey: 'admin.settings.payment.confirmModeCallback' },
+]
 
 /** Fixed display order for user-facing payment methods */
 export const METHOD_ORDER = ['alipay', 'alipay_direct', 'wxpay', 'wxpay_direct', 'stripe', 'airwallex'] as const
@@ -129,6 +136,14 @@ export const PROVIDER_CONFIG_FIELDS: Record<string, ConfigFieldDef[]> = {
     { key: 'pid', label: 'PID', sensitive: false },
     { key: 'pkey', label: 'PKey', sensitive: true },
     { key: 'apiBase', label: '', sensitive: false },
+    {
+      key: 'notificationConfirmMode',
+      label: '',
+      sensitive: false,
+      defaultValue: 'upstream',
+      hintKey: 'admin.settings.payment.field_notificationConfirmModeHint',
+      options: EASYPAY_NOTIFICATION_CONFIRMATION_MODES,
+    },
     { key: 'cidAlipay', label: '', sensitive: false, optional: true },
     { key: 'cidWxpay', label: '', sensitive: false, optional: true },
   ],

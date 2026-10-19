@@ -233,6 +233,9 @@ type easyPayCustomMethodConfig struct {
 }
 
 func validateEasyPayCustomMethods(config map[string]string, supportedTypes string) error {
+	if err := provider.ValidateEasyPayNotificationConfirmMode(config["notificationConfirmMode"]); err != nil {
+		return infraerrors.BadRequest("VALIDATION_ERROR", err.Error())
+	}
 	if config == nil {
 		config = map[string]string{}
 	}

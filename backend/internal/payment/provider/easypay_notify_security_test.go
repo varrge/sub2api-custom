@@ -22,6 +22,7 @@ package provider
 import (
 	"context"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/payment"
@@ -138,6 +139,31 @@ func TestEasyPayNotifyAcceptsGenuineCallback(t *testing.T) {
 	}
 	if n.OrderID != "ORDER123" || n.TradeNo != "2026100622001400000001" || n.Amount != 650.00 {
 		t.Fatalf("unexpected notification: %+v", n)
+	}
+}
+
+func TestEasyPaySignedCallbackRequiresTradeIdentity(t *testing.T) {
+	t.Parallel()
+	e := easyPayPoCProvider()
+	e.config[easyPayNotificationConfirmModeKey] = easyPayNotificationConfirmModeCallback
+
+	params := map[string]string{
+		"pid":          "1000",
+		"out_trade_no": "ORDER123",
+		"type":         "alipay",
+		"name":         "balance recharge",
+		"money":        "650.00",
+		"trade_status": tradeStatusSuccess,
+	}
+	params["sign"] = easyPaySign(params, e.config["pkey"])
+	params["sign_type"] = signTypeMD5
+	q := url.Values{}
+	for k, v := range params {
+		q.Set(k, v)
+	}
+
+	if _, err := e.VerifyNotification(context.Background(), q.Encode(), nil); err == nil || !strings.Contains(err.Error(), "trade_no") {
+		t.Fatalf("missing trade_no should be rejected in signed callback mode, got %v", err)
 	}
 }
 

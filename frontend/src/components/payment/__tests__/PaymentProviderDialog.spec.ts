@@ -84,6 +84,7 @@ function mountDialog(options: { editing?: ProviderInstance | null } = {}) {
           template: '<div><slot /><slot name="footer" /></div>',
         },
         Select: {
+          name: 'Select',
           props: ['modelValue', 'options', 'disabled'],
           template: '<div />',
         },
@@ -275,5 +276,31 @@ describe('PaymentProviderDialog payment guide', () => {
     await wrapper.find('form').trigger('submit.prevent')
 
     expect(wrapper.emitted('save')).toBeUndefined()
+  })
+})
+
+describe('EasyPay notification confirmation', () => {
+  it.each([undefined, 'upstream', 'signed_callback'])('loads and saves mode %s without changing the choice', async (mode) => {
+    const provider = providerFactory({
+      provider_key: 'easypay', name: 'EasyPay', supported_types: ['wxpay'],
+      config: { pid: '1001', apiBase: 'https://pay.test', ...(mode ? { notificationConfirmMode: mode } : {}) },
+    })
+    const wrapper = mountDialog({ editing: provider })
+    ;(wrapper.vm as unknown as { loadProvider: (p: ProviderInstance) => void }).loadProvider(provider)
+    await nextTick()
+    const selector = wrapper.findAllComponents({ name: 'Select' }).find(component =>
+      component.props('options')?.some((option: { value: string }) => option.value === 'signed_callback'))
+    expect(selector?.props('modelValue')).toBe(mode || 'upstream')
+    expect(selector?.props('options')).toEqual([
+      expect.objectContaining({ value: 'upstream', label: 'admin.settings.payment.confirmModeUpstream' }),
+      expect.objectContaining({ value: 'signed_callback', label: 'admin.settings.payment.confirmModeCallback' }),
+    ])
+    await wrapper.find('form').trigger('submit')
+    expect((wrapper.emitted('save')?.[0]?.[0] as { config: Record<string, string> }).config.notificationConfirmMode).toBe(mode || 'upstream')
+    selector?.vm.$emit('update:modelValue', mode === 'signed_callback' ? 'upstream' : 'signed_callback')
+    await nextTick()
+    await wrapper.find('form').trigger('submit')
+    expect((wrapper.emitted('save')?.[1]?.[0] as { config: Record<string, string> }).config.notificationConfirmMode).toBe(mode === 'signed_callback' ? 'upstream' : 'signed_callback')
+    wrapper.unmount()
   })
 })

@@ -41,20 +41,30 @@ func (s *PaymentService) HandlePaymentNotification(ctx context.Context, n *payme
 	if n.Status != payment.NotificationStatusSuccess {
 		return nil
 	}
-	// Look up order by out_trade_no (the external order ID we sent to the provider)
-	order, err := s.entClient.PaymentOrder.Query().Where(paymentorder.OutTradeNo(n.OrderID)).Only(ctx)
+	order, err := s.getPaymentNotificationOrder(ctx, n.OrderID)
 	if err != nil {
-		// Fallback only for true legacy "sub2_N" DB-ID payloads when the
-		// current out_trade_no lookup genuinely did not find an order.
-		if oid, ok := parseLegacyPaymentOrderID(n.OrderID, err); ok {
-			return s.confirmPayment(ctx, oid, n.TradeNo, n.Amount, pk, n.Metadata)
-		}
 		if dbent.IsNotFound(err) {
 			return fmt.Errorf("%w: out_trade_no=%s", ErrOrderNotFound, n.OrderID)
 		}
 		return fmt.Errorf("lookup order failed for out_trade_no %s: %w", n.OrderID, err)
 	}
 	return s.confirmPayment(ctx, order.ID, n.TradeNo, n.Amount, pk, n.Metadata)
+}
+
+// Use the same order binding for provider selection and fulfillment. Old
+// sub2_N aliases must never identify a modern order with a different external ID.
+func (s *PaymentService) getPaymentNotificationOrder(ctx context.Context, outTradeNo string) (*dbent.PaymentOrder, error) {
+	order, err := s.entClient.PaymentOrder.Query().Where(paymentorder.OutTradeNo(outTradeNo)).Only(ctx)
+	if oid, ok := parseLegacyPaymentOrderID(outTradeNo, err); ok {
+		legacy, legacyErr := s.entClient.PaymentOrder.Get(ctx, oid)
+		if legacyErr != nil {
+			return nil, legacyErr
+		}
+		if legacy.OutTradeNo == "" {
+			return legacy, nil
+		}
+	}
+	return order, err
 }
 
 // ConfirmNotificationUpstream asks providers that implement

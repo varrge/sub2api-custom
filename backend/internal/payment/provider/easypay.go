@@ -34,6 +34,10 @@ const (
 	signTypeMD5            = "MD5"
 	paymentModePopup       = "popup"
 	deviceMobile           = "mobile"
+	// Only an explicit administrator setting may omit the upstream query.
+	easyPayNotificationConfirmModeKey      = "notificationConfirmMode"
+	easyPayNotificationConfirmModeUpstream = "upstream"
+	easyPayNotificationConfirmModeCallback = "signed_callback"
 )
 
 // EasyPay implements payment.Provider for the EasyPay aggregation platform.
@@ -52,6 +56,9 @@ type easyPayCustomMethod struct {
 // NewEasyPay creates a new EasyPay provider.
 // config keys: pid, pkey, apiBase, notifyUrl, returnUrl, cid, cidAlipay, cidWxpay
 func NewEasyPay(instanceID string, config map[string]string) (*EasyPay, error) {
+	if err := ValidateEasyPayNotificationConfirmMode(config[easyPayNotificationConfirmModeKey]); err != nil {
+		return nil, err
+	}
 	for _, k := range []string{"pid", "pkey", "apiBase", "notifyUrl", "returnUrl"} {
 		if strings.TrimSpace(config[k]) == "" {
 			return nil, fmt.Errorf("easypay config missing required key: %s", k)
@@ -67,6 +74,15 @@ func NewEasyPay(instanceID string, config map[string]string) (*EasyPay, error) {
 		config:     cfg,
 		httpClient: &http.Client{Timeout: easypayHTTPTimeout},
 	}, nil
+}
+
+func ValidateEasyPayNotificationConfirmMode(mode string) error {
+	switch strings.TrimSpace(mode) {
+	case "", easyPayNotificationConfirmModeUpstream, easyPayNotificationConfirmModeCallback:
+		return nil
+	default:
+		return fmt.Errorf("invalid EasyPay notification confirmation mode")
+	}
 }
 
 func normalizeEasyPayAPIBase(apiBase string) string {
@@ -100,6 +116,13 @@ func (e *EasyPay) apiBase() string {
 		return ""
 	}
 	return normalizeEasyPayAPIBase(e.config["apiBase"])
+}
+
+func (e *EasyPay) usesSignedCallbackConfirmation() bool {
+	if e == nil {
+		return false
+	}
+	return strings.TrimSpace(e.config[easyPayNotificationConfirmModeKey]) == easyPayNotificationConfirmModeCallback
 }
 
 func (e *EasyPay) Name() string        { return "EasyPay" }
@@ -427,6 +450,13 @@ func (e *EasyPay) ConfirmNotification(ctx context.Context, n *payment.PaymentNot
 	if n == nil || n.Status != payment.NotificationStatusSuccess {
 		return nil
 	}
+	// Some EasyPay-compatible gateways do not expose an order-query API. This
+	// mode is opt-in and still runs all callback verification and local
+	// fulfillment checks; it only omits the independent upstream query. Any
+	// missing or unknown mode keeps the safer query-confirmation behavior.
+	if e.usesSignedCallbackConfirmation() {
+		return nil
+	}
 	result, err := e.queryOrder(ctx, n.OrderID)
 	if err != nil {
 		return fmt.Errorf("easypay confirm: %w", err)
@@ -482,6 +512,9 @@ func (e *EasyPay) VerifyNotification(_ context.Context, rawBody string, _ map[st
 	// url.ParseQuery already decodes values — no additional decode needed.
 	params := make(map[string]string)
 	for k := range values {
+		if len(values[k]) != 1 {
+			return nil, fmt.Errorf("duplicate notify param: %s", k)
+		}
 		if !easyPayNotifyAllowedParams[k] {
 			return nil, fmt.Errorf("unexpected notify param: %s", k)
 		}
@@ -505,6 +538,13 @@ func (e *EasyPay) VerifyNotification(_ context.Context, rawBody string, _ map[st
 	// relying on the order snapshot, which legacy orders do not carry.
 	if expected, actual := strings.TrimSpace(e.config["pid"]), strings.TrimSpace(params["pid"]); actual != expected {
 		return nil, fmt.Errorf("easypay pid mismatch: expected %s, got %s", expected, actual)
+	}
+	if e.usesSignedCallbackConfirmation() && params["trade_status"] == tradeStatusSuccess {
+		for _, key := range []string{"out_trade_no", "trade_no", "money"} {
+			if strings.TrimSpace(params[key]) == "" {
+				return nil, fmt.Errorf("missing required signed callback field: %s", key)
+			}
+		}
 	}
 	status := payment.ProviderStatusFailed
 	if params["trade_status"] == tradeStatusSuccess {

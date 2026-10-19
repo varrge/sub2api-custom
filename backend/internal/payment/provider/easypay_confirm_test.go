@@ -191,6 +191,19 @@ func TestEasyPayConfirmNotificationSkipsNonSuccess(t *testing.T) {
 	}
 }
 
+func TestEasyPayConfirmNotificationSignedCallbackModeSkipsUpstream(t *testing.T) {
+	t.Parallel()
+
+	provider, calls := newConfirmTestEasyPay(t, `{}`, http.StatusOK)
+	provider.config[easyPayNotificationConfirmModeKey] = easyPayNotificationConfirmModeCallback
+	if err := provider.ConfirmNotification(context.Background(), confirmTestNotification()); err != nil {
+		t.Fatalf("ConfirmNotification returned error: %v", err)
+	}
+	if calls.Load() != 0 {
+		t.Fatalf("upstream query calls = %d, want 0 in signed callback mode", calls.Load())
+	}
+}
+
 func TestEasyPayConfirmNotificationQueryTransportError(t *testing.T) {
 	t.Parallel()
 
@@ -297,5 +310,26 @@ func TestEasyPayConfirmedNotificationPreservesSignedPaymentTime(t *testing.T) {
 	}
 	if calls.Load() != 1 || n.Metadata["paid_at"] != params["endtime"] || n.Metadata["pid"] != params["pid"] {
 		t.Fatalf("confirmation lost signed metadata: calls=%d notification=%+v", calls.Load(), n)
+	}
+}
+
+func TestEasyPayConfirmationModeDefaultsAndValidation(t *testing.T) {
+	for _, mode := range []string{"", "upstream", "signed_callback", "typo"} {
+		t.Run(mode, func(t *testing.T) {
+			p, calls := newConfirmTestEasyPay(t, `<html>challenge</html>`, http.StatusOK)
+			p.config[easyPayNotificationConfirmModeKey] = mode
+			err := p.ConfirmNotification(context.Background(), confirmTestNotification())
+			if mode == "signed_callback" {
+				if err != nil || calls.Load() != 0 {
+					t.Fatalf("callback mode queried upstream: err=%v calls=%d", err, calls.Load())
+				}
+			} else if err == nil || calls.Load() != 1 {
+				t.Fatalf("mode %q skipped required query: err=%v calls=%d", mode, err, calls.Load())
+			}
+			_, err = NewEasyPay("fixture", p.config)
+			if (err != nil) != (mode == "typo") {
+				t.Fatalf("constructor validation for %q: %v", mode, err)
+			}
+		})
 	}
 }

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
-	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 )
@@ -31,7 +30,7 @@ func (s *PaymentService) GetWebhookProvider(ctx context.Context, providerKey, ou
 // cannot be bound to a merchant before decryption.
 func (s *PaymentService) GetWebhookProviders(ctx context.Context, providerKey, outTradeNo string) ([]payment.Provider, error) {
 	if outTradeNo != "" {
-		order, err := s.entClient.PaymentOrder.Query().Where(paymentorder.OutTradeNo(outTradeNo)).Only(ctx)
+		order, err := s.getPaymentNotificationOrder(ctx, outTradeNo)
 		if err == nil {
 			if psHasPinnedProviderInstance(order) {
 				prov, err := s.getPinnedOrderProvider(ctx, order)

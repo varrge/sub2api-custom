@@ -822,3 +822,41 @@ func validWxpayProviderConfigWithJSAPIAppID(t *testing.T) map[string]string {
 	cfg["mpAppId"] = "wx-mp-app-test"
 	return cfg
 }
+
+func TestEasyPayConfirmationModeAdminValidationAndDefaults(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	svc := &PaymentConfigService{entClient: client}
+	cfg := validEasyPayProviderConfig(t)
+	instance, err := svc.CreateProviderInstance(ctx, CreateProviderInstanceRequest{ProviderKey: payment.TypeEasyPay, Name: "mode test", Config: cfg, Enabled: true, SupportedTypes: []string{payment.TypeAlipay}})
+	require.NoError(t, err)
+	createPendingProviderConfigOrder(t, ctx, client, instance)
+	// Saving the UI's explicit default must not count as a policy change on an old instance.
+	_, err = svc.UpdateProviderInstance(ctx, instance.ID, UpdateProviderInstanceRequest{Config: map[string]string{"notificationConfirmMode": "upstream"}})
+	require.NoError(t, err)
+	require.False(t, hasPendingOrderProtectedConfigChange(payment.TypeEasyPay, map[string]string{}, map[string]string{"notificationConfirmMode": "upstream"}))
+	// Administrators can recover pending orders without cancelling them or
+	// replacing their pinned signing credentials.
+	_, err = svc.UpdateProviderInstance(ctx, instance.ID, UpdateProviderInstanceRequest{Config: map[string]string{"notificationConfirmMode": "signed_callback"}})
+	require.NoError(t, err)
+	updated, err := client.PaymentProviderInstance.Get(ctx, instance.ID)
+	require.NoError(t, err)
+	stored, err := svc.decryptConfig(updated.Config)
+	require.NoError(t, err)
+	require.Equal(t, "signed_callback", stored["notificationConfirmMode"])
+	require.Equal(t, cfg["pkey"], stored["pkey"])
+	for _, enabled := range []bool{true, false} {
+		cfg["notificationConfirmMode"] = "unknown"
+		_, err = svc.CreateProviderInstance(ctx, CreateProviderInstanceRequest{ProviderKey: payment.TypeEasyPay, Name: "invalid mode", Config: cfg, Enabled: enabled})
+		require.Error(t, err)
+		require.Equal(t, "VALIDATION_ERROR", infraerrors.Reason(err))
+	}
+	cfg["notificationConfirmMode"] = "signed_callback"
+	other, err := svc.CreateProviderInstance(ctx, CreateProviderInstanceRequest{ProviderKey: payment.TypeEasyPay, Name: "callback instance", Config: cfg, Enabled: true})
+	require.NoError(t, err)
+	_, err = svc.UpdateProviderInstance(ctx, other.ID, UpdateProviderInstanceRequest{Config: map[string]string{"notificationConfirmMode": "typo"}})
+	require.Error(t, err)
+	require.Equal(t, "VALIDATION_ERROR", infraerrors.Reason(err))
+	_, err = svc.UpdateProviderInstance(ctx, other.ID, UpdateProviderInstanceRequest{Config: map[string]string{"notificationConfirmMode": "upstream"}})
+	require.NoError(t, err)
+}

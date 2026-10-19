@@ -6,7 +6,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"testing"
+	"time"
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
@@ -103,4 +105,30 @@ func TestErrOrderNotFound_DistinctFromOtherErrors(t *testing.T) {
 	wrappedLookupErr := errors.New("lookup order failed for out_trade_no sub2_42: connection refused")
 	require.False(t, errors.Is(wrappedLookupErr, ErrOrderNotFound),
 		"DB connection failures must not masquerade as order-not-found")
+}
+
+func TestPaymentNotificationLegacyAliasCannotMatchModernOrder(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	u, err := client.User.Create().SetEmail("alias@example.test").SetPasswordHash("fixture").Save(ctx)
+	require.NoError(t, err)
+	o, err := client.PaymentOrder.Create().SetUserID(u.ID).SetUserEmail(u.Email).SetUserName("fixture").
+		SetAmount(10).SetPayAmount(10).SetFeeRate(0).SetRechargeCode("PAY-alias").SetOutTradeNo("sub2_random-order").
+		SetPaymentType(payment.TypeWxpay).SetPaymentTradeNo("").SetOrderType(payment.OrderTypeBalance).
+		SetStatus(payment.OrderStatusPending).SetExpiresAt(time.Now().Add(time.Hour)).SetClientIP("127.0.0.1").SetSrcHost("fixture.test").Save(ctx)
+	require.NoError(t, err)
+	svc := &PaymentService{entClient: client}
+	alias := fmt.Sprintf("sub2_%d", o.ID)
+	err = svc.HandlePaymentNotification(ctx, &payment.PaymentNotification{
+		OrderID: alias, TradeNo: "historical-trade", Amount: 10, Status: payment.NotificationStatusSuccess,
+	}, payment.TypeEasyPay)
+	require.ErrorIs(t, err, ErrOrderNotFound)
+	unchanged, err := client.PaymentOrder.Get(ctx, o.ID)
+	require.NoError(t, err)
+	require.Equal(t, payment.OrderStatusPending, unchanged.Status)
+	_, err = client.PaymentOrder.UpdateOneID(o.ID).SetOutTradeNo("").Save(ctx)
+	require.NoError(t, err)
+	legacy, err := svc.getPaymentNotificationOrder(ctx, alias)
+	require.NoError(t, err)
+	require.Equal(t, o.ID, legacy.ID)
 }

@@ -165,7 +165,7 @@ export default {
         fastMultiplier: 'Fast 倍率',
         flexMultiplier: 'Flex 倍率',
         ultrafastMultiplier: 'Ultrafast 倍率',
-        ultrafastMultiplierHint: 'Ultrafast 留空沿用模型默认倍率（GPT-6.1 Sol / GPT-6 Astra 为 6 倍）；填 1 按标准档价格计费。独立于 Fast 倍率，仅影响 Ultrafast 请求的计费，不会切换请求档位。',
+        ultrafastMultiplierHint: 'Ultrafast 留空沿用模型默认倍率：GPT-6.1 Sol / GPT-6 Astra 为 6 倍，GPT-5.6 Sol 为 2 倍，无内置 Ultrafast 定价的模型不额外加价。填 1 按标准档价格计费。独立于 Fast，仅影响 Ultrafast 请求的计费，不会启用或切换请求档位。',
         reasoningEffortMultipliers: '自定义思考等级倍率（可选）',
         reasoningEffortMultipliersHint: '按请求最终转发的思考等级，对整次请求的费用与额度消耗应用对应倍率。未配置的等级按 1 倍计费，可与其他计费倍率叠加。',
         reasoningEffortMultiplierLabel: '{effort} 思考等级倍率',

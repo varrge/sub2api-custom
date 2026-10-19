@@ -111,3 +111,56 @@ func TestUltrafastMultiplierValidation(t *testing.T) {
 		require.NoError(t, checkPricesNotNegative(ChannelModelPricing{UltrafastMultiplier: value}))
 	}
 }
+
+func TestUltrafastKnownModelDefaultsAndUnknownModelFallback(t *testing.T) {
+	svc := newTestBillingService()
+	tokens := UsageTokens{InputTokens: 1000, OutputTokens: 500, CacheCreationTokens: 200, CacheReadTokens: 300}
+	for _, tc := range []struct {
+		model string
+		want  float64
+	}{
+		{"gpt-6.1-sol", 6}, {"openai/GPT_6.1_SOL-max", 6},
+		{"gpt-6-astra", 6}, {"gpt-6", 6},
+		{"gpt-5.6-sol", 2}, {"gpt-5.6", 2}, {"openai/gpt-5.6-sol-high", 2},
+		{"gpt-6-sol", 1}, {"gpt-6-luna", 1}, {"gpt-5.6-terra", 1},
+		{"gpt-5.6-luna", 1}, {"gpt-5.4", 1}, {"claude-sonnet-4", 1},
+	} {
+		t.Run(tc.model, func(t *testing.T) {
+			standard, err := svc.CalculateCostWithServiceTier(tc.model, tokens, 0.8, "default")
+			require.NoError(t, err)
+			ultra, err := svc.CalculateCostWithServiceTier(tc.model, tokens, 0.8, "ultrafast")
+			require.NoError(t, err)
+			require.InDelta(t, standard.InputCost*tc.want, ultra.InputCost, 1e-12)
+			require.InDelta(t, standard.OutputCost*tc.want, ultra.OutputCost, 1e-12)
+			require.InDelta(t, standard.CacheCreationCost*tc.want, ultra.CacheCreationCost, 1e-12)
+			require.InDelta(t, standard.CacheReadCost*tc.want, ultra.CacheReadCost, 1e-12)
+			require.InDelta(t, standard.ActualCost*tc.want, ultra.ActualCost, 1e-12)
+		})
+	}
+}
+
+func TestUltrafastCustomModelOverrideOnlyAppliesToUltrafast(t *testing.T) {
+	svc := newTestBillingService()
+	resolver := NewModelPricingResolver(nil, svc)
+	group := &Group{ID: 7, ModelPricing: []ChannelModelPricing{{
+		Models: []string{"custom-model"}, BillingMode: BillingModeToken,
+		InputPrice: pricingMultiplier(2e-6), OutputPrice: pricingMultiplier(10e-6),
+		FastMultiplier: pricingMultiplier(2.5), FlexMultiplier: pricingMultiplier(0.5),
+	}}}
+	input := CostInput{Ctx: context.Background(), Model: "custom-model", Group: group, GroupID: &group.ID,
+		Tokens: UsageTokens{InputTokens: 1000, OutputTokens: 200}, RateMultiplier: 0.8, Resolver: resolver}
+	for _, override := range []*float64{nil, pricingMultiplier(3.5)} {
+		group.ModelPricing[0].UltrafastMultiplier = override
+		ultrafast := 1.0
+		if override != nil {
+			ultrafast = *override
+		}
+		for tier, want := range map[string]float64{"": 1, "default": 1, "priority": 2.5, "fast": 2.5, "flex": 0.5, "ultrafast": ultrafast} {
+			input.ServiceTier = tier
+			cost, err := svc.CalculateCostUnified(input)
+			require.NoError(t, err)
+			require.InDelta(t, 0.004*want, cost.TotalCost, 1e-12, "tier=%s", tier)
+			require.InDelta(t, 0.004*want*0.8, cost.ActualCost, 1e-12, "tier=%s", tier)
+		}
+	}
+}

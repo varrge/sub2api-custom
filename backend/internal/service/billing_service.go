@@ -143,7 +143,7 @@ func usePriorityServiceTierPricing(serviceTier string, pricing *ModelPricing) bo
 
 func serviceTierCostMultiplier(serviceTier string) float64 {
 	switch normalizeBillingServiceTier(serviceTier) {
-	case "priority", "fast", OpenAIFastTierUltrafast:
+	case "priority", "fast":
 		return 2.0
 	case "flex":
 		return 0.5
@@ -1941,14 +1941,20 @@ func (s *BillingService) applyModelSpecificPricingPolicyEx(model string, pricing
 		(pricing.InputPricePerTokenPriority > 0 && pricing.CacheCreationPricePerTokenPriority <= 0))
 	fastRatio := openAIModelFastPricingRatio(normalized)
 	needsOpus55FastMultiplier := claude.IsOpus55(model) && pricing.FastMultiplier == nil
-	needsUltrafastMultiplier := pricing.UltrafastMultiplier == nil && (isOpenAIGPT6AstraModel(normalized) || openai.IsGPT61SolModelSpelling(normalized))
+	// An Ultrafast label alone does not establish a surcharge for an unknown model.
+	ultrafastRatio := 0.0
+	if isOpenAIGPT6AstraModel(normalized) || openai.IsGPT61SolModelSpelling(normalized) {
+		ultrafastRatio = 6
+	} else if normalized == "gpt-5.6-sol" {
+		ultrafastRatio = 2
+	}
+	needsUltrafastMultiplier := pricing.UltrafastMultiplier == nil && ultrafastRatio > 0
 	if !needsCacheCreationPolicy && fastRatio <= 0 && !needsOpus55FastMultiplier && !needsUltrafastMultiplier {
 		return pricing
 	}
 	cloned := *pricing
 	if needsUltrafastMultiplier {
-		multiplier := 6.0
-		cloned.UltrafastMultiplier = &multiplier
+		cloned.UltrafastMultiplier = &ultrafastRatio
 	}
 	if needsOpus55FastMultiplier {
 		multiplier := 2.0

@@ -37,7 +37,7 @@
 
 ```sh
 cd backend
-PAYMENT_WEBHOOK_TEST_DSN='<独立测试 PostgreSQL URL>' go test -race ./internal/handler -run '^TestEasyPayWebhookSecurityPostgres$' -count=1
+PAYMENT_WEBHOOK_TEST_DSN='<独立测试 PostgreSQL URL>' go test -race ./internal/integration -run '^TestEasyPayWebhookSecurityPostgres$' -count=1
 ```
 
 ## 发布边界

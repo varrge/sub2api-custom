@@ -83,6 +83,12 @@ jobs:
           MONTHCARD_PAYMENT_TEST_DSN: postgres://monthcard_test:isolated-test-password@127.0.0.1:55439/monthcard_test?sslmode=disable
         run: go test -race ./internal/monthcard -count=1
 
+      - name: EasyPay PostgreSQL webhook security and replay protection
+        working-directory: backend
+        env:
+          PAYMENT_WEBHOOK_TEST_DSN: postgres://monthcard_test:isolated-test-password@127.0.0.1:55439/monthcard_test?sslmode=disable
+        run: go test -race ./internal/handler -run '^TestEasyPayWebhookSecurityPostgres$' -count=1
+
   frontend:
     runs-on: ubuntu-latest
     steps:

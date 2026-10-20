@@ -73,7 +73,7 @@ const adminTeamsWhere = ` WHERE ($3::bigint=0 OR t.group_id=$3)
 	AND ($4='' OR t.code ILIKE $4 OR t.product_snapshot->>'name' ILIKE $4
 	 OR t.product_snapshot->>'group_name' ILIKE $4 OR EXISTS (
 		SELECT 1 FROM month_card_cards c JOIN users u ON u.id=c.user_id
-		WHERE c.team_id=t.id AND (u.username ILIKE $4 OR u.email ILIKE $4 OR c.user_id::text=$6)))
+		WHERE c.team_id=t.id AND c.deleted_at IS NULL AND (u.username ILIKE $4 OR u.email ILIKE $4 OR c.user_id::text=$6)))
 	AND ($5='all' OR ($5='active') = EXISTS (
 		SELECT 1 FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id
 		WHERE c.team_id=t.id AND ` + effectiveTeamCard + `))`
@@ -152,7 +152,7 @@ func (s *Store) ListAdminEntitlementCards(ctx context.Context, teamID int64, f A
 	defer func() { _ = tx.Rollback() }()
 	// Push team/group restrictions into the CTE before weekly usage is joined.
 	base := `WITH card_data ` + adminCardColumns + ` AS (` + cardSelect + `
-		WHERE (($2::bigint=0 AND c.team_id IS NULL) OR c.team_id=$2) AND ($3::bigint=0 OR c.group_id=$3)) `
+		WHERE c.deleted_at IS NULL AND (($2::bigint=0 AND c.team_id IS NULL) OR c.team_id=$2) AND ($3::bigint=0 OR c.group_id=$3)) `
 	from := ` FROM card_data d JOIN users u ON u.id=d.user_id
 		WHERE ($4='' OR d.code ILIKE $4 OR d.product_name ILIKE $4 OR d.group_name ILIKE $4
 		 OR u.username ILIKE $4 OR u.email ILIKE $4 OR d.user_id::text=$6)

@@ -54,7 +54,7 @@
         @update:page="page = $event" />
     </template>
 
-    <BaseDialog :show="!!selectedTeam" :title="`${t('groupBuy.teamCode')} ${selectedTeam?.code ?? ''}`" width="full" :close-on-escape="!quotaCards.length && !resetCards.length" @close="closeTeam">
+    <BaseDialog :show="!!selectedTeam" :title="`${t('groupBuy.teamCode')} ${selectedTeam?.code ?? ''}`" width="full" :close-on-escape="!quotaCards.length && !resetCards.length && !deleteCard" @close="closeTeam">
       <div v-if="selectedTeam" class="space-y-4">
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -69,7 +69,7 @@
         </div>
         <template v-else>
           <p v-if="quotaSuccess" role="status" class="gb-notice gb-notice-info p-3">{{ quotaSuccess }}</p>
-          <AdminEntitlementMembersTable :items="members" :loading="membersLoading" :selected-ids="memberSelectedIds" :selectable-ids="memberSelectableIds" :disabled="mutationSaving"
+          <AdminEntitlementMembersTable :items="members" :loading="membersLoading" :selected-ids="memberSelectedIds" :selectable-ids="memberSelectableIds" :disabled="mutationSaving" allow-delete @delete-card="openDelete"
             @inspect-user="inspectUser" @toggle-select="toggleSelection('members', $event)" @toggle-all="toggleAll('members')" @clear-selection="memberSelectedIds = []"
             @adjust-quota="openQuota([$event])" @adjust-selected="openSelectedQuotas('members')" @reset-usage="openReset([$event])" @reset-selected="openSelectedReset('members')" />
           <Pagination v-if="memberTotal > 0" :total="memberTotal" :page="memberPage" :page-size="20" :show-page-size-selector="false" @update:page="memberPage = $event" />
@@ -95,6 +95,8 @@
       v-model:draft="quotaDraft" @close="closeQuota" @save="saveQuota" />
     <AdminUsageResetDialog :show="!!resetCards.length" :cards="resetCards" :saving="resetSaving" :error="resetError"
       v-model:draft="resetDraft" @close="closeReset" @save="saveReset" />
+    <AdminMonthCardDeleteDialog :show="!!deleteCard" :card="deleteCard" :saving="deleteSaving" :error="deleteError"
+      @close="closeDelete" @confirm="saveDelete" />
   </section>
 </template>
 
@@ -110,6 +112,7 @@ import AdminEntitlementMembersTable from './AdminEntitlementMembersTable.vue'
 import AllocationTable from './AllocationTable.vue'
 import AdminQuotaAdjustmentDialog from './AdminQuotaAdjustmentDialog.vue'
 import AdminUsageResetDialog from './AdminUsageResetDialog.vue'
+import AdminMonthCardDeleteDialog from './AdminMonthCardDeleteDialog.vue'
 import { cny } from './model'
 import { extractApiErrorMessage } from '@/utils/apiError'
 
@@ -179,7 +182,7 @@ const membersError = ref('')
 let membersController: AbortController | undefined
 let membersRequest = 0
 function inspectTeam(team: AdminTeamEntitlement) { closeUser(); selectedTeam.value = team; memberPage.value = 1 }
-function closeTeam() { if (quotaCards.value.length || resetCards.value.length) return; memberSelectedIds.value = []; closeUser(); selectedTeam.value = null; membersController?.abort(); ++membersRequest }
+function closeTeam() { if (quotaCards.value.length || resetCards.value.length || deleteCard.value) return; memberSelectedIds.value = []; closeUser(); selectedTeam.value = null; membersController?.abort(); ++membersRequest }
 async function loadMembers() {
   memberSelectedIds.value = []
   if (!selectedTeam.value) return
@@ -196,6 +199,7 @@ async function loadMembers() {
     if (request !== membersRequest) return
     members.value = result.items
     memberTotal.value = result.total
+    if (memberPage.value > 1 && !result.items.length) memberPage.value = Math.max(1, Math.ceil(result.total / 20))
   } catch (err) {
     if (request === membersRequest) membersError.value = extractApiErrorMessage(err, t('groupBuy.loadFailed'))
   } finally {
@@ -260,7 +264,7 @@ const quotaSaving = ref(false)
 const quotaError = ref('')
 const quotaDraft = ref<QuotaAdjustmentDraft>({ setTotal: false, setWeekly: false, total: '', weekly: '' })
 function openQuota(cards: AdminMonthCard[]) {
-  if (mutationSaving.value || resetCards.value.length || !cards.length || cards.some(card => !canAdjust(card))) return
+  if (mutationSaving.value || resetCards.value.length || deleteCard.value || !cards.length || cards.some(card => !canAdjust(card))) return
   quotaCards.value = cards.map(card => ({ ...card }))
   quotaError.value = ''
   quotaSuccess.value = ''
@@ -311,13 +315,39 @@ const resetCards = ref<AdminMonthCard[]>([])
 const resetSaving = ref(false)
 const resetError = ref('')
 const resetDraft = ref<UsageResetDraft>({ resetTotal: false, resetWeekly: false })
-const mutationSaving = computed(() => quotaSaving.value || resetSaving.value)
+const deleteCard = ref<AdminMonthCard | null>(null)
+const deleteSaving = ref(false)
+const deleteError = ref('')
+const mutationSaving = computed(() => quotaSaving.value || resetSaving.value || deleteSaving.value)
+function openDelete(card: AdminMonthCard) {
+  if (mutationSaving.value || quotaCards.value.length || resetCards.value.length || !selectedTeam.value || card.team_id !== selectedTeam.value.id) return
+  deleteCard.value = { ...card }
+  deleteError.value = ''
+  quotaSuccess.value = ''
+}
+function closeDelete() { if (!deleteSaving.value) { deleteCard.value = null; deleteError.value = '' } }
+async function saveDelete() {
+  if (mutationSaving.value || !deleteCard.value) return
+  deleteSaving.value = true
+  deleteError.value = ''
+  try {
+    await adminGroupBuyAPI.deleteCard(deleteCard.value.id)
+    if (disposed) return
+    deleteCard.value = null
+    quotaSuccess.value = t('groupBuy.deleteCardSuccess')
+    await Promise.all([loadList(), loadMembers(), selectedUserId.value ? inspectUser(selectedUserId.value) : Promise.resolve()])
+  } catch (err) {
+    if (!disposed) deleteError.value = extractApiErrorMessage(err, t('groupBuy.deleteCardFailed'))
+  } finally {
+    if (!disposed) deleteSaving.value = false
+  }
+}
 function openSelectedReset(scope: 'solo' | 'members') {
   const state = selection(scope)
   openReset(state.cards.value.filter(card => state.ids.value.includes(card.id)))
 }
 function openReset(cards: AdminMonthCard[]) {
-  if (mutationSaving.value || quotaCards.value.length || !cards.length || cards.some(card => !canAdjust(card))) return
+  if (mutationSaving.value || quotaCards.value.length || deleteCard.value || !cards.length || cards.some(card => !canAdjust(card))) return
   resetCards.value = cards.map(card => ({ ...card }))
   resetError.value = ''
   quotaSuccess.value = ''

@@ -172,6 +172,7 @@ export default {
     "maxTier": "已达到最高额度档位",
     "join": "立即参团",
     "joined": "已参团",
+    "rejoin": "再次参团",
     "viewCards": "查看我的拼团",
     "browse": "浏览进行中的团",
     "closedHint": "该团已结束招募，已购月卡仍按到期时间有效。",
@@ -195,7 +196,7 @@ export default {
     "mode": "购买方式",
     "pay": "确认并支付 {amount}",
     "cnyOnly": "月卡按人民币定价，请选择支持 CNY 的支付方式。",
-    "joinUnavailable": "你已参团或该团已结束招募，请返回大厅查看。",
+    "joinUnavailable": "拼团已满或招募已结束，请返回大厅查看。",
     "independent": "每次购买新增一张独立月卡，不延长旧卡有效期。",
     "monthCards": "我的月卡",
     "cardCode": "卡号",
@@ -324,6 +325,12 @@ export default {
     usageResetFailed: '重置已用额度失败，请稍后重试。',
     confirmUsageReset: '确认清零',
     usageResetScopeHint: '清零本周已用会同步扣减累计已用，最低为 0；勾选清零累计已用则累计直接归零。额度上限、有效期和周重置时间均不变，历史消费记录保留，已扣余额不予退还。',
-    usageResetPartialHint: '未结算的请求仍按原周期结算；实际重置以保存时的已用量为准。仅清零累计已用不会清零本周已用。'
+    usageResetPartialHint: '未结算的请求仍按原周期结算；实际重置以保存时的已用量为准。仅清零累计已用不会清零本周已用。',
+    deleteCard: '删除月卡',
+    deleteCardTitle: '删除月卡',
+    deleteCardHint: '删除后该月卡立即失效，不再显示在月卡列表中；拼团已招募人数及其他月卡权益保持不变。此操作不退款，订单与历史扣费记录保留。',
+    confirmDeleteCard: '确认删除',
+    deleteCardSuccess: '已删除月卡。',
+    deleteCardFailed: '删除月卡失败，请稍后重试。'
   }
 }

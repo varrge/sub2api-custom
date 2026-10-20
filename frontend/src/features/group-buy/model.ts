@@ -72,7 +72,6 @@ export const availableQuota = (card: MonthCard) =>
     )
   )
 export const canJoin = (team: GroupBuyTeam, now = Date.now()) =>
-  !team.joined &&
   team.status === 'recruiting' &&
   team.member_count < team.product.max_members &&
   Date.parse(team.closes_at) > now

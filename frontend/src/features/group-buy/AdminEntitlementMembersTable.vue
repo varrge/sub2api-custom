@@ -156,6 +156,15 @@
                 >
                   {{ t('groupBuy.resetUsage') }}
                 </button>
+                <button
+                  v-if="allowDelete"
+                  type="button"
+                  class="btn btn-danger btn-sm whitespace-nowrap"
+                  :disabled="disabled"
+                  @click="emit('deleteCard', card)"
+                >
+                  {{ t('groupBuy.deleteCard') }}
+                </button>
               </div>
             </td>
           </tr>
@@ -180,8 +189,9 @@ const props = withDefaults(
     selectedIds?: number[]
     selectableIds?: number[]
     disabled?: boolean
+    allowDelete?: boolean
   }>(),
-  { selectedIds: () => [], selectableIds: () => [], disabled: false }
+  { selectedIds: () => [], selectableIds: () => [], disabled: false, allowDelete: false }
 )
 const emit = defineEmits<{
   inspectUser: [userId: number]
@@ -192,6 +202,7 @@ const emit = defineEmits<{
   resetUsage: [card: AdminMonthCard]
   resetSelected: []
   clearSelection: []
+  deleteCard: [card: AdminMonthCard]
 }>()
 const { t } = useI18n()
 

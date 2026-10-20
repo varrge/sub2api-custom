@@ -35,7 +35,7 @@ func TestCorePostgresMultipleSameGroupCards(t *testing.T) {
 
 	for _, code := range []string{created.TeamCode, teamA.TeamCode, teamB.TeamCode} {
 		_, err := s.PreparePurchase(ctx, 1, p.ID, "join", code)
-		require.ErrorIs(t, err, ErrCannotJoin)
+		require.NoError(t, err)
 	}
 	// Upgrading one team must not upgrade other cards of the same user/group.
 	coreBuy(t, s, db, 2, p, "join", created.TeamCode)

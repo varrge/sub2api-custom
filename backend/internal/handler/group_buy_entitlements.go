@@ -79,6 +79,23 @@ func (h *GroupBuyHandler) AdminSoloEntitlements(c *gin.Context) {
 	response.Paginated(c, items, total, f.Page, f.PageSize)
 }
 
+// DeleteEntitlementCard is registered only under adminAuth + auditLog.
+func (h *GroupBuyHandler) DeleteEntitlementCard(c *gin.Context) {
+	actor, ok := requireAuth(c)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		response.BadRequest(c, "月卡编号无效")
+		return
+	}
+	middleware.SetAuditAction(c, "admin.month_card.delete")
+	middleware.SetAuditExtra(c, map[string]any{"card_id": id})
+	err = h.store.DeleteCard(c.Request.Context(), actor.UserID, id)
+	groupBuyResponse(c, gin.H{"deleted_id": id}, err)
+}
+
 // AdjustEntitlementQuotas is registered only under adminAuth + auditLog.
 func (h *GroupBuyHandler) AdjustEntitlementQuotas(c *gin.Context) {
 	actor, ok := requireAuth(c)

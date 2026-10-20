@@ -26,10 +26,19 @@ describe('group buy purchase and quota boundaries', () => {
     expect(wrapper.text()).toContain('下一档每卡 $1,000.00，还差 2 人')
     expect(wrapper.text()).toContain('每张卡月总额度')
   })
-  it.each([{ ...team, joined: true }, { ...team, status: 'closed' as const }, { ...team, status: 'cancelled' as const }, { ...team, member_count: 10 }, { ...team, closes_at: '2000-01-01T00:00:00Z' }])('disables duplicate or unavailable team checkout', current => {
+  it.each([{ ...team, status: 'closed' as const }, { ...team, status: 'cancelled' as const }, { ...team, member_count: 10 }, { ...team, closes_at: '2000-01-01T00:00:00Z' }])('disables unavailable team checkout', current => {
     expect(canJoin(current)).toBe(false)
     const wrapper = mount(TeamCard, { props: { team: current, now: Date.now() }, global: global() })
     expect(wrapper.get('button.btn-primary').attributes('disabled')).toBeDefined()
+  })
+  it('allows an existing member to purchase another card in the same recruiting team', async () => {
+    const current = { ...team, joined: true }
+    expect(canJoin(current)).toBe(true)
+    const wrapper = mount(TeamCard, { props: { team: current, now: Date.now() }, global: global() })
+    expect(wrapper.get('button.btn-primary').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('button.btn-primary').text()).toBe('再次参团')
+    await wrapper.get('button.btn-primary').trigger('click')
+    expect(wrapper.emitted('join')?.[0]).toEqual([current])
   })
   it('caps fifth weekly window by the remaining whole-card quota and shows final exact window', () => {
     expect(availableQuota(card)).toBe(100)

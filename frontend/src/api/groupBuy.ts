@@ -67,6 +67,9 @@ export const groupBuyAPI = {
   }
 }
 export const adminGroupBuyAPI = {
+  async deleteCard(id: number) {
+    return (await apiClient.delete<{ deleted_id: number }>(`/admin/group-buy/entitlements/cards/${id}`)).data
+  },
   async announcement() {
     return (await apiClient.get<GroupBuyAnnouncement>('/admin/group-buy/announcement')).data
   },

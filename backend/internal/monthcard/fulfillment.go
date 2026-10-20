@@ -83,8 +83,7 @@ func (s *Store) Fulfill(ctx context.Context, orderID, userID int64, paidAt time.
 			}
 			return nil, err
 		}
-		// Use a fresh READ COMMITTED statement after any lock wait so the count
-		// and duplicate-membership checks see the previous winner's committed card.
+		// Read after the team lock so capacity includes the previous buyer's card.
 		team, err = scanTeam(tx.QueryRowContext(ctx, `SELECT `+teamColumns+` FROM month_card_teams t WHERE t.id=$2`, userID, lockedTeamID), s.now())
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
@@ -95,7 +94,7 @@ func (s *Store) Fulfill(ctx context.Context, orderID, userID int64, paidAt time.
 		if team.Status == "cancelled" {
 			return nil, ErrTeamCancelled
 		}
-		if team.Code != purchase.TeamCode || team.ProductID != p.ID || team.Status != "recruiting" || team.Joined || team.MemberCount >= team.Product.MaxMembers || !paidAt.Before(team.ClosesAt) {
+		if team.Code != purchase.TeamCode || team.ProductID != p.ID || team.Status != "recruiting" || team.MemberCount >= team.Product.MaxMembers || !paidAt.Before(team.ClosesAt) {
 			return nil, ErrCannotJoin
 		}
 		// The team, not a subsequently edited product or caller snapshot, owns rules.
@@ -243,14 +242,14 @@ func (s *Store) RevokeOrder(ctx context.Context, orderID int64) error {
 			return err
 		}
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE month_card_cards SET status='revoked',revoked_at=COALESCE(revoked_at,$2),updated_at=$2,
+	_, err = tx.ExecContext(ctx, `UPDATE month_card_cards SET status='revoked',retain_team_seat=FALSE,revoked_at=COALESCE(revoked_at,$2),updated_at=$2,
 		paused_us=paused_us+CASE WHEN frozen_at IS NULL THEN 0 ELSE GREATEST(0,EXTRACT(EPOCH FROM($2::timestamptz-frozen_at))*1000000)::bigint END,
-		frozen_at=NULL WHERE id=$1 AND status<>'revoked'`, id, s.now().UTC().Truncate(time.Microsecond))
+		frozen_at=NULL WHERE id=$1 AND (status<>'revoked' OR retain_team_seat)`, id, s.now().UTC().Truncate(time.Microsecond))
 	if err != nil {
 		return err
 	}
 	if teamID.Valid {
-		_, err = tx.ExecContext(ctx, `UPDATE month_card_teams t SET member_count=(SELECT COUNT(*) FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id WHERE c.team_id=t.id AND c.status<>'revoked' AND o.status<>'REFUNDED'),status=CASE WHEN status='recruiting' AND closes_at<=NOW() THEN 'closed' ELSE status END,updated_at=NOW() WHERE t.id=$1`, teamID.Int64)
+		_, err = tx.ExecContext(ctx, `UPDATE month_card_teams t SET member_count=(SELECT COUNT(*) FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id WHERE c.team_id=t.id AND `+countedTeamCard+`),status=CASE WHEN status='recruiting' AND closes_at<=NOW() THEN 'closed' ELSE status END,updated_at=NOW() WHERE t.id=$1`, teamID.Int64)
 		if err != nil {
 			return err
 		}

@@ -8,10 +8,11 @@ import (
 	"time"
 )
 
-// Count refunded orders immediately, even if the reconciliation worker has not
-// revoked their cards yet. The persisted quota remains a historical high-water mark.
+// Admin deletion preserves a paid seat; refunds still release it immediately.
+const countedTeamCard = `(c.status<>'revoked' OR c.retain_team_seat) AND o.status<>'REFUNDED'`
+
 const teamColumns = `t.id,t.code,t.product_id,t.product_snapshot,
-	(SELECT COUNT(*) FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id WHERE c.team_id=t.id AND c.status<>'revoked' AND o.status<>'REFUNDED'),
+	(SELECT COUNT(*) FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id WHERE c.team_id=t.id AND ` + countedTeamCard + `),
 	t.current_quota_usd,t.starts_at,t.closes_at,t.status,
 	EXISTS(SELECT 1 FROM month_card_cards c WHERE c.team_id=t.id AND c.user_id=$1)`
 
@@ -123,7 +124,7 @@ func (s *Store) PreparePurchase(ctx context.Context, userID, productID int64, mo
 		if err != nil {
 			return nil, err
 		}
-		if team.Status != "recruiting" || team.MemberCount >= team.Product.MaxMembers || team.Joined {
+		if team.Status != "recruiting" || team.MemberCount >= team.Product.MaxMembers {
 			return nil, ErrCannotJoin
 		}
 		if productID != team.ProductID {

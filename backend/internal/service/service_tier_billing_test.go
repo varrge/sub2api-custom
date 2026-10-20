@@ -16,8 +16,11 @@ func TestResolveBillingServiceTier(t *testing.T) {
 	}{
 		{name: "openai priority served as default", requested: "priority", observed: "default", billing: "default", downgraded: true},
 		{name: "anthropic fast served as standard", requested: "fast", observed: "standard", billing: "standard", downgraded: true},
-		{name: "ultrafast served as priority", requested: "ultrafast", observed: "priority", billing: "priority", downgraded: true},
-		{name: "ultrafast served as default", requested: "ultrafast", observed: "default", billing: "default", downgraded: true},
+		{name: "ultrafast retained despite priority response", requested: "ultrafast", observed: "priority", billing: "ultrafast"},
+		{name: "ultrafast retained despite default response", requested: "ultrafast", observed: "default", billing: "ultrafast"},
+		{name: "ultrafast retained despite flex response", requested: "ultrafast", observed: "flex", billing: "ultrafast"},
+		{name: "ultrafast retained despite standard response", requested: "ultrafast", observed: "standard", billing: "ultrafast"},
+		{name: "ultrafast normalised before resolution", requested: " ULTRAFAST ", observed: "DEFAULT", billing: "ultrafast"},
 		{name: "ultrafast honoured", requested: "ultrafast", observed: "ultrafast", billing: "ultrafast"},
 		{name: "ultrafast missing declaration", requested: "ultrafast", billing: "ultrafast"},
 		{name: "response cannot upgrade to ultrafast", requested: "priority", observed: "ultrafast", billing: "priority"},
@@ -60,6 +63,25 @@ func TestApplyServiceTierBillingResolutionOnlyRewritesDowngrades(t *testing.T) {
 		result := &OpenAIForwardResult{ServiceTier: &requested, UpstreamResponseServiceTier: "priority"}
 		require.False(t, ApplyOpenAIServiceTierBillingResolution(&Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey}, result).Downgraded)
 		require.Same(t, &requested, result.ServiceTier)
+	})
+
+	t.Run("ultrafast response metadata cannot rewrite either gateway tier", func(t *testing.T) {
+		requested := "ultrafast"
+		openAIResult := &OpenAIForwardResult{ServiceTier: &requested, UpstreamResponseServiceTier: "default"}
+		result := &ForwardResult{ServiceTier: &requested, UpstreamResponseServiceTier: "default"}
+		for _, resolution := range []ServiceTierBillingResolution{
+			ApplyOpenAIServiceTierBillingResolution(&Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey}, openAIResult),
+			ApplyForwardServiceTierBillingResolution(result),
+		} {
+			require.False(t, resolution.Downgraded)
+			require.Equal(t, "ultrafast", resolution.Requested)
+			require.Equal(t, "default", resolution.Observed)
+			require.Equal(t, "ultrafast", resolution.Billing)
+		}
+		require.Same(t, &requested, openAIResult.ServiceTier)
+		require.Same(t, &requested, result.ServiceTier)
+		require.Equal(t, "default", openAIResult.UpstreamResponseServiceTier)
+		require.Equal(t, "default", result.UpstreamResponseServiceTier)
 	})
 
 	t.Run("openai untiered request stays nil", func(t *testing.T) {

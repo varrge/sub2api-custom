@@ -15,8 +15,9 @@ type ServiceTierBillingResolution struct {
 	Downgraded bool   // Billing is cheaper than Requested
 }
 
-// ResolveBillingServiceTier picks the tier to bill. The upstream declaration is
-// trusted only to lower the bill: a request served below the tier it asked for
+// ResolveBillingServiceTier keeps explicit Ultrafast requests at that tier.
+// For other tiers, the upstream declaration is trusted only to lower the bill:
+// a request served below the tier it asked for
 // (OpenAI "priority" answered with service_tier "default", Anthropic speed=fast
 // answered with usage.speed "standard") is billed at the cheaper tier. A response
 // that claims a more expensive tier, an unknown one, or none at all leaves the
@@ -26,6 +27,10 @@ func ResolveBillingServiceTier(requested, observed string) ServiceTierBillingRes
 	requested = normalizeBillingServiceTier(requested)
 	observed = normalizeBillingServiceTier(observed)
 	resolution := ServiceTierBillingResolution{Requested: requested, Observed: observed, Billing: requested}
+	// Gateways may echo default even when charging Ultrafast; bill the outbound tier.
+	if requested == OpenAIFastTierUltrafast {
+		return resolution
+	}
 	if observed == "" || observed == requested {
 		return resolution
 	}
@@ -61,7 +66,7 @@ func serviceTierCostRank(tier string) (rank int, known bool) {
 }
 
 // ResolveOpenAIServiceTierBilling applies the response-tier contract for the
-// selected credential. Public OpenAI API responses declare the actual tier and
+// selected credential. Outside explicit Ultrafast, public OpenAI API responses
 // may lower billing. The private ChatGPT Codex endpoint does not: it commonly
 // reports default for effective Fast turns, so OAuth-like credentials retain
 // the final outbound tier while still exposing the observed value.

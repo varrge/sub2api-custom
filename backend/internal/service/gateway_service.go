@@ -637,8 +637,8 @@ type ForwardResult struct {
 	RequestedReasoningEffort *string
 	// ServiceTier records the tier requested by the client. OpenAI uses
 	// service_tier; Anthropic speed=fast is normalized to "fast". Usage recording
-	// lowers it to UpstreamResponseServiceTier when the upstream reports a
-	// cheaper tier (see ResolveBillingServiceTier).
+	// preserves explicit Ultrafast; other tiers may be lowered to a cheaper
+	// UpstreamResponseServiceTier (see ResolveBillingServiceTier).
 	ServiceTier *string
 
 	// 图片生成计费字段（图片生成模型使用）

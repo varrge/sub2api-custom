@@ -41,6 +41,25 @@ func TestAdminEntitlementFilters(t *testing.T) {
 	}
 }
 
+func TestDeleteEntitlementCardRejectsInvalidRequestsBeforeStore(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := &GroupBuyHandler{}
+	for _, id := range []string{"0", "-1", "abc", "999999999999999999999"} {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 30})
+		c.Params = gin.Params{{Key: "id", Value: id}}
+		c.Request = httptest.NewRequest("DELETE", "/", nil)
+		h.DeleteEntitlementCard(c)
+		require.Equal(t, 400, w.Code)
+	}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("DELETE", "/", nil)
+	h.DeleteEntitlementCard(c)
+	require.Equal(t, 401, w.Code)
+}
+
 func TestAdjustEntitlementQuotasRejectsInvalidRequestsBeforeStore(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	h := &GroupBuyHandler{}

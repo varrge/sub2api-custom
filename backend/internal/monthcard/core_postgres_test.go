@@ -54,7 +54,7 @@ func corePostgres(t *testing.T) (*Store, *sql.DB) {
 	INSERT INTO users(id) SELECT generate_series(1,30);
 	INSERT INTO groups(id) VALUES(1),(2);`)
 	require.NoError(t, err)
-	for _, name := range []string{"238_month_card_core.sql", "239_month_card_billing.sql", "240_month_card_freeze.sql", "241_month_card_freeze_policy.sql", "249_month_card_quota_adjustments.sql", "250_month_card_usage_resets.sql"} {
+	for _, name := range []string{"238_month_card_core.sql", "239_month_card_billing.sql", "240_month_card_freeze.sql", "241_month_card_freeze_policy.sql", "249_month_card_quota_adjustments.sql", "250_month_card_usage_resets.sql", "255_month_card_delete_repeat_join.sql"} {
 		b, err := os.ReadFile(filepath.Join("..", "..", "migrations", name))
 		require.NoError(t, err)
 		_, err = db.Exec(string(b))
@@ -127,7 +127,7 @@ func TestCorePostgresEligibilityAndSnapshot(t *testing.T) {
 	require.ErrorIs(t, err, ErrInvalid)
 }
 
-func TestCorePostgresFulfillIdempotencyAndDuplicateMembership(t *testing.T) {
+func TestCorePostgresFulfillIdempotencyAndRepeatMembership(t *testing.T) {
 	s, db := corePostgres(t)
 	ctx := context.Background()
 	p := coreSave(t, s, coreProduct())
@@ -183,13 +183,13 @@ func TestCorePostgresFulfillIdempotencyAndDuplicateMembership(t *testing.T) {
 	}
 	wg.Wait()
 	close(errs)
-	require.Equal(t, int32(1), successes.Load())
+	require.Equal(t, int32(2), successes.Load())
 	for err := range errs {
-		require.ErrorIs(t, err, ErrCannotJoin)
+		require.NoError(t, err)
 	}
 	team, err = s.GetTeam(ctx, first.TeamCode, 2)
 	require.NoError(t, err)
-	require.Equal(t, 2, team.MemberCount)
+	require.Equal(t, 3, team.MemberCount)
 	require.True(t, team.Joined)
 }
 
@@ -283,7 +283,7 @@ func TestCorePostgresRefundHighWaterAndWeeklyUpgrade(t *testing.T) {
 	require.Equal(t, 960.0, team.CurrentQuotaUSD)
 	require.True(t, team.Joined)
 	_, err = s.PreparePurchase(ctx, 2, p.ID, "join", first.TeamCode)
-	require.ErrorIs(t, err, ErrCannotJoin)
+	require.NoError(t, err)
 	require.NoError(t, s.ReconcileRefunds(ctx))
 	revoked, err := s.GetCardByOrder(ctx, second.OrderID)
 	require.NoError(t, err)

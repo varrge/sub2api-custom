@@ -6,6 +6,7 @@ import AdminEntitlementMembersTable from '../AdminEntitlementMembersTable.vue'
 import AllocationTable from '../AllocationTable.vue'
 import AdminQuotaAdjustmentDialog from '../AdminQuotaAdjustmentDialog.vue'
 import AdminUsageResetDialog from '../AdminUsageResetDialog.vue'
+import AdminMonthCardDeleteDialog from '../AdminMonthCardDeleteDialog.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import { adminGroupBuyAPI } from '@/api/groupBuy'
@@ -13,7 +14,7 @@ import type { AdminMonthCard, AdminTeamEntitlement } from '@/types/groupBuy'
 
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 vi.mock('@/api/groupBuy', () => ({ adminGroupBuyAPI: {
-  entitlementTeams: vi.fn(), entitlementTeamCards: vi.fn(), soloEntitlements: vi.fn(), adjustQuotas: vi.fn(), resetUsage: vi.fn(), cards: vi.fn(), allocations: vi.fn()
+  entitlementTeams: vi.fn(), entitlementTeamCards: vi.fn(), soloEntitlements: vi.fn(), adjustQuotas: vi.fn(), resetUsage: vi.fn(), deleteCard: vi.fn(), cards: vi.fn(), allocations: vi.fn()
 } }))
 
 const team: AdminTeamEntitlement = {
@@ -33,6 +34,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(new Date('2026-10-10T12:00:00Z'))
   vi.mocked(adminGroupBuyAPI.resetUsage).mockResolvedValue({ updated_count: 1 })
+  vi.mocked(adminGroupBuyAPI.deleteCard).mockResolvedValue({ deleted_id: 11 })
   vi.mocked(adminGroupBuyAPI.adjustQuotas).mockResolvedValue({ updated_count: 1 })
   vi.mocked(adminGroupBuyAPI.entitlementTeams).mockResolvedValue(result([team]))
   vi.mocked(adminGroupBuyAPI.entitlementTeamCards).mockResolvedValue(result([card]))
@@ -42,6 +44,84 @@ beforeEach(() => {
 })
 
 afterEach(() => vi.useRealTimers())
+
+describe('single team card deletion', () => {
+  async function openDeletion() {
+    const wrapper = mount()
+    await flushPromises()
+    wrapper.getComponent(AdminEntitlementTeamsTable).vm.$emit('inspect', team)
+    await flushPromises()
+    expect(wrapper.getComponent(AdminEntitlementMembersTable).props('allowDelete')).toBe(true)
+    wrapper.getComponent(AdminEntitlementMembersTable).vm.$emit('deleteCard', card)
+    await flushPromises()
+    return wrapper
+  }
+
+  it('requires confirmation and refreshes members and team totals after deletion', async () => {
+    const wrapper = await openDeletion()
+    const dialog = wrapper.getComponent(AdminMonthCardDeleteDialog)
+    expect(dialog.props('card')).toEqual(card)
+    expect(adminGroupBuyAPI.deleteCard).not.toHaveBeenCalled()
+    dialog.vm.$emit('close')
+    await flushPromises()
+    expect(dialog.props('show')).toBe(false)
+    expect(adminGroupBuyAPI.deleteCard).not.toHaveBeenCalled()
+    wrapper.getComponent(AdminEntitlementMembersTable).vm.$emit('deleteCard', card)
+    await flushPromises()
+    vi.mocked(adminGroupBuyAPI.entitlementTeamCards).mockResolvedValue(result([]))
+    vi.mocked(adminGroupBuyAPI.entitlementTeams).mockResolvedValue(result([{ ...team, active_cards: 9 }]))
+    dialog.vm.$emit('confirm')
+    await flushPromises()
+    expect(adminGroupBuyAPI.deleteCard).toHaveBeenCalledTimes(1)
+    expect(adminGroupBuyAPI.deleteCard).toHaveBeenCalledWith(card.id)
+    expect(dialog.props('show')).toBe(false)
+    expect(wrapper.getComponent(AdminEntitlementMembersTable).props('items')).toEqual([])
+    expect(wrapper.getComponent(AdminEntitlementTeamsTable).props('items')[0]).toMatchObject({ member_count: 10, active_cards: 9 })
+    wrapper.unmount()
+  })
+
+  it('keeps a failed deletion open for retry and blocks duplicate submits or closing while saving', async () => {
+    const wrapper = await openDeletion()
+    const dialog = wrapper.getComponent(AdminMonthCardDeleteDialog)
+    let fail: (reason: unknown) => void = () => {}
+    vi.mocked(adminGroupBuyAPI.deleteCard).mockImplementationOnce(() => new Promise((_, reject) => { fail = reject }))
+    dialog.vm.$emit('confirm')
+    await flushPromises()
+    expect(dialog.props('saving')).toBe(true)
+    dialog.vm.$emit('confirm')
+    dialog.vm.$emit('close')
+    wrapper.findAllComponents(BaseDialog)[0].vm.$emit('close')
+    await flushPromises()
+    expect(adminGroupBuyAPI.deleteCard).toHaveBeenCalledTimes(1)
+    expect(dialog.props('show')).toBe(true)
+    fail(new Error('offline'))
+    await flushPromises()
+    expect(dialog.props('saving')).toBe(false)
+    expect(dialog.props('error')).toBeTruthy()
+    expect(dialog.props('card')).toEqual(card)
+    dialog.vm.$emit('confirm')
+    await flushPromises()
+    expect(adminGroupBuyAPI.deleteCard).toHaveBeenCalledTimes(2)
+    expect(dialog.props('show')).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('returns to the previous member page when its last card is deleted', async () => {
+    vi.mocked(adminGroupBuyAPI.entitlementTeamCards).mockResolvedValue(result([card], 21))
+    const wrapper = await openDeletion()
+    wrapper.getComponent(AdminMonthCardDeleteDialog).vm.$emit('close')
+    await flushPromises()
+    wrapper.findAllComponents(Pagination)[1].vm.$emit('update:page', 2)
+    await flushPromises()
+    wrapper.getComponent(AdminEntitlementMembersTable).vm.$emit('deleteCard', card)
+    await flushPromises()
+    vi.mocked(adminGroupBuyAPI.entitlementTeamCards).mockResolvedValueOnce(result([], 20)).mockResolvedValue(result([card], 20))
+    wrapper.getComponent(AdminMonthCardDeleteDialog).vm.$emit('confirm')
+    await flushPromises()
+    expect(adminGroupBuyAPI.entitlementTeamCards).toHaveBeenLastCalledWith(team.code, expect.objectContaining({ page: 1 }), expect.any(AbortSignal))
+    wrapper.unmount()
+  })
+})
 
 describe('admin entitlement browsing', () => {
   it('loads active teams automatically, including full teams, without a user lookup', async () => {

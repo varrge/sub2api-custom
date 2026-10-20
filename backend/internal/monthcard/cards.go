@@ -53,9 +53,9 @@ func (s *Store) ListCards(ctx context.Context, userID int64) ([]Card, error) {
 	if err := s.syncFreezePolicy(ctx, s.now().UTC()); err != nil {
 		return nil, err
 	}
-	where := ` WHERE c.user_id=$2 ORDER BY COALESCE(p.priority,2147483647),c.expires_at,c.starts_at,c.id`
+	where := ` WHERE c.deleted_at IS NULL AND c.user_id=$2 ORDER BY COALESCE(p.priority,2147483647),c.expires_at,c.starts_at,c.id`
 	if userID == 0 {
-		where = ` WHERE $2::bigint=0 ORDER BY c.id DESC LIMIT 100`
+		where = ` WHERE c.deleted_at IS NULL AND $2::bigint=0 ORDER BY c.id DESC LIMIT 100`
 	}
 	items, err := listCards(ctx, s.db, s.now(), where, userID)
 	if err != nil {
@@ -78,7 +78,7 @@ func (s *Store) TeamCards(ctx context.Context, teamID int64) ([]Card, error) {
 	if err := s.syncFreezePolicy(ctx, s.now().UTC()); err != nil {
 		return nil, err
 	}
-	return listCards(ctx, s.db, s.now(), ` WHERE c.team_id=$2 ORDER BY c.starts_at,c.id`, teamID)
+	return listCards(ctx, s.db, s.now(), ` WHERE c.deleted_at IS NULL AND c.team_id=$2 ORDER BY c.starts_at,c.id`, teamID)
 }
 
 func (s *Store) GetCardByOrder(ctx context.Context, orderID int64) (*Card, error) {
@@ -91,7 +91,7 @@ func (s *Store) GetCardByOrder(ctx context.Context, orderID int64) (*Card, error
 // ReconcileRefunds completes card revocation after a crash between the payment
 // refund transaction and RevokeOrder. Billing and counts also check order status.
 func (s *Store) ReconcileRefunds(ctx context.Context) error {
-	rows, err := s.db.QueryContext(ctx, `SELECT c.order_id FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id WHERE o.status='REFUNDED' AND c.status<>'revoked' ORDER BY c.order_id LIMIT 100`)
+	rows, err := s.db.QueryContext(ctx, `SELECT c.order_id FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id WHERE o.status='REFUNDED' AND (c.status<>'revoked' OR c.retain_team_seat) ORDER BY c.order_id LIMIT 100`)
 	if err != nil {
 		return err
 	}

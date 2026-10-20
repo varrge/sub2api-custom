@@ -167,7 +167,7 @@
           :disabled="!canJoin(team, now)"
           @click="$emit('join', team)"
         >
-          {{ team.joined ? t('groupBuy.joined') : t('groupBuy.join') }}
+          {{ team.joined ? t('groupBuy.rejoin') : t('groupBuy.join') }}
         </button>
       </div>
     </div>

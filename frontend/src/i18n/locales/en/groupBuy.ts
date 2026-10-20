@@ -172,6 +172,7 @@ export default {
     "maxTier": "Highest quota tier reached",
     "join": "Join team",
     "joined": "Already joined",
+    "rejoin": "Join again",
     "viewCards": "View my group buy",
     "browse": "Browse recruiting teams",
     "closedHint": "Recruitment has ended; purchased cards keep their original expiry.",
@@ -195,7 +196,7 @@ export default {
     "mode": "Purchase mode",
     "pay": "Confirm and pay {amount}",
     "cnyOnly": "Month cards are priced in CNY. Choose a payment method that supports CNY.",
-    "joinUnavailable": "You have joined already or recruitment has ended. Return to the hall.",
+    "joinUnavailable": "This team is full or recruitment has ended. Return to the hall.",
     "independent": "Each purchase adds a separate card without extending existing cards.",
     "monthCards": "My month cards",
     "cardCode": "Card code",
@@ -324,6 +325,12 @@ export default {
     usageResetFailed: 'Failed to reset used quota. Please try again.',
     confirmUsageReset: 'Confirm reset',
     usageResetScopeHint: 'Clearing weekly usage also subtracts it from total usage, down to zero. Selecting clear total usage sets the total to zero. Quota limits, validity and weekly reset times stay unchanged; consumption history is kept and deducted balances are not refunded.',
-    usageResetPartialHint: 'Pending requests still settle against their original period. The reset uses the usage at save time. Clearing only total usage leaves weekly usage unchanged.'
+    usageResetPartialHint: 'Pending requests still settle against their original period. The reset uses the usage at save time. Clearing only total usage leaves weekly usage unchanged.',
+    deleteCard: 'Delete card',
+    deleteCardTitle: 'Delete month card',
+    deleteCardHint: 'Deleting this card invalidates it immediately and removes it from the month card list. The team’s recruited member count and every other card’s entitlements stay unchanged. This does not issue a refund; the order and historical charge records are kept.',
+    confirmDeleteCard: 'Confirm deletion',
+    deleteCardSuccess: 'Month card deleted.',
+    deleteCardFailed: 'Could not delete the month card. Please try again.'
   }
 }

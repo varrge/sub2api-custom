@@ -2,8 +2,14 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { apiClient } from '../client'
 import { adminGroupBuyAPI } from '../groupBuy'
 
-vi.mock('../client', () => ({ apiClient: { get: vi.fn(), patch: vi.fn(), post: vi.fn() } }))
+vi.mock('../client', () => ({ apiClient: { get: vi.fn(), patch: vi.fn(), post: vi.fn(), delete: vi.fn() } }))
 beforeEach(() => { vi.clearAllMocks(); vi.mocked(apiClient.get).mockResolvedValue({ data: { items: [], total: 0, page: 1, page_size: 20, pages: 0 } }) })
+
+it('deletes a single card through the admin entitlement endpoint', async () => {
+  vi.mocked(apiClient.delete).mockResolvedValue({ data: { deleted_id: 11 } })
+  expect(await adminGroupBuyAPI.deleteCard(11)).toEqual({ deleted_id: 11 })
+  expect(apiClient.delete).toHaveBeenCalledWith('/admin/group-buy/entitlements/cards/11')
+})
 
 it('requests paginated entitlements only through the admin namespace', async () => {
   const params = { page: 2, page_size: 20, validity: 'active' as const, search: 'customer@example.test', group_id: 3 }

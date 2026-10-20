@@ -211,12 +211,14 @@
               <span class="font-medium text-green-600 dark:text-green-400">${{ row.actual_cost?.toFixed(6) || '0.000000' }}</span>
               <span
                 v-if="normalizeUsageServiceTier(row.service_tier) === 'ultrafast'"
+                role="img"
                 :title="`${t('usage.serviceTier')}: ${t('usage.serviceTierUltrafast')}`"
                 :aria-label="t('usage.serviceTierUltrafast')"
                 class="inline-flex shrink-0 items-center whitespace-nowrap rounded bg-violet-100 px-1 py-px text-[10px] font-semibold leading-tight text-violet-700 ring-1 ring-inset ring-violet-200 dark:bg-violet-500/20 dark:text-violet-300 dark:ring-violet-500/30"
               >UF</span>
               <span
                 v-else-if="normalizeUsageServiceTier(row.service_tier) === 'priority'"
+                role="img"
                 :title="`${t('usage.serviceTier')}: ${t('usage.serviceTierPriority')}`"
                 :aria-label="t('usage.serviceTierPriority')"
                 class="inline-flex shrink-0 items-center whitespace-nowrap rounded bg-sky-100 px-1 py-px text-[10px] font-semibold leading-tight text-sky-700 ring-1 ring-inset ring-sky-200 dark:bg-sky-500/20 dark:text-sky-300 dark:ring-sky-500/30"

@@ -4,6 +4,7 @@ package repository
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -82,28 +83,38 @@ func TestRedeemReductionPreservesRenewal(t *testing.T) {
 func TestRedeemConcurrentReductionsBothApply(t *testing.T) {
 	redeem, repo, sub, userID, codes := newReductionLockFixture(t, "reduction-concurrent")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	var workers sync.WaitGroup
+	defer func() {
+		cancel()
+		workers.Wait()
+	}()
 	ready := make(chan struct{}, 2)
-	release := make(chan struct{})
-	repo.afterRead = func(*service.UserSubscription) {
-		ready <- struct{}{}
-		select {
-		case <-release:
-		case <-ctx.Done():
-		}
-	}
+	start := make(chan struct{})
 	results := make(chan error, 2)
+	// Synchronize before redemption: its user-row lock serializes same-user calls.
+	// Waiting for both initial subscription reads would hold that lock forever.
 	for _, code := range codes {
-		go func(code string) { _, err := redeem.RedeemForAdminFulfillment(ctx, userID, code); results <- err }(code)
+		workers.Add(1)
+		go func(code string) {
+			defer workers.Done()
+			ready <- struct{}{}
+			select {
+			case <-start:
+				_, err := redeem.RedeemForAdminFulfillment(ctx, userID, code)
+				results <- err
+			case <-ctx.Done():
+				results <- ctx.Err()
+			}
+		}(code)
 	}
 	for range 2 {
 		select {
 		case <-ready:
 		case <-ctx.Done():
-			t.Fatal("both deductions did not reach the read barrier")
+			t.Fatal("both deductions did not reach the start barrier")
 		}
 	}
-	close(release)
+	close(start)
 	for range 2 {
 		select {
 		case err := <-results:

@@ -9,17 +9,17 @@ export function keyGroups(key: Partial<Pick<ApiKey, 'groups' | 'group'>> | null)
   return key?.groups ?? (key?.group ? [key.group] : [])
 }
 
-export function groupDisplayProps(group: Group) {
+export function groupDisplayProps(group: Group, enterpriseRate?: number) {
   return {
     name: group.name,
     platform: group.platform,
     subscriptionType: group.subscription_type,
-    rateMultiplier: group.rate_multiplier,
-    temporaryRateEnabled: group.temporary_rate_enabled,
+    rateMultiplier: enterpriseRate ?? group.rate_multiplier,
+    temporaryRateEnabled: enterpriseRate != null ? false : group.temporary_rate_enabled,
     temporaryRateMultiplier: group.temporary_rate_multiplier,
     temporaryRateStartsAt: group.temporary_rate_starts_at,
     temporaryRateEndsAt: group.temporary_rate_ends_at,
-    peakRateEnabled: group.peak_rate_enabled,
+    peakRateEnabled: enterpriseRate != null ? false : group.peak_rate_enabled,
     peakStart: group.peak_start,
     peakEnd: group.peak_end,
     peakRateMultiplier: group.peak_rate_multiplier

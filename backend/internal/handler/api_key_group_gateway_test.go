@@ -55,6 +55,17 @@ type groupProbeAccountRepo struct {
 	codexModelsFailoverAccountRepo
 }
 
+func TestEnterpriseSingleGroupFallbackKeepsCurrentAuthorization(t *testing.T) {
+	key := &service.APIKey{User: &service.User{AccountType: service.AccountTypeEnterprise, AllowedGroups: []int64{2}}}
+	group := &service.Group{ID: 2, Status: service.StatusActive, IsExclusive: true}
+	require.NoError(t, validateAPIKeyFallbackGroup(key, group, "model", "model", nil, true))
+	group.SubscriptionType = service.SubscriptionTypeSubscription
+	require.ErrorContains(t, validateAPIKeyFallbackGroup(key, group, "model", "model", nil, true), "not available")
+	group.SubscriptionType = service.SubscriptionTypeStandard
+	key.User.AllowedGroups = nil
+	require.ErrorContains(t, validateAPIKeyFallbackGroup(key, group, "model", "model", nil, true), "not available")
+}
+
 func (r groupProbeAccountRepo) ListSchedulableByGroupIDAndPlatform(ctx context.Context, _ int64, platform string) ([]service.Account, error) {
 	return r.ListSchedulableByPlatform(ctx, platform)
 }

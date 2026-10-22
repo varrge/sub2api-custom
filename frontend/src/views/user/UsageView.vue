@@ -27,6 +27,87 @@
         </div>
       </header>
 
+      <div class="card p-4">
+        <div class="flex flex-wrap items-center gap-4">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('enterpriseExport.title') }}:</span>
+            <input
+              v-model="exportMonth"
+              type="month"
+              data-testid="monthly-export-month"
+              class="input w-40"
+            />
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.usage.group') }}:</span>
+            <div class="w-44">
+              <Select
+                v-model="exportGroupId"
+                :options="groupOptions"
+                searchable
+                data-testid="monthly-export-group"
+              />
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('usage.apiKeyFilter') }}:</span>
+            <div class="w-44">
+              <Select
+                v-model="exportApiKeyId"
+                :options="apiKeyOptions"
+                :disabled="exportApiKeySelectDisabled"
+                data-testid="monthly-export-api-key"
+              />
+            </div>
+          </div>
+          <p
+            v-if="exportApiKeyId != null"
+            data-testid="monthly-export-api-key-hint"
+            class="w-full text-xs text-amber-600 dark:text-amber-300"
+          >
+            {{ t('enterpriseExport.apiKeyIgnoredForFullPack') }}
+          </p>
+          <div class="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              data-testid="monthly-export-all"
+              :disabled="!exportMonth || monthlyExporting !== null"
+              class="btn btn-primary"
+              @click="runMonthlyExport('all')"
+            >
+              {{ monthlyExporting === 'all' ? t('enterpriseExport.exporting') : t('enterpriseExport.fullPack') }}
+            </button>
+            <button
+              type="button"
+              data-testid="monthly-export-summary"
+              :disabled="!exportMonth || monthlyExporting !== null"
+              class="btn btn-secondary"
+              @click="runMonthlyExport('summary')"
+            >
+              {{ monthlyExporting === 'summary' ? t('enterpriseExport.exporting') : t('enterpriseExport.summary') }}
+            </button>
+            <button
+              type="button"
+              data-testid="monthly-export-details"
+              :disabled="!exportMonth || monthlyExporting !== null"
+              class="btn btn-secondary"
+              @click="runMonthlyExport('details')"
+            >
+              {{ monthlyExporting === 'details' ? t('enterpriseExport.exporting') : t('enterpriseExport.details') }}
+            </button>
+            <button
+              type="button"
+              data-testid="monthly-export-conversions"
+              :disabled="!exportMonth || monthlyExporting !== null"
+              class="btn btn-secondary"
+              @click="runMonthlyExport('conversions')"
+            >
+              {{ monthlyExporting === 'conversions' ? t('enterpriseExport.exporting') : t('enterpriseExport.conversions') }}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <UsageStatsCards :stats="usageStats" :show-account-cost="false" :strike-standard-cost="true" />
 
       <div class="usage-charts">
@@ -229,6 +310,8 @@
 import '@/styles/usage.css'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { saveAs } from 'file-saver'
+import type { UsageMonthlyExportKind } from '@/api/usage'
 import { useAppStore } from '@/stores/app'
 import { FeatureFlags, resolveFeatureFlag } from '@/utils/featureFlags'
 import { keysAPI, usageAPI, userGroupsAPI } from '@/api'
@@ -283,6 +366,55 @@ const chartsLoading = ref(false)
 const modelStatsLoading = ref(false)
 const endpointStatsLoading = ref(false)
 const exporting = ref(false)
+
+// 月度导出（对账包/单类 CSV），月份默认为当前月
+const getCurrentMonth = (utcOffset?: string): string => {
+  const now = new Date()
+  const offset = /^([+-])(\d{2}):(\d{2})$/.exec(utcOffset ?? '')
+  if (offset) {
+    const minutes = (Number(offset[2]) * 60 + Number(offset[3])) * (offset[1] === '-' ? -1 : 1)
+    const siteDate = new Date(now.getTime() + minutes * 60_000)
+    return `${siteDate.getUTCFullYear()}-${String(siteDate.getUTCMonth() + 1).padStart(2, '0')}`
+  }
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+const exportMonth = ref(getCurrentMonth(appStore.cachedPublicSettings?.server_utc_offset))
+watch(() => appStore.cachedPublicSettings?.server_utc_offset, (offset, previous) => {
+  if (exportMonth.value === getCurrentMonth(previous)) exportMonth.value = getCurrentMonth(offset)
+})
+const monthlyExporting = ref<UsageMonthlyExportKind | null>(null)
+// 月度导出专用筛选：分组对所有导出类型生效；API Key 仅对 summary/details 生效
+const exportGroupId = ref<number | null>(null)
+const exportApiKeyId = ref<number | null>(null)
+// 完整对账包（all）与折算入账（conversions）导出期间禁用 API Key 筛选（这两类导出会忽略它）
+const exportApiKeySelectDisabled = computed(
+  () => monthlyExporting.value === 'all' || monthlyExporting.value === 'conversions'
+)
+
+const runMonthlyExport = async (kind: UsageMonthlyExportKind) => {
+  if (!exportMonth.value || monthlyExporting.value !== null) return
+  monthlyExporting.value = kind
+  try {
+    const supportsApiKeyFilter = kind === 'summary' || kind === 'details'
+    if (!supportsApiKeyFilter && exportApiKeyId.value != null) {
+      appStore.showWarning(t('enterpriseExport.apiKeyIgnoredForFullPack'))
+    }
+    const { blob, filename } = await usageAPI.exportMonthly({
+      month: exportMonth.value,
+      kind,
+      group_id: exportGroupId.value ?? undefined,
+      api_key_id: supportsApiKeyFilter ? exportApiKeyId.value ?? undefined : undefined,
+    })
+    saveAs(blob, filename)
+    appStore.showSuccess(t('enterpriseExport.exportSuccess'))
+  } catch (error) {
+    console.error('Monthly export failed:', error)
+    appStore.showError(t('enterpriseExport.exportFailed'))
+  } finally {
+    monthlyExporting.value = null
+  }
+}
+
 const errorRows = ref<UserErrorRequest[]>([])
 const errorLoading = ref(false)
 const errorPage = ref(1)

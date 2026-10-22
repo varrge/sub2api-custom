@@ -3,6 +3,10 @@
     <TablePageLayout>
       <template #filters>
         <div class="flex flex-col gap-3">
+          <div v-if="groupRatesFailed" class="text-sm text-red-600 dark:text-red-400" role="alert">
+            {{ t('enterpriseNav.pricingUnavailable') }}
+            <button type="button" class="btn btn-secondary ml-2" @click="loadUserGroupRates">{{ t('common.refresh') }}</button>
+          </div>
           <div class="flex flex-wrap items-center gap-3">
             <SearchInput
               v-model="filterSearch"
@@ -165,7 +169,7 @@
               :title="t('keys.clickToChangeGroup')"
               :aria-label="t('keys.multiGroup.editGroups', { name: row.name })"
             >
-              <KeyGroupBadges class="flex-1" :api-key="row" :user-rates="userGroupRates" />
+              <KeyGroupBadges class="flex-1" :api-key="row" :user-rates="userGroupRates" :enterprise-rates="enterpriseGroupRates" :rates-unavailable="enterpriseRatesUnavailable" />
               <Icon name="edit" size="sm" class="mt-1 shrink-0 text-gray-400" />
             </button>
           </template>
@@ -570,6 +574,8 @@
             :addition-group-ids="showEditModal ? undefined : createProviderGroupIds"
             :existing-groups="keyGroups(selectedKey)"
             :user-rates="userGroupRates"
+            :enterprise-rates="enterpriseGroupRates"
+            :rates-unavailable="enterpriseRatesUnavailable"
             :multi-group-enabled="selectedKey?.multi_group_enabled"
             :disabled="submitting"
             data-tour="key-form-group"
@@ -1033,6 +1039,8 @@
       :selected-keys="selectedApiKeys"
       :groups="groups"
       :user-rates="userGroupRates"
+      :enterprise-rates="enterpriseGroupRates"
+      :rates-unavailable="enterpriseRatesUnavailable"
       @close="showBulkEditModal = false"
       @updated="handleBulkUpdated"
     />
@@ -1144,6 +1152,8 @@
         :available-groups="groups"
         :existing-groups="keyGroups(selectedKeyForGroup)"
         :user-rates="userGroupRates"
+        :enterprise-rates="enterpriseGroupRates"
+        :rates-unavailable="enterpriseRatesUnavailable"
         :multi-group-enabled="selectedKeyForGroup.multi_group_enabled"
         :disabled="savingGroups"
       />
@@ -1164,6 +1174,7 @@
 	import { useOnboardingStore } from '@/stores/onboarding'
 	import { useClipboard } from '@/composables/useClipboard'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
+import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
 import { keysAPI, authAPI, usageAPI, userGroupsAPI } from '@/api'
@@ -1206,6 +1217,7 @@ const formatDateTimeLocal = (isoDate: string): string => {
 }
 
 const appStore = useAppStore()
+const authStore = useAuthStore()
 const onboardingStore = useOnboardingStore()
 const { copyToClipboard: clipboardCopy } = useClipboard()
 
@@ -1326,6 +1338,13 @@ const now = ref(new Date())
 let resetTimer: ReturnType<typeof setInterval> | null = null
 const usageStats = ref<Record<string, BatchApiKeyUsageStats>>({})
 const userGroupRates = ref<Record<number, number>>({})
+const enterpriseGroupRates = ref<Record<number, number>>({})
+const groupRatesFailed = ref(false)
+const loadedRateIdentity = ref('')
+const rateIdentity = computed(() => `${authStore.user?.id ?? ''}:${authStore.isEnterprise === true}`)
+const enterpriseRatesUnavailable = computed(() => authStore.isEnterprise && loadedRateIdentity.value !== rateIdentity.value)
+let groupLoadGeneration = 0
+let rateLoadGeneration = 0
 
 const pagination = ref({
   page: 1,
@@ -1558,17 +1577,35 @@ const loadApiKeys = async () => {
 }
 
 const loadGroups = async () => {
+  const generation = ++groupLoadGeneration
+  groups.value = []
   try {
-    groups.value = await userGroupsAPI.getAvailable()
+    const available = await userGroupsAPI.getAvailable()
+    if (generation === groupLoadGeneration) groups.value = available
   } catch (error) {
     console.error('Failed to load groups:', error)
   }
 }
 
 const loadUserGroupRates = async () => {
+  const generation = ++rateLoadGeneration
+  const identity = rateIdentity.value
+  loadedRateIdentity.value = ''
+  groupRatesFailed.value = false
+  userGroupRates.value = {}
+  enterpriseGroupRates.value = {}
   try {
-    userGroupRates.value = await userGroupsAPI.getUserGroupRates()
+    const [ordinaryRates, enterpriseRates] = await Promise.all([
+      userGroupsAPI.getUserGroupRates(),
+      authStore.isEnterprise ? userGroupsAPI.getEnterpriseGroupRates() : Promise.resolve({}),
+    ])
+    if (generation !== rateLoadGeneration || identity !== rateIdentity.value) return
+    userGroupRates.value = ordinaryRates
+    enterpriseGroupRates.value = enterpriseRates
+    loadedRateIdentity.value = identity
   } catch (error) {
+    if (generation !== rateLoadGeneration) return
+    groupRatesFailed.value = authStore.isEnterprise === true
     console.error('Failed to load user group rates:', error)
   }
 }
@@ -1990,17 +2027,33 @@ function formatResetTime(resetAt: string | null): string {
   return `${mins}m`
 }
 
+watch([() => authStore.user?.id, () => authStore.isEnterprise], (_identity, previous) => {
+  void loadGroups()
+  void loadUserGroupRates()
+  if (previous.length > 0 && previous[0] !== authStore.user?.id) {
+    apiKeys.value = []
+    selectedIds.value = []
+    selectedKey.value = null
+    showCreateModal.value = false
+    showEditModal.value = false
+    showUseKeyModal.value = false
+    showBulkEditModal.value = false
+    groupSelectorKeyId.value = null
+    void loadApiKeys()
+  }
+}, { immediate: true, flush: 'sync' })
+
 onMounted(() => {
   loadSavedColumns()
   loadApiKeys()
-  loadGroups()
-  loadUserGroupRates()
   loadPublicSettings()
   document.addEventListener('click', closeGroupSelector)
   resetTimer = setInterval(() => { now.value = new Date() }, 60000)
 })
 
 onUnmounted(() => {
+  groupLoadGeneration++
+  rateLoadGeneration++
   document.removeEventListener('click', closeGroupSelector)
   if (resetTimer) clearInterval(resetTimer)
 })

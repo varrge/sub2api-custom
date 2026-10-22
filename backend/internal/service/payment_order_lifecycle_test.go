@@ -861,6 +861,8 @@ func newPaymentOrderLifecycleTestClient(t *testing.T) *dbent.Client {
 
 	drv := entsql.OpenDB(dialect.SQLite, db)
 	client := enttest.NewClient(t, enttest.WithOptions(dbent.Driver(drv)))
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS enterprise_conversion_cards(order_id BIGINT,credited_usd NUMERIC,refunded_at TIMESTAMP)`)
+	require.NoError(t, err)
 	t.Cleanup(func() { _ = client.Close() })
 	return client
 }

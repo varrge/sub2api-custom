@@ -360,6 +360,10 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 			continue
 		}
 		candidate := key.ForGroup(group)
+		if key.User.IsEnterprise() && group.IsSubscriptionType() {
+			reasons = append(reasons, fmt.Sprintf("%d: enterprise account cannot use subscription group", id))
+			continue
+		}
 		if !group.IsSubscriptionType() && !candidate.User.CanBindGroup(id, group.IsExclusive) {
 			reasons = append(reasons, fmt.Sprintf("%d: permission revoked", id))
 			continue
@@ -499,6 +503,9 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 }
 
 func (r *apiKeyGroupRouting) admit(ctx context.Context, key *service.APIKey) (*service.UserSubscription, error) {
+	if key.User.IsEnterprise() && (key.Group == nil || key.Group.IsSubscriptionType()) {
+		return nil, service.ErrEnterpriseFeature
+	}
 	if r.cfg != nil && r.cfg.RunMode == config.RunModeSimple {
 		return nil, nil
 	}

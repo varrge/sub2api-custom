@@ -102,6 +102,9 @@ func (s *PromoService) ApplyPromoCode(ctx context.Context, userID int64, code st
 	defer func() { _ = tx.Rollback() }()
 
 	txCtx := dbent.NewTxContext(ctx, tx)
+	if err := lockPersonalAccount(txCtx, s.entClient, userID); err != nil {
+		return err
+	}
 
 	// 在事务中获取并锁定优惠码记录（FOR UPDATE）
 	promoCode, err := s.promoRepo.GetByCodeForUpdate(txCtx, code)

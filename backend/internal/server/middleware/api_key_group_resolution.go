@@ -53,6 +53,9 @@ func RevalidateAPIKeyPinnedGroup(c *gin.Context, key *service.APIKey) (*service.
 	if err != nil {
 		return nil, err
 	}
+	if resolved.User.IsEnterprise() && resolved.Group != nil && resolved.Group.IsSubscriptionType() {
+		return nil, service.ErrEnterpriseFeature
+	}
 	c.Set(string(ContextKeyAPIKey), resolved)
 	setGroupContext(c, resolved.Group)
 	return resolved, nil
@@ -128,6 +131,9 @@ func ResolveDeferredAPIKeyGroup(c *gin.Context, key *service.APIKey, body []byte
 	resolved, err := resolver(c, key)
 	if err != nil {
 		return nil, err
+	}
+	if resolved.User.IsEnterprise() && resolved.Group != nil && resolved.Group.IsSubscriptionType() {
+		return nil, service.ErrEnterpriseFeature
 	}
 	c.Set(string(ContextKeyAPIKey), resolved)
 	setGroupContext(c, resolved.Group)

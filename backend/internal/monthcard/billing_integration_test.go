@@ -42,7 +42,8 @@ func billingDB(t *testing.T) *sql.DB {
 	require.NoError(t, err)
 	db.SetMaxOpenConns(24)
 	t.Cleanup(func() { _ = db.Close(); _, _ = admin.Exec(`DROP SCHEMA ` + schema + ` CASCADE`); _ = admin.Close() })
-	_, err = db.Exec(`CREATE TABLE users(id BIGINT PRIMARY KEY,balance NUMERIC(20,8) NOT NULL DEFAULT 0,deleted_at TIMESTAMPTZ,updated_at TIMESTAMPTZ DEFAULT NOW());
+	_, err = db.Exec(`CREATE TABLE users(id BIGINT PRIMARY KEY,account_type TEXT NOT NULL DEFAULT 'personal',balance NUMERIC(20,8) NOT NULL DEFAULT 0,deleted_at TIMESTAMPTZ,updated_at TIMESTAMPTZ DEFAULT NOW());
+ CREATE TABLE enterprise_conversion_cards(card_id BIGINT PRIMARY KEY,order_id BIGINT,credited_usd NUMERIC(20,8),refunded_at TIMESTAMPTZ);
  CREATE TABLE groups(id BIGINT PRIMARY KEY,name TEXT,platform TEXT,deleted_at TIMESTAMPTZ,daily_limit_usd NUMERIC(20,8),weekly_limit_usd NUMERIC(20,8),monthly_limit_usd NUMERIC(20,8));
  CREATE TABLE payment_orders(id BIGINT PRIMARY KEY,status TEXT NOT NULL DEFAULT 'COMPLETED');
  CREATE TABLE api_keys(id BIGINT PRIMARY KEY,user_id BIGINT,group_id BIGINT,quota_used NUMERIC(20,8) DEFAULT 0,usage_5h NUMERIC(20,8) DEFAULT 0,usage_1d NUMERIC(20,8) DEFAULT 0,usage_7d NUMERIC(20,8) DEFAULT 0,window_5h_start TIMESTAMPTZ,window_1d_start TIMESTAMPTZ,window_7d_start TIMESTAMPTZ);

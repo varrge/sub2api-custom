@@ -370,6 +370,50 @@ export async function getMyErrorDetail(id: number): Promise<UserErrorRequestDeta
   return data
 }
 
+// ==================== Monthly export ====================
+
+export type UsageMonthlyExportKind = 'summary' | 'details' | 'conversions' | 'all'
+
+export interface UsageMonthlyExportParams {
+  /** 月份，格式 YYYY-MM */
+  month: string
+  /** summary/details/conversions 返回 CSV；all 返回含三份 CSV 的 ZIP（同一数据库快照） */
+  kind?: UsageMonthlyExportKind
+  group_id?: number
+  /** 仅 summary/details 生效；all 与 conversions 会被忽略（不发送） */
+  api_key_id?: number
+}
+
+export interface UsageMonthlyExportResult {
+  blob: Blob
+  filename: string
+}
+
+/** 月度用量导出：CSV（单类）或 ZIP（kind=all 完整对账包）。 */
+export async function exportMonthly(
+  params: UsageMonthlyExportParams
+): Promise<UsageMonthlyExportResult> {
+  const kind = params.kind ?? 'all'
+  // 契约：kind=all（完整 ZIP 对账包）与 kind=conversions（折算入账）不支持按 API Key
+  // 筛选，这里防御性地丢弃 api_key_id；group_id 对全部 kind 仍然有效。
+  const apiKeyId = kind === 'summary' || kind === 'details' ? params.api_key_id : undefined
+  const response = await apiClient.get('/usage/monthly-export', {
+    params: {
+      month: params.month,
+      kind,
+      group_id: params.group_id,
+      api_key_id: apiKeyId
+    },
+    responseType: 'blob'
+  })
+  const blob = response.data as Blob
+  const disposition = String(response.headers?.['content-disposition'] ?? '')
+  const match = /filename\*?=(?:UTF-8'')?"?([^";]+)/i.exec(disposition)
+  const fallback = `usage-${params.month}-${kind}.${kind === 'all' ? 'zip' : 'csv'}`
+  const filename = match ? decodeURIComponent(match[1].trim()) : fallback
+  return { blob, filename }
+}
+
 export const usageAPI = {
   list,
   query,
@@ -386,7 +430,9 @@ export const usageAPI = {
   getDashboardApiKeysUsage,
   // Error requests
   listMyErrorRequests,
-  getMyErrorDetail
+  getMyErrorDetail,
+  // Monthly export
+  exportMonthly
 }
 
 export default usageAPI

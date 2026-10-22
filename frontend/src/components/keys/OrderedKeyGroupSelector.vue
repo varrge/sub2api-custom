@@ -13,13 +13,13 @@
         <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-100 text-[11px] font-semibold tabular-nums text-primary-700 dark:bg-dark-700 dark:text-primary-300">{{ index + 1 }}</span>
         <div class="min-w-0 flex-1">
           <GroupOptionItem
-            v-if="groupsById.get(id)"
+            v-if="groupsById.get(id) && !ratesUnavailable"
             class="key-group-option"
-            v-bind="groupDisplayProps(groupsById.get(id)!)"
-            :user-rate-multiplier="userRates[id]"
+            v-bind="groupDisplayProps(groupsById.get(id)!, enterpriseRates[id])"
+            :user-rate-multiplier="enterpriseRates[id] != null ? null : userRates[id]"
             :show-checkmark="false"
           />
-          <span v-else class="text-sm">#{{ id }}</span>
+          <span v-else class="text-sm">{{ groupName(id) }}</span>
           <span v-if="groupsById.get(id)" class="block text-[10px] leading-4 text-gray-500 dark:text-gray-400" data-test="group-billing-type">{{ t(groupsById.get(id)!.subscription_type === 'subscription' ? 'groups.subscription' : 'dashboard.balance') }}</span>
           <p v-if="unavailableReason(id)" class="mt-0.5 text-xs text-amber-700 dark:text-amber-400">{{ unavailableReason(id) }}</p>
         </div>
@@ -107,12 +107,14 @@
           >
             <div class="min-w-0 flex-1">
             <GroupOptionItem
+              v-if="!ratesUnavailable"
               class="key-group-option"
-              v-bind="groupDisplayProps(group)"
-              :user-rate-multiplier="userRates[group.id]"
+              v-bind="groupDisplayProps(group, enterpriseRates[group.id])"
+              :user-rate-multiplier="enterpriseRates[group.id] != null ? null : userRates[group.id]"
               :description="group.description?.trim() === group.name.trim() ? undefined : group.description"
               :show-checkmark="false"
             />
+            <span v-else class="text-sm">{{ group.name }}</span>
             <span class="block text-[10px] leading-4 text-gray-500 dark:text-gray-400" data-test="group-billing-type">{{ t(group.subscription_type === 'subscription' ? 'groups.subscription' : 'dashboard.balance') }}</span>
             </div>
             <Icon name="plus" size="sm" class="shrink-0 text-gray-400" />
@@ -151,12 +153,16 @@ const props = withDefaults(defineProps<{
   existingGroups?: Group[]
   additionGroupIds?: number[]
   userRates?: Record<number, number>
+  enterpriseRates?: Record<number, number>
+  ratesUnavailable?: boolean
   multiGroupEnabled?: boolean
   allowEmpty?: boolean
   disabled?: boolean
 }>(), {
   existingGroups: () => [],
   userRates: () => ({}),
+  enterpriseRates: () => ({}),
+  ratesUnavailable: false,
   multiGroupEnabled: false,
   allowEmpty: false,
   disabled: false

@@ -32,7 +32,7 @@ func (s *Store) ReserveFixedCharge(ctx context.Context, id string, snap *Snapsho
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	if err := lockUser(ctx, tx, snap.UserID); err != nil {
+	if err := lockPersonalUser(ctx, tx, snap.UserID); err != nil {
 		return err
 	}
 	var balance decimal.Decimal

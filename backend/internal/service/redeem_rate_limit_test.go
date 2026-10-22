@@ -151,7 +151,9 @@ func TestPublicRedeemCounterWriteFailurePreservesDomainError(t *testing.T) {
 func TestSuccessfulPublicRedeemDoesNotMutateFailureCounter(t *testing.T) {
 	ctx := context.Background()
 	client := newPaymentConfigServiceTestClient(t)
-	userID := int64(42)
+	user, err := client.User.Create().SetEmail("public-redeem@example.test").SetPasswordHash("test-only").Save(ctx)
+	require.NoError(t, err)
+	userID := user.ID
 	code := &RedeemCode{
 		ID: 101, Code: "PUBLIC-SUCCESS", Type: RedeemTypeBalance, Value: 10, Status: StatusUnused,
 	}

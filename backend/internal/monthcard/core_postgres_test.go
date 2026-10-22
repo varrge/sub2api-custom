@@ -44,7 +44,8 @@ func corePostgres(t *testing.T) (*Store, *sql.DB) {
 	db.SetMaxOpenConns(24)
 	t.Cleanup(func() { _ = db.Close(); _, _ = admin.Exec(`DROP SCHEMA ` + schema + ` CASCADE`); _ = admin.Close() })
 	_, err = db.Exec(`
-	CREATE TABLE users(id BIGSERIAL PRIMARY KEY,status TEXT NOT NULL DEFAULT 'active',deleted_at TIMESTAMPTZ,restrict_public_groups BOOL NOT NULL DEFAULT FALSE,balance NUMERIC(20,8) NOT NULL DEFAULT 0,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+	CREATE TABLE users(id BIGSERIAL PRIMARY KEY,account_type TEXT NOT NULL DEFAULT 'personal',status TEXT NOT NULL DEFAULT 'active',deleted_at TIMESTAMPTZ,restrict_public_groups BOOL NOT NULL DEFAULT FALSE,balance NUMERIC(20,8) NOT NULL DEFAULT 0,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+	CREATE TABLE enterprise_conversion_cards(card_id BIGINT PRIMARY KEY,order_id BIGINT,credited_usd NUMERIC(20,8),refunded_at TIMESTAMPTZ);
 	CREATE TABLE groups(id BIGSERIAL PRIMARY KEY,name TEXT NOT NULL DEFAULT 'Group',platform TEXT NOT NULL DEFAULT 'openai',status TEXT NOT NULL DEFAULT 'active',deleted_at TIMESTAMPTZ,subscription_type TEXT NOT NULL DEFAULT 'subscription',is_exclusive BOOL NOT NULL DEFAULT FALSE,daily_limit_usd NUMERIC(20,8),weekly_limit_usd NUMERIC(20,8),monthly_limit_usd NUMERIC(20,8));
 	CREATE TABLE user_allowed_groups(user_id BIGINT REFERENCES users,group_id BIGINT REFERENCES groups,PRIMARY KEY(user_id,group_id));
 	CREATE TABLE payment_orders(id BIGSERIAL PRIMARY KEY,user_id BIGINT NOT NULL,status TEXT NOT NULL DEFAULT 'PAID',order_type TEXT NOT NULL DEFAULT 'month_card',paid_at TIMESTAMPTZ);

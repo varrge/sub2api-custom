@@ -13,7 +13,9 @@ import (
 func TestAdminFulfillmentBypassesLimitAndKeepsRedeemAffiliate(t *testing.T) {
 	ctx := context.Background()
 	client := newPaymentConfigServiceTestClient(t)
-	userID := int64(42)
+	user, err := client.User.Create().SetEmail("admin-redeem@example.test").SetPasswordHash("test-only").Save(ctx)
+	require.NoError(t, err)
+	userID := user.ID
 	inviterID := int64(9001)
 	code := &RedeemCode{
 		ID: 102, Code: "ADMIN-SUCCESS", Type: RedeemTypeBalance, Value: 20, Status: StatusUnused,

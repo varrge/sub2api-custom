@@ -79,6 +79,14 @@ func (r *affiliateRepository) GetAffiliateByCode(ctx context.Context, code strin
 func (r *affiliateRepository) BindInviter(ctx context.Context, userID, inviterID int64) (bool, error) {
 	var bound bool
 	err := r.withTx(ctx, func(txCtx context.Context, txClient *dbent.Client) error {
+		allowed, err := personalAffiliateUsers(txCtx, txClient, userID, inviterID)
+		if err != nil {
+			return err
+		}
+		if !allowed {
+			return service.ErrEnterpriseFeature
+		}
+
 		if _, err := ensureUserAffiliateWithClient(txCtx, txClient, userID); err != nil {
 			return err
 		}
@@ -121,6 +129,14 @@ func (r *affiliateRepository) AccrueQuota(ctx context.Context, inviterID, invite
 
 	var applied bool
 	err := r.withTx(ctx, func(txCtx context.Context, txClient *dbent.Client) error {
+		allowed, err := personalAffiliateUsers(txCtx, txClient, inviterID, inviteeUserID)
+		if err != nil {
+			return err
+		}
+		if !allowed {
+			return nil
+		}
+
 		// freezeHours > 0: add to frozen quota; == 0: add to available quota directly
 		var updateSQL string
 		if freezeHours > 0 {
@@ -237,6 +253,14 @@ func (r *affiliateRepository) TransferQuotaToBalance(ctx context.Context, userID
 	var newBalance float64
 
 	err := r.withTx(ctx, func(txCtx context.Context, txClient *dbent.Client) error {
+		allowed, err := personalAffiliateUsers(txCtx, txClient, userID, userID)
+		if err != nil {
+			return err
+		}
+		if !allowed {
+			return service.ErrEnterpriseFeature
+		}
+
 		if _, err := ensureUserAffiliateWithClient(txCtx, txClient, userID); err != nil {
 			return err
 		}
@@ -1151,6 +1175,34 @@ func generateAffiliateCode() (string, error) {
 		buf[i] = affiliateCodeCharset[int(buf[i])%len(affiliateCodeCharset)]
 	}
 	return string(buf), nil
+}
+
+func personalAffiliateUsers(ctx context.Context, c *dbent.Client, first, second int64) (bool, error) {
+	rows, err := c.QueryContext(ctx, `SELECT account_type FROM users WHERE id IN ($1,$2) AND deleted_at IS NULL ORDER BY id FOR UPDATE`, first, second)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = rows.Close() }()
+	count := 0
+	allowed := true
+	for rows.Next() {
+		var kind string
+		if err := rows.Scan(&kind); err != nil {
+			return false, err
+		}
+		count++
+		if kind == service.AccountTypeEnterprise {
+			allowed = false
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	expected := 2
+	if first == second {
+		expected = 1
+	}
+	return allowed && count == expected, nil
 }
 
 func isAffiliateUniqueViolation(err error) bool {

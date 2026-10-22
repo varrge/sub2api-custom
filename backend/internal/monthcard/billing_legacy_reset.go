@@ -58,6 +58,27 @@ func (s *Store) ResetLegacyQuotaInTx(ctx context.Context, tx LegacyQuotaTx, user
 	if err := lock(`SELECT id FROM users WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, userID); err != nil {
 		return err
 	}
+	rows, err := tx.QueryContext(ctx, `SELECT account_type FROM users WHERE id=$1`, userID)
+	if err != nil {
+		return err
+	}
+	var accountType string
+	if !rows.Next() {
+		err := rows.Err()
+		_ = rows.Close()
+		if err != nil {
+			return err
+		}
+		return ErrNotFound
+	}
+	err = rows.Scan(&accountType)
+	_ = rows.Close()
+	if err != nil {
+		return err
+	}
+	if accountType == "enterprise" {
+		return ErrEnterpriseFeature
+	}
 	if err := lock(`SELECT id FROM user_subscriptions WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL FOR UPDATE`, subscriptionID, userID); err != nil {
 		return err
 	}

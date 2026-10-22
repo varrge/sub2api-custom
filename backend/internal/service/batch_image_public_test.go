@@ -134,6 +134,27 @@ func TestBatchImagePublicService_Submit(t *testing.T) {
 		require.InDelta(t, 0.25, *job.HoldAmount, 1e-12)
 	})
 
+	t.Run("enterprise snapshot overrides image rate without upstream cost multiplier", func(t *testing.T) {
+		svc, repo, _, _, _ := newTestBatchImagePublicService(true)
+		groupID := int64(7)
+		upstreamRate := 9.0
+		svc.AccountRepo.(*publicBatchImageAccountRepo).accounts[0].RateMultiplier = &upstreamRate
+		svc.GroupRepo = &publicBatchImageGroupRepo{groups: map[int64]*Group{groupID: {
+			ID: groupID, Platform: PlatformGemini, RateMultiplier: 2,
+			AllowImageGeneration: true, AllowBatchImageGeneration: true,
+			ImageRateIndependent: true, ImageRateMultiplier: 8,
+			BatchImageDiscountMultiplier: 0.8, BatchImageHoldMultiplier: 1,
+		}}}
+		ctx := WithEnterprisePricing(context.Background(), &User{ID: 11, AccountType: AccountTypeEnterprise, EnterpriseGroupRates: map[int64]float64{groupID: 0.6}})
+		got, err := svc.Submit(ctx, BatchImageOwner{UserID: 11, APIKeyID: 22, GroupID: &groupID}, validBatchImageSubmitRequest(), "")
+		require.NoError(t, err)
+		job := repo.jobs[got.ID]
+		require.Equal(t, 0.6, job.GroupRateMultiplier)
+		require.Equal(t, 9.0, job.AccountRateMultiplier)
+		require.InDelta(t, 0.25*0.6*0.8, job.BillableUnitPrice, 1e-12)
+		require.InDelta(t, 0.25*0.6, job.HoldUnitPrice, 1e-12)
+	})
+
 	t.Run("uses configured group 1k image price for batch image base price", func(t *testing.T) {
 		svc, repo, _, _, _ := newTestBatchImagePublicService(true)
 		groupID := int64(7)

@@ -4,6 +4,7 @@ import ChannelStatusV1View from '../ChannelStatusV1View.vue'
 
 const mocks = vi.hoisted(() => ({ list: vi.fn(), status: vi.fn() }))
 vi.mock('@/api/channelMonitor', () => mocks)
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isEnterprise: false }) }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ cachedPublicSettings: { channel_monitor_enabled: true }, showError: vi.fn() }) }))
 vi.mock('vue-i18n', async () => ({
   ...await vi.importActual<typeof import('vue-i18n')>('vue-i18n'),
@@ -28,6 +29,7 @@ function mountView() {
   return shallowMount(ChannelStatusV1View, {
     global: { stubs: {
       AppLayout: { template: '<div><slot /></div>' },
+      RouterLink: true,
       MonitorHero: { props: ['loading'], emits: ['update:window', 'refresh'], template: `<div :data-loading="loading">
         <button class="fifteen" @click="$emit('update:window', '15d')">15d</button>
         <button class="thirty" @click="$emit('update:window', '30d')">30d</button>

@@ -79,6 +79,7 @@ func TestLiveSidebandLocationMatchesCreateRoute(t *testing.T) {
 }
 
 func TestLiveEnabledForAPIKey(t *testing.T) {
+	require.False(t, liveEnabledForAPIKey(&service.APIKey{User: &service.User{AccountType: service.AccountTypeEnterprise}, Group: &service.Group{Platform: service.PlatformOpenAI, AllowLive: true}}))
 	require.False(t, liveEnabledForAPIKey(nil))
 	require.False(t, liveEnabledForAPIKey(&service.APIKey{}))
 	require.False(t, liveEnabledForAPIKey(&service.APIKey{

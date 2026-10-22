@@ -160,9 +160,24 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		if !enforceAPIKeyModelAllowlist(c, apiKey) {
 			return
 		}
+		if c.Request.Method != "GET" || strings.EqualFold(c.GetHeader("Upgrade"), "websocket") {
+			requestCtx, release, err := apiKeyService.BeginAccountRequest(c.Request.Context(), apiKey)
+			if err != nil {
+				AbortWithError(c, 503, "ACCOUNT_TRANSITION", "账户状态已变化，请重试")
+				return
+			}
+			defer release()
+			c.Request = c.Request.WithContext(requestCtx)
+		} else {
+			c.Request = c.Request.WithContext(service.WithEnterprisePricing(c.Request.Context(), apiKey.User))
+		}
 		var groupResolved bool
 		apiKey, groupResolved = resolveAPIKeyRequestGroup(c, apiKey, false)
 		if !groupResolved || !enforceAPIKeySelectedModelGroups(c, apiKey) {
+			return
+		}
+		if !SkipAPIKeyGroupEnforcement(c) && apiKey.User.IsEnterprise() && (apiKey.Group == nil || apiKey.Group.IsSubscriptionType()) {
+			AbortWithError(c, 403, "ENTERPRISE_FEATURE_FORBIDDEN", "企业账户不能使用订阅分组")
 			return
 		}
 		if !SkipAPIKeyGroupEnforcement(c) && abortIfAPIKeyGroupUnavailable(c, apiKey) {

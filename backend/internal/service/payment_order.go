@@ -37,6 +37,16 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	if !cfg.Enabled {
 		return nil, infraerrors.Forbidden("PAYMENT_DISABLED", "payment system is disabled")
 	}
+	user, err := s.userRepo.GetByID(ctx, req.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("get user: %w", err)
+	}
+	if user.IsEnterprise() {
+		if req.OrderType != payment.OrderTypeBalance || req.CouponCode != "" {
+			return nil, ErrEnterpriseFeature
+		}
+		cfg.ApplyEnterpriseRecharge()
+	}
 	if req.CouponCode != "" && req.OrderType != payment.OrderTypeMonthCard {
 		return nil, infraerrors.BadRequest("COUPON_ORDER_TYPE", "优惠码仅适用于月卡购买")
 	}
@@ -51,10 +61,6 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	}
 	if err := s.checkCancelRateLimit(ctx, req.UserID, cfg); err != nil {
 		return nil, err
-	}
-	user, err := s.userRepo.GetByID(ctx, req.UserID)
-	if err != nil {
-		return nil, fmt.Errorf("get user: %w", err)
 	}
 	if user.Status != payment.EntityStatusActive {
 		return nil, infraerrors.Forbidden("USER_INACTIVE", "user account is disabled")
@@ -185,6 +191,13 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		return nil, fmt.Errorf("begin transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	currentType, err := lockAccountType(ctx, tx.Client(), req.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if currentType != user.EffectiveAccountType() {
+		return nil, infraerrors.Conflict("ACCOUNT_TYPE_CHANGED", "账户类型已变更，请重新创建订单")
+	}
 	if err := s.checkPendingLimit(ctx, tx, req.UserID, cfg.MaxPendingOrders); err != nil {
 		return nil, err
 	}
@@ -201,6 +214,11 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		return nil, err
 	}
 	providerSnapshot := buildPaymentOrderProviderSnapshot(sel, req)
+	if providerSnapshot == nil {
+		providerSnapshot = map[string]any{}
+	}
+	providerSnapshot["account_type"] = user.EffectiveAccountType()
+	providerSnapshot["balance_recharge_multiplier"] = cfg.BalanceRechargeMultiplier
 	if req.monthCardPurchase != nil {
 		if providerSnapshot == nil {
 			providerSnapshot = make(map[string]any)

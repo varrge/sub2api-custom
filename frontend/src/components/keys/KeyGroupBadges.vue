@@ -2,8 +2,8 @@
   <span class="key-group-badges flex min-w-0 max-w-full flex-wrap items-start gap-1.5 whitespace-normal">
     <span v-for="(id, index) in ids" :key="id" class="inline-flex min-w-0 max-w-full items-start gap-1">
       <span class="shrink-0 pt-1 text-xs tabular-nums text-gray-500">{{ index + 1 }}.</span>
-      <GroupBadge v-if="groupsById.get(id)" class="key-group-badge" v-bind="groupDisplayProps(groupsById.get(id)!)" :user-rate-multiplier="userRates[id]" />
-      <span v-else class="text-xs text-gray-500">#{{ id }}</span>
+      <GroupBadge v-if="groupsById.get(id) && !ratesUnavailable" class="key-group-badge" v-bind="groupDisplayProps(groupsById.get(id)!, enterpriseRates[id])" :user-rate-multiplier="enterpriseRates[id] != null ? null : userRates[id]" />
+      <span v-else class="text-xs text-gray-500">{{ groupsById.get(id)?.name ?? `#${id}` }}</span>
     </span>
     <span v-if="ids.length === 0" class="text-sm text-gray-400">{{ t('keys.noGroup') }}</span>
   </span>
@@ -16,8 +16,10 @@ import type { ApiKey } from '@/types'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import { groupDisplayProps, keyGroupIds, keyGroups } from './keyGroups'
 
-const props = withDefaults(defineProps<{ apiKey: ApiKey; userRates?: Record<number, number> }>(), {
-  userRates: () => ({})
+const props = withDefaults(defineProps<{ apiKey: ApiKey; userRates?: Record<number, number>; enterpriseRates?: Record<number, number>; ratesUnavailable?: boolean }>(), {
+  userRates: () => ({}),
+  enterpriseRates: () => ({}),
+  ratesUnavailable: false
 })
 const { t } = useI18n()
 const ids = computed(() => keyGroupIds(props.apiKey))

@@ -32,6 +32,9 @@ func (s *GatewayService) getUserGroupRateMultiplier(ctx context.Context, userID,
 
 // ResolveUserGroupRateMultiplier resolves the same cached multiplier used by usage billing.
 func (s *GatewayService) ResolveUserGroupRateMultiplier(ctx context.Context, userID, groupID int64, groupDefaultMultiplier float64) float64 {
+	if rate, ok := enterpriseContextRate(ctx, userID, groupID, groupDefaultMultiplier); ok {
+		return rate
+	}
 	return s.getUserGroupRateMultiplier(ctx, userID, groupID, groupDefaultMultiplier)
 }
 
@@ -935,7 +938,7 @@ func (s *GatewayService) recordUsageMultipliers(ctx context.Context, apiKey *API
 	if apiKey.GroupID != nil && apiKey.Group != nil {
 		multiplier = apiKey.Group.BaseRateMultiplierAt(pricingAt)
 		if user != nil {
-			multiplier = s.ResolveUserGroupRateMultiplier(ctx, user.ID, *apiKey.GroupID, multiplier)
+			multiplier = s.ResolveUserGroupRateMultiplier(WithEnterprisePricing(ctx, apiKey.User), user.ID, *apiKey.GroupID, multiplier)
 		}
 	}
 	// 高峰因子按请求时刻现算，不并入 getUserGroupRateMultiplier，以免污染 user:group 倍率缓存。

@@ -23,7 +23,7 @@ func (s *Store) SetFrozen(ctx context.Context, userID, cardID int64, frozen bool
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	if err = lockUser(ctx, tx, userID); err != nil {
+	if err = lockPersonalUser(ctx, tx, userID); err != nil {
 		return nil, err
 	}
 	var status, orderStatus string

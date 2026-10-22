@@ -58,6 +58,13 @@ func lockCardsForAdminChange(ctx context.Context, tx *sql.Tx, ids []int64) error
 			return err
 		}
 	}
+	var enterprise bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM users u JOIN month_card_cards c ON c.user_id=u.id WHERE c.id=ANY($1) AND u.account_type='enterprise')`, pq.Array(ids)).Scan(&enterprise); err != nil {
+		return err
+	}
+	if enterprise {
+		return ErrEnterpriseFeature
+	}
 	return nil
 }
 

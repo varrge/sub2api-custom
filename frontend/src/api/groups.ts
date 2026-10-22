@@ -27,9 +27,16 @@ export async function getUserGroupRates(): Promise<Record<number, number>> {
   return data || {}
 }
 
+/** Explicit enterprise rates only; an absent entry inherits ordinary pricing. */
+export async function getEnterpriseGroupRates(): Promise<Record<number, number>> {
+  const { data } = await apiClient.get<Record<number, number> | null>('/groups/enterprise-rates')
+  return data || {}
+}
+
 export const userGroupsAPI = {
   getAvailable,
-  getUserGroupRates
+  getUserGroupRates,
+  getEnterpriseGroupRates
 }
 
 export default userGroupsAPI

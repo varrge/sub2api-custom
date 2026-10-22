@@ -116,9 +116,24 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 		if !enforceAPIKeyModelAllowlist(c, apiKey) {
 			return
 		}
+		if c.Request.Method != "GET" || strings.EqualFold(c.GetHeader("Upgrade"), "websocket") {
+			requestCtx, release, err := apiKeyService.BeginAccountRequest(c.Request.Context(), apiKey)
+			if err != nil {
+				abortWithGoogleError(c, 503, "Account is changing; retry request")
+				return
+			}
+			defer release()
+			c.Request = c.Request.WithContext(requestCtx)
+		} else {
+			c.Request = c.Request.WithContext(service.WithEnterprisePricing(c.Request.Context(), apiKey.User))
+		}
 		var groupResolved bool
 		apiKey, groupResolved = resolveAPIKeyRequestGroup(c, apiKey, true)
 		if !groupResolved || !enforceAPIKeySelectedModelGroups(c, apiKey) {
+			return
+		}
+		if !SkipAPIKeyGroupEnforcement(c) && apiKey.User.IsEnterprise() && (apiKey.Group == nil || apiKey.Group.IsSubscriptionType()) {
+			abortWithGoogleError(c, 403, "Enterprise accounts cannot use subscription groups")
 			return
 		}
 		if code, message, ok := validateAPIKeyGroupAvailable(apiKey); !ok && !SkipAPIKeyGroupEnforcement(c) {

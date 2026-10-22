@@ -101,10 +101,10 @@ func validateAPIKeyFallbackGroup(key *service.APIKey, group *service.Group, mode
 			return errors.New("fallback group is not selected for this model")
 		}
 	}
-	if key == nil || !key.MultiGroupEnabled {
+	if key == nil || !key.MultiGroupEnabled && !key.User.IsEnterprise() {
 		return nil
 	}
-	if group == nil || !key.HasGroupID(group.ID) || !group.IsActive() || key.User == nil || !key.User.CanBindGroup(group.ID, group.IsExclusive) {
+	if group == nil || key.MultiGroupEnabled && !key.HasGroupID(group.ID) || !group.IsActive() || key.User == nil || key.User.IsEnterprise() && group.IsSubscriptionType() || !key.User.CanBindGroup(group.ID, group.IsExclusive) {
 		return errors.New("fallback group is not available to this key")
 	}
 	if group.ClaudeCodeOnly && !claudeClient {

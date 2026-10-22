@@ -70,6 +70,7 @@ export async function list(
   filters?: {
     status?: 'active' | 'disabled'
     role?: 'admin' | 'user'
+    account_type?: 'personal' | 'enterprise'
     search?: string
     group_name?: string         // fuzzy filter by allowed group name
     api_key_group_id?: number   // filter users by the group their API keys are bound to
@@ -88,6 +89,7 @@ export async function list(
     page_size: pageSize,
     status: filters?.status,
     role: filters?.role,
+    account_type: filters?.account_type,
     search: filters?.search,
     group_name: filters?.group_name,
     api_key_group_id: filters?.api_key_group_id,
@@ -134,6 +136,7 @@ export async function create(userData: {
   username?: string
   notes?: string
   role?: 'admin' | 'user'
+  account_type?: 'personal' | 'enterprise'
   balance?: number
   concurrency?: number
   rpm_limit?: number
@@ -417,6 +420,74 @@ export async function getApiKeyModelOptions(userId: number, groupIds: number[]):
   return data
 }
 
+// ==================== Enterprise account conversion ====================
+
+export interface EnterpriseConversionCardPreview {
+  id: number
+  code: string
+  group_id: number
+  group_name: string
+  total_quota_usd: number
+  total_used_usd: number
+  remaining_usd: number
+  expires_at: string | null
+}
+
+export interface EnterpriseConversionPreview {
+  user_id: number
+  account_type: 'personal' | 'enterprise'
+  /** 当前余额（只读） */
+  balance: number
+  /** 所有有效月卡及剩余额度（只读） */
+  cards: EnterpriseConversionCardPreview[]
+  /** 有效月卡剩余额度合计（USD） */
+  remaining_usd: number
+  /** 本次预览采用的统一折算倍率；无有效月卡时可为 null */
+  conversion_rate: number | null
+  /** 折算入账金额（USD） */
+  credited_usd: number
+  /** 入账后余额（USD） */
+  balance_after: number
+  preview_token: string
+  /** 阻止转换的原因；非空时不允许提交转换 */
+  blockers: string[]
+}
+
+/**
+ * Preview personal ↔ enterprise conversion.
+ * 额度只读；无有效月卡时不要求 conversion_rate。
+ */
+export async function previewEnterpriseConversion(
+  id: number,
+  conversionRate?: number
+): Promise<EnterpriseConversionPreview> {
+  const { data } = await apiClient.post<EnterpriseConversionPreview>(
+    `/admin/users/${id}/enterprise/preview`,
+    conversionRate === undefined ? {} : { conversion_rate: conversionRate }
+  )
+  return data
+}
+
+/**
+ * Execute personal ↔ enterprise conversion.
+ * 重试必须复用同一 operation_id 保证幂等；409 表示预览失效，需重新预览确认。
+ */
+export async function convertEnterpriseAccount(
+  id: number,
+  payload: {
+    account_type: 'personal' | 'enterprise'
+    conversion_rate?: number
+    preview_token: string
+    operation_id: string
+  }
+): Promise<AdminUser> {
+  const { data } = await apiClient.post<AdminUser>(
+    `/admin/users/${id}/enterprise/convert`,
+    payload
+  )
+  return data
+}
+
 export const usersAPI = {
   list,
   getById,
@@ -437,6 +508,8 @@ export const usersAPI = {
   getPlatformQuotas,
   updatePlatformQuotas,
   resetPlatformQuotaWindow,
+  previewEnterpriseConversion,
+  convertEnterpriseAccount,
 }
 
 export default usersAPI

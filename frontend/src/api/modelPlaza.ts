@@ -76,6 +76,8 @@ export interface ModelPlazaGroup {
   temporary_rate_ends_at: string | null
   /** 登录且管理员为该用户配了专属倍率时返回；生效倍率 = user_rate ?? rate_multiplier。 */
   user_rate_multiplier?: number
+  /** 企业用户专属倍率；仅管理员显式配置时返回，null/缺省表示未配置。 */
+  enterprise_rate_multiplier?: number | null
   peak_rate_enabled: boolean
   peak_start: string
   peak_end: string

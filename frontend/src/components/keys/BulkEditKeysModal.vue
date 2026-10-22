@@ -26,6 +26,8 @@
             v-model="groupIds"
             :available-groups="groups"
             :user-rates="userRates"
+            :enterprise-rates="enterpriseRates"
+            :rates-unavailable="ratesUnavailable"
             :multi-group-enabled="selectedKeys.some((key) => key.multi_group_enabled)"
             :disabled="submitting"
             data-test="group-input"
@@ -168,6 +170,8 @@ const props = defineProps<{
   selectedKeys: SelectedKey[]
   groups: Group[]
   userRates?: Record<number, number>
+  enterpriseRates?: Record<number, number>
+  ratesUnavailable?: boolean
 }>()
 const emit = defineEmits<{
   close: []

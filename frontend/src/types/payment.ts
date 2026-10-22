@@ -40,6 +40,8 @@ export interface PaymentConfig {
   order_timeout_minutes: number
   balance_disabled: boolean
   balance_recharge_multiplier: number
+  /** 企业账户余额充值倍率，默认 1 */
+  enterprise_balance_recharge_multiplier?: number
   subscription_usd_to_cny_rate: number
   enabled_payment_types: PaymentType[]
   help_image_url: string
@@ -73,7 +75,10 @@ export interface CheckoutInfoResponse {
   global_max: number
   plans: SubscriptionPlan[]
   balance_disabled: boolean
+  /** 后端按账户类型选择后的实际余额充值倍率（企业账户为 enterprise 倍率） */
   balance_recharge_multiplier: number
+  /** 企业账户余额充值倍率配置值，默认 1 */
+  enterprise_balance_recharge_multiplier?: number
   /** Subscription CNY conversion rate (1 USD = X CNY); 0 = disabled, plan price is charged as-is */
   subscription_usd_to_cny_rate: number
   recharge_fee_rate: number

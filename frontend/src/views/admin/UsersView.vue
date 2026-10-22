@@ -48,6 +48,19 @@
               />
             </div>
 
+            <!-- Account Type Filter (visible when enabled) -->
+            <div v-if="visibleFilters.has('accountType')" class="w-full sm:w-32">
+              <Select
+                v-model="filters.accountType"
+                :options="[
+                  { value: '', label: t('enterpriseAdmin.accountType.all') },
+                  { value: 'personal', label: t('enterpriseAdmin.accountType.personal') },
+                  { value: 'enterprise', label: t('enterpriseAdmin.accountType.enterprise') }
+                ]"
+                @change="applyFilter"
+              />
+            </div>
+
             <!-- Group Filter (visible when enabled) -->
             <div v-if="visibleFilters.has('group')" class="w-full sm:w-44">
               <Select
@@ -339,6 +352,14 @@
           <template #cell-role="{ value }">
             <span :class="['badge', value === 'admin' ? 'badge-purple' : 'badge-gray']">
               {{ t('admin.users.roles.' + value) }}
+            </span>
+          </template>
+
+          <template #cell-account_type="{ row }">
+            <span
+              :class="['badge', row.account_type === 'enterprise' ? 'badge-blue' : 'badge-gray']"
+            >
+              {{ row.account_type === 'enterprise' ? t('enterpriseAdmin.badge.enterprise') : t('enterpriseAdmin.badge.personal') }}
             </span>
           </template>
 
@@ -743,6 +764,16 @@
 
               <div class="my-1 border-t border-gray-100 dark:border-dark-700"></div>
 
+              <!-- Convert Account Type (not for admin) -->
+              <button
+                v-if="user.role !== 'admin'"
+                @click="handleConvertAccount(user); closeActionMenu()"
+                class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+              >
+                <Icon name="swap" size="sm" class="text-gray-400" :stroke-width="2" />
+                {{ user.account_type === 'enterprise' ? t('enterpriseAdmin.conversion.toPersonal') : t('enterpriseAdmin.conversion.toEnterprise') }}
+              </button>
+
               <!-- Delete (not for admin) -->
               <button
                 v-if="user.role !== 'admin'"
@@ -784,6 +815,7 @@
     />
     <UserApiKeysModal :show="showApiKeysModal" :user="viewingUser" @close="closeApiKeysModal" />
     <UserAllowedGroupsModal :show="showAllowedGroupsModal" :user="allowedGroupsUser" @close="closeAllowedGroupsModal" @success="loadUsers" />
+    <UserEnterpriseConversionModal :show="showConversionModal" :user="conversionUser" @close="closeConversionModal" @success="loadUsers" />
     <UserBalanceModal :show="showBalanceModal" :user="balanceUser" :operation="balanceOperation" @close="closeBalanceModal" @success="loadUsers" />
     <UserBalanceHistoryModal :show="showBalanceHistoryModal" :user="balanceHistoryUser" @close="closeBalanceHistoryModal" @deposit="handleDepositFromHistory" @withdraw="handleWithdrawFromHistory" />
     <GroupReplaceModal :show="showGroupReplaceModal" :user="groupReplaceUser" :old-group="groupReplaceOldGroup" :all-groups="allGroups" @close="closeGroupReplaceModal" @success="loadUsers" />
@@ -830,6 +862,7 @@ import UserAllowedGroupsModal from '@/components/admin/user/UserAllowedGroupsMod
 import UserBalanceModal from '@/components/admin/user/UserBalanceModal.vue'
 import UserBalanceHistoryModal from '@/components/admin/user/UserBalanceHistoryModal.vue'
 import GroupReplaceModal from '@/components/admin/user/GroupReplaceModal.vue'
+import UserEnterpriseConversionModal from '@/components/admin/user/UserEnterpriseConversionModal.vue'
 
 const appStore = useAppStore()
 
@@ -888,6 +921,7 @@ const allColumns = computed<Column[]>(() => [
   // Dynamic attribute columns
   ...attributeColumns.value,
   { key: 'role', label: t('admin.users.columns.role'), sortable: true },
+  { key: 'account_type', label: t('enterpriseAdmin.columns.accountType'), sortable: false },
   { key: 'groups', label: t('admin.users.columns.groups'), sortable: false },
   { key: 'subscriptions', label: t('admin.users.columns.subscriptions'), sortable: false },
   { key: 'balance', label: t('admin.users.columns.balance'), sortable: true },
@@ -918,7 +952,7 @@ const hiddenColumns = reactive<Set<string>>(new Set())
 const DEFAULT_HIDDEN_COLUMNS = [
   'notes', 'groups', 'subscriptions', 'usage', 'concurrency',
   'usage_anthropic', 'usage_openai', 'usage_gemini', 'usage_antigravity',
-  'balance_platform_quota'
+  'balance_platform_quota', 'account_type'
 ]
 const REMOVED_COLUMNS = new Set(['last_login_at'])
 // 强制可见列：加载时会被强制移出 hiddenColumns，并在列设置 UI 上 disabled。
@@ -931,10 +965,11 @@ const HIDDEN_COLUMNS_KEY = 'user-hidden-columns'
 // 并在 VERSION_NEW_HIDDEN_COLUMNS 中登记该版本新增的 key。
 // 这样老用户升级后这些新列会被自动隐藏一次，而不会影响他们对其它老列的偏好。
 const COLUMN_SETTINGS_VERSION_KEY = 'user-column-settings-version'
-const COLUMN_SETTINGS_VERSION = 3
+const COLUMN_SETTINGS_VERSION = 4
 const VERSION_NEW_HIDDEN_COLUMNS: Record<number, string[]> = {
   2: ['usage_anthropic', 'usage_openai', 'usage_gemini', 'usage_antigravity'],
-  3: ['balance_platform_quota']
+  3: ['balance_platform_quota'],
+  4: ['account_type']
 }
 
 // Load saved column settings
@@ -1125,10 +1160,11 @@ const apiKeyGroupFilterOptions = computed(() =>
   }) as SelectOption[]
 )
 
-// Filter values (role, status, and custom attributes)
+// Filter values (role, status, account type, and custom attributes)
 const filters = reactive({
   role: '',
   status: '',
+  accountType: '',  // '', 'personal', 'enterprise'
   group: '',  // group name for fuzzy match, '' = all
   apiKeyGroup: null as number | null  // group id bound to the user's API keys, null = all
 })
@@ -1159,6 +1195,7 @@ const filterableAttributes = computed(() =>
 const builtInFilters = computed(() => [
   { key: 'role', name: t('admin.users.columns.role'), type: 'select' as const },
   { key: 'status', name: t('admin.users.columns.status'), type: 'select' as const },
+  { key: 'accountType', name: t('enterpriseAdmin.accountType.label'), type: 'select' as const },
   { key: 'group', name: t('admin.users.authorizedGroupFilter'), type: 'select' as const },
   { key: 'apiKeyGroup', name: t('admin.users.apiKeyGroupFilter'), type: 'select' as const }
 ])
@@ -1178,6 +1215,7 @@ const loadSavedFilters = () => {
       const parsed = JSON.parse(savedValues)
       if (parsed.role) filters.role = parsed.role
       if (parsed.status) filters.status = parsed.status
+      if (parsed.accountType) filters.accountType = parsed.accountType
       if (parsed.group) filters.group = parsed.group
       if (typeof parsed.apiKeyGroup === 'number') filters.apiKeyGroup = parsed.apiKeyGroup
       if (parsed.attributes) {
@@ -1198,6 +1236,7 @@ const saveFiltersToStorage = () => {
     const values = {
       role: filters.role,
       status: filters.status,
+      accountType: filters.accountType,
       group: filters.group,
       apiKeyGroup: filters.apiKeyGroup,
       attributes: activeAttributeFilters
@@ -1539,6 +1578,10 @@ const handleClickOutside = (event: MouseEvent) => {
 const showAllowedGroupsModal = ref(false)
 const allowedGroupsUser = ref<AdminUser | null>(null)
 
+// Enterprise conversion modal state
+const showConversionModal = ref(false)
+const conversionUser = ref<AdminUser | null>(null)
+
 // Expanded group dropdown state (click to show exclusive groups list)
 const expandedGroupUserId = ref<number | null>(null)
 const toggleExpandedGroup = (userId: number) => {
@@ -1603,6 +1646,7 @@ const loadUsers = async () => {
       {
         role: filters.role as any,
         status: filters.status as any,
+        account_type: (filters.accountType || undefined) as 'personal' | 'enterprise' | undefined,
         search: searchQuery.value || undefined,
         group_name: filters.group || undefined,
         api_key_group_id: filters.apiKeyGroup ?? undefined,
@@ -1695,6 +1739,7 @@ const toggleBuiltInFilter = (key: string) => {
     visibleFilters.delete(key)
     if (key === 'role') filters.role = ''
     if (key === 'status') filters.status = ''
+    if (key === 'accountType') filters.accountType = ''
     if (key === 'group') filters.group = ''
     if (key === 'apiKeyGroup') filters.apiKeyGroup = null
   } else {
@@ -1784,6 +1829,18 @@ const handleAllowedGroups = (user: AdminUser) => {
 const closeAllowedGroupsModal = () => {
   showAllowedGroupsModal.value = false
   allowedGroupsUser.value = null
+}
+
+// 管理员账号不允许转换账户类型（模板已对 role === 'admin' 隐藏入口），这里再兜底一次。
+const handleConvertAccount = (user: AdminUser) => {
+  if (user.role === 'admin') return
+  conversionUser.value = user
+  showConversionModal.value = true
+}
+
+const closeConversionModal = () => {
+  showConversionModal.value = false
+  conversionUser.value = null
 }
 
 const openGroupReplace = (user: AdminUser, group: { id: number; name: string }) => {

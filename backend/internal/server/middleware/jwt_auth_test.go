@@ -374,3 +374,30 @@ func TestJWTAuth_TokenVersionMismatch(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 	require.Equal(t, "TOKEN_REVOKED", body.Code)
 }
+
+func TestJWTAuth_EnterpriseChangeTakesEffectForExistingSession(t *testing.T) {
+	user := &service.User{ID: 1, Role: service.RoleUser, Status: service.StatusActive, AccountType: service.AccountTypePersonal}
+	router, authSvc := newJWTTestEnv(map[int64]*service.User{1: user})
+	paths := []string{"/api/v1/redeem", "/api/v1/subscriptions/active", "/api/v1/group-buy/teams", "/api/v1/activities/leaderboard", "/api/v1/user/aff/transfer", "/api/v1/payment/plans"}
+	for _, p := range append(paths, "/api/v1/usage/monthly-export", "/api/v1/payment/orders", "/api/v1/user/profile") {
+		router.GET(p, func(c *gin.Context) { c.Status(http.StatusOK) })
+	}
+	token, err := authSvc.GenerateToken(context.Background(), user)
+	require.NoError(t, err)
+	// The same JWT remains valid, but authority now comes from the changed user.
+	user.AccountType = service.AccountTypeEnterprise
+	for _, p := range paths {
+		req := httptest.NewRequest(http.MethodGet, p, nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		require.Equal(t, http.StatusForbidden, w.Code, p)
+	}
+	for _, p := range []string{"/api/v1/usage/monthly-export", "/api/v1/payment/orders", "/api/v1/user/profile"} {
+		req := httptest.NewRequest(http.MethodGet, p, nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		require.Equal(t, http.StatusOK, w.Code, p)
+	}
+}

@@ -10,13 +10,16 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
 var (
-	ErrNotFound      = errors.New("month card resource not found")
-	ErrInvalid       = errors.New("invalid month card operation")
-	ErrCannotJoin    = errors.New("cannot join month card team")
-	ErrTeamCancelled = errors.New("month card team recruitment was cancelled; manual refund required")
+	ErrNotFound          = errors.New("month card resource not found")
+	ErrInvalid           = errors.New("invalid month card operation")
+	ErrCannotJoin        = errors.New("cannot join month card team")
+	ErrTeamCancelled     = errors.New("month card team recruitment was cancelled; manual refund required")
+	ErrEnterpriseFeature = infraerrors.Forbidden("ENTERPRISE_FEATURE_FORBIDDEN", "企业账户不支持月卡权益操作")
 )
 
 type Tier struct {
@@ -91,11 +94,16 @@ type Purchase struct {
 }
 
 type Store struct {
-	db  *sql.DB
-	now func() time.Time
+	db                 *sql.DB
+	now                func() time.Time
+	balanceInvalidator func(context.Context, int64)
 }
 
 func NewStore(db *sql.DB) *Store { return &Store{db: db, now: time.Now} }
+
+func (s *Store) SetBalanceInvalidator(invalidate func(context.Context, int64)) {
+	s.balanceInvalidator = invalidate
+}
 
 type rowScanner interface{ Scan(...any) error }
 type queryer interface {
@@ -129,6 +137,9 @@ func lockUser(ctx context.Context, tx *sql.Tx, userID int64) error {
 // binding restrictions must not require that entitlement before it is bought;
 // API key binding remains gated by an active paid card or legacy subscription.
 func checkPurchaseEligibility(ctx context.Context, q queryer, userID, groupID int64) error {
+	if err := requirePersonalAccount(ctx, q, userID); err != nil {
+		return err
+	}
 	var eligible bool
 	err := q.QueryRowContext(ctx, `SELECT u.status='active' AND u.deleted_at IS NULL
 		AND g.status='active' AND g.deleted_at IS NULL AND g.subscription_type='subscription'
@@ -140,4 +151,22 @@ func checkPurchaseEligibility(ctx context.Context, q queryer, userID, groupID in
 		return fmt.Errorf("%w: user or subscription group is unavailable", ErrInvalid)
 	}
 	return nil
+}
+
+func requirePersonalAccount(ctx context.Context, q queryer, userID int64) error {
+	var accountType string
+	if err := q.QueryRowContext(ctx, `SELECT account_type FROM users WHERE id=$1 AND deleted_at IS NULL`, userID).Scan(&accountType); err != nil {
+		return notFound(err)
+	}
+	if accountType == "enterprise" {
+		return ErrEnterpriseFeature
+	}
+	return nil
+}
+
+func lockPersonalUser(ctx context.Context, tx *sql.Tx, userID int64) error {
+	if err := lockUser(ctx, tx, userID); err != nil {
+		return err
+	}
+	return requirePersonalAccount(ctx, tx, userID)
 }

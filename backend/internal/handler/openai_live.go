@@ -282,7 +282,7 @@ func (h *OpenAIGatewayHandler) LiveSideband(c *gin.Context) {
 }
 
 func liveEnabledForAPIKey(apiKey *service.APIKey) bool {
-	return apiKey != nil &&
+	return apiKey != nil && !apiKey.User.IsEnterprise() &&
 		apiKey.Group != nil &&
 		(apiKey.Group.Platform == service.PlatformOpenAI || apiKey.Group.Platform == service.PlatformComposite) &&
 		apiKey.Group.AllowLive

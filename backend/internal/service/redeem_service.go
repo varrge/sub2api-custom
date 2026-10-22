@@ -412,6 +412,11 @@ func (s *RedeemService) RedeemForAdminFulfillment(ctx context.Context, userID in
 }
 
 func (s *RedeemService) redeem(ctx context.Context, userID int64, code string, rateLimitPolicy redeemRateLimitPolicy) (*RedeemCode, error) {
+	if ctx.Value(ctxKeyEnterprisePayment{}) == nil {
+		if err := requirePersonalUser(ctx, s.userRepo, userID); err != nil {
+			return nil, err
+		}
+	}
 	if rateLimitPolicy == enforceRedeemRateLimit {
 		if err := s.checkRedeemRateLimit(ctx, userID); err != nil {
 			return nil, err
@@ -476,6 +481,17 @@ func (s *RedeemService) redeem(ctx context.Context, userID int64, code string, r
 
 	// 将事务放入 context，使 repository 方法能够使用同一事务
 	txCtx := dbent.NewTxContext(ctx, tx)
+	if expected, ok := ctx.Value(ctxKeyEnterprisePayment{}).(string); ok {
+		current, err := lockAccountType(txCtx, tx.Client(), userID)
+		if err != nil {
+			return nil, err
+		}
+		if current != expected {
+			return nil, infraerrors.Conflict("PAYMENT_ACCOUNT_CHANGED", "付款前账户类型已变化，款项尚未入账，请管理员退款")
+		}
+	} else if err := lockPersonalAccount(txCtx, tx.Client(), userID); err != nil {
+		return nil, err
+	}
 
 	// 【关键】先标记兑换码为已使用，确保并发安全
 	// 利用数据库乐观锁（WHERE status = 'unused'）保证原子性

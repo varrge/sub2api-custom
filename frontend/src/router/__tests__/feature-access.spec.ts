@@ -15,6 +15,8 @@ const authStore = vi.hoisted(() => ({
   checkAuth: vi.fn(),
   isAuthenticated: true,
   isAdmin: false,
+  isEnterprise: false,
+  userRefreshStatus: 'success',
   isSimpleMode: false,
   hasPendingAuthSession: false,
 }))
@@ -124,6 +126,7 @@ describe('feature route guard', () => {
   beforeEach(() => {
     authStore.isAuthenticated = true
     authStore.isAdmin = false
+    authStore.isEnterprise = false
     authStore.isSimpleMode = false
     appStore.publicSettingsLoaded = false
     appStore.cachedPublicSettings = null
@@ -227,11 +230,26 @@ describe('feature route guard', () => {
     expect(admin.next).toHaveBeenCalledWith()
     expect(appStore.showWarning).not.toHaveBeenCalled()
   })
+  it.each(['/dashboard','/subscriptions','/group-buy','/my-group-buy','/activities','/activities/leaderboard','/redeem','/affiliate','/admin/users','/image-generation'])('redirects enterprise requests for %s to usage',async(path)=>{
+    authStore.isEnterprise=true
+    const {navigation,next}=runGuard({},path)
+    await navigation
+    expect(next).toHaveBeenCalledWith('/usage')
+  })
+
+  it.each(['/usage','/monitor','/keys','/purchase','/profile','/tickets/42','/orders','/payment/result','/model-plaza'])('preserves enterprise navigation and auxiliary flow %s',async(path)=>{
+    authStore.isEnterprise=true
+    const {navigation,next}=runGuard({},path)
+    await navigation
+    expect(next).toHaveBeenCalledWith()
+  })
+
 })
 
 describe('subscription route guard (opt-out flag)', () => {
   beforeEach(() => {
     authStore.isAdmin = false
+    authStore.isEnterprise = false
     authStore.isSimpleMode = false
     appStore.publicSettingsLoaded = true
     appStore.fetchPublicSettings.mockReset()

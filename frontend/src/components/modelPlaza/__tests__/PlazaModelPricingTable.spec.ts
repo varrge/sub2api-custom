@@ -742,6 +742,15 @@ describe('PlazaModelPricingTable 分时计价', () => {
     expect(nightCells[4].text()).toContain('$3.00')
   })
 
+  it('小倍率的分时价格保持精度，不提前舍入为零', () => {
+    const model = timePricedModel()
+    model.time_pricing!.periods[0].multiplier = 2
+    const wrapper = mountTable([model], 0.0001)
+    const cells = wrapper.findAll('tbody tr')[1].findAll('td')
+    expect(cells[1].text()).toContain('$0.0006')
+    expect(cells[7].text()).toContain('0.0002x')
+  })
+
   it('仅工作日生效时时段行带工作日前缀,tooltip 换用周末回落文案', () => {
     const model = timePricedModel()
     model.time_pricing!.weekdays_only = true

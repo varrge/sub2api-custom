@@ -8333,6 +8333,47 @@
                   </div>
                   <div>
                     <label class="input-label">{{
+                      t("enterprisePayment.admin.enterpriseBalanceRechargeMultiplier")
+                    }}</label>
+                    <input
+                      :value="
+                        form.payment_enterprise_balance_recharge_multiplier || ''
+                      "
+                      data-testid="enterprise-recharge-multiplier"
+                      @input="
+                        form.payment_enterprise_balance_recharge_multiplier =
+                          parseFloat(
+                            ($event.target as HTMLInputElement).value,
+                          )
+                      "
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      class="input"
+                    />
+                    <p class="mt-0.5 text-xs text-gray-400">
+                      {{
+                        t(
+                          "enterprisePayment.admin.enterpriseBalanceRechargeMultiplierHint",
+                        )
+                      }}
+                    </p>
+                    <p
+                      class="mt-1 text-xs font-medium text-primary-600 dark:text-primary-400"
+                    >
+                      {{
+                        t("enterprisePayment.admin.enterpriseBalanceRechargePreview", {
+                          usd: (
+                            Number(
+                              form.payment_enterprise_balance_recharge_multiplier,
+                            ) || 1
+                          ).toFixed(2),
+                        })
+                      }}
+                    </p>
+                  </div>
+                  <div>
+                    <label class="input-label">{{
                       t("admin.settings.payment.subscriptionUsdToCnyRate")
                     }}</label>
                     <input
@@ -9139,13 +9180,17 @@
         </div>
 
         <!-- Tab: Backup -->
+        <div v-show="activeTab === 'privileges'">
+          <PrivilegeSettingsPanel ref="privilegeSettingsPanel" />
+        </div>
+
         <div v-show="activeTab === 'backup'">
           <BackupSettings />
         </div>
 
         <!-- Save Button -->
         <div
-          v-show="activeTab !== 'backup' && activeTab !== 'leaderboard' && activeTab !== 'sidebar'"
+          v-show="activeTab !== 'backup' && activeTab !== 'leaderboard' && activeTab !== 'sidebar' && activeTab !== 'privileges'"
           class="flex justify-end"
         >
           <button
@@ -9279,6 +9324,7 @@ import ImageUpload from "@/components/common/ImageUpload.vue";
 import { sidebarIconPresets } from "@/features/sidebar/iconPresets";
 import { sanitizeSvg } from "@/utils/sanitize";
 import BackupSettings from "@/views/admin/BackupView.vue";
+import PrivilegeSettingsPanel from "@/views/admin/settings/PrivilegeSettingsPanel.vue";
 import SidebarGroupsSettings from "@/components/admin/SidebarGroupsSettings.vue";
 import ActivityLeaderboardSettings from "@/views/admin/settings/ActivityLeaderboardSettings.vue";
 import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue";
@@ -9365,6 +9411,7 @@ type SettingsTab =
   | "general"
   | "agreement"
   | "features"
+  | "privileges"
   | "security"
   | "users"
   | "gateway"
@@ -9374,10 +9421,12 @@ type SettingsTab =
   | "sidebar"
   | "backup";
 const activeTab = ref<SettingsTab>("general");
+const privilegeSettingsPanel = ref<{ save: () => Promise<void> } | null>(null);
 const settingsTabs = [
   { key: "general" as SettingsTab, icon: "home" as const },
   { key: "agreement" as SettingsTab, icon: "document" as const },
   { key: "features" as SettingsTab, icon: "bolt" as const },
+  { key: "privileges" as SettingsTab, icon: "sparkles" as const },
   { key: "security" as SettingsTab, icon: "shield" as const },
   { key: "users" as SettingsTab, icon: "user" as const },
   { key: "gateway" as SettingsTab, icon: "server" as const },
@@ -10193,6 +10242,7 @@ const form = reactive<SettingsForm>({
   payment_order_timeout_minutes: 30,
   payment_balance_disabled: false,
   payment_balance_recharge_multiplier: 1,
+  payment_enterprise_balance_recharge_multiplier: 1,
   payment_subscription_usd_to_cny_rate: 0,
   payment_recharge_fee_rate: 0,
   payment_recharge_bonus_tiers: [],
@@ -11731,10 +11781,19 @@ const siteBillingModeHint = computed(() =>
 );
 
 async function saveSettings() {
+  if (activeTab.value === "privileges") {
+    await privilegeSettingsPanel.value?.save();
+    return;
+  }
   // These tabs have their own save endpoint; implicit Enter must not submit other settings.
   if (activeTab.value === "leaderboard" || activeTab.value === "sidebar") return;
   saving.value = true;
   try {
+    const enterpriseRechargeMultiplier = Number(form.payment_enterprise_balance_recharge_multiplier);
+    if (!Number.isFinite(enterpriseRechargeMultiplier) || enterpriseRechargeMultiplier <= 0) {
+      appStore.showError(t("enterprisePayment.admin.invalidMultiplier"));
+      return;
+    }
     const normalizedTableDefaultPageSize = Math.floor(
       Number(form.table_default_page_size),
     );
@@ -12134,6 +12193,8 @@ async function saveSettings() {
       payment_balance_disabled: form.payment_balance_disabled,
       payment_balance_recharge_multiplier:
         Number(form.payment_balance_recharge_multiplier) || 1,
+      payment_enterprise_balance_recharge_multiplier:
+        enterpriseRechargeMultiplier,
       payment_subscription_usd_to_cny_rate:
         Number(form.payment_subscription_usd_to_cny_rate) || 0,
       payment_recharge_fee_rate: Number(form.payment_recharge_fee_rate) || 0,

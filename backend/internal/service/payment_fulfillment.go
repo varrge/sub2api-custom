@@ -16,6 +16,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
+	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
@@ -28,6 +29,8 @@ import (
 // retrying forever (e.g. when a foreign environment's webhook endpoint is
 // misconfigured to point at us, or when our orders table has been wiped).
 var ErrOrderNotFound = errors.New("payment order not found")
+
+const enterpriseUnfulfilledPaymentReason = "ACCOUNT_TYPE_CHANGED_UNFULFILLED"
 
 const paymentFulfillmentLeaseDuration = 5 * time.Minute
 
@@ -192,23 +195,36 @@ func (s *PaymentService) toPaid(ctx context.Context, o *dbent.PaymentOrder, trad
 	if o.OrderType == payment.OrderTypeMonthCard && len(confirmedAt) > 0 && !confirmedAt[0].IsZero() {
 		paidAt = confirmedAt[0]
 	}
+	// Serialize recovery with conversion, including payments from expired links.
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	accountType, err := lockAccountType(ctx, tx.Client(), o.UserID)
+	if err != nil {
+		return err
+	}
 	grace := now.Add(-paymentGraceMinutes * time.Minute)
 	eligible := paymentorder.Or(
 		paymentorder.StatusEQ(OrderStatusPending),
 		paymentorder.StatusEQ(OrderStatusCancelled),
 		paymentorder.And(paymentorder.StatusEQ(OrderStatusExpired), paymentorder.UpdatedAtGTE(grace)),
 	)
-	if o.OrderType == payment.OrderTypeMonthCard {
+	if o.OrderType == payment.OrderTypeMonthCard || accountType != paymentOrderAccountType(o) {
 		// Late verified card payments must be fulfilled or refunded even after
 		// the legacy payment grace period, never silently acknowledged and lost.
 		eligible = paymentorder.StatusIn(OrderStatusPending, OrderStatusCancelled, OrderStatusExpired)
 	}
-	c, err := s.entClient.PaymentOrder.Update().Where(
+	c, err := tx.PaymentOrder.Update().Where(
 		paymentorder.IDEQ(o.ID),
 		eligible,
 	).SetStatus(OrderStatusPaid).SetPayAmount(paid).SetPaymentTradeNo(tradeNo).SetPaidAt(paidAt).ClearFailedAt().ClearFailedReason().Save(ctx)
 	if err != nil {
 		return fmt.Errorf("update to PAID: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 	if c == 0 {
 		return s.alreadyProcessed(ctx, o)
@@ -451,6 +467,15 @@ func (s *PaymentService) doBalance(ctx context.Context, o *dbent.PaymentOrder, l
 			return err
 		}
 	}
+	if action != redeemActionSkipCompleted {
+		user, err := s.entClient.User.Get(ctx, o.UserID)
+		if err != nil {
+			return err
+		}
+		if user.AccountType != paymentOrderAccountType(o) {
+			return infraerrors.Conflict("PAYMENT_ACCOUNT_CHANGED", "付款前账户类型已变化，款项尚未入账，请管理员退款")
+		}
+	}
 
 	switch action {
 	case redeemActionSkipCompleted:
@@ -467,7 +492,7 @@ func (s *PaymentService) doBalance(ctx context.Context, o *dbent.PaymentOrder, l
 	case redeemActionRedeem:
 		// Code exists but unused — skip creation, proceed to redeem
 	}
-	if _, err := s.redeemService.redeemForPaymentFulfillment(ctx, o.UserID, o.RechargeCode); err != nil {
+	if _, err := s.redeemService.redeemForPaymentFulfillment(context.WithValue(ctx, ctxKeyEnterprisePayment{}, paymentOrderAccountType(o)), o.UserID, o.RechargeCode); err != nil {
 		return fmt.Errorf("redeem balance: %w", err)
 	}
 	if err := s.applyAffiliateRebateForOrder(ctx, o); err != nil {
@@ -738,6 +763,9 @@ func (s *PaymentService) hasAuditLog(ctx context.Context, orderID int64, action 
 }
 
 func (s *PaymentService) applyAffiliateRebateForOrder(ctx context.Context, o *dbent.PaymentOrder) error {
+	if o != nil && paymentOrderAccountType(o) == AccountTypeEnterprise {
+		return nil
+	}
 	baseAmount := affiliateRebateBaseAmount(o)
 	if o == nil || baseAmount <= 0 {
 		return nil
@@ -928,6 +956,12 @@ func (s *PaymentService) markFailed(ctx context.Context, oid int64, lease *payme
 		slog.Error("mark FAILED without fulfillment lease", "orderID", oid)
 		return
 	}
+	if infraerrors.Reason(cause) == "PAYMENT_ACCOUNT_CHANGED" || infraerrors.Reason(cause) == "ENTERPRISE_FEATURE_FORBIDDEN" {
+		if err := s.markUnfulfilledPaymentForRefund(ctx, oid, lease, cause); err != nil {
+			slog.Error("mark unfulfilled payment for refund", "orderID", oid, "error", err)
+		}
+		return
+	}
 	now := time.Now()
 	r := psErrMsg(cause)
 	// The lease version prevents a stale worker from overwriting a newer owner.
@@ -968,4 +1002,46 @@ func (s *PaymentService) RetryFulfillment(ctx context.Context, oid int64) error 
 	}
 	s.writeAuditLog(ctx, oid, "RECHARGE_RETRY", "admin", map[string]any{"detail": "admin manual retry"})
 	return s.executeFulfillment(ctx, oid)
+}
+
+// Verified payments that issued no entitlement remain refundable without
+// deducting unrelated balances, even after a failed refund or process restart.
+func (s *PaymentService) markUnfulfilledPaymentForRefund(ctx context.Context, oid int64, lease *paymentFulfillmentLease, cause error) error {
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	o, err := tx.PaymentOrder.Get(ctx, oid)
+	if err != nil {
+		return err
+	}
+	snapshot := make(map[string]any, len(o.ProviderSnapshot)+1)
+	for key, value := range o.ProviderSnapshot {
+		snapshot[key] = value
+	}
+	snapshot["enterprise_unfulfilled_refund"] = true
+	n, err := tx.PaymentOrder.Update().Where(paymentorder.IDEQ(oid), paymentorder.StatusEQ(OrderStatusRecharging), paymentorder.UpdatedAtEQ(lease.version)).SetStatus(OrderStatusRefundRequested).SetProviderSnapshot(snapshot).SetFailedAt(time.Now()).SetFailedReason(enterpriseUnfulfilledPaymentReason + ": " + cause.Error()).SetRefundReason(enterpriseUnfulfilledPaymentReason).SetRefundAmount(o.Amount).Save(ctx)
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return infraerrors.Conflict("FULFILLMENT_LEASE_LOST", "fulfillment lease changed")
+	}
+	if _, err := tx.RedeemCode.Update().Where(redeemcode.CodeEQ(o.RechargeCode), redeemcode.StatusEQ(StatusUnused)).SetStatus(StatusDisabled).Save(ctx); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	s.writeAuditLog(ctx, oid, "PAYMENT_ACCOUNT_CHANGED", "system", map[string]any{"reason": cause.Error(), "creditedAmount": 0, "refundRequired": o.Amount})
+	return nil
+}
+
+func paymentIsUnfulfilledAccountChange(o *dbent.PaymentOrder) bool {
+	if o == nil {
+		return false
+	}
+	blocked, _ := o.ProviderSnapshot["enterprise_unfulfilled_refund"].(bool)
+	return blocked || strings.HasPrefix(psStringValue(o.FailedReason), enterpriseUnfulfilledPaymentReason+":")
 }

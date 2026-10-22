@@ -286,7 +286,7 @@
               v-if="period"
               class="font-bold text-primary-600 dark:text-primary-400"
               :title="t('modelPlaza.table.timePricingRateHint', { rate: effectiveRate, multiplier: period.multiplier })"
-              >{{ periodRate(period) }}x</span
+              >{{ Number(periodRate(period).toPrecision(10)) }}x</span
             >
             <span
               v-else-if="usesIndependentMediaRate(m)"
@@ -408,9 +408,9 @@ const rows = computed<PlazaRow[]>(() =>
   })
 )
 
-/** 时段行的生效倍率 = 生效倍率 × 时段倍率(去掉浮点噪声)。 */
+/** 时段行保留完整计算精度，浮点显示噪声仅在展示时处理。 */
 function periodRate(period: PlazaTimePricingPeriod): number {
-  return Math.round(effectiveRate.value * period.multiplier * 1000) / 1000
+  return effectiveRate.value * period.multiplier
 }
 
 /** 实付价 = 渠道单价 × 生效倍率(时段行再乘时段倍率),按 $/1M token 展示。 */

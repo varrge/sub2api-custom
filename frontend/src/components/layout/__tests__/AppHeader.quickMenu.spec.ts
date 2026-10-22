@@ -3,12 +3,14 @@ import { defineComponent, h } from 'vue'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 
 import AppHeader from '../AppHeader.vue'
+import { getActivityLeaderboardConfig } from '@/api/activityLeaderboard'
 
 const state = vi.hoisted(() => ({
   routePath: '/dashboard',
   routeName: 'Dashboard',
   routeMeta: {} as Record<string, string>,
   isAdmin: false,
+  accountType: 'personal' as 'personal' | 'enterprise',
   imageGenerationEnabled: true,
   modelPlazaEnabled: true,
   supportTicketsEnabled: true,
@@ -74,6 +76,7 @@ vi.mock('@/stores', () => ({
   useAuthStore: () => ({
     user: {
       email: 'user@example.com',
+      account_type: state.accountType,
       role: state.isAdmin ? 'admin' : 'user',
       balance: state.balance,
       frozen_balance: state.frozenBalance,
@@ -143,6 +146,7 @@ describe('AppHeader top quick menu', () => {
     state.settings.subscription_enabled = true
     state.settings.payment_balance_disabled = false
     state.isAdmin = false
+    state.accountType = 'personal'
     state.imageGenerationEnabled = true
     state.modelPlazaEnabled = true
     state.supportTicketsEnabled = true
@@ -152,6 +156,7 @@ describe('AppHeader top quick menu', () => {
     state.userRefreshStatus = 'success'
     state.settings.top_quick_menu_items = []
     routerPush.mockReset()
+    vi.mocked(getActivityLeaderboardConfig).mockClear()
     localStorage.clear()
     document.documentElement.classList.remove('dark')
   })
@@ -167,6 +172,26 @@ describe('AppHeader top quick menu', () => {
     const ids = view.findAll('[data-testid]').map((node) => node.attributes('data-testid'))
     const theme = ids.indexOf('header-theme-toggle')
     expect(ids.slice(theme, theme + 3)).toEqual(['header-theme-toggle', 'header-activity-leaderboard', 'header-balance'])
+  })
+
+  it('does not mount or request the activity leaderboard for enterprise accounts', async () => {
+    state.accountType = 'enterprise'
+    const view = mountHeader()
+    await flushPromises()
+    expect(view.find('[data-testid="header-activity-leaderboard"]').exists()).toBe(false)
+    expect(view.find('subscription-progress-mini-stub').exists()).toBe(false)
+    expect(getActivityLeaderboardConfig).not.toHaveBeenCalled()
+  })
+
+  it('uses the recharge-only purchase heading for enterprise users even when subscriptions are enabled', () => {
+    state.accountType = 'enterprise'
+    state.routePath = '/purchase'
+    state.routeName = 'PurchaseSubscription'
+    state.routeMeta = { titleKey: 'payment.title', descriptionKey: 'payment.description' }
+    const view = mountHeader()
+    expect(view.text()).toContain('nav.recharge')
+    expect(view.text()).toContain('purchase.rechargeDescription')
+    expect(view.text()).not.toContain('payment.description')
   })
 
   it.each([

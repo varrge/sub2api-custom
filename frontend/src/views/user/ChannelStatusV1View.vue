@@ -1,5 +1,15 @@
 <template>
   <AppLayout>
+    <!-- 企业用户入口:模型与报价(模型广场) -->
+    <div v-if="isEnterprise" class="mb-4 flex justify-end">
+      <RouterLink
+        to="/model-plaza?embedded=1"
+        class="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary-500 to-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-primary-500/25 transition-all duration-200 hover:from-primary-600 hover:to-primary-700 hover:shadow-lg hover:shadow-primary-500/30 active:scale-[0.98] dark:shadow-primary-500/20"
+      >
+        {{ t('enterprisePlaza.monitorEntry') }}
+      </RouterLink>
+    </div>
+
     <MonitorHero
       :overall-status="overallStatus"
       :interval-seconds="DEFAULT_INTERVAL_SECONDS"
@@ -31,6 +41,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import {
@@ -50,6 +61,8 @@ import { DEFAULT_INTERVAL_SECONDS, STATUS_OPERATIONAL } from '@/constants/channe
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
 
 const { t } = useI18n()
+const authStore = useAuthStore()
+const isEnterprise = computed(() => authStore.isEnterprise)
 const appStore = useAppStore()
 
 // ── State ──

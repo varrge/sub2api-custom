@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"regexp"
 	"testing"
 	"time"
 
@@ -19,7 +20,7 @@ type transactionalBulkSubscriptionRepo struct {
 	UserSubscriptionRepository
 	committed       UserSubscription
 	pending         map[*dbent.Tx]*UserSubscription
-	reads           map[*dbent.Tx]int
+	written         map[*dbent.Tx]bool
 	postReadFailure bool
 	statusFailure   bool
 }
@@ -42,8 +43,7 @@ func (r *transactionalBulkSubscriptionRepo) GetByID(ctx context.Context, _ int64
 			})
 		})
 	}
-	r.reads[tx]++
-	if r.reads[tx] > 1 && r.postReadFailure {
+	if r.written[tx] && r.postReadFailure {
 		return nil, errors.New("refresh failed after write")
 	}
 	copy := *r.pending[tx]
@@ -56,6 +56,7 @@ func (r *transactionalBulkSubscriptionRepo) GetByIDForUpdate(ctx context.Context
 
 func (r *transactionalBulkSubscriptionRepo) ExtendExpiry(ctx context.Context, _ int64, expiry time.Time) error {
 	r.pending[dbent.TxFromContext(ctx)].ExpiresAt = expiry
+	r.written[dbent.TxFromContext(ctx)] = true
 	return nil
 }
 
@@ -69,6 +70,7 @@ func (r *transactionalBulkSubscriptionRepo) UpdateStatus(ctx context.Context, _ 
 
 func (r *transactionalBulkSubscriptionRepo) ResetUsageWindows(ctx context.Context, _ int64, daily, weekly, monthly bool, dailyStart, periodicStart time.Time) error {
 	sub := r.pending[dbent.TxFromContext(ctx)]
+	r.written[dbent.TxFromContext(ctx)] = true
 	if daily {
 		sub.DailyUsageUSD, sub.DailyWindowStart = 0, &dailyStart
 	}
@@ -105,7 +107,7 @@ func TestBulkSubscriptionAction_RollsBackPostWriteFailureBeforeRetry(t *testing.
 			repo := &transactionalBulkSubscriptionRepo{
 				committed:       UserSubscription{ID: 1, UserID: 10, GroupID: 20, Status: status, ExpiresAt: expiresAt, DailyUsageUSD: 7},
 				pending:         make(map[*dbent.Tx]*UserSubscription),
-				reads:           make(map[*dbent.Tx]int),
+				written:         make(map[*dbent.Tx]bool),
 				postReadFailure: tc.postReadFailure,
 				statusFailure:   tc.statusFailure,
 			}
@@ -114,6 +116,8 @@ func TestBulkSubscriptionAction_RollsBackPostWriteFailureBeforeRetry(t *testing.
 			input := &BulkSubscriptionActionInput{SubscriptionIDs: []int64{1}, Action: tc.action, Days: 7, Daily: true}
 
 			mock.ExpectBegin()
+			mock.ExpectQuery(regexp.QuoteMeta(`SELECT "users"."id", "users"."account_type" FROM "users" WHERE "users"."id" = $1 AND "users"."deleted_at" IS NULL LIMIT 2 FOR UPDATE`)).
+				WithArgs(int64(10)).WillReturnRows(sqlmock.NewRows([]string{"id", "account_type"}).AddRow(10, AccountTypePersonal))
 			mock.ExpectRollback()
 			result, err := svc.BulkSubscriptionAction(context.Background(), input)
 			require.NoError(t, err)
@@ -124,6 +128,8 @@ func TestBulkSubscriptionAction_RollsBackPostWriteFailureBeforeRetry(t *testing.
 
 			repo.postReadFailure, repo.statusFailure = false, false
 			mock.ExpectBegin()
+			mock.ExpectQuery(regexp.QuoteMeta(`SELECT "users"."id", "users"."account_type" FROM "users" WHERE "users"."id" = $1 AND "users"."deleted_at" IS NULL LIMIT 2 FOR UPDATE`)).
+				WithArgs(int64(10)).WillReturnRows(sqlmock.NewRows([]string{"id", "account_type"}).AddRow(10, AccountTypePersonal))
 			mock.ExpectCommit()
 			result, err = svc.BulkSubscriptionAction(context.Background(), input)
 			require.NoError(t, err)

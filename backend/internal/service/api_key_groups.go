@@ -102,7 +102,7 @@ func (s *APIKeyService) validateGroupSelection(ctx context.Context, user *User, 
 		if err != nil {
 			return nil, fmt.Errorf("get group: %w", err)
 		}
-		if !old[id] && !s.canUserBindGroup(ctx, user, group) {
+		if user.IsEnterprise() && group.IsSubscriptionType() || !old[id] && !s.canUserBindGroup(ctx, user, group) {
 			return nil, ErrGroupNotAllowed
 		}
 		groups = append(groups, group)

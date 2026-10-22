@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { RouterView, useRouter, useRoute } from 'vue-router'
-import { computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, provide, readonly, watch } from 'vue'
 import Toast from '@/components/common/Toast.vue'
 import NavigationProgress from '@/components/common/NavigationProgress.vue'
 import AdminComplianceDialog from '@/components/admin/AdminComplianceDialog.vue'
 import { resolveRouteDocumentTitle } from '@/router/title'
 import AnnouncementPopup from '@/components/common/AnnouncementPopup.vue'
+import PrivilegeWelcome from '@/components/common/PrivilegeWelcome.vue'
+import { usePrivilegeWelcome } from '@/composables/usePrivilegeWelcome'
+import { userPrivilegeTitleKey } from '@/composables/useUserPrivilegeTitle'
 import { useAppStore, useAuthStore, useSubscriptionStore, useGroupBuyStore, useAnnouncementStore, useAdminComplianceStore, useAdminSettingsStore, useSupportTicketStore } from '@/stores'
 import { getSetupStatus } from '@/api/setup'
 import { updateFavicon } from '@/utils/branding'
@@ -16,6 +19,8 @@ const router = useRouter()
 const route = useRoute()
 const appStore = useAppStore()
 const authStore = useAuthStore()
+const { message: welcomeMessage, effect: welcomeEffect, phase: welcomePhase, dismiss: dismissWelcome, title: privilegeTitle } = usePrivilegeWelcome()
+provide(userPrivilegeTitleKey, readonly(privilegeTitle))
 const subscriptionStore = useSubscriptionStore()
 const groupBuyStore = useGroupBuyStore()
 const announcementStore = useAnnouncementStore()
@@ -29,7 +34,7 @@ function updateDocumentTitle() {
     ...(authStore.isAdmin ? adminSettingsStore.customMenuItems : []),
   ]
   document.title = resolveRouteDocumentTitle(route, appStore.siteName, customMenuItems, {
-    billingMode: resolveSiteBillingMode(appStore.cachedPublicSettings),
+    billingMode: authStore.isEnterprise ? 'recharge_only' : resolveSiteBillingMode(appStore.cachedPublicSettings),
   })
 }
 
@@ -54,6 +59,7 @@ watch(
     () => appStore.cachedPublicSettings?.subscription_enabled,
     () => appStore.cachedPublicSettings?.payment_balance_disabled,
     () => authStore.isAdmin,
+    () => authStore.isEnterprise,
     () => adminSettingsStore.customMenuItems,
   ],
   updateDocumentTitle,
@@ -73,7 +79,7 @@ function onAdminComplianceRequired(event: Event) {
 }
 
 // 订阅功能开关（opt-out）。关闭后不再预加载/轮询订阅接口；开关在登录后才到达时补启动，反向则清空。
-const subscriptionFeatureEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.subscription))
+const subscriptionFeatureEnabled = computed(() => !authStore.isEnterprise && isFeatureFlagEnabled(FeatureFlags.subscription))
 
 function startSubscriptionSync() {
   subscriptionStore.fetchActiveSubscriptions().catch((error) => {
@@ -107,8 +113,13 @@ watch(
         startSubscriptionSync()
       }
 
-      groupBuyStore.fetchMonthCards().catch(() => {})
-      groupBuyStore.startPolling()
+      if (!authStore.isEnterprise) {
+        groupBuyStore.fetchMonthCards().catch(() => {})
+        groupBuyStore.startPolling()
+      } else {
+        subscriptionStore.clear()
+        groupBuyStore.clear()
+      }
 
       // Announcements: new login vs page refresh restore
       if (oldValue === false) {
@@ -156,6 +167,21 @@ watch(
   { immediate: true },
 )
 
+// Mid-session conversion to enterprise (admin changes the account type): stop
+// subscription/month-card polling and drop cached data.
+watch(
+  () => authStore.isEnterprise,
+  (isEnterprise) => {
+    if (isEnterprise) {
+      subscriptionStore.clear()
+      groupBuyStore.clear()
+    } else if (authStore.isAuthenticated) {
+      groupBuyStore.fetchMonthCards().catch(() => {})
+      groupBuyStore.startPolling()
+    }
+  }
+)
+
 // Route change trigger (throttled by store)
 router.afterEach(() => {
   if (authStore.isAuthenticated) {
@@ -195,6 +221,7 @@ onMounted(async () => {
 <template>
   <NavigationProgress />
   <RouterView />
+  <PrivilegeWelcome v-if="welcomeMessage" :message="welcomeMessage" :effect="welcomeEffect" :phase="welcomePhase" @close="dismissWelcome" />
   <Toast />
   <AnnouncementPopup />
   <AdminComplianceDialog />

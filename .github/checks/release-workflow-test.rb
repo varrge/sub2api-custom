@@ -30,6 +30,11 @@ assert(events.fetch('push').fetch('tags-ignore').include?('v*'), 'Release tags m
 assert(events.key?('pull_request'), 'Pull request CI must remain enabled')
 
 jobs = ci.fetch('jobs')
+integration = jobs.fetch('test').fetch('steps').find { |step| step['name'] == 'Integration tests' }
+assert(integration.fetch('run') == 'make test-integration', 'CI must run the complete integration suite')
+integration_env = integration.fetch('env')
+assert(!integration_env.fetch('ENTERPRISE_TEST_DSN', '').empty?, 'Enterprise PostgreSQL tests must not silently skip in CI')
+assert(integration_env.fetch('ENTERPRISE_TEST_DSN') == integration_env.fetch('ACTIVITY_TEST_DSN'), 'Enterprise tests must use the isolated CI PostgreSQL service')
 gate = jobs.fetch('required')
 checks = jobs.keys - ['required']
 assert(gate.fetch('needs').sort == checks.sort, 'CI gate must require every CI job')

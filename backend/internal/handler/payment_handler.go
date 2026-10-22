@@ -40,6 +40,9 @@ func (h *PaymentHandler) GetPaymentConfig(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	if subject, ok := middleware2.GetAuthSubjectFromContext(c); ok && subject.AccountType == service.AccountTypeEnterprise {
+		cfg.ApplyEnterpriseRecharge()
+	}
 	response.Success(c, cfg)
 }
 
@@ -150,6 +153,10 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 		})
 	}
 
+	if subject, ok := middleware2.GetAuthSubjectFromContext(c); ok && subject.AccountType == service.AccountTypeEnterprise {
+		cfg.ApplyEnterpriseRecharge()
+		planList = []checkoutPlan{}
+	}
 	response.Success(c, checkoutInfoResponse{
 		Methods:                       limitsResp.Methods,
 		GlobalMin:                     limitsResp.GlobalMin,

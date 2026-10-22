@@ -37,7 +37,19 @@ func paymentConfirmedAt(metadata map[string]string, createdAt, now time.Time) ti
 	return now
 }
 
-func (s *PaymentService) SetMonthCardStore(store *monthcard.Store) { s.monthCards = store }
+func (s *PaymentService) SetMonthCardStore(store *monthcard.Store) {
+	s.monthCards = store
+	if store != nil && s.redeemService != nil {
+		store.SetBalanceInvalidator(func(ctx context.Context, id int64) {
+			if s.redeemService.billingCacheService != nil {
+				_ = s.redeemService.billingCacheService.InvalidateUserBalance(ctx, id)
+			}
+			if s.redeemService.authCacheInvalidator != nil {
+				s.redeemService.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, id)
+			}
+		})
+	}
+}
 
 func (s *PaymentService) MonthCardStore() *monthcard.Store {
 	if s == nil {

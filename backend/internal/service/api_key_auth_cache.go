@@ -36,6 +36,7 @@ type APIKeyAuthSnapshot struct {
 
 // APIKeyAuthUserSnapshot 用户快照
 type APIKeyAuthUserSnapshot struct {
+	AccountType   string  `json:"account_type"`
 	ID            int64   `json:"id"`
 	Status        string  `json:"status"`
 	Role          string  `json:"role"`

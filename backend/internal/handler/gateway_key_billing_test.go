@@ -188,6 +188,19 @@ func TestBuildKeyBillingInfoAppliesPeakMultiplier(t *testing.T) {
 	}
 }
 
+func TestBuildEnterpriseKeyBillingInfoUsesExactEnterpriseRate(t *testing.T) {
+	gid := int64(7)
+	key := &service.APIKey{
+		GroupID: &gid,
+		User:    &service.User{AccountType: service.AccountTypeEnterprise, EnterpriseGroupRates: map[int64]float64{gid: 0.6}},
+		Group:   &service.Group{ID: gid, RateMultiplier: 4, PeakRateEnabled: true, PeakStart: "00:00", PeakEnd: "23:59", PeakRateMultiplier: 3},
+	}
+	info := buildKeyBillingInfo(key, 0.6, time.Now())
+	require.False(t, info.PeakRateEnabled)
+	require.Equal(t, 0.6, info.EffectiveRateMultiplier)
+	require.Nil(t, info.AppliedPeakMultiplier)
+}
+
 func TestKeyBillingInfoJSONKeepsZeroPeakMultiplierWhenEnabled(t *testing.T) {
 	groupID := int64(7)
 	apiKey := &service.APIKey{

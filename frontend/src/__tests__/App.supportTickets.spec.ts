@@ -59,6 +59,7 @@ vi.mock('@/stores', () => ({
 vi.mock('@/stores/app', () => ({ useAppStore: () => mocks.app }))
 
 vi.mock('@/api/setup', () => ({ getSetupStatus: mocks.getSetupStatus }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => mocks.auth }))
 vi.mock('@/utils/branding', () => ({ updateFavicon: vi.fn() }))
 
 import App from '../App.vue'
@@ -76,7 +77,7 @@ describe('App support ticket unread lifecycle', () => {
       siteName: 'Sub2API',
       fetchPublicSettings: vi.fn().mockResolvedValue(undefined),
     })
-    mocks.auth = reactive({ isAuthenticated: true, isAdmin: true })
+    mocks.auth = reactive({ isAuthenticated: true, isAdmin: true, isEnterprise: false })
     const initializeUserUnread = vi.fn(async () => {
       mocks.supportTickets.userUnreadLoaded = true
       return 2
@@ -95,6 +96,39 @@ describe('App support ticket unread lifecycle', () => {
       resetUserUnread,
       reset: vi.fn(),
     })
+  })
+
+  it('never starts subscription or month-card polling for an enterprise login', async () => {
+    mocks.auth.isEnterprise = true
+    mocks.auth.isAdmin = false
+    const wrapper = mount(App, { global: { stubs: { Toast: true, NavigationProgress: true, AdminComplianceDialog: true, AnnouncementPopup: true } } })
+    await flushPromises()
+    expect(mocks.fetchSubscriptions).not.toHaveBeenCalled()
+    expect(mocks.startPolling).not.toHaveBeenCalled()
+    expect(mocks.fetchMonthCards).not.toHaveBeenCalled()
+    expect(mocks.startGroupBuyPolling).not.toHaveBeenCalled()
+    mocks.app.cachedPublicSettings.subscription_enabled = true
+    await flushPromises()
+    expect(mocks.fetchSubscriptions).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('clears both entitlement stores on enterprise conversion and resumes them on conversion back', async () => {
+    const wrapper = mount(App, { global: { stubs: { Toast: true, NavigationProgress: true, AdminComplianceDialog: true, AnnouncementPopup: true } } })
+    await flushPromises()
+    mocks.fetchSubscriptions.mockClear()
+    mocks.fetchMonthCards.mockClear()
+    mocks.auth.isEnterprise = true
+    await flushPromises()
+    expect(mocks.clearSubscriptions).toHaveBeenCalled()
+    expect(mocks.clearGroupBuy).toHaveBeenCalled()
+    expect(mocks.fetchSubscriptions).not.toHaveBeenCalled()
+    expect(mocks.fetchMonthCards).not.toHaveBeenCalled()
+    mocks.auth.isEnterprise = false
+    await flushPromises()
+    expect(mocks.fetchSubscriptions).toHaveBeenCalledOnce()
+    expect(mocks.fetchMonthCards).toHaveBeenCalledOnce()
+    wrapper.unmount()
   })
 
   it('resets the user cache on disable and fetches it again on re-enable without resetting admin state', async () => {

@@ -69,6 +69,20 @@ func (_u *UserUpdate) ClearDeletedAt() *UserUpdate {
 	return _u
 }
 
+// SetAccountType sets the "account_type" field.
+func (_u *UserUpdate) SetAccountType(v string) *UserUpdate {
+	_u.mutation.SetAccountType(v)
+	return _u
+}
+
+// SetNillableAccountType sets the "account_type" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableAccountType(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetAccountType(*v)
+	}
+	return _u
+}
+
 // SetEmail sets the "email" field.
 func (_u *UserUpdate) SetEmail(v string) *UserUpdate {
 	_u.mutation.SetEmail(v)
@@ -1074,6 +1088,11 @@ func (_u *UserUpdate) defaults() error {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *UserUpdate) check() error {
+	if v, ok := _u.mutation.AccountType(); ok {
+		if err := user.AccountTypeValidator(v); err != nil {
+			return &ValidationError{Name: "account_type", err: fmt.Errorf(`ent: validator failed for field "User.account_type": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Email(); ok {
 		if err := user.EmailValidator(v); err != nil {
 			return &ValidationError{Name: "email", err: fmt.Errorf(`ent: validator failed for field "User.email": %w`, err)}
@@ -1127,6 +1146,9 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(user.FieldDeletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.AccountType(); ok {
+		_spec.SetField(user.FieldAccountType, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Email(); ok {
 		_spec.SetField(user.FieldEmail, field.TypeString, value)
@@ -2002,6 +2024,20 @@ func (_u *UserUpdateOne) SetNillableDeletedAt(v *time.Time) *UserUpdateOne {
 // ClearDeletedAt clears the value of the "deleted_at" field.
 func (_u *UserUpdateOne) ClearDeletedAt() *UserUpdateOne {
 	_u.mutation.ClearDeletedAt()
+	return _u
+}
+
+// SetAccountType sets the "account_type" field.
+func (_u *UserUpdateOne) SetAccountType(v string) *UserUpdateOne {
+	_u.mutation.SetAccountType(v)
+	return _u
+}
+
+// SetNillableAccountType sets the "account_type" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableAccountType(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetAccountType(*v)
+	}
 	return _u
 }
 
@@ -3023,6 +3059,11 @@ func (_u *UserUpdateOne) defaults() error {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *UserUpdateOne) check() error {
+	if v, ok := _u.mutation.AccountType(); ok {
+		if err := user.AccountTypeValidator(v); err != nil {
+			return &ValidationError{Name: "account_type", err: fmt.Errorf(`ent: validator failed for field "User.account_type": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Email(); ok {
 		if err := user.EmailValidator(v); err != nil {
 			return &ValidationError{Name: "email", err: fmt.Errorf(`ent: validator failed for field "User.email": %w`, err)}
@@ -3093,6 +3134,9 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(user.FieldDeletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.AccountType(); ok {
+		_spec.SetField(user.FieldAccountType, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Email(); ok {
 		_spec.SetField(user.FieldEmail, field.TypeString, value)

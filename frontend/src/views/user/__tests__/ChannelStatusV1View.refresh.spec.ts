@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ChannelStatusV1View from '../ChannelStatusV1View.vue'
 
 const { list } = vi.hoisted(() => ({ list: vi.fn() }))
+const auth = vi.hoisted(() => ({ isEnterprise: false }))
 vi.mock('@/api/channelMonitor', () => ({ list, status: vi.fn() }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => auth }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ cachedPublicSettings: { channel_monitor_enabled: true }, showError: vi.fn() }) }))
 vi.mock('vue-i18n', async () => ({
   ...await vi.importActual<typeof import('vue-i18n')>('vue-i18n'),
@@ -12,6 +14,7 @@ vi.mock('vue-i18n', async () => ({
 const mountView = () => shallowMount(ChannelStatusV1View, {
   global: { stubs: {
     AppLayout: { template: '<div><slot /></div>' },
+    RouterLink: true,
     MonitorHero: { props: ['autoRefresh'], emits: ['refresh'], template: `<div>
       <button class="interval" @click="autoRefresh.setInterval(120)">120 seconds</button>
       <button class="refresh" @click="$emit('refresh')">Refresh</button>
@@ -20,10 +23,17 @@ const mountView = () => shallowMount(ChannelStatusV1View, {
   } },
 })
 let wrapper: ReturnType<typeof mountView>
-beforeEach(() => { vi.useFakeTimers(); localStorage.clear(); list.mockReset().mockResolvedValue({ items: [] }) })
+beforeEach(() => { vi.useFakeTimers(); localStorage.clear(); auth.isEnterprise = false; list.mockReset().mockResolvedValue({ items: [] }) })
 afterEach(() => { wrapper?.unmount(); vi.useRealTimers(); localStorage.clear() })
 
 describe('channel monitor refresh interval', () => {
+  it('provides the embedded model-plaza entry for enterprise users', async () => {
+    auth.isEnterprise = true
+    wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.get('router-link-stub').attributes('to')).toBe('/model-plaza?embedded=1')
+  })
+
   it('keeps automatic refresh disabled after reopening the page', async () => {
     wrapper = mountView(); await flushPromises()
     await wrapper.get('.disable').trigger('click')

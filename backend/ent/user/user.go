@@ -21,6 +21,8 @@ const (
 	FieldUpdatedAt = "updated_at"
 	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
 	FieldDeletedAt = "deleted_at"
+	// FieldAccountType holds the string denoting the account_type field in the database.
+	FieldAccountType = "account_type"
 	// FieldEmail holds the string denoting the email field in the database.
 	FieldEmail = "email"
 	// FieldPasswordHash holds the string denoting the password_hash field in the database.
@@ -226,6 +228,7 @@ var Columns = []string{
 	FieldCreatedAt,
 	FieldUpdatedAt,
 	FieldDeletedAt,
+	FieldAccountType,
 	FieldEmail,
 	FieldPasswordHash,
 	FieldRole,
@@ -280,6 +283,10 @@ var (
 	DefaultUpdatedAt func() time.Time
 	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
 	UpdateDefaultUpdatedAt func() time.Time
+	// DefaultAccountType holds the default value on creation for the "account_type" field.
+	DefaultAccountType string
+	// AccountTypeValidator is a validator for the "account_type" field. It is called by the builders before save.
+	AccountTypeValidator func(string) error
 	// EmailValidator is a validator for the "email" field. It is called by the builders before save.
 	EmailValidator func(string) error
 	// PasswordHashValidator is a validator for the "password_hash" field. It is called by the builders before save.
@@ -345,6 +352,11 @@ func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByDeletedAt orders the results by the deleted_at field.
 func ByDeletedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDeletedAt, opts...).ToFunc()
+}
+
+// ByAccountType orders the results by the account_type field.
+func ByAccountType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAccountType, opts...).ToFunc()
 }
 
 // ByEmail orders the results by the email field.

@@ -98,6 +98,7 @@ export const useAuthStore = defineStore('auth', () => {
   })
 
   const isSimpleMode = computed(() => runMode.value === 'simple')
+  const isEnterprise = computed(() => user.value?.account_type === 'enterprise')
   const hasPendingAuthSession = computed(() => pendingAuthSession.value !== null)
 
   // ==================== Actions ====================
@@ -506,6 +507,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     isAdmin,
     isSimpleMode,
+    isEnterprise,
     hasPendingAuthSession,
 
     // Actions

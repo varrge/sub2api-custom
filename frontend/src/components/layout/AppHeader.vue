@@ -107,7 +107,7 @@
           <LocaleSwitcher class="header-locale" />
 
           <!-- Subscription Progress (for users with active subscriptions) -->
-          <SubscriptionProgressMini v-if="user && subscriptionFeatureEnabled" class="header-subscription" />
+          <SubscriptionProgressMini v-if="user && subscriptionFeatureEnabled && !isEnterprise" class="header-subscription" />
 
           <!-- Announcement Bell -->
           <AnnouncementBell v-if="user" data-testid="header-announcement" />
@@ -125,7 +125,7 @@
             <Icon :name="isDark ? 'sun' : 'moon'" size="md" :class="isDark ? 'text-amber-500' : ''" />
           </button>
 
-          <ActivityLeaderboard v-if="user" :key="user.id" />
+          <ActivityLeaderboard v-if="user && !isEnterprise" :key="user.id" />
 
           <!-- Balance Display -->
           <div
@@ -208,6 +208,7 @@ const adminSettingsStore = useAdminSettingsStore()
 const supportTicketStore = useSupportTicketStore()
 
 const user = computed(() => authStore.user)
+const isEnterprise = computed(() => user.value?.account_type === 'enterprise')
 const isDark = ref(document.documentElement.classList.contains('dark'))
 const docUrl = computed(() => sanitizeUrl(appStore.docUrl))
 const imageGenerationEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.imageGeneration))
@@ -219,12 +220,18 @@ const configuredTopQuickMenuItems = computed(() =>
   normalizeTopQuickMenuItems(appStore.cachedPublicSettings?.top_quick_menu_items),
 )
 const modelPlazaInQuickMenu = computed(() => configuredTopQuickMenuItems.value.includes('model_plaza'))
-const dashboardPath = computed(() => authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+// Enterprise users land on /usage; /dashboard is not part of the enterprise workspace.
+const dashboardPath = computed(() => {
+  if (authStore.isAdmin) return '/admin/dashboard'
+  return isEnterprise.value ? '/usage' : '/dashboard'
+})
 const visibleTopQuickMenuItems = computed(() =>
   configuredTopQuickMenuItems.value
     .map((id) => TOP_QUICK_MENU_OPTIONS.find((item) => item.id === id))
     .filter((item): item is (typeof TOP_QUICK_MENU_OPTIONS)[number] => {
       if (!item) return false
+      // Image generation entries are not part of the enterprise workspace.
+      if (isEnterprise.value && (item.id === 'image_generation' || item.id === 'batch_image')) return false
       if (item.id === 'image_generation') return imageGenerationEnabled.value
       if (item.id === 'model_plaza') return modelPlazaEnabled.value
       if (item.id === 'support_tickets') return supportTicketsEnabled.value
@@ -250,11 +257,11 @@ const totalBalanceDisplay = computed(() => balanceFailed.value ? '$--' : formatH
 const themeToggleLabel = computed(() => t(isDark.value ? 'nav.lightMode' : 'nav.darkMode'))
 const balanceAriaLabel = computed(() => {
   const label = `${balanceAvailableText.value}: ${balanceLoading.value ? t('common.loading') : balanceDisplay.value}`
-  return paymentEnabled.value ? `${label}. ${t('nav.buySubscription')}` : label
+  return paymentEnabled.value ? `${label}. ${t(isEnterprise.value ? 'enterpriseNav.recharge' : 'nav.buySubscription')}` : label
 })
 
 const routeMetaKeys = computed(() => resolveRouteMetaKeys(route, {
-  billingMode: resolveSiteBillingMode(appStore.cachedPublicSettings),
+  billingMode: isEnterprise.value ? 'recharge_only' : resolveSiteBillingMode(appStore.cachedPublicSettings),
 }))
 
 const pageTitle = computed(() => {

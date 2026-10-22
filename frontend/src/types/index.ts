@@ -85,6 +85,7 @@ export interface User {
   oidc_bound?: boolean
   wechat_bound?: boolean
   role: 'admin' | 'user' // User role for authorization
+  account_type?: 'personal' | 'enterprise' // 账户类型；缺省视为 personal
   balance: number // User balance for API usage
   frozen_balance?: number // Balance currently held by async batch jobs
   concurrency: number // Allowed concurrent requests
@@ -107,6 +108,8 @@ export interface AdminUser extends User {
   last_used_at?: string | null
   // 用户专属分组倍率配置 (group_id -> rate_multiplier)
   group_rates?: Record<number, number>
+  // 企业分组倍率配置 (group_id -> enterprise_rate_multiplier)，仅企业账户有效
+  enterprise_group_rates?: Record<string, number>
   // 为 true 时该用户仅可使用 allowed_groups 中列出的公开分组。
   // 管理侧权限开关，普通用户接口不返回。
   restrict_public_groups?: boolean
@@ -2182,6 +2185,9 @@ export interface UpdateUserRequest {
   // 用户专属分组倍率配置 (group_id -> rate_multiplier | null)
   // null 表示删除该分组的专属倍率
   group_rates?: Record<number, number | null>
+  // 企业分组倍率配置 (group_id -> enterprise_rate_multiplier | null)
+  // null 表示清除该分组的企业倍率
+  enterprise_group_rates?: Record<string, number | null>
 }
 
 export interface ChangePasswordRequest {

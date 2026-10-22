@@ -3,6 +3,7 @@
  * Defines all application routes with lazy loading and navigation guards
  */
 
+import { watch } from 'vue'
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
@@ -885,6 +886,10 @@ function isBackendModePublicRouteAllowed(path: string, hasPendingAuthSession: bo
   return false
 }
 
+const enterprisePaths = ['/usage', '/keys', '/monitor', '/purchase', '/orders', '/payment', '/profile', '/tickets', '/model-plaza']
+const enterprisePathAllowed = (path: string) => enterprisePaths.some((allowed) => path === allowed || path.startsWith(allowed + '/'))
+let watchingEnterpriseIdentity = false
+
 router.beforeEach(async (to, _from, next) => {
   // 开始导航加载状态
   navigationLoading.startNavigation()
@@ -895,6 +900,24 @@ router.beforeEach(async (to, _from, next) => {
   if (!authInitialized) {
     authStore.checkAuth()
     authInitialized = true
+  }
+
+  // Refresh authoritative account type before restoring a protected console.
+  if (authStore.isAuthenticated && authStore.userRefreshStatus !== 'success') {
+    try { await authStore.refreshUser() } catch { /* APIs still enforce authority. */ }
+  }
+  if (!watchingEnterpriseIdentity) {
+    watchingEnterpriseIdentity = true
+    watch(() => authStore.isEnterprise, (enterprise) => {
+      const current = router.currentRoute.value
+      if (enterprise && current.meta.requiresAuth !== false && !enterprisePathAllowed(current.path)) {
+        void router.replace('/usage')
+      }
+    })
+  }
+  if (authStore.isEnterprise && to.meta.requiresAuth !== false && !enterprisePathAllowed(to.path)) {
+    next('/usage')
+    return
   }
 
   // Set page title

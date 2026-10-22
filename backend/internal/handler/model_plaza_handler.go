@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"log/slog"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
@@ -78,22 +77,23 @@ type modelPlazaModel struct {
 
 // modelPlazaGroup 广场分组条目（白名单字段）。
 type modelPlazaGroup struct {
-	ID                      int64      `json:"id"`
-	Name                    string     `json:"name"`
-	Description             string     `json:"description"`
-	Platform                string     `json:"platform"`
-	SubscriptionType        string     `json:"subscription_type"`
-	RateMultiplier          float64    `json:"rate_multiplier"`
-	UserRateMultiplier      *float64   `json:"user_rate_multiplier,omitempty"`
-	TemporaryRateEnabled    bool       `json:"temporary_rate_enabled"`
-	TemporaryRateMultiplier float64    `json:"temporary_rate_multiplier"`
-	TemporaryRateStartsAt   *time.Time `json:"temporary_rate_starts_at"`
-	TemporaryRateEndsAt     *time.Time `json:"temporary_rate_ends_at"`
-	PeakRateEnabled         bool       `json:"peak_rate_enabled"`
-	PeakStart               string     `json:"peak_start"`
-	PeakEnd                 string     `json:"peak_end"`
-	PeakRateMultiplier      float64    `json:"peak_rate_multiplier"`
-	IsExclusive             bool       `json:"is_exclusive"`
+	EnterpriseRateMultiplier *float64   `json:"enterprise_rate_multiplier,omitempty"`
+	ID                       int64      `json:"id"`
+	Name                     string     `json:"name"`
+	Description              string     `json:"description"`
+	Platform                 string     `json:"platform"`
+	SubscriptionType         string     `json:"subscription_type"`
+	RateMultiplier           float64    `json:"rate_multiplier"`
+	UserRateMultiplier       *float64   `json:"user_rate_multiplier,omitempty"`
+	TemporaryRateEnabled     bool       `json:"temporary_rate_enabled"`
+	TemporaryRateMultiplier  float64    `json:"temporary_rate_multiplier"`
+	TemporaryRateStartsAt    *time.Time `json:"temporary_rate_starts_at"`
+	TemporaryRateEndsAt      *time.Time `json:"temporary_rate_ends_at"`
+	PeakRateEnabled          bool       `json:"peak_rate_enabled"`
+	PeakStart                string     `json:"peak_start"`
+	PeakEnd                  string     `json:"peak_end"`
+	PeakRateMultiplier       float64    `json:"peak_rate_multiplier"`
+	IsExclusive              bool       `json:"is_exclusive"`
 	// 生图独立倍率：为 true 时图片计费模型的实付倍率取 ImageRateMultiplier，
 	// 不取分组/用户专属倍率。
 	ImageRateIndependent bool    `json:"image_rate_independent"`
@@ -140,6 +140,7 @@ func (h *ModelPlazaHandler) Get(c *gin.Context) {
 	var allowedGroups map[int64]struct{}
 	var restrictPublicGroups bool
 	var userRates map[int64]float64
+	var enterpriseRates map[int64]float64
 	if authed {
 		allowedGroups, restrictPublicGroups, err = h.apiKeyService.GetUserGroupVisibility(c.Request.Context(), subject.UserID)
 		if err != nil {
@@ -147,11 +148,16 @@ func (h *ModelPlazaHandler) Get(c *gin.Context) {
 			response.ErrorFrom(c, err)
 			return
 		}
+		enterpriseRates, err = h.apiKeyService.GetEnterpriseGroupRates(c.Request.Context(), subject.UserID)
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
 		userRates, err = h.apiKeyService.GetUserGroupRates(c.Request.Context(), subject.UserID)
 		if err != nil {
-			// 专属倍率仅是展示增强，失败降级为分组默认倍率。
-			slog.Warn("model_plaza_user_rates_failed", "error", err, "user_id", subject.UserID)
-			userRates = nil
+			// A failed quote lookup is not an absent per-user price.
+			response.ErrorFrom(c, err)
+			return
 		}
 	}
 
@@ -161,6 +167,11 @@ func (h *ModelPlazaHandler) Get(c *gin.Context) {
 	// 追加而非覆盖：CORS 中间件已为具体来源写入 Vary: Origin。
 	c.Writer.Header().Add("Vary", "Accept-Language")
 	out := toLocalizedModelPlazaGroups(visible, userRates, c.GetHeader("Accept-Language"))
+	for i := range out {
+		if rate, ok := enterpriseRates[out[i].ID]; ok {
+			out[i].EnterpriseRateMultiplier = &rate
+		}
+	}
 	response.Success(c, modelPlazaResponse{
 		Description: rt.Description,
 		Groups:      out,

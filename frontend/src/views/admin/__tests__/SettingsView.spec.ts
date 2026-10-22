@@ -82,6 +82,15 @@ const {
 }));
 
 const localeRef = vi.hoisted(() => ({ value: "zh-CN" }));
+const privilegeSave = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+
+vi.mock("@/views/admin/settings/PrivilegeSettingsPanel.vue", () => ({
+  default: {
+    name: "PrivilegeSettingsPanel",
+    template: '<div data-testid="privilege-settings-stub" />',
+    methods: { save: privilegeSave },
+  },
+}));
 
 vi.mock("@/api", () => ({
   adminAPI: {
@@ -516,6 +525,7 @@ const baseSettingsResponse = {
   payment_enabled_types: [],
   payment_balance_disabled: false,
   payment_balance_recharge_multiplier: 1,
+  payment_enterprise_balance_recharge_multiplier: 1,
   payment_subscription_usd_to_cny_rate: 0,
   payment_recharge_fee_rate: 0,
   payment_recharge_bonus_tiers: [],
@@ -824,6 +834,45 @@ describe("admin SettingsView payment visible method controls", () => {
       ],
     }));
     wrapper.unmount();
+  });
+
+  it("saves the privilege tab independently when its form is submitted", async () => {
+    privilegeSave.mockClear();
+    const wrapper = mountView();
+    await flushPromises();
+    const tab = wrapper.get("#settings-tab-privileges");
+    await tab.trigger("click");
+    expect(tab.attributes("aria-selected")).toBe("true");
+    expect(wrapper.get('[data-testid="privilege-settings-stub"]').isVisible()).toBe(true);
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(privilegeSave).toHaveBeenCalledTimes(1);
+    expect(updateSettings).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("loads and saves the enterprise recharge multiplier independently", async () => {
+    getSettings.mockResolvedValue({ ...baseSettingsResponse, payment_balance_recharge_multiplier: 2, payment_enterprise_balance_recharge_multiplier: 0.75 });
+    const wrapper = mountView();
+    await flushPromises();
+    await openPaymentTab(wrapper);
+    const input = wrapper.get('[data-testid="enterprise-recharge-multiplier"]');
+    expect((input.element as HTMLInputElement).value).toBe('0.75');
+    await input.setValue('1.25');
+    await wrapper.find('form').trigger('submit.prevent');
+    await flushPromises();
+    expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({ payment_enterprise_balance_recharge_multiplier: 1.25, payment_balance_recharge_multiplier: 2 }));
+  });
+
+  it("rejects an invalid enterprise recharge multiplier before saving", async () => {
+    const wrapper = mountView();
+    await flushPromises();
+    await openPaymentTab(wrapper);
+    await wrapper.get('[data-testid="enterprise-recharge-multiplier"]').setValue('0');
+    await wrapper.find('form').trigger('submit.prevent');
+    await flushPromises();
+    expect(updateSettings).not.toHaveBeenCalled();
+    expect(showError).toHaveBeenCalledWith('enterprisePayment.admin.invalidMultiplier');
   });
 
   it("submits the compact home page toggle", async () => {
@@ -2398,7 +2447,7 @@ describe("admin SettingsView tab navigation (responsive)", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders all 11 tabs with full labels, ARIA roles, and no truncation classes", async () => {
+  it("renders all 12 tabs with full labels, ARIA roles, and no truncation classes", async () => {
     const wrapper = mountView(document.body);
     await flushPromises();
     await flushPromises();
@@ -2408,7 +2457,7 @@ describe("admin SettingsView tab navigation (responsive)", () => {
     expect(tablist.attributes("aria-label")).toBe("admin.settings.title");
 
     const tabs = wrapper.findAll('[role="tab"]');
-    expect(tabs).toHaveLength(11);
+    expect(tabs).toHaveLength(12);
 
     for (const tab of tabs) {
       expect(tab.attributes("aria-selected")).toBeDefined();
@@ -2611,7 +2660,7 @@ describe("admin SettingsView tab navigation (responsive)", () => {
       width: 400, height: 42, x: 0, y: 0, toJSON: () => ({}),
     });
 
-    // The first tab is within view; the last tab (backup/index 10) is off-screen
+    // The first tab is within view; the last tab (backup) is off-screen.
     const tabs = wrapper.findAll('[role="tab"]');
     tabs.forEach((tab, i) => {
       (tab.element.getBoundingClientRect as unknown) = () => ({
@@ -2627,11 +2676,11 @@ describe("admin SettingsView tab navigation (responsive)", () => {
       });
     });
 
-    // End → scroll to last tab (off-screen at index 10 with left≈1350)
+    // End → scroll to the last off-screen tab.
     await tabs[0].trigger("keydown", { key: "End" });
     await flushPromises();
 
-    // Should have attempted to scroll into view
-    expect(scrollToMock).toHaveBeenCalled();
+    // Keyboard focus/scroll runs in requestAnimationFrame, after promise microtasks.
+    await vi.waitFor(() => expect(scrollToMock).toHaveBeenCalled());
   });
 });

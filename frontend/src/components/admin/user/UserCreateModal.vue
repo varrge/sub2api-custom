@@ -32,6 +32,21 @@
           <option value="admin">{{ t('admin.users.roles.admin') }}</option>
         </select>
       </div>
+      <div>
+        <label class="input-label">{{ t('enterpriseAdmin.accountType.label') }}</label>
+        <select
+          v-model="form.account_type"
+          class="input"
+          :disabled="form.role === 'admin'"
+          data-test="create-account-type"
+        >
+          <option value="personal">{{ t('enterpriseAdmin.accountType.personal') }}</option>
+          <option value="enterprise">{{ t('enterpriseAdmin.accountType.enterprise') }}</option>
+        </select>
+        <p class="input-hint">
+          {{ form.role === 'admin' ? t('enterpriseAdmin.accountType.adminHint') : t('enterpriseAdmin.accountType.hint') }}
+        </p>
+      </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="input-label">{{ t('admin.users.columns.balance') }}</label>
@@ -82,7 +97,10 @@ const props = defineProps<{ show: boolean }>()
 const emit = defineEmits(['close', 'success']); const { t } = useI18n()
 const appStore = useAppStore()
 
-const form = reactive({ email: '', password: '', username: '', notes: '', role: 'user' as 'user' | 'admin', balance: '', concurrency: 1, rpm_limit: 0 })
+const form = reactive({ email: '', password: '', username: '', notes: '', role: 'user' as 'user' | 'admin', account_type: 'personal' as 'personal' | 'enterprise', balance: '', concurrency: 1, rpm_limit: 0 })
+
+// 管理员账号不允许企业类型：切到 admin 时强制回到 personal
+watch(() => form.role, (role) => { if (role === 'admin') form.account_type = 'personal' })
 
 const stepUp = useStepUp()
 const loading = ref(false)
@@ -116,7 +134,7 @@ const submit = async () => {
   } finally { loading.value = false }
 }
 
-watch(() => props.show, (v) => { if(v) Object.assign(form, { email: '', password: '', username: '', notes: '', role: 'user', balance: '', concurrency: 1, rpm_limit: 0 }) })
+watch(() => props.show, (v) => { if(v) Object.assign(form, { email: '', password: '', username: '', notes: '', role: 'user', account_type: 'personal', balance: '', concurrency: 1, rpm_limit: 0 }) })
 
 const generateRandomPassword = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%^&*'

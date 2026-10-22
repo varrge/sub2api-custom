@@ -372,6 +372,22 @@ func (h *APIKeyHandler) GetUserGroupRates(c *gin.Context) {
 	response.Success(c, rates)
 }
 
+// GetEnterpriseGroupRates keeps enterprise quotes separate from ordinary plaza prices.
+func (h *APIKeyHandler) GetEnterpriseGroupRates(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	rates, err := h.apiKeyService.GetEnterpriseGroupRates(c.Request.Context(), subject.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	response.Success(c, rates)
+}
+
 func (r *CreateAPIKeyRequest) UnmarshalJSON(data []byte) error {
 	type plain CreateAPIKeyRequest
 	if err := json.Unmarshal(data, (*plain)(r)); err != nil {

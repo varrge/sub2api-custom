@@ -80,17 +80,18 @@ func (h *GatewayHandler) KeyBillingInfo(c *gin.Context) {
 
 func (h *GatewayHandler) resolveKeyBillingRate(c *gin.Context, apiKey *service.APIKey, now time.Time) (float64, bool) {
 	groupRate := apiKey.Group.BaseRateMultiplierAt(now)
+	ctx := service.WithEnterprisePricing(c.Request.Context(), apiKey.User)
 	switch apiKey.Group.Platform {
 	case service.PlatformOpenAI, service.PlatformGrok:
 		if h.openAIGatewayService == nil {
 			return 0, false
 		}
-		return h.openAIGatewayService.ResolveUserGroupRateMultiplier(c.Request.Context(), apiKey.UserID, *apiKey.GroupID, groupRate), true
+		return h.openAIGatewayService.ResolveUserGroupRateMultiplier(ctx, apiKey.UserID, *apiKey.GroupID, groupRate), true
 	default:
 		if h.gatewayService == nil {
 			return 0, false
 		}
-		return h.gatewayService.ResolveUserGroupRateMultiplier(c.Request.Context(), apiKey.UserID, *apiKey.GroupID, groupRate), true
+		return h.gatewayService.ResolveUserGroupRateMultiplier(ctx, apiKey.UserID, *apiKey.GroupID, groupRate), true
 	}
 }
 
@@ -101,6 +102,13 @@ func buildKeyBillingInfo(apiKey *service.APIKey, resolvedRate float64, now time.
 		userRate = &resolvedRate
 	}
 	appliedPeak := apiKey.Group.PeakMultiplierAt(now)
+	enterpriseRate := false
+	if apiKey.User.IsEnterprise() {
+		_, enterpriseRate = apiKey.User.EnterpriseGroupRates[apiKey.Group.ID]
+		if enterpriseRate {
+			appliedPeak = 1
+		}
+	}
 
 	response := keyBillingInfoResponse{
 		Object:                  "sub2api.key_billing",
@@ -109,11 +117,11 @@ func buildKeyBillingInfo(apiKey *service.APIKey, resolvedRate float64, now time.
 		GroupRateMultiplier:     groupRate,
 		UserRateMultiplier:      userRate,
 		ResolvedRateMultiplier:  resolvedRate,
-		PeakRateEnabled:         apiKey.Group.PeakRateEnabled,
+		PeakRateEnabled:         apiKey.Group.PeakRateEnabled && !enterpriseRate,
 		EffectiveRateMultiplier: resolvedRate * appliedPeak,
 		ObservedAt:              now.UTC(),
 	}
-	if apiKey.Group.PeakRateEnabled {
+	if apiKey.Group.PeakRateEnabled && !enterpriseRate {
 		response.PeakStart = &apiKey.Group.PeakStart
 		response.PeakEnd = &apiKey.Group.PeakEnd
 		response.PeakRateMultiplier = &apiKey.Group.PeakRateMultiplier

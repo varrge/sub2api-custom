@@ -401,6 +401,9 @@ func newPaymentConfigServiceTestClient(t *testing.T) *dbent.Client {
 
 	drv := entsql.OpenDB(dialect.SQLite, db)
 	client := enttest.NewClient(t, enttest.WithOptions(dbent.Driver(drv)))
+	if _, err := db.Exec(`CREATE TABLE enterprise_conversion_cards(order_id BIGINT,credited_usd NUMERIC,refunded_at TIMESTAMP)`); err != nil {
+		t.Fatalf("create enterprise conversion fixture: %v", err)
+	}
 	t.Cleanup(func() { _ = client.Close() })
 	return client
 }

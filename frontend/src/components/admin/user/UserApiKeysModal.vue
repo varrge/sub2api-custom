@@ -15,7 +15,7 @@
           </div>
           <p class="truncate font-mono text-sm text-gray-500">{{ key.key.substring(0, 20) }}...{{ key.key.substring(key.key.length - 8) }}</p>
           <button class="mt-3 flex w-full min-w-0 max-w-full items-start gap-2 whitespace-normal rounded-lg p-1 text-left hover:bg-gray-100 dark:hover:bg-dark-700" :aria-label="t('keys.multiGroup.editGroups', { name: key.name })" :disabled="groupsLoading || groupsFailed" @click="openGroupSelector(key)">
-            <KeyGroupBadges class="flex-1" :api-key="key" :user-rates="user.group_rates ?? {}" />
+            <KeyGroupBadges class="flex-1" :api-key="key" :user-rates="user.group_rates ?? {}" :enterprise-rates="enterpriseRates" />
             <Icon name="edit" size="sm" class="mt-1 shrink-0 text-gray-400" />
           </button>
           <p class="mt-2 text-xs text-gray-500">{{ t('admin.users.columns.created') }}: {{ formatDateTime(key.created_at) }}</p>
@@ -34,6 +34,7 @@
       :available-groups="availableGroups"
       :existing-groups="keyGroups(selectedKey)"
       :user-rates="user?.group_rates ?? {}"
+      :enterprise-rates="enterpriseRates"
       :multi-group-enabled="selectedKey.multi_group_enabled"
       :disabled="saving"
       allow-empty
@@ -56,7 +57,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
@@ -73,6 +74,7 @@ const props = defineProps<{ show: boolean; user: AdminUser | null }>()
 const emit = defineEmits(['close'])
 const { t } = useI18n()
 const appStore = useAppStore()
+const enterpriseRates = computed(() => props.user?.account_type === 'enterprise' ? props.user.enterprise_group_rates ?? {} : {})
 const apiKeys = ref<ApiKey[]>([])
 const availableGroups = ref<Group[]>([])
 const loading = ref(false)

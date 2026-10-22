@@ -37,7 +37,7 @@
                 ? 'border-primary-400 bg-primary-50/50 shadow-sm dark:border-primary-500 dark:bg-primary-900/20'
                 : 'border-gray-200 bg-white hover:border-gray-300 dark:border-dark-600 dark:bg-dark-800 dark:hover:border-dark-500'"
             >
-              <div class="flex items-center gap-4">
+              <div class="flex flex-wrap items-center gap-4">
                 <!-- 复选框 -->
                 <div class="flex-shrink-0">
                   <label class="relative flex h-6 w-6 cursor-pointer items-center justify-center">
@@ -75,8 +75,8 @@
                   </div>
                 </div>
 
-                <!-- 专属倍率输入 -->
-                <div class="flex flex-shrink-0 items-center gap-3">
+                <!-- 专属倍率 / 企业倍率输入 -->
+                <div class="flex w-full flex-wrap items-center justify-end gap-3 sm:w-auto sm:flex-shrink-0">
                   <label class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ t('admin.users.customRate') }}</label>
                   <input
                     type="number"
@@ -85,6 +85,17 @@
                     :value="config.customRate ?? ''"
                     @input="updateCustomRate(config.groupId, ($event.target as HTMLInputElement).value)"
                     :placeholder="String(config.defaultRate)"
+                    class="hide-spinner w-24 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-500 dark:bg-dark-700 dark:focus:border-primary-500"
+                  />
+                  <label class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ t('enterpriseAdmin.groupRates.label') }}</label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    :value="config.enterpriseRate ?? ''"
+                    @input="updateEnterpriseRate(config.groupId, ($event.target as HTMLInputElement).value)"
+                    :placeholder="t('enterpriseAdmin.groupRates.placeholder')"
+                    :title="t('enterpriseAdmin.groupRates.inheritHint')"
                     class="hide-spinner w-24 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-500 dark:bg-dark-700 dark:focus:border-primary-500"
                   />
                 </div>
@@ -118,7 +129,7 @@
               :key="config.groupId"
               class="relative overflow-hidden rounded-xl border-2 border-green-200 bg-green-50/50 p-4 dark:border-green-800/50 dark:bg-green-900/10"
             >
-              <div class="flex items-center gap-4">
+              <div class="flex flex-wrap items-center gap-4">
                 <!-- 未开启限制时公开分组恒可用，此处仅作展示；开启后才是真实开关 -->
                 <div class="flex-shrink-0">
                   <input
@@ -155,8 +166,8 @@
                   </div>
                 </div>
 
-                <!-- 专属倍率输入 -->
-                <div class="flex flex-shrink-0 items-center gap-3">
+                <!-- 专属倍率 / 企业倍率输入 -->
+                <div class="flex w-full flex-wrap items-center justify-end gap-3 sm:w-auto sm:flex-shrink-0">
                   <label class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ t('admin.users.customRate') }}</label>
                   <input
                     type="number"
@@ -165,6 +176,17 @@
                     :value="config.customRate ?? ''"
                     @input="updateCustomRate(config.groupId, ($event.target as HTMLInputElement).value)"
                     :placeholder="String(config.defaultRate)"
+                    class="hide-spinner w-24 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-500 dark:bg-dark-700 dark:focus:border-primary-500"
+                  />
+                  <label class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ t('enterpriseAdmin.groupRates.label') }}</label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    :value="config.enterpriseRate ?? ''"
+                    @input="updateEnterpriseRate(config.groupId, ($event.target as HTMLInputElement).value)"
+                    :placeholder="t('enterpriseAdmin.groupRates.placeholder')"
+                    :title="t('enterpriseAdmin.groupRates.inheritHint')"
                     class="hide-spinner w-24 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-500 dark:bg-dark-700 dark:focus:border-primary-500"
                   />
                 </div>
@@ -188,7 +210,7 @@
     <template #footer>
       <div class="flex justify-end gap-3">
         <button @click="$emit('close')" class="btn btn-secondary px-5">{{ t('common.cancel') }}</button>
-        <button @click="handleSave" :disabled="submitting || !loaded" class="btn btn-primary px-6">
+        <button @click="handleSave" :disabled="submitting || loading || !loaded || loadedUserId !== user?.id" class="btn btn-primary px-6">
           <svg v-if="submitting" class="-ml-1 mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -201,7 +223,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
@@ -216,6 +238,7 @@ interface GroupRateConfig {
   isExclusive: boolean
   defaultRate: number
   customRate: number | null
+  enterpriseRate: number | null
   isSelected: boolean
 }
 
@@ -227,10 +250,14 @@ const appStore = useAppStore()
 const groups = ref<Group[]>([])
 const groupConfigs = ref<GroupRateConfig[]>([])
 const originalGroupRates = ref<Record<number, number>>({}) // 记录原始专属倍率，用于检测删除
+const originalEnterpriseGroupRates = ref<Record<string, number>>({})
 const loading = ref(false)
 const loaded = ref(false)
 const submitting = ref(false)
 const restrictPublicGroups = ref(false)
+const loadedUserId = ref<number | null>(null)
+let loadSequence = 0
+onBeforeUnmount(() => { loadSequence++ })
 
 // 分离专属分组和公开分组
 const exclusiveGroups = computed(() => groups.value.filter((g) => g.is_exclusive))
@@ -240,8 +267,17 @@ const exclusiveGroupConfigs = computed(() => groupConfigs.value.filter((c) => c.
 const publicGroupConfigs = computed(() => groupConfigs.value.filter((c) => !c.isExclusive))
 
 watch(
-  () => props.show,
-  (v) => {
+  () => [props.show, props.user?.id] as const,
+  ([v]) => {
+    loadSequence++
+    loadedUserId.value = null
+    loaded.value = false
+    groupConfigs.value = []
+    groups.value = []
+    originalGroupRates.value = {}
+    originalEnterpriseGroupRates.value = {}
+    restrictPublicGroups.value = false
+    loading.value = false
     if (v && props.user) {
       load()
     }
@@ -249,20 +285,26 @@ watch(
 )
 
 const load = async () => {
+  const user = props.user
+  if (!user || !props.show) return
+  const sequence = ++loadSequence
   loaded.value = false
   loading.value = true
   try {
     const res = await adminAPI.groups.list(1, 1000)
+    if (sequence !== loadSequence || !props.show || props.user?.id !== user.id) return
     // 只显示标准类型且活跃的分组
     groups.value = res.items.filter((g) => g.subscription_type === 'standard' && g.status === 'active')
 
     // 初始化配置
-    const userAllowedGroups = props.user?.allowed_groups || []
-    const userGroupRates = props.user?.group_rates || {}
-    restrictPublicGroups.value = props.user?.restrict_public_groups ?? false
+    const userAllowedGroups = user.allowed_groups || []
+    const userGroupRates = user.group_rates || {}
+    const userEnterpriseGroupRates = user.enterprise_group_rates || {}
+    restrictPublicGroups.value = user.restrict_public_groups ?? false
 
     // 保存原始专属倍率，用于检测删除操作
     originalGroupRates.value = { ...userGroupRates }
+    originalEnterpriseGroupRates.value = { ...userEnterpriseGroupRates }
 
     groupConfigs.value = groups.value.map((g) => ({
       groupId: g.id,
@@ -271,16 +313,20 @@ const load = async () => {
       isExclusive: g.is_exclusive,
       defaultRate: g.rate_multiplier,
       customRate: userGroupRates[g.id] ?? null,
+      enterpriseRate: userEnterpriseGroupRates[String(g.id)] ?? null,
       // 专属分组：检查是否在 allowed_groups 中
       // 公开分组：未开启限制时恒可用；开启后同样以 allowed_groups 为准
       isSelected:
         g.is_exclusive || restrictPublicGroups.value ? userAllowedGroups.includes(g.id) : true,
     }))
     loaded.value = true
+    loadedUserId.value = user.id
   } catch (error) {
+    if (sequence !== loadSequence) return
     console.error('Failed to load groups:', error)
+    appStore.showError(t('enterpriseAdmin.groupRates.loadFailed'))
   } finally {
-    loading.value = false
+    if (sequence === loadSequence) loading.value = false
   }
 }
 
@@ -320,8 +366,17 @@ const updateCustomRate = (groupId: number, value: string) => {
   }
 }
 
+const updateEnterpriseRate = (groupId: number, value: string) => {
+  const config = groupConfigs.value.find((c) => c.groupId === groupId)
+  if (config) config.enterpriseRate = value === '' ? null : Number(value)
+}
+
 const handleSave = async () => {
-  if (!props.user || !loaded.value) return
+  if (!props.show || !props.user || !loaded.value || loadedUserId.value !== props.user.id || loading.value || submitting.value) return
+  if (groupConfigs.value.some((c) => c.enterpriseRate !== null && (!Number.isFinite(c.enterpriseRate) || c.enterpriseRate <= 0))) {
+    appStore.showError(t('enterpriseAdmin.groupRates.invalid'))
+    return
+  }
   submitting.value = true
 
   try {
@@ -347,10 +402,18 @@ const handleSave = async () => {
       }
     }
 
+    const enterpriseGroupRates: Record<string, number | null> = {}
+    for (const c of groupConfigs.value) {
+      if (c.enterpriseRate !== null || originalEnterpriseGroupRates.value[String(c.groupId)] !== undefined) {
+        enterpriseGroupRates[String(c.groupId)] = c.enterpriseRate
+      }
+    }
+
     await adminAPI.users.update(props.user.id, {
       allowed_groups: allowedGroups,
       restrict_public_groups: restrictPublicGroups.value,
       group_rates: Object.keys(groupRates).length > 0 ? groupRates : undefined,
+      enterprise_group_rates: Object.keys(enterpriseGroupRates).length > 0 ? enterpriseGroupRates : undefined,
     })
 
     appStore.showSuccess(t('admin.users.groupConfigUpdated'))

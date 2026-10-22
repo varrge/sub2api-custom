@@ -14,6 +14,7 @@ func UserFromServiceShallow(u *service.User) *User {
 		return nil
 	}
 	return &User{
+		AccountType:                u.EffectiveAccountType(),
 		ID:                         u.ID,
 		Email:                      u.Email,
 		Username:                   u.Username,
@@ -69,6 +70,7 @@ func UserFromServiceAdmin(u *service.User) *AdminUser {
 		return nil
 	}
 	return &AdminUser{
+		EnterpriseGroupRates: u.EnterpriseGroupRates,
 		User:                 *base,
 		Notes:                u.Notes,
 		LastUsedAt:           u.LastUsedAt,

@@ -6,6 +6,7 @@ export default {
         general: 'General',
         agreement: 'Agreement',
         features: 'Feature Switches',
+        privileges: 'Privileges',
         security: 'Security',
         users: 'Users',
         gateway: 'Gateway',

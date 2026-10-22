@@ -60,7 +60,8 @@ func thawFrozenCards(ctx context.Context, tx *sql.Tx, thawAt, updatedAt time.Tim
 	_, err := tx.ExecContext(ctx, `UPDATE month_card_cards
 		SET paused_us=paused_us+GREATEST(0,FLOOR(EXTRACT(EPOCH FROM ($1::timestamptz-frozen_at))*1000000))::bigint,
 		    status='active', thawed_at=$1, frozen_at=NULL, updated_at=$2
-		WHERE status='frozen' AND frozen_at IS NOT NULL`, thawAt, updatedAt)
+		WHERE status='frozen' AND frozen_at IS NOT NULL
+		AND EXISTS (SELECT 1 FROM users u WHERE u.id=month_card_cards.user_id AND u.account_type='personal')`, thawAt, updatedAt)
 	return err
 }
 

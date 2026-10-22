@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { nextTick, reactive } from 'vue'
 
 import type { ApiKey } from '@/types'
 import { keysAPI } from '@/api'
 import KeysView from '../KeysView.vue'
+import KeyGroupBadges from '@/components/keys/KeyGroupBadges.vue'
+
+const auth = reactive({ user: { id: 1 }, isEnterprise: false })
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => auth }))
 
 const {
   listKeys,
@@ -15,6 +19,7 @@ const {
   getDashboardApiKeysUsage,
   getAvailableGroups,
   getUserGroupRates,
+  getEnterpriseGroupRates,
   showError,
   showSuccess,
   copyToClipboard,
@@ -29,6 +34,7 @@ const {
   getDashboardApiKeysUsage: vi.fn(),
   getAvailableGroups: vi.fn(),
   getUserGroupRates: vi.fn(),
+  getEnterpriseGroupRates: vi.fn(),
   showError: vi.fn(),
   showSuccess: vi.fn(),
   copyToClipboard: vi.fn(),
@@ -80,6 +86,7 @@ vi.mock('@/api', () => ({
   userGroupsAPI: {
     getAvailable: getAvailableGroups,
     getUserGroupRates,
+    getEnterpriseGroupRates,
   },
 }))
 
@@ -277,6 +284,8 @@ const getButtonByText = (wrapper: VueWrapper, text: string) => {
 
 describe('user KeysView column settings', () => {
   beforeEach(() => {
+    auth.user.id = 1
+    auth.isEnterprise = false
     localStorage.clear()
 
     listKeys.mockReset()
@@ -287,6 +296,7 @@ describe('user KeysView column settings', () => {
     getDashboardApiKeysUsage.mockReset()
     getAvailableGroups.mockReset()
     getUserGroupRates.mockReset()
+    getEnterpriseGroupRates.mockReset().mockResolvedValue({})
     showError.mockReset()
     showSuccess.mockReset()
     copyToClipboard.mockReset()
@@ -305,6 +315,66 @@ describe('user KeysView column settings', () => {
     getAvailableGroups.mockResolvedValue([])
     getUserGroupRates.mockResolvedValue({})
     isCurrentStep.mockReturnValue(false)
+  })
+
+  it('loads separate enterprise prices without overwriting ordinary fallback rates', async () => {
+    auth.isEnterprise = true
+    getUserGroupRates.mockResolvedValue({ 7: 0.8, 8: 0.7 })
+    getEnterpriseGroupRates.mockResolvedValue({ 7: 0.3 })
+    const wrapper = await mountView()
+    const badge = wrapper.findComponent(KeyGroupBadges)
+    expect(getEnterpriseGroupRates).toHaveBeenCalledOnce()
+    expect(badge.props('enterpriseRates')).toEqual({ 7: 0.3 })
+    expect(badge.props('userRates')).toEqual({ 7: 0.8, 8: 0.7 })
+    expect(badge.props('ratesUnavailable')).toBe(false)
+    wrapper.unmount()
+  })
+
+  it.each([false, true])('does not reload groups or prices when the same identity profile is replaced (enterprise=%s)', async (enterprise) => {
+    auth.isEnterprise = enterprise
+    const wrapper = await mountView()
+    getAvailableGroups.mockClear()
+    getUserGroupRates.mockClear()
+    getEnterpriseGroupRates.mockClear()
+    listKeys.mockClear()
+    auth.user = { ...auth.user }
+    await flushPromises()
+    expect(getAvailableGroups).not.toHaveBeenCalled()
+    expect(getUserGroupRates).not.toHaveBeenCalled()
+    expect(getEnterpriseGroupRates).not.toHaveBeenCalled()
+    expect(listKeys).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('hides stale prices during conversion, reports a failed quote, and retries', async () => {
+    const wrapper = await mountView()
+    expect(getEnterpriseGroupRates).not.toHaveBeenCalled()
+    getEnterpriseGroupRates.mockRejectedValueOnce(new Error('offline'))
+    auth.isEnterprise = true
+    await flushPromises()
+    const badge = wrapper.findComponent(KeyGroupBadges)
+    expect(badge.props('ratesUnavailable')).toBe(true)
+    expect(wrapper.get('[role="alert"]').text()).toContain('enterpriseNav.pricingUnavailable')
+    getEnterpriseGroupRates.mockResolvedValue({ 7: 0.2 })
+    await wrapper.get('[role="alert"] button').trigger('click')
+    await flushPromises()
+    expect(badge.props('ratesUnavailable')).toBe(false)
+    expect(badge.props('enterpriseRates')).toEqual({ 7: 0.2 })
+    wrapper.unmount()
+  })
+
+  it('ignores a late enterprise price response after switching users', async () => {
+    auth.isEnterprise = true
+    let resolveOld!: (rates: Record<number, number>) => void
+    getEnterpriseGroupRates.mockReturnValueOnce(new Promise(resolve => { resolveOld = resolve }))
+    const wrapper = await mountView()
+    getEnterpriseGroupRates.mockResolvedValue({ 8: 0.4 })
+    auth.user.id = 2
+    await flushPromises()
+    resolveOld({ 7: 0.1 })
+    await flushPromises()
+    expect(wrapper.findComponent(KeyGroupBadges).props('enterpriseRates')).toEqual({ 8: 0.4 })
+    wrapper.unmount()
   })
 
   it('keeps model restrictions on their own edit tab and saves the selection for reopening', async () => {

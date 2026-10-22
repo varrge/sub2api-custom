@@ -250,6 +250,10 @@ func (s *PaymentService) PrepareRefund(ctx context.Context, oid int64, amt float
 		rr = fmt.Sprintf("refund order:%d", o.ID)
 	}
 	p := &RefundPlan{OrderID: oid, Order: o, RefundAmount: amt, GatewayAmount: ga, Reason: rr, Force: force, DeductBalance: deduct, DeductionType: payment.DeductionTypeNone}
+	if paymentIsUnfulfilledAccountChange(o) {
+		p.DeductBalance = false
+		return p, nil, nil
+	}
 	if o.OrderType == payment.OrderTypeMonthCard {
 		return p, nil, nil
 	}
@@ -313,7 +317,24 @@ func (s *PaymentService) invalidateRefundBalanceCache(ctx context.Context, userI
 }
 
 func (s *PaymentService) ExecuteRefund(ctx context.Context, p *RefundPlan) (*RefundResult, error) {
-	claim := s.entClient.PaymentOrder.Update().Where(paymentorder.IDEQ(p.OrderID), paymentorder.StatusIn(OrderStatusCompleted, OrderStatusRefundRequested, OrderStatusRefundFailed)).SetStatus(OrderStatusRefunding)
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := lockAccountType(ctx, tx.Client(), p.Order.UserID); err != nil {
+		return nil, err
+	}
+	if p.Order.OrderType == payment.OrderTypeMonthCard && !p.Force {
+		var credit float64
+		if err := enterpriseQueryOne(ctx, tx.Client(), `SELECT COALESCE(SUM(credited_usd),0) FROM enterprise_conversion_cards WHERE order_id=$1 AND refunded_at IS NULL`, []any{p.OrderID}, &credit); err != nil {
+			return nil, err
+		}
+		if credit > 0 {
+			return &RefundResult{Success: false, RequireForce: true, Warning: fmt.Sprintf("此月卡已折算为余额。退款完成后将冲回 $%.8f 已折算余额；余额不足会形成欠费。请确认后继续。", credit)}, nil
+		}
+	}
+	claim := tx.PaymentOrder.Update().Where(paymentorder.IDEQ(p.OrderID), paymentorder.StatusIn(OrderStatusCompleted, OrderStatusRefundRequested, OrderStatusRefundFailed)).SetStatus(OrderStatusRefunding)
 	if p.Order.OrderType == payment.OrderTypeMonthCard {
 		// Preserve enough information to query a provider after a process exit
 		// between the remote refund and its local acknowledgement.
@@ -325,6 +346,9 @@ func (s *PaymentService) ExecuteRefund(ctx context.Context, p *RefundPlan) (*Ref
 	}
 	if c == 0 {
 		return nil, infraerrors.Conflict("CONFLICT", "order status changed")
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
 	}
 	if p.DeductionType == payment.DeductionTypeBalance && p.BalanceToDeduct > 0 {
 		// Skip balance deduction on retry if previous attempt already deducted
@@ -483,7 +507,7 @@ func (s *PaymentService) QueryAndFinalizeRefund(ctx context.Context, oid int64) 
 	case !pendingDetail.DeductionRollbackOK:
 		plan.BalanceToDeduct = 0
 		plan.SubDaysToDeduct = 0
-	case o.OrderType == payment.OrderTypeSubscription:
+	case plan.DeductBalance && o.OrderType == payment.OrderTypeSubscription:
 		if early := s.prepDeduct(ctx, o, plan, true); early != nil {
 			return early, nil
 		}
@@ -550,7 +574,7 @@ func (s *PaymentService) refundFinalizePlan(o *dbent.PaymentOrder) *RefundPlan {
 	if reason == "" {
 		reason = fmt.Sprintf("refund order:%d", o.ID)
 	}
-	return &RefundPlan{
+	plan := &RefundPlan{
 		OrderID:       o.ID,
 		Order:         o,
 		RefundAmount:  refundAmount,
@@ -566,6 +590,12 @@ func (s *PaymentService) refundFinalizePlan(o *dbent.PaymentOrder) *RefundPlan {
 			return 0
 		}(),
 	}
+	if paymentIsUnfulfilledAccountChange(o) {
+		plan.DeductBalance = false
+		plan.DeductionType = payment.DeductionTypeNone
+		plan.BalanceToDeduct = 0
+	}
+	return plan
 }
 
 func (s *PaymentService) applyRefundFinalDeduction(ctx context.Context, p *RefundPlan) error {
@@ -681,7 +711,7 @@ func (s *PaymentService) returnHeldRefundDeduction(ctx context.Context, p *Refun
 		}
 	}
 	if p.DeductionType == payment.DeductionTypeSubscription && p.SubDaysToDeduct > 0 && p.SubscriptionID > 0 {
-		if _, err := s.subscriptionSvc.ExtendSubscription(ctx, p.SubscriptionID, p.SubDaysToDeduct); err != nil {
+		if _, err := s.subscriptionSvc.extendSubscription(ctx, p.SubscriptionID, p.SubDaysToDeduct); err != nil {
 			return fmt.Errorf("return held subscription deduction: %w", err)
 		}
 	}
@@ -896,7 +926,7 @@ func (s *PaymentService) RollbackRefund(ctx context.Context, p *RefundPlan, gErr
 		s.invalidateRefundBalanceCache(ctx, p.Order.UserID)
 	}
 	if p.DeductionType == payment.DeductionTypeSubscription && p.SubDaysToDeduct > 0 && p.SubscriptionID > 0 {
-		if _, err := s.subscriptionSvc.ExtendSubscription(ctx, p.SubscriptionID, p.SubDaysToDeduct); err != nil {
+		if _, err := s.subscriptionSvc.extendSubscription(ctx, p.SubscriptionID, p.SubDaysToDeduct); err != nil {
 			slog.Error("[CRITICAL] subscription rollback failed", "orderID", p.OrderID, "subID", p.SubscriptionID, "days", p.SubDaysToDeduct, "error", err)
 			s.writeAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED", "admin", map[string]any{"gatewayError": psErrMsg(gErr), "rollbackError": psErrMsg(err), "subDaysDeducted": p.SubDaysToDeduct})
 			return false

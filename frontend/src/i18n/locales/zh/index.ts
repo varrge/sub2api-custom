@@ -10,6 +10,11 @@ import supportTickets from './supportTickets'
 import modelKeyAccess from './modelKeyAccess'
 import admin from './admin'
 import misc from './misc'
+import enterpriseNav from './enterpriseNav'
+import enterpriseAdmin from './enterpriseAdmin'
+import enterprisePlaza from './enterprisePlaza'
+import enterpriseExport from './enterpriseExport'
+import enterprisePayment from './enterprisePayment'
 
 export default {
   ...activityLeaderboard,
@@ -24,4 +29,9 @@ export default {
   ...modelKeyAccess,
   admin,
   ...misc,
+  ...enterpriseNav,
+  ...enterpriseAdmin,
+  ...enterprisePlaza,
+  ...enterpriseExport,
+  ...enterprisePayment,
 }

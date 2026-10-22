@@ -140,8 +140,12 @@ func (s *Store) AdmitIncludingLegacy(ctx context.Context, userID, groupID int64,
 	}
 	defer func() { _ = tx.Rollback() }()
 	var balance decimal.Decimal
-	if err := tx.QueryRowContext(ctx, `SELECT balance FROM users WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, userID).Scan(&balance); err != nil {
+	var accountType string
+	if err := tx.QueryRowContext(ctx, `SELECT balance,account_type FROM users WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, userID).Scan(&balance, &accountType); err != nil {
 		return nil, err
+	}
+	if accountType == "enterprise" {
+		return nil, ErrNoEntitlement
 	}
 	if balance.IsNegative() {
 		return nil, ErrDebt

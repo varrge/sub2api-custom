@@ -100,6 +100,7 @@ func jwtAuth(
 		c.Set(string(ContextKeyUser), AuthSubject{
 			UserID:      user.ID,
 			Concurrency: user.Concurrency,
+			AccountType: user.EffectiveAccountType(),
 		})
 		c.Set(string(ContextKeyUserRole), user.Role)
 		c.Set(ContextKeyAuthEmail, user.Email)
@@ -108,6 +109,10 @@ func jwtAuth(
 			activityToucher.TouchLastActiveForUser(c.Request.Context(), user)
 		}
 
+		if user.IsEnterprise() && !EnterprisePanelPathAllowed(c.Request.URL.Path) {
+			AbortWithError(c, 403, "ENTERPRISE_FEATURE_FORBIDDEN", "企业账户不支持此功能")
+			return
+		}
 		c.Next()
 	}
 }

@@ -1,11 +1,15 @@
 <template>
   <AppLayout>
     <div class="mx-auto max-w-4xl space-y-6">
-      <div v-if="loading" class="flex items-center justify-center py-20">
+      <div v-if="loading && paymentPhase !== 'paying'" class="flex items-center justify-center py-20">
         <div class="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"></div>
       </div>
       <template v-else>
         <p v-if="errorMessage" class="rounded-xl bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950" role="alert">{{ errorMessage }} {{ errorHintMessage }}</p>
+        <div v-if="checkoutLoadFailed" class="card space-y-3 p-4" role="alert">
+          <p>{{ t('enterprisePayment.checkoutLoadFailed') }}</p>
+          <button type="button" class="btn btn-secondary" :disabled="loading" data-testid="retry-checkout" @click="loadCheckout(false)">{{ t('common.refresh') }}</button>
+        </div>
         <!-- Tab Switcher (hide during payment and subscription confirm) -->
         <div v-if="tabs.length > 1 && paymentPhase === 'select' && !selectedPlan && !selectedMonthCard" class="flex space-x-1 rounded-xl bg-gray-100 p-1 dark:bg-dark-800">
           <button v-for="tab in tabs" :key="tab.key"
@@ -33,7 +37,7 @@
           />
         </template>
         <!-- Tab content (select phase) -->
-        <template v-else>
+        <template v-else-if="checkoutReady">
           <div v-if="tabs.length === 0" class="card py-16 text-center">
             <p class="text-gray-500 dark:text-gray-400">{{ t('payment.billingUnavailable') }}</p>
           </div>
@@ -98,11 +102,15 @@
                   <span class="text-gray-500 dark:text-gray-400">{{ t('payment.rechargeBonus.amountLabelWithPercent', { percent: formatRechargeBonusNumber(bonusQuote.percent) }) }}</span>
                   <span class="font-medium text-red-600 dark:text-red-400">+${{ bonusQuote.bonus.toFixed(2) }}</span>
                 </div>
-                <div v-if="showCreditedBalance" class="flex justify-between" :class="{ 'border-t border-gray-200 pt-2 dark:border-dark-600': !showActualPay && !showBonusRow }" data-testid="recharge-credited-row">
+                <div v-if="isEnterprise" class="flex justify-between" :class="{ 'border-t border-gray-200 pt-2 dark:border-dark-600': !showActualPay }" data-testid="enterprise-recharge-multiplier">
+                  <span class="text-gray-500 dark:text-gray-400">{{ t('enterprisePayment.effectiveMultiplier') }}</span>
+                  <span class="text-gray-900 dark:text-white">×{{ balanceRechargeMultiplier.toFixed(2) }}</span>
+                </div>
+                <div v-if="showCreditedBalance" class="flex justify-between" :class="{ 'border-t border-gray-200 pt-2 dark:border-dark-600': !showActualPay && !showBonusRow && !isEnterprise }" data-testid="recharge-credited-row">
                   <span class="text-gray-500 dark:text-gray-400">{{ t('payment.creditedBalance') }}</span>
                   <span :class="bonusQuote.percent > 0 ? 'font-semibold text-gray-900 dark:text-white' : 'text-gray-900 dark:text-white'">${{ creditedAmount.toFixed(2) }}</span>
                 </div>
-                <p v-if="balanceRechargeMultiplier !== 1" class="border-t border-gray-200 pt-2 text-xs text-gray-500 dark:border-dark-600 dark:text-gray-400">
+                <p v-if="balanceRechargeMultiplier !== 1 || isEnterprise" class="border-t border-gray-200 pt-2 text-xs text-gray-500 dark:border-dark-600 dark:text-gray-400">
                   {{ t('payment.rechargeRatePreview', { currency: selectedCurrency, usd: balanceRechargeMultiplier.toFixed(2) }) }}
                 </p>
               </div>
@@ -114,10 +122,15 @@
               </span>
               <span v-else>{{ t('payment.createOrder') }} {{ formatSelectedPaymentAmount(totalAmount) }}</span>
             </button>
+            <div v-if="isEnterprise" class="text-center">
+              <router-link to="/orders" data-testid="enterprise-orders-entry" class="text-sm font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400">
+                {{ t('enterprisePayment.viewOrders') }}
+              </router-link>
+            </div>
             </template>
           </template>
           <!-- Group-buy Tab -->
-          <template v-else-if="activeTab === 'group-buy'">
+          <template v-else-if="activeTab === 'group-buy' && !isEnterprise">
             <template v-if="selectedMonthCard">
               <div class="gb-panel space-y-4 p-5 sm:p-6">
                 <h2 class="text-xl font-bold text-gray-900 dark:text-white">{{ t('groupBuy.confirm') }}</h2>
@@ -173,7 +186,7 @@
             <ProductCatalog v-else :group-id="purchaseQuery(route.query).groupId" @select="selectMonthCard" />
           </template>
           <!-- Official subscription Tab -->
-          <template v-else-if="activeTab === 'subscription'">
+          <template v-else-if="activeTab === 'subscription' && !isEnterprise">
             <template v-if="selectedPlan">
               <div class="card p-5">
                 <!-- Header: platform badge + plan name -->
@@ -417,6 +430,7 @@ const temporaryRateNow = useTemporaryRateNow()
 const userGroupRates = ref<Record<number, number>>({})
 
 const user = computed(() => authStore.user)
+const isEnterprise = computed(() => authStore.isEnterprise === true)
 const activeSubscriptions = computed(() => subscriptionStore.activeSubscriptions)
 
 function getDaysRemaining(expiresAt: string): number {
@@ -466,6 +480,10 @@ function temporaryRateLabel(group?: DisplayRateGroup | null): string {
 }
 
 const loading = ref(true)
+const checkoutReady = ref(false)
+const checkoutLoadFailed = ref(false)
+let checkoutGeneration = 0
+let checkoutMounted = false
 const submitting = ref(false)
 const errorMessage = ref('')
 const errorHintMessage = ref('')
@@ -495,8 +513,9 @@ onUnmounted(() => clearInterval(monthCardTimer))
 const monthCardMethods = computed<PaymentMethodOption[]>(() => enabledMethods.value.map(type => ({ type, display_name: visibleMethods.value[type]?.display_name, fee_rate: visibleMethods.value[type]?.fee_rate ?? 0, available: normalizePaymentCurrency(visibleMethods.value[type]?.currency) === 'CNY' && visibleMethods.value[type]?.available !== false && amountFitsMethod(monthCardTotal.value, type) })))
 const monthCardFee = computed(() => monthCardFeeCNY(monthCardAmount.value, feeRate.value))
 const monthCardTotal = computed(() => Math.round((monthCardAmount.value + monthCardFee.value) * 100) / 100)
-const canSubmitMonthCard = computed(() => monthCardRules.canPay.value && !couponBusy.value && !!selectedMonthCard.value && monthCardMethods.value.some(method => method.type === selectedMethod.value && method.available) && (!selectedMonthCard.value.team || canJoin(selectedMonthCard.value.team, monthCardNow.value)))
+const canSubmitMonthCard = computed(() => checkoutReady.value && !isEnterprise.value && monthCardRules.canPay.value && !couponBusy.value && !!selectedMonthCard.value && monthCardMethods.value.some(method => method.type === selectedMethod.value && method.available) && (!selectedMonthCard.value.team || canJoin(selectedMonthCard.value.team, monthCardNow.value)))
 function selectMonthCard(selection: MonthCardSelection) {
+  if (isEnterprise.value) return
   selectedPlan.value = null
   selectedMonthCard.value = selection
   activeTab.value = 'group-buy'
@@ -507,14 +526,17 @@ async function confirmMonthCard() {
   if (!canSubmitMonthCard.value || !selectedMonthCard.value || submitting.value) return
   await createOrder(monthCardAmount.value, 'month_card')
 }
-async function loadMonthCardQuery() {
+async function loadMonthCardQuery(generation = checkoutGeneration) {
+  if (isEnterprise.value) return
   const query = purchaseQuery(route.query)
   if (query.groupBuy) activeTab.value = 'group-buy'
   if (query.mode === 'join' && query.teamCode) {
     const team = await groupBuyAPI.team(query.teamCode)
+    if (generation !== checkoutGeneration) return
     selectMonthCard({ product: team.product, mode: 'join', team })
   } else if ((query.mode === 'solo' || query.mode === 'create') && query.productId) {
     const product = (await groupBuyAPI.products()).find(item => item.id === query.productId)
+    if (generation !== checkoutGeneration) return
     if (!product) throw new Error(t('groupBuy.noProducts'))
     selectMonthCard({ product, mode: query.mode })
   }
@@ -678,6 +700,7 @@ function buildWechatOAuthAuthorizeUrl(
 }
 
 function refreshPurchasedEntitlements(orderType: OrderType | '') {
+  if (isEnterprise.value) return
   if (orderType === 'month_card') {
     groupBuyStore.fetchMonthCards(true).catch(() => {})
   } else if (orderType === 'subscription' && subscriptionEnabled.value) {
@@ -706,13 +729,14 @@ function onPaymentSettled() {
 }
 
 // All checkout data from single API call
-const checkout = ref<CheckoutInfoResponse>({
+const emptyCheckout = (): CheckoutInfoResponse => ({
   methods: {}, global_min: 0, global_max: 0,
   plans: [], balance_disabled: false, balance_recharge_multiplier: 1, subscription_usd_to_cny_rate: 0, recharge_fee_rate: 0, help_text: '', help_image_url: '', stripe_publishable_key: '',
   recharge_bonus_tiers: [], recharge_bonus_mode: 'bonus', recharge_bonus_notice: '',
 })
+const checkout = ref<CheckoutInfoResponse>(emptyCheckout())
 
-const subscriptionEnabled = computed(() => resolveFeatureFlag(appStore.cachedPublicSettings, FeatureFlags.subscription))
+const subscriptionEnabled = computed(() => !isEnterprise.value && resolveFeatureFlag(appStore.cachedPublicSettings, FeatureFlags.subscription))
 
 const renderedHelpText = computed(() => DOMPurify.sanitize(
   marked.parse(checkout.value.help_text || '', { async: false, gfm: true, breaks: false }),
@@ -720,6 +744,7 @@ const renderedHelpText = computed(() => DOMPurify.sanitize(
 
 // 充值赠送活动文案：后台 Markdown 配置，空字符串时金额卡顶部不渲染
 const renderedBonusNotice = computed(() => {
+  if (isEnterprise.value) return ''
   const raw = (checkout.value.recharge_bonus_notice || '').trim()
   if (!raw) return ''
   return DOMPurify.sanitize(marked.parse(raw, { async: false, gfm: true, breaks: true }))
@@ -728,6 +753,7 @@ const renderedBonusNotice = computed(() => {
 const tabs = computed(() => {
   const result: { key: PurchaseTab; label: string }[] = []
   if (!checkout.value.balance_disabled) result.push({ key: 'recharge', label: t('payment.tabTopUp') })
+  if (isEnterprise.value) return result
   if (subscriptionEnabled.value) result.push({ key: 'subscription', label: t('payment.tabSubscribe') })
   result.push({ key: 'group-buy', label: t('groupBuy.tab') })
   return result
@@ -742,6 +768,7 @@ watch(tabs, (available) => {
     selectedPlan.value = null
     showRenewalModal.value = false
   }
+  if (isEnterprise.value) selectedMonthCard.value = null
 })
 
 const visibleMethods = computed(() => getVisibleMethods(checkout.value.methods))
@@ -756,7 +783,7 @@ const subscriptionUsdToCnyRate = computed(() => {
   const rate = checkout.value.subscription_usd_to_cny_rate
   return Number.isFinite(rate) && rate > 0 ? rate : 0
 })
-const rechargeBonusTiers = computed(() => normalizeRechargeBonusTiers(checkout.value.recharge_bonus_tiers))
+const rechargeBonusTiers = computed(() => isEnterprise.value ? [] : normalizeRechargeBonusTiers(checkout.value.recharge_bonus_tiers))
 const rechargeBonusMode = computed(() => normalizeRechargeBonusMode(checkout.value.recharge_bonus_mode))
 
 // Adaptive grid: center single card, 2-col for 2 plans, 3-col for 3+
@@ -850,7 +877,7 @@ const payBaseAmount = computed(() => bonusQuote.value.payBase)
 const discountAmount = computed(() => roundPaymentAmount(validAmount.value - payBaseAmount.value, selectedCurrency.value))
 const creditedAmount = computed(() => bonusQuote.value.credited)
 const showBonusRow = computed(() => bonusQuote.value.mode !== 'discount' && bonusQuote.value.bonus > 0)
-const showCreditedBalance = computed(() => balanceRechargeMultiplier.value !== 1 || bonusQuote.value.percent > 0)
+const showCreditedBalance = computed(() => isEnterprise.value || balanceRechargeMultiplier.value !== 1 || bonusQuote.value.percent > 0)
 
 const methodOptions = computed<PaymentMethodOption[]>(() =>
   enabledMethods.value.map((type) => {
@@ -893,7 +920,7 @@ const amountError = computed(() => {
 })
 
 const canSubmit = computed(() =>
-  validAmount.value > 0
+  checkoutReady.value && validAmount.value > 0
     && amountFitsMethod(payBaseAmount.value, selectedMethod.value)
     && selectedLimit.value?.available !== false
 )
@@ -936,7 +963,7 @@ const subMethodOptions = computed<PaymentMethodOption[]>(() => {
 })
 
 const canSubmitSubscription = computed(() =>
-  selectedPlan.value !== null
+  checkoutReady.value && !isEnterprise.value && selectedPlan.value !== null
     && amountFitsMethod(subTotalAmount.value, selectedMethod.value)
     && selectedLimit.value?.available !== false
 )
@@ -1014,6 +1041,8 @@ async function confirmSubscribe() {
 }
 
 async function createOrder(orderAmount: number, orderType: OrderType, planId?: number, options: CreateOrderOptions = {}) {
+  if (!checkoutReady.value || (isEnterprise.value && orderType !== 'balance')) return
+  const orderUserId = authStore.user?.id
   submitting.value = true
   errorMessage.value = ''
   errorHintMessage.value = ''
@@ -1048,6 +1077,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
 
     fallbackRequest = { ...payload }
     const result = await paymentStore.createOrder(payload) as CreateOrderResult & { resume_token?: string }
+    if (orderUserId !== authStore.user?.id) return
     const openWindow = (url: string) => {
       const win = window.open(url, 'paymentPopup', getPaymentPopupFeatures())
       if (!win || win.closed) {
@@ -1175,6 +1205,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
       openWindow(decision.paymentState.payUrl)
     }
   } catch (err: unknown) {
+    if (orderUserId !== authStore.user?.id) return
     const apiErr = err as Record<string, unknown>
     if (orderType === 'month_card' && (apiErr.reason === 'MONTH_CARD_RULES_CHANGED' || apiErr.reason === 'MONTH_CARD_RULES_REQUIRED')) {
       await monthCardRules.load()
@@ -1372,14 +1403,31 @@ async function resumeWechatPaymentFromQuery() {
   }
 }
 
-onMounted(async () => {
+async function loadCheckout(initial: boolean) {
+  const generation = ++checkoutGeneration
+  checkoutReady.value = false
+  checkoutLoadFailed.value = false
+  loading.value = true
+  checkout.value = emptyCheckout()
+  userGroupRates.value = {}
+  amount.value = null
+  selectedMethod.value = ''
+  selectedPlan.value = null
+  selectedMonthCard.value = null
+  appliedCoupon.value = null
+  showRenewalModal.value = false
+  renewGroupId.value = null
+  errorMessage.value = ''
+  errorHintMessage.value = ''
   try {
     const [res, rates] = await Promise.all([
       paymentAPI.getCheckoutInfo(),
       userGroupsAPI.getUserGroupRates().catch(() => ({}))
     ])
+    if (generation !== checkoutGeneration) return
     checkout.value = res.data
     userGroupRates.value = rates
+    checkoutReady.value = true
     if (enabledMethods.value.length) {
       const order: readonly string[] = METHOD_ORDER
       const sorted = [...enabledMethods.value].sort((a, b) => {
@@ -1389,6 +1437,7 @@ onMounted(async () => {
       })
       selectedMethod.value = sorted[0]
     }
+    if (!initial) return
     if (typeof window !== 'undefined') {
       if (hasWechatResumeQuery(route.query)) {
         removeRecoverySnapshot()
@@ -1420,7 +1469,9 @@ onMounted(async () => {
       // The server's opaque token owns an existing checkout, including products since delisted.
       if (typeof route.query.wechat_resume_token !== 'string' || !route.query.wechat_resume_token) throw error
     }
+    if (generation !== checkoutGeneration) return
     await resumeWechatPaymentFromQuery()
+    if (generation !== checkoutGeneration) return
     // Old month-card links are identified by their mode/order type, not the subscription tab.
     if (!isGroupBuyFlow && route.query.tab === 'subscription' && subscriptionEnabled.value) {
       activeTab.value = 'subscription'
@@ -1434,11 +1485,33 @@ onMounted(async () => {
         }
       }
     }
-  } catch (err: unknown) { appStore.showError(extractI18nErrorMessage(err, t, 'payment.errors', t('common.error'))) }
-  finally { loading.value = false }
-  // Fetch active subscriptions (uses cache, non-blocking)
-  if (subscriptionEnabled.value) {
-    subscriptionStore.fetchActiveSubscriptions().catch(() => {})
+  } catch (err: unknown) {
+    if (generation !== checkoutGeneration) return
+    checkoutLoadFailed.value = !checkoutReady.value
+    appStore.showError(extractI18nErrorMessage(err, t, 'payment.errors', t('common.error')))
+  } finally {
+    if (generation === checkoutGeneration) {
+      loading.value = false
+      if (checkoutReady.value && subscriptionEnabled.value) {
+        subscriptionStore.fetchActiveSubscriptions().catch(() => {})
+      }
+    }
   }
+}
+
+watch([() => authStore.user?.id, () => isEnterprise.value], ([userId], [previousUserId]) => {
+  if (!checkoutMounted) return
+  // Identity changes invalidate draft quotes; an existing order keeps its captured price.
+  if (userId !== previousUserId) resetPayment()
+  void loadCheckout(false)
+}, { flush: 'sync' })
+
+onMounted(() => {
+  checkoutMounted = true
+  void loadCheckout(true)
+})
+onUnmounted(() => {
+  checkoutMounted = false
+  checkoutGeneration++
 })
 </script>

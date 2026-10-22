@@ -228,6 +228,22 @@ func (s *SubscriptionService) AssignOrExtendSubscription(ctx context.Context, in
 }
 
 func (s *SubscriptionService) assignOrExtendSubscription(ctx context.Context, input *AssignSubscriptionInput, deferCacheInvalidation bool) (*UserSubscription, bool, error) {
+	if s.entClient != nil && dbent.TxFromContext(ctx) == nil {
+		var sub *UserSubscription
+		var extended bool
+		err := s.withSubscriptionUpdateTx(ctx, func(txctx context.Context) error {
+			var err error
+			sub, extended, err = s.assignOrExtendSubscription(txctx, input, true)
+			return err
+		})
+		if err == nil {
+			s.maybeInvalidateAssignmentCaches(input.UserID, input.GroupID, deferCacheInvalidation)
+		}
+		return sub, extended, err
+	}
+	if err := lockPersonalAccount(ctx, s.entClient, input.UserID); err != nil {
+		return nil, false, err
+	}
 	// 检查分组是否存在且为订阅类型
 	group, err := s.groupRepo.GetByID(ctx, input.GroupID)
 	if err != nil {
@@ -513,6 +529,22 @@ func (s *SubscriptionService) BulkAssignSubscription(ctx context.Context, input 
 }
 
 func (s *SubscriptionService) assignSubscriptionWithReuse(ctx context.Context, input *AssignSubscriptionInput) (*UserSubscription, bool, error) {
+	if s.entClient != nil && dbent.TxFromContext(ctx) == nil {
+		var sub *UserSubscription
+		var reused bool
+		err := s.withSubscriptionUpdateTx(ctx, func(txctx context.Context) error {
+			var err error
+			sub, reused, err = s.assignSubscriptionWithReuse(txctx, input)
+			return err
+		})
+		if err == nil {
+			s.maybeInvalidateAssignmentCaches(input.UserID, input.GroupID, false)
+		}
+		return sub, reused, err
+	}
+	if err := lockPersonalAccount(ctx, s.entClient, input.UserID); err != nil {
+		return nil, false, err
+	}
 	// 检查分组是否存在且为订阅类型
 	group, err := s.groupRepo.GetByID(ctx, input.GroupID)
 	if err != nil {
@@ -626,8 +658,26 @@ func (s *SubscriptionService) RevokeSubscription(ctx context.Context, subscripti
 
 // RestoreSubscription 恢复已撤销订阅
 func (s *SubscriptionService) RestoreSubscription(ctx context.Context, subscriptionID int64) (*UserSubscription, error) {
+	if s.entClient != nil && dbent.TxFromContext(ctx) == nil {
+		var restored *UserSubscription
+		err := s.withSubscriptionUpdateTx(ctx, func(txctx context.Context) error {
+			var err error
+			restored, err = s.RestoreSubscription(txctx, subscriptionID)
+			return err
+		})
+		if err != nil {
+			return nil, err
+		}
+		if err := s.invalidateSubscriptionCaches(restored.UserID, restored.GroupID); err != nil {
+			return nil, err
+		}
+		return restored, nil
+	}
 	sub, err := s.userSubRepo.GetByIDIncludeDeleted(ctx, subscriptionID)
 	if err != nil {
+		return nil, err
+	}
+	if err := lockPersonalAccount(ctx, s.entClient, sub.UserID); err != nil {
 		return nil, err
 	}
 	if sub.DeletedAt == nil {
@@ -661,6 +711,33 @@ func (s *SubscriptionService) RestoreSubscription(ctx context.Context, subscript
 
 // ExtendSubscription 调整订阅时长（正数延长，负数缩短）
 func (s *SubscriptionService) ExtendSubscription(ctx context.Context, subscriptionID int64, days int) (*UserSubscription, error) {
+	if days <= 0 {
+		return s.extendSubscription(ctx, subscriptionID, days)
+	}
+	var result *UserSubscription
+	err := s.withSubscriptionUpdateTx(ctx, func(txCtx context.Context) error {
+		sub, err := s.userSubRepo.GetByID(txCtx, subscriptionID)
+		if err != nil {
+			return ErrSubscriptionNotFound
+		}
+		if err := lockPersonalAccount(txCtx, s.entClient, sub.UserID); err != nil {
+			return err
+		}
+		result, err = s.extendSubscription(txCtx, subscriptionID, days)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := s.invalidateSubscriptionCaches(result.UserID, result.GroupID); err != nil {
+		// The extension already committed; an error response could extend twice on retry.
+		log.Printf("subscription extension committed but cache invalidation failed: subscription_id=%d error=%v", subscriptionID, err)
+	}
+	return result, nil
+}
+
+// Refund rollback restores already purchased days without granting a new benefit.
+func (s *SubscriptionService) extendSubscription(ctx context.Context, subscriptionID int64, days int) (*UserSubscription, error) {
 	err := s.withSubscriptionUpdateTx(ctx, func(txCtx context.Context) error {
 		// Lock the row before reading its expiry. Without this lock, concurrent
 		// adjustments can both calculate from the same stale expiry and lose one
@@ -904,11 +981,30 @@ func (s *SubscriptionService) checkAndActivateWindowAt(ctx context.Context, sub 
 
 // AdminResetQuota manually resets the daily, weekly, and/or monthly usage windows.
 func (s *SubscriptionService) AdminResetQuota(ctx context.Context, subscriptionID int64, resetDaily, resetWeekly, resetMonthly bool) (*UserSubscription, error) {
+	if s.entClient != nil && dbent.TxFromContext(ctx) == nil {
+		var result *UserSubscription
+		err := s.withSubscriptionUpdateTx(ctx, func(txCtx context.Context) error {
+			var err error
+			result, err = s.AdminResetQuota(txCtx, subscriptionID, resetDaily, resetWeekly, resetMonthly)
+			return err
+		})
+		if err != nil {
+			return nil, err
+		}
+		s.InvalidateSubCacheSync(result.UserID, result.GroupID)
+		if s.billingCacheService != nil {
+			_ = s.billingCacheService.InvalidateSubscription(ctx, result.UserID, result.GroupID)
+		}
+		return result, nil
+	}
 	if !resetDaily && !resetWeekly && !resetMonthly {
 		return nil, ErrInvalidInput
 	}
 	sub, err := s.userSubRepo.GetByID(ctx, subscriptionID)
 	if err != nil {
+		return nil, err
+	}
+	if err := lockPersonalAccount(ctx, s.entClient, sub.UserID); err != nil {
 		return nil, err
 	}
 	now := s.now()

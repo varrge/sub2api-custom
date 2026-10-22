@@ -61,6 +61,15 @@ func (s *adminServiceImpl) ListUsers(ctx context.Context, page, pageSize int, fi
 			s.loadUserGroupRatesOneByOne(ctx, users)
 		}
 	}
+	if repo, ok := s.userGroupRateRepo.(EnterpriseRateRepository); ok {
+		for i := range users {
+			rates, err := repo.GetEnterpriseRates(ctx, users[i].ID)
+			if err != nil {
+				return nil, 0, err
+			}
+			users[i].EnterpriseGroupRates = rates
+		}
+	}
 	return users, result.Total, nil
 }
 
@@ -98,6 +107,12 @@ func (s *adminServiceImpl) GetUser(ctx context.Context, id int64) (*User, error)
 			user.GroupRates = rates
 		}
 	}
+	if repo, ok := s.userGroupRateRepo.(EnterpriseRateRepository); ok {
+		user.EnterpriseGroupRates, err = repo.GetEnterpriseRates(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return user, nil
 }
 
@@ -131,11 +146,15 @@ func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInpu
 		return nil, err
 	}
 
+	if err := validateAccountType(input.AccountType, role); err != nil {
+		return nil, err
+	}
 	user := &User{
 		Email:         input.Email,
 		Username:      input.Username,
 		Notes:         input.Notes,
 		Role:          role,
+		AccountType:   input.AccountType,
 		Balance:       balance,
 		Concurrency:   input.Concurrency,
 		RPMLimit:      input.RPMLimit,
@@ -155,7 +174,9 @@ func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInpu
 		logger.LegacyPrintf("service.admin", "audit: admin user created actor_admin_id=%d target_user_id=%d",
 			input.ActorAdminID, user.ID)
 	}
-	s.assignDefaultSubscriptions(ctx, user.ID)
+	if !user.IsEnterprise() {
+		s.assignDefaultSubscriptions(ctx, user.ID)
+	}
 	return user, nil
 }
 
@@ -195,6 +216,20 @@ func (s *adminServiceImpl) assignDefaultSubscriptions(ctx context.Context, userI
 }
 
 func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *UpdateUserInput) (*User, error) {
+	if err := validateEnterpriseRates(input.EnterpriseGroupRates); err != nil {
+		return nil, err
+	}
+	originalCtx := ctx
+	var enterpriseTx *dbent.Tx
+	if input.EnterpriseGroupRates != nil && s.entClient != nil && dbent.TxFromContext(ctx) == nil {
+		var err error
+		enterpriseTx, err = s.entClient.Tx(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = enterpriseTx.Rollback() }()
+		ctx = dbent.NewTxContext(ctx, enterpriseTx)
+	}
 	// 校验用户专属分组倍率：必须 > 0（nil 合法，表示清除专属倍率）
 	if input.GroupRates != nil {
 		for groupID, rate := range input.GroupRates {
@@ -287,6 +322,9 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 		fields.RestrictPublicGroups = true
 	}
 
+	if err := validateAccountType(user.AccountType, user.Role); err != nil {
+		return nil, err
+	}
 	if err := s.userRepo.Update(ctx, user, fields); err != nil {
 		return nil, err
 	}
@@ -300,14 +338,35 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	// 同步用户专属分组倍率
 	if input.GroupRates != nil && s.userGroupRateRepo != nil {
 		if err := s.userGroupRateRepo.SyncUserGroupRates(ctx, user.ID, input.GroupRates); err != nil {
-			logger.LegacyPrintf("service.admin", "failed to sync user group rates: user_id=%d err=%v", user.ID, err)
+			return nil, err
 		}
 	}
 
+	if input.EnterpriseGroupRates != nil {
+		repo, ok := s.userGroupRateRepo.(EnterpriseRateRepository)
+		if !ok {
+			return nil, fmt.Errorf("enterprise rate repository unavailable")
+		}
+		if err := repo.SyncEnterpriseRates(ctx, user.ID, input.EnterpriseGroupRates); err != nil {
+			return nil, err
+		}
+	}
+	if repo, ok := s.userGroupRateRepo.(EnterpriseRateRepository); ok {
+		user.EnterpriseGroupRates, err = repo.GetEnterpriseRates(ctx, user.ID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if enterpriseTx != nil {
+		if err := enterpriseTx.Commit(); err != nil {
+			return nil, err
+		}
+		ctx = originalCtx
+	}
 	if s.authCacheInvalidator != nil {
 		// RPMLimit 直接参与 billing_cache_service.checkRPM 的三级级联，
 		// allowed_groups 参与 API Key 专属分组授权判断；不失效缓存会让修改在一个 L2 TTL 内失去效果。
-		if user.Concurrency != oldConcurrency || user.Status != oldStatus || user.Role != oldRole || user.RPMLimit != oldRPMLimit || user.RestrictPublicGroups != oldRestrictPublicGroups || !sameInt64Set(user.AllowedGroups, oldAllowedGroups) {
+		if input.EnterpriseGroupRates != nil || user.Concurrency != oldConcurrency || user.Status != oldStatus || user.Role != oldRole || user.RPMLimit != oldRPMLimit || user.RestrictPublicGroups != oldRestrictPublicGroups || !sameInt64Set(user.AllowedGroups, oldAllowedGroups) {
 			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, user.ID)
 		}
 	}

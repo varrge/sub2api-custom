@@ -189,7 +189,7 @@ func (s *Store) Fulfill(ctx context.Context, orderID, userID int64, paidAt time.
 		if err != nil {
 			return nil, err
 		}
-		_, err = tx.ExecContext(ctx, `UPDATE month_card_cards SET total_quota_usd=GREATEST(total_quota_usd,$2),updated_at=NOW() WHERE team_id=$1 AND status<>'revoked' AND NOT total_quota_manual`, team.ID, quota.StringFixed(8))
+		_, err = tx.ExecContext(ctx, `UPDATE month_card_cards SET total_quota_usd=GREATEST(total_quota_usd,$2),updated_at=NOW() WHERE team_id=$1 AND status NOT IN ('revoked','converted') AND NOT total_quota_manual`, team.ID, quota.StringFixed(8))
 		if err != nil {
 			return nil, err
 		}
@@ -242,7 +242,12 @@ func (s *Store) RevokeOrder(ctx context.Context, orderID int64) error {
 			return err
 		}
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE month_card_cards SET status='revoked',retain_team_seat=FALSE,revoked_at=COALESCE(revoked_at,$2),updated_at=$2,
+	if _, err := tx.ExecContext(ctx, `WITH reversed AS (
+		UPDATE enterprise_conversion_cards SET refunded_at=NOW() WHERE card_id=$2 AND refunded_at IS NULL RETURNING credited_usd
+	) UPDATE users SET balance=balance-(SELECT COALESCE(SUM(credited_usd),0) FROM reversed),updated_at=NOW() WHERE id=$1`, userID, id); err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `UPDATE month_card_cards SET status=CASE WHEN status='converted' THEN status ELSE 'revoked' END,retain_team_seat=FALSE,revoked_at=COALESCE(revoked_at,$2),updated_at=$2,
 		paused_us=paused_us+CASE WHEN frozen_at IS NULL THEN 0 ELSE GREATEST(0,EXTRACT(EPOCH FROM($2::timestamptz-frozen_at))*1000000)::bigint END,
 		frozen_at=NULL WHERE id=$1 AND (status<>'revoked' OR retain_team_seat)`, id, s.now().UTC().Truncate(time.Microsecond))
 	if err != nil {
@@ -254,5 +259,13 @@ func (s *Store) RevokeOrder(ctx context.Context, orderID int64) error {
 			return err
 		}
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if s.balanceInvalidator != nil {
+		invalidateCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		s.balanceInvalidator(invalidateCtx, userID)
+	}
+	return nil
 }

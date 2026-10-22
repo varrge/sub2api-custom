@@ -34,6 +34,7 @@ func mustCreateUser(t *testing.T, client *dbent.Client, u *service.User) *servic
 	}
 
 	create := client.User.Create().
+		SetAccountType(u.EffectiveAccountType()).
 		SetEmail(u.Email).
 		SetPasswordHash(u.PasswordHash).
 		SetRole(u.Role).

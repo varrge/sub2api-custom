@@ -65,10 +65,11 @@ var (
 
 // UserListFilters contains all filter options for listing users
 type UserListFilters struct {
-	Status    string // User status filter
-	Role      string // User role filter
-	Search    string // Search in email, username
-	GroupName string // Filter by allowed group name (fuzzy match)
+	AccountType string
+	Status      string // User status filter
+	Role        string // User role filter
+	Search      string // Search in email, username
+	GroupName   string // Filter by allowed group name (fuzzy match)
 	// APIKeyGroupID filters users who own at least one non-soft-deleted API key
 	// bound to this group (api_keys.group_id). 0 = no filter. Covers all three
 	// group types since it matches the key's group directly, not allowed_groups.
@@ -95,6 +96,7 @@ type UserListFilters struct {
 // 注意这里没有 balance / total_recharged：余额只能经由 AdjustBalance、
 // SetBalance、UpdateBalance、DeductBalance 等原子接口修改，Update 永远不碰它们。
 type UserUpdateFields struct {
+	AccountType  bool
 	Email        bool
 	Username     bool
 	Notes        bool

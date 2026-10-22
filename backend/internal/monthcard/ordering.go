@@ -103,7 +103,7 @@ func (s *Store) SetOrder(ctx context.Context, userID, groupID int64, refs []Ref)
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	if err = lockUser(ctx, tx, userID); err != nil {
+	if err = lockPersonalUser(ctx, tx, userID); err != nil {
 		return err
 	}
 	orders, err := getOrders(ctx, tx, userID, groupID, s.now())

@@ -10,13 +10,13 @@
           :name="group.name"
           :platform="group.platform as GroupPlatform"
           :subscription-type="(group.subscription_type || 'standard') as SubscriptionType"
-          :rate-multiplier="group.rate_multiplier"
-          :user-rate-multiplier="group.user_rate_multiplier ?? null"
-          :temporary-rate-enabled="group.temporary_rate_enabled"
+          :rate-multiplier="displayBaseRate"
+          :user-rate-multiplier="enterpriseMode ? null : (group.user_rate_multiplier ?? null)"
+          :temporary-rate-enabled="enterpriseMode ? false : group.temporary_rate_enabled"
           :temporary-rate-multiplier="group.temporary_rate_multiplier"
           :temporary-rate-starts-at="group.temporary_rate_starts_at"
           :temporary-rate-ends-at="group.temporary_rate_ends_at"
-          :peak-rate-enabled="group.peak_rate_enabled"
+          :peak-rate-enabled="enterpriseMode ? false : group.peak_rate_enabled"
           :peak-start="group.peak_start"
           :peak-end="group.peak_end"
           :peak-rate-multiplier="group.peak_rate_multiplier"
@@ -61,11 +61,11 @@
         v-if="group.models.length > 0"
         :models="group.models"
         :platform="group.platform"
-        :rate-multiplier="currentGroupRate"
-        :user-rate-multiplier="group.user_rate_multiplier ?? null"
-        :image-rate-independent="group.image_rate_independent"
+        :rate-multiplier="tableRateMultiplier"
+        :user-rate-multiplier="enterpriseMode ? null : (group.user_rate_multiplier ?? null)"
+        :image-rate-independent="enterpriseMode ? false : group.image_rate_independent"
         :image-rate-multiplier="group.image_rate_multiplier"
-        :video-rate-independent="group.video_rate_independent"
+        :video-rate-independent="enterpriseMode ? false : group.video_rate_independent"
         :video-rate-multiplier="group.video_rate_multiplier"
         :peak-window="peakWindow"
         :peak-rate-multiplier="group.peak_rate_multiplier"
@@ -92,6 +92,7 @@ import { useAppStore } from '@/stores/app'
 
 const props = defineProps<{
   group: ModelPlazaGroup
+  enterprise?: boolean
 }>()
 
 const { t } = useI18n()
@@ -99,8 +100,19 @@ const appStore = useAppStore()
 const temporaryRateNow = useTemporaryRateNow()
 const currentGroupRate = computed(() => effectiveGroupRate(props.group, null, temporaryRateNow.value))
 
+const enterpriseMode = computed(
+  () => props.enterprise === true && props.group.enterprise_rate_multiplier != null
+)
+const displayBaseRate = computed(() =>
+  enterpriseMode.value ? props.group.enterprise_rate_multiplier! : props.group.rate_multiplier
+)
+const tableRateMultiplier = computed(() =>
+  enterpriseMode.value ? props.group.enterprise_rate_multiplier! : currentGroupRate.value
+)
+
 /** 高峰窗口描述(含倍率与服务器时区标注);分组未启用高峰为空串。 */
 const peakWindow = computed(() => {
+  if (enterpriseMode.value) return ''
   if (!hasPeakRate(props.group)) return ''
   return formatPeakRateWindow(
     props.group,

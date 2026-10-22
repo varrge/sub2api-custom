@@ -72,6 +72,28 @@
         </div>
       </template>
 
+      <!-- Enterprise View: payment and tickets follow their feature switches -->
+      <template v-else-if="authStore.isEnterprise">
+        <div class="sidebar-section" data-testid="enterprise-nav-section">
+          <router-link
+            v-for="item in enterpriseNavItems"
+            :key="item.path"
+            :to="item.path"
+            class="sidebar-link mb-1"
+            :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
+            :title="sidebarCollapsed ? item.label : undefined"
+            :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined"
+            @click="handleMenuItemClick(item.path)"
+          >
+            <component :is="item.icon" class="h-5 w-5 flex-shrink-0" />
+            <span class="sidebar-label flex min-w-0 items-center gap-2" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">
+              <span class="min-w-0 truncate">{{ item.label }}</span>
+              <span v-if="item.badge?.()" class="ml-auto rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">{{ item.badge() }}</span>
+            </span>
+          </router-link>
+        </div>
+      </template>
+
       <!-- Regular User View -->
       <template v-else-if="!appStore.backendModeEnabled">
         <div class="sidebar-section">
@@ -195,6 +217,7 @@
             <div class="truncate text-xs text-gray-500 dark:text-dark-400">
               {{ t('admin.users.roles.' + user.role) }}
             </div>
+            <PrivilegeTitleBadge class="mt-1" />
           </div>
         </button>
       </div>
@@ -217,6 +240,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore, useSupportTicketStore } from '@/stores'
 import VersionBadge from '@/components/common/VersionBadge.vue'
+import PrivilegeTitleBadge from '@/components/common/PrivilegeTitleBadge.vue'
 import Icon from '@/components/icons/Icon.vue'
 import SidebarNavItem, { type SidebarNavEntry } from './SidebarNavItem.vue'
 import { applySidebarGroups } from '@/features/sidebar/sidebarGroups'
@@ -284,7 +308,11 @@ const accountMenuRef = ref<HTMLElement | null>(null)
 const accountTriggerRef = ref<HTMLButtonElement | null>(null)
 const accountMenuOpen = ref(false)
 
-const homePath = computed(() => (isAdmin.value ? '/admin/dashboard' : '/dashboard'))
+const homePath = computed(() => {
+  if (isAdmin.value) return '/admin/dashboard'
+  // Enterprise workspace lands on Usage; /dashboard is not part of its six entries.
+  return authStore.isEnterprise ? '/usage' : '/dashboard'
+})
 const contactInfo = computed(() => appStore.contactInfo)
 const avatarUrl = computed(() => user.value?.avatar_url?.trim() || '')
 const displayName = computed(() => user.value?.username || user.value?.email?.split('@')[0] || '')
@@ -742,6 +770,17 @@ function finalizeNav(items: NavItem[]): NavItem[] {
 // User navigation items (for regular users)
 const userNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(true)))
 
+// Enterprise navigation ignores run mode; payment and tickets follow site settings.
+// Orders and model plaza are reached from purchase and channel status respectively.
+const enterpriseNavItems = computed((): NavItem[] => applyFeatureFlags([
+  { path: '/usage', label: t('enterpriseNav.usage'), icon: ChartIcon },
+  { path: '/monitor', label: t('enterpriseNav.channelStatus'), icon: SignalIcon },
+  { path: '/keys', label: t('enterpriseNav.apiKeys'), icon: KeyIcon },
+  { path: '/purchase', label: t('enterpriseNav.recharge'), icon: RechargeSubscriptionIcon, featureFlag: flagPayment },
+  { path: '/profile', label: t('enterpriseNav.profile'), icon: UserIcon },
+  { path: '/tickets', label: t('enterpriseNav.tickets'), icon: TicketIcon, featureFlag: flagSupportTicket, badge: () => supportTicketStore.userUnreadCount },
+]))
+
 // Personal navigation items (for admin's "My Account" section, without Dashboard).
 // Admins access 可用渠道 from this section just like regular users — there is no
 // separate admin entry, since the page is purely a user-facing view.
@@ -1031,7 +1070,11 @@ onMounted(() => {
   appStore.setSidebarCollapsed(false)
   document.addEventListener('click', handleAccountMenuClickOutside)
   document.addEventListener('keydown', handleAccountMenuKeydown)
-  void refreshBatchImageAccess()
+  // Batch image access only feeds regular/admin nav flags; the fixed enterprise
+  // nav never uses it, so skip the request for pure enterprise accounts.
+  if (!(authStore.isEnterprise && !isAdmin.value)) {
+    void refreshBatchImageAccess()
+  }
   if (isAdmin.value) {
     adminSettingsStore.fetch()
   }

@@ -2607,7 +2607,7 @@ func (h *GatewayHandler) submitUsageRecordTask(parent context.Context, task serv
 		return
 	}
 	task, abandon := wrapUsageRecordTaskContext(parent, task)
-	if h.usageRecordWorkerPool != nil {
+	if h.usageRecordWorkerPool != nil && !service.EnterpriseSynchronousBilling(parent) {
 		if mode := h.usageRecordWorkerPool.Submit(task); mode != service.UsageRecordSubmitModeDroppedStopped {
 			if mode.Dropped() {
 				abandon()
@@ -2640,7 +2640,7 @@ func (h *GatewayHandler) submitMandatoryUsageRecordTask(parent context.Context, 
 		return
 	}
 	task, _ = wrapUsageRecordTaskContext(parent, task)
-	if h.usageRecordWorkerPool != nil {
+	if h.usageRecordWorkerPool != nil && !service.EnterpriseSynchronousBilling(parent) {
 		if mode := h.usageRecordWorkerPool.Submit(task); !mode.Dropped() {
 			return
 		}

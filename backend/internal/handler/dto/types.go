@@ -10,6 +10,7 @@ import (
 )
 
 type User struct {
+	AccountType   string     `json:"account_type"`
 	ID            int64      `json:"id"`
 	Email         string     `json:"email"`
 	Username      string     `json:"username"`
@@ -41,6 +42,7 @@ type User struct {
 // AdminUser 是管理员接口使用的 user DTO（包含敏感/内部字段）。
 // 注意：普通用户接口不得返回 notes 等管理员备注信息。
 type AdminUser struct {
+	EnterpriseGroupRates map[int64]float64 `json:"enterprise_group_rates"`
 	User
 
 	Notes      string     `json:"notes"`

@@ -185,6 +185,31 @@ func (s *Store) PreviewCoupon(ctx context.Context, userID, productID int64, mode
 }
 
 func QuoteCoupon(ctx context.Context, db CouponDB, userID int64, product Product, code string, lock bool, now time.Time) (*CouponQuote, error) {
+	query := `SELECT account_type FROM users WHERE id=$1 AND deleted_at IS NULL`
+	if lock {
+		query += ` FOR UPDATE`
+	}
+	rows, err := db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !rows.Next() {
+		err := rows.Err()
+		_ = rows.Close()
+		if err != nil {
+			return nil, err
+		}
+		return nil, ErrNotFound
+	}
+	var accountType string
+	err = rows.Scan(&accountType)
+	_ = rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	if accountType == "enterprise" {
+		return nil, ErrEnterpriseFeature
+	}
 	c, err := loadCoupon(ctx, db, code, lock)
 	if err != nil {
 		return nil, err

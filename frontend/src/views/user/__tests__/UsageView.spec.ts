@@ -249,6 +249,7 @@ describe('user UsageView', () => {
 
     expect(list.mock.calls).toEqual([[1, 100], [2, 100]])
     const usageKeySelect = wrapper.findAllComponents(Select).find((select) =>
+      select.attributes('data-testid') !== 'monthly-export-api-key' &&
       select.props('options').some((option: SelectOption) => option.label === 'All API Keys')
     )!
     expect(usageKeySelect.props('options')).toHaveLength(102)
@@ -268,6 +269,7 @@ describe('user UsageView', () => {
     await flushPromises()
 
     const errorKeySelect = wrapper.findAllComponents(Select).find((select) =>
+      select.attributes('data-testid') !== 'monthly-export-api-key' &&
       select.props('options').some((option: SelectOption) => option.label === 'All API Keys')
     )!
     expect(errorKeySelect.props('options')).toHaveLength(102)
@@ -293,6 +295,7 @@ describe('user UsageView', () => {
 
     expect(list.mock.calls).toEqual([[1, 100]])
     const keySelect = wrapper.findAllComponents(Select).find((select) =>
+      select.attributes('data-testid') !== 'monthly-export-api-key' &&
       select.props('options').some((option: SelectOption) => option.label === 'All API Keys')
     )!
     expect(keySelect.props('options')).toEqual([{ value: null, label: 'All API Keys' }])
@@ -314,6 +317,7 @@ describe('user UsageView', () => {
 
     expect(list.mock.calls).toEqual([[1, 100], [2, 100]])
     const keySelect = wrapper.findAllComponents(Select).find((select) =>
+      select.attributes('data-testid') !== 'monthly-export-api-key' &&
       select.props('options').some((option: SelectOption) => option.label === 'All API Keys')
     )!
     expect(keySelect.props('options')).toHaveLength(101)
@@ -483,6 +487,7 @@ describe('user UsageView', () => {
       })
 
       const keySelect = wrapper.findAllComponents(Select).find((select) =>
+        select.attributes('data-testid') !== 'monthly-export-api-key' &&
         select.props('options').some((option: SelectOption) => option.label === 'All API Keys')
       )!
       keySelect.vm.$emit('update:modelValue', 1)

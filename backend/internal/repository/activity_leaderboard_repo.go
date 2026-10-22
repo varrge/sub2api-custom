@@ -25,6 +25,7 @@ FROM usage_logs ul
 JOIN users u ON u.id = ul.user_id
 WHERE ul.created_at >= $1 AND ul.created_at < $2
   AND ul.actual_cost > 0 AND u.role = 'user' AND u.deleted_at IS NULL
+  AND u.account_type = 'personal'
   AND NOT EXISTS (
     SELECT 1 FROM month_card_billing_pending p
     WHERE p.request_id = ul.request_id AND p.api_key_id = ul.api_key_id

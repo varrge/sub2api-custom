@@ -278,7 +278,8 @@ func newAsyncImageContext(c *gin.Context, body []byte, timeoutDuration time.Dura
 	recorderCtx, _ := gin.CreateTestContext(recorder)
 	taskCtx.Writer = recorderCtx.Writer
 	taskCtx.Request = request
-	return taskCtx, recorder, cancel
+	release := service.RetainAccountRequest(base)
+	return taskCtx, recorder, func() { cancel(); release() }
 }
 
 func asyncImageRequestStreams(contentType string, body []byte) bool {

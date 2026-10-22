@@ -254,6 +254,10 @@ func (s *OpenAIGatewayService) CreateLiveCall(
 			return nil, fmt.Errorf("save live call mapping: %w", saveErr)
 		}
 		created.Account = account
+		if EnterpriseSynchronousBilling(ctx) {
+			release := RetainAccountRequest(ctx)
+			go s.holdLiveAccountConversionBarrier(store, record.CallHash, record.ExpiresAt, release)
+		}
 		go s.observeLiveCall(record)
 		return created, nil
 	}
@@ -261,6 +265,28 @@ func (s *OpenAIGatewayService) CreateLiveCall(
 		return nil, lastErr
 	}
 	return nil, ErrLiveUnavailable
+}
+
+// Signaling ends before WebRTC; conversion must wait for the accepted session.
+func (s *OpenAIGatewayService) holdLiveAccountConversionBarrier(store LiveCallStore, hash string, expires time.Time, release func()) {
+	defer release()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	timer := time.NewTimer(time.Until(expires))
+	defer timer.Stop()
+	for {
+		select {
+		case <-timer.C:
+			return
+		case <-ticker.C:
+			ctx, cancel := context.WithTimeout(context.Background(), liveRedisOperationTimeout)
+			record, err := store.GetLiveCall(ctx, hash)
+			cancel()
+			if err == nil && record != nil && record.Controller == LiveControllerClosed {
+				return
+			}
+		}
+	}
 }
 
 func (s *OpenAIGatewayService) shouldFailoverLiveCreateError(account *Account, err error) bool {

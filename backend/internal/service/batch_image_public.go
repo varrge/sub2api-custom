@@ -1047,6 +1047,9 @@ func (s *BatchImagePublicService) resolvePricingSnapshot(ctx context.Context, ow
 		if group.ImageRateIndependent {
 			groupMultiplier = group.ImageRateMultiplier
 		}
+		if enterpriseContextHasRate(ctx, group.ID) {
+			groupMultiplier, _ = enterpriseContextRate(ctx, owner.UserID, group.ID, groupMultiplier)
+		}
 		if groupMultiplier < 0 {
 			groupMultiplier = 0
 		}
@@ -1089,6 +1092,10 @@ func (s *BatchImagePublicService) resolvePricingSnapshot(ctx context.Context, ow
 		accountMultiplier = 0
 	}
 	standardUnitPrice := unit * groupMultiplier * accountMultiplier
+	if owner.GroupID != nil && enterpriseContextHasRate(ctx, *owner.GroupID) {
+		// Upstream accounting cost is not part of an explicit enterprise price.
+		standardUnitPrice = unit * groupMultiplier
+	}
 	billableUnitPrice := standardUnitPrice * discountMultiplier
 	holdUnitPrice := standardUnitPrice * holdMultiplier
 	return &BatchImagePricingSnapshot{

@@ -508,6 +508,9 @@ func (s *APIKeyService) canUserBindGroup(ctx context.Context, user *User, group 
 	}
 	// 订阅类型分组：需要有效订阅
 	if group.IsSubscriptionType() {
+		if user.IsEnterprise() {
+			return false
+		}
 		if s.monthCardStore != nil {
 			groups, err := s.monthCardStore.BindingGroups(ctx, user.ID)
 			if err != nil {
@@ -792,7 +795,20 @@ func (s *APIKeyService) GetByID(ctx context.Context, id int64) (*APIKey, error) 
 }
 
 // GetByKey 根据Key字符串获取API Key（用于认证）
-func (s *APIKeyService) GetByKey(ctx context.Context, key string) (*APIKey, error) {
+func (s *APIKeyService) GetByKey(ctx context.Context, key string) (result *APIKey, resultErr error) {
+	defer func() {
+		if resultErr == nil && result != nil && result.User != nil {
+			if repo, ok := s.userRepo.(interface {
+				RefreshEnterpriseIdentity(context.Context, *User) error
+			}); ok {
+				copyKey := *result
+				copyUser := *result.User
+				copyKey.User = &copyUser
+				result = &copyKey
+				resultErr = repo.RefreshEnterpriseIdentity(ctx, result.User)
+			}
+		}
+	}()
 	if len(key) == 0 || len(key) > MaxAPIKeyCredentialBytes {
 		return nil, ErrAPIKeyNotFound
 	}
@@ -1170,6 +1186,9 @@ func (s *APIKeyService) GetAvailableGroups(ctx context.Context, userID int64) ([
 func (s *APIKeyService) canUserBindGroupInternal(user *User, group *Group, subscribedGroupIDs map[int64]bool) bool {
 	// 订阅类型分组：需要有效订阅
 	if group.IsSubscriptionType() {
+		if user.IsEnterprise() {
+			return false
+		}
 		return subscribedGroupIDs[group.ID]
 	}
 	// 标准类型分组：使用原有逻辑
@@ -1197,6 +1216,9 @@ func (s *APIKeyService) GetUserGroupVisibility(ctx context.Context, userID int64
 	allowed := make(map[int64]struct{}, len(user.AllowedGroups))
 	for _, id := range user.AllowedGroups {
 		allowed[id] = struct{}{}
+	}
+	if user.IsEnterprise() {
+		return allowed, user.RestrictPublicGroups, nil
 	}
 	subscriptions, err := s.userSubRepo.ListActiveByUserID(ctx, userID)
 	if err != nil {

@@ -33,6 +33,15 @@
       {{ t('modelPlaza.loadFailed') }}
     </div>
     <template v-else>
+      <!-- 企业报价仅影响展示，不改变实际计费。 -->
+      <div v-if="isEnterprise" class="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <label class="inline-flex cursor-pointer select-none items-center gap-2 text-sm font-medium text-gray-700 dark:text-dark-200">
+          <input v-model="enterpriseOnly" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-800" />
+          {{ t('enterprisePlaza.onlyEnterprise') }}
+        </label>
+        <span class="text-xs text-gray-400 dark:text-dark-500">{{ t('enterprisePlaza.displayOnlyHint') }}</span>
+      </div>
+
       <!-- 筛选区:平台 → 分组 → 倍率 -->
       <PlazaFilterBar
         :platforms="platforms"
@@ -49,8 +58,12 @@
       />
 
       <!-- 分组分节的模型清单(默认按生效倍率升序) -->
-      <div v-if="filteredGroups.length > 0" class="space-y-5">
-        <PlazaGroupSection v-for="g in filteredGroups" :key="g.id" :group="g" />
+      <div v-if="enterpriseEmpty" class="rounded-2xl border border-dashed border-gray-300 px-5 py-12 text-center dark:border-dark-600">
+        <p class="text-sm text-gray-500 dark:text-dark-400">{{ t('enterprisePlaza.empty') }}</p>
+        <p class="mt-1.5 text-xs text-gray-400 dark:text-dark-500">{{ t('enterprisePlaza.emptyHint') }}</p>
+      </div>
+      <div v-else-if="filteredGroups.length > 0" class="space-y-5">
+        <PlazaGroupSection v-for="g in filteredGroups" :key="g.id" :group="g" :enterprise="enterpriseActive" />
       </div>
       <div
         v-else
@@ -86,6 +99,9 @@ const { t } = useI18n()
 const authStore = useAuthStore()
 const temporaryRateNow = useTemporaryRateNow()
 const isAuthenticated = computed(() => authStore.isAuthenticated)
+const isEnterprise = computed(() => authStore.isEnterprise)
+const enterpriseOnly = ref(isEnterprise.value)
+const enterpriseActive = computed(() => isEnterprise.value && enterpriseOnly.value)
 
 const selectedPlatform = ref<string>('all')
 const selectedGroupIds = ref<number[] | 'all'>('all')
@@ -101,13 +117,20 @@ const descriptionHtml = computed(() => {
   return DOMPurify.sanitize(marked.parse(md) as string)
 })
 
-/** 生效倍率 = 用户专属倍率 ?? 分组默认倍率。 */
+const scopedGroups = computed(() => {
+  const groups = props.response?.groups ?? []
+  return enterpriseActive.value ? groups.filter(g => g.enterprise_rate_multiplier != null) : groups
+})
+const enterpriseEmpty = computed(() => enterpriseActive.value && scopedGroups.value.length === 0)
+
+/** 企业报价使用显式企业倍率，普通报价沿用原计价路径。 */
 function effectiveRate(g: ModelPlazaGroup): number {
+  if (enterpriseActive.value) return g.enterprise_rate_multiplier ?? g.rate_multiplier
   return effectiveGroupRate(g, g.user_rate_multiplier, temporaryRateNow.value)
 }
 
 const platforms = computed(() =>
-  [...new Set((props.response?.groups ?? []).map((g) => g.platform).filter(Boolean))].sort()
+  [...new Set(scopedGroups.value.map((g) => g.platform).filter(Boolean))].sort()
 )
 
 watch(platforms, (list) => {
@@ -117,7 +140,7 @@ watch(platforms, (list) => {
 })
 
 const groupOptions = computed(() =>
-  (props.response?.groups ?? []).map((g) => ({
+  scopedGroups.value.map((g) => ({
     id: g.id,
     name: g.name,
     platform: g.platform,
@@ -127,11 +150,11 @@ const groupOptions = computed(() =>
 
 /** 全量生效倍率;当前组合下不可用的项由 FilterBar 置灰而非隐藏。 */
 const rates = computed(() =>
-  [...new Set((props.response?.groups ?? []).map(effectiveRate))].sort((a, b) => a - b)
+  [...new Set(scopedGroups.value.map(effectiveRate))].sort((a, b) => a - b)
 )
 
 /** 刷新后保留仍可用的已选分组;选择全部时自动包含新分组。 */
-watch(() => props.response?.groups, (groups) => {
+watch(scopedGroups, (groups) => {
   const selected = selectedGroupIds.value
   if (!groups || selected === 'all' || selected.length === 0) return
   const availableIds = new Set(groups.map((g) => g.id))
@@ -147,7 +170,7 @@ watch(rates, (list) => {
 })
 
 const filteredGroups = computed(() => {
-  let groups = props.response?.groups ?? []
+  let groups = scopedGroups.value
   if (selectedPlatform.value !== 'all') {
     groups = groups.filter((g) => g.platform === selectedPlatform.value)
   }

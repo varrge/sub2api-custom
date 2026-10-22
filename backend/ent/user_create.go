@@ -79,6 +79,20 @@ func (_c *UserCreate) SetNillableDeletedAt(v *time.Time) *UserCreate {
 	return _c
 }
 
+// SetAccountType sets the "account_type" field.
+func (_c *UserCreate) SetAccountType(v string) *UserCreate {
+	_c.mutation.SetAccountType(v)
+	return _c
+}
+
+// SetNillableAccountType sets the "account_type" field if the given value is not nil.
+func (_c *UserCreate) SetNillableAccountType(v *string) *UserCreate {
+	if v != nil {
+		_c.SetAccountType(*v)
+	}
+	return _c
+}
+
 // SetEmail sets the "email" field.
 func (_c *UserCreate) SetEmail(v string) *UserCreate {
 	_c.mutation.SetEmail(v)
@@ -662,6 +676,10 @@ func (_c *UserCreate) defaults() error {
 		v := user.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := _c.mutation.AccountType(); !ok {
+		v := user.DefaultAccountType
+		_c.mutation.SetAccountType(v)
+	}
 	if _, ok := _c.mutation.Role(); !ok {
 		v := user.DefaultRole
 		_c.mutation.SetRole(v)
@@ -732,6 +750,14 @@ func (_c *UserCreate) check() error {
 	}
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "User.updated_at"`)}
+	}
+	if _, ok := _c.mutation.AccountType(); !ok {
+		return &ValidationError{Name: "account_type", err: errors.New(`ent: missing required field "User.account_type"`)}
+	}
+	if v, ok := _c.mutation.AccountType(); ok {
+		if err := user.AccountTypeValidator(v); err != nil {
+			return &ValidationError{Name: "account_type", err: fmt.Errorf(`ent: validator failed for field "User.account_type": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.Email(); !ok {
 		return &ValidationError{Name: "email", err: errors.New(`ent: missing required field "User.email"`)}
@@ -852,6 +878,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.DeletedAt(); ok {
 		_spec.SetField(user.FieldDeletedAt, field.TypeTime, value)
 		_node.DeletedAt = &value
+	}
+	if value, ok := _c.mutation.AccountType(); ok {
+		_spec.SetField(user.FieldAccountType, field.TypeString, value)
+		_node.AccountType = value
 	}
 	if value, ok := _c.mutation.Email(); ok {
 		_spec.SetField(user.FieldEmail, field.TypeString, value)
@@ -1283,6 +1313,18 @@ func (u *UserUpsert) ClearDeletedAt() *UserUpsert {
 	return u
 }
 
+// SetAccountType sets the "account_type" field.
+func (u *UserUpsert) SetAccountType(v string) *UserUpsert {
+	u.Set(user.FieldAccountType, v)
+	return u
+}
+
+// UpdateAccountType sets the "account_type" field to the value that was provided on create.
+func (u *UserUpsert) UpdateAccountType() *UserUpsert {
+	u.SetExcluded(user.FieldAccountType)
+	return u
+}
+
 // SetEmail sets the "email" field.
 func (u *UserUpsert) SetEmail(v string) *UserUpsert {
 	u.Set(user.FieldEmail, v)
@@ -1690,6 +1732,20 @@ func (u *UserUpsertOne) UpdateDeletedAt() *UserUpsertOne {
 func (u *UserUpsertOne) ClearDeletedAt() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.ClearDeletedAt()
+	})
+}
+
+// SetAccountType sets the "account_type" field.
+func (u *UserUpsertOne) SetAccountType(v string) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetAccountType(v)
+	})
+}
+
+// UpdateAccountType sets the "account_type" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateAccountType() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateAccountType()
 	})
 }
 
@@ -2321,6 +2377,20 @@ func (u *UserUpsertBulk) UpdateDeletedAt() *UserUpsertBulk {
 func (u *UserUpsertBulk) ClearDeletedAt() *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
 		s.ClearDeletedAt()
+	})
+}
+
+// SetAccountType sets the "account_type" field.
+func (u *UserUpsertBulk) SetAccountType(v string) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetAccountType(v)
+	})
+}
+
+// UpdateAccountType sets the "account_type" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateAccountType() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateAccountType()
 	})
 }
 

@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 30 // v30: forced service tier and free Ultrafast
+const apiKeyAuthSnapshotVersion = 31 // v31: enterprise account identity
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -356,6 +356,7 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 		RateLimit1d:           apiKey.RateLimit1d,
 		RateLimit7d:           apiKey.RateLimit7d,
 		User: APIKeyAuthUserSnapshot{
+			AccountType:                apiKey.User.EffectiveAccountType(),
 			ID:                         apiKey.User.ID,
 			Status:                     apiKey.User.Status,
 			Role:                       apiKey.User.Role,
@@ -430,6 +431,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			Username:                   snapshot.User.Username,
 			BalanceNotifyEnabled:       snapshot.User.BalanceNotifyEnabled,
 			RestrictPublicGroups:       snapshot.User.RestrictPublicGroups,
+			AccountType:                snapshot.User.AccountType,
 			BalanceNotifyThresholdType: snapshot.User.BalanceNotifyThresholdType,
 			BalanceNotifyThreshold:     snapshot.User.BalanceNotifyThreshold,
 			BalanceNotifyExtraEmails:   snapshot.User.BalanceNotifyExtraEmails,

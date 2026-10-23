@@ -403,6 +403,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		ModelPlazaEnabled:       settings.ModelPlazaEnabled,
 		ModelPlazaRequireAuth:   settings.ModelPlazaRequireAuth,
 		PluginManagementEnabled: settings.PluginManagementEnabled,
+		NativeBoxEntryEnabled:   settings.NativeBoxEntryEnabled,
 		ModelPlazaDescription:   settings.ModelPlazaDescription,
 
 		AffiliateEnabled: settings.AffiliateEnabled,

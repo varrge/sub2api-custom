@@ -129,6 +129,11 @@ export const FeatureFlags = {
     mode: 'opt-in',
     label: 'Plugin Management',
   }),
+  nativeBoxEntry: defineFlag({
+    key: 'native_box_entry_enabled',
+    mode: 'opt-in',
+    label: 'Lucky Box Entry',
+  }),
   payment: defineFlag({
     key: 'payment_enabled',
     mode: 'opt-out',

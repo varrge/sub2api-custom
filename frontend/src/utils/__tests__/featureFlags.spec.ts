@@ -63,3 +63,30 @@ describe('resolveFeatureFlag', () => {
     expect(isFeatureFlagEnabled(FeatureFlags.subscription)).toBe(false)
   })
 })
+
+describe('FeatureFlags.nativeBoxEntry', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    delete (window as any).__APP_CONFIG__
+  })
+
+  it('hides the native box entry unless it is explicitly enabled', () => {
+    const flag = FeatureFlags.nativeBoxEntry
+    expect(flag.key).toBe('native_box_entry_enabled')
+    expect(flag.mode).toBe('opt-in')
+    expect(resolveFeatureFlag(null, flag)).toBe(false)
+    expect(resolveFeatureFlag({}, flag)).toBe(false)
+    expect(resolveFeatureFlag({ native_box_entry_enabled: false }, flag)).toBe(false)
+    expect(resolveFeatureFlag({ native_box_entry_enabled: true }, flag)).toBe(true)
+  })
+
+  it('uses the injected value after refresh and follows newly saved public settings', () => {
+    (window as any).__APP_CONFIG__ = { native_box_entry_enabled: true }
+    const store = useAppStore()
+    expect(store.initFromInjectedConfig()).toBe(true)
+    const visible = makeSidebarFlag(FeatureFlags.nativeBoxEntry)
+    expect(visible()).toBe(true)
+    store.cachedPublicSettings = { native_box_entry_enabled: false } as PublicSettings
+    expect(visible()).toBe(false)
+  })
+})

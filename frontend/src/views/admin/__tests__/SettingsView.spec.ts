@@ -949,6 +949,41 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(fetchPublicSettings).toHaveBeenCalledWith(true);
   });
 
+  it("defaults the native box entry switch off and saves it from the Features tab", async () => {
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+    const toggle = wrapper.get('[data-testid="native-box-entry-enabled"]');
+    expect((toggle.element as HTMLInputElement).checked).toBe(false);
+    await toggle.setValue(true);
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ native_box_entry_enabled: true }),
+    );
+    expect(updateSettings.mock.calls.at(-1)?.[0]).not.toHaveProperty("auto_rewards");
+    expect(fetchPublicSettings).toHaveBeenCalledWith(true);
+  });
+
+  it("loads the saved native box entry value and can hide it again", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      native_box_entry_enabled: true,
+    });
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+    const toggle = wrapper.get('[data-testid="native-box-entry-enabled"]');
+    expect((toggle.element as HTMLInputElement).checked).toBe(true);
+    await toggle.setValue(false);
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ native_box_entry_enabled: false }),
+    );
+    expect(fetchPublicSettings).toHaveBeenCalledWith(true);
+  });
+
   it("selects at most three top quick items, reorders them, and saves their order", async () => {
     getSettings.mockResolvedValueOnce({
       ...baseSettingsResponse,

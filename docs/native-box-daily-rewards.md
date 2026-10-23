@@ -24,6 +24,13 @@ Client-supplied user IDs, arbitrary destinations and credentials in query string
 are not accepted. The delegated box session never leaves the server. HTTPS is
 required except for loopback development; redirects are disabled.
 
+The native navigation entry is opt-in: enable **Settings → Feature Toggles →
+Show Lucky Box entry** (`native_box_entry_enabled`, default false). It controls
+the personal-user sidebar and the admin My Account menu, including after a page
+refresh. It only hides or shows navigation; authenticated direct links and APIs
+remain available, and prize pools, cards, balances and automatic rewards are
+unchanged. Simple-mode and enterprise-account restrictions still apply.
+
 New draws carry both the request ID and expected box campaign. Unknown results
 are persisted per authenticated user before sending. Lookup-only recovery stays
 available after the campaign closes and never consumes another campaign's card.
@@ -151,8 +158,8 @@ does not change these accounting rules.
 
 ## Release pairing and case animation
 
-Sub release `v0.2.17-custom.10` (a test-only lint correction of
-`v0.2.17-custom.9`, with unchanged runtime code) pairs with KaWang
+Sub release `v0.2.17-custom.10` (fixing the release lint check and adding the
+default-off native navigation entry toggle to `v0.2.17-custom.9`) pairs with KaWang
 `native-box-rewards-20261023` (feature commit `b18ed50`).
 Both changes preserve the existing KaWang database and operator-managed campaign.
 Tagging or upgrading Sub alone does not enable rewards or upgrade KaWang.

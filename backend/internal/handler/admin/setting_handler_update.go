@@ -365,6 +365,7 @@ type UpdateSettingsRequest struct {
 
 	// Plugin management menu visibility switch; plugin runtime is unaffected.
 	PluginManagementEnabled *bool `json:"plugin_management_enabled"`
+	NativeBoxEntryEnabled   *bool `json:"native_box_entry_enabled"`
 
 	// Affiliate (邀请返利) feature switch
 	AffiliateEnabled *bool `json:"affiliate_enabled"`
@@ -2059,6 +2060,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.PluginManagementEnabled
 		}(),
+		NativeBoxEntryEnabled: func() bool {
+			if req.NativeBoxEntryEnabled != nil {
+				return *req.NativeBoxEntryEnabled
+			}
+			return previousSettings.NativeBoxEntryEnabled
+		}(),
 		AffiliateEnabled: func() bool {
 			if req.AffiliateEnabled != nil {
 				return *req.AffiliateEnabled
@@ -2508,6 +2515,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		ModelPlazaRequireAuth:   updatedSettings.ModelPlazaRequireAuth,
 		ModelPlazaDescription:   updatedSettings.ModelPlazaDescription,
 		PluginManagementEnabled: updatedSettings.PluginManagementEnabled,
+		NativeBoxEntryEnabled:   updatedSettings.NativeBoxEntryEnabled,
 
 		AffiliateEnabled: updatedSettings.AffiliateEnabled,
 

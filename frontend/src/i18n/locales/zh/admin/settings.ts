@@ -81,6 +81,12 @@ export default {
           priceDescription: '价格说明（Markdown）',
           priceDescriptionHint: '展示在模型广场页面顶部，可用于说明计费规则、汇率、优惠活动等。',
         },
+        nativeBox: {
+          title: '疯狂开箱',
+          description: '控制用户侧边栏和管理员「我的账户」中的原生开箱入口，默认关闭。',
+          enabled: '显示疯狂开箱入口',
+          enabledHint: '仅控制导航显示，仍可通过地址访问；不修改奖池、卡片、余额或消费榜自动发奖。',
+        },
         pluginManagement: {
           title: '插件管理',
           description: '控制管理员侧边栏是否显示插件管理入口。此开关不控制插件运行状态。',

@@ -103,6 +103,27 @@ func TestSettingHandler_GetPublicSettings_ExposesSupportTicketFlag(t *testing.T)
 	require.True(t, resp.Data.SupportTicketEnabled)
 }
 
+func TestSettingHandler_GetPublicSettings_ExposesNativeBoxEntryFlag(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, value := range []string{"", "true", "false"} {
+		t.Run(value, func(t *testing.T) {
+			h := NewSettingHandler(service.NewSettingService(&settingHandlerPublicRepoStub{values: map[string]string{
+				service.SettingKeyNativeBoxEntryEnabled: value,
+			}}, &config.Config{}), "test-version")
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/settings/public", nil)
+			h.GetPublicSettings(c)
+			require.Equal(t, http.StatusOK, rec.Code)
+			var envelope struct {
+				Data map[string]any `json:"data"`
+			}
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
+			require.Equal(t, value == "true", envelope.Data["native_box_entry_enabled"])
+		})
+	}
+}
+
 func TestSettingHandler_GetPublicSettings_ExposesSubscriptionOnlyMode(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	h := NewSettingHandler(service.NewSettingService(&settingHandlerPublicRepoStub{values: map[string]string{

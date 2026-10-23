@@ -81,6 +81,12 @@ export default {
           priceDescription: 'Pricing notes (Markdown)',
           priceDescriptionHint: 'Rendered at the top of the plaza page. Use it for billing rules, exchange rates, promotions, etc.',
         },
+        nativeBox: {
+          title: 'Lucky Box',
+          description: 'Controls the native box entry in the user sidebar and the admin My Account menu. Hidden by default.',
+          enabled: 'Show Lucky Box entry',
+          enabledHint: 'Only controls navigation visibility; direct links remain available. Prize pools, cards, balances and automatic leaderboard rewards are unchanged.',
+        },
         pluginManagement: {
           title: 'Plugin Management',
           description: 'Controls whether the plugin management entry appears in the admin sidebar. This switch does not control plugin runtime state.',

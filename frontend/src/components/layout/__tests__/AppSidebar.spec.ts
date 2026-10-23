@@ -11,6 +11,7 @@ import AppSidebar from '../AppSidebar.vue'
 const sidebarState = vi.hoisted(() => ({
   isAdmin: true,
   subscriptionEnabled: true,
+  nativeBoxEntryEnabled: false,
   isSimpleMode: false,
   mobileOpen: false,
   contactInfo: 'support@example.com',
@@ -80,7 +81,11 @@ vi.mock('@/stores', () => ({
 
 vi.mock('@/utils/featureFlags', async (importOriginal) => ({
   ...await importOriginal<typeof import('@/utils/featureFlags')>(),
-  makeSidebarFlag: (flag: { key: string }) => () => flag.key === 'subscription_enabled' ? sidebarState.subscriptionEnabled : true,
+  makeSidebarFlag: (flag: { key: string }) => () => {
+    if (flag.key === 'subscription_enabled') return sidebarState.subscriptionEnabled
+    if (flag.key === 'native_box_entry_enabled') return sidebarState.nativeBoxEntryEnabled
+    return true
+  },
 }))
 
 vi.mock('@/composables/useBatchImageAccess', () => ({
@@ -227,6 +232,7 @@ describe('AppSidebar account menu interactions', () => {
   beforeEach(() => {
     sidebarState.isAdmin = true
     sidebarState.subscriptionEnabled = true
+    sidebarState.nativeBoxEntryEnabled = false
     sidebarState.isSimpleMode = false
     sidebarState.mobileOpen = false
     sidebarState.contactInfo = 'support@example.com'
@@ -248,6 +254,27 @@ describe('AppSidebar account menu interactions', () => {
     expect(view.find('[data-to="/subscriptions"]').exists()).toBe(false)
     expect(view.get('[data-to="/my-group-buy"]').text()).toBe('groupBuy.myGroupBuy')
     expect(view.get('[data-to="/group-buy"]').text()).toBe('groupBuy.hall')
+  })
+
+  it.each([false, true])('hides the native box entry when disabled (admin=%s)', (isAdmin) => {
+    sidebarState.isAdmin = isAdmin
+    const view = mountSidebar()
+    expect(view.find('[data-to="/activities/box"]').exists()).toBe(false)
+  })
+
+  it.each([false, true])('shows the native box entry when enabled (admin=%s)', (isAdmin) => {
+    sidebarState.isAdmin = isAdmin
+    sidebarState.nativeBoxEntryEnabled = true
+    const view = mountSidebar()
+    expect(view.get('[data-to="/activities/box"]').text()).toBe('nav.box')
+  })
+
+  it('keeps the native box entry hidden in simple mode even when enabled', () => {
+    sidebarState.isAdmin = false
+    sidebarState.isSimpleMode = true
+    sidebarState.nativeBoxEntryEnabled = true
+    const view = mountSidebar()
+    expect(view.find('[data-to="/activities/box"]').exists()).toBe(false)
   })
 
   it('toggles the menu from the account trigger', async () => {

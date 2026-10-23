@@ -60,6 +60,7 @@ function createPublicSettings(overrides: Partial<PublicSettings> = {}): PublicSe
     model_plaza_enabled: false,
     model_plaza_require_auth: false,
     plugin_management_enabled: false,
+    native_box_entry_enabled: false,
     service_quota_enabled: false,
     affiliate_enabled: false,
     ...overrides,

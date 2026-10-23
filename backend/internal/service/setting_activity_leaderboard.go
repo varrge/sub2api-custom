@@ -24,8 +24,9 @@ type ActivityLeaderboardConfig struct {
 	StartsAt          time.Time  `json:"starts_at"`
 	EndsAt            time.Time  `json:"ends_at"`
 	DemoExpiresAt     *time.Time `json:"demo_expires_at"`
-	Period            string     `json:"period,omitempty"`
-	AutoRewards       bool       `json:"auto_rewards,omitempty"`
+	// Period selects reward settlement windows; ranking always covers StartsAt..EndsAt.
+	Period      string `json:"period,omitempty"`
+	AutoRewards bool   `json:"auto_rewards,omitempty"`
 }
 
 func DefaultActivityLeaderboardConfig() *ActivityLeaderboardConfig {
@@ -84,22 +85,6 @@ func (c *ActivityLeaderboardConfig) Validate() error {
 		return fmt.Errorf("demo_expires_at must be a valid date at or before starts_at")
 	}
 	return nil
-}
-
-// The stored campaign remains unchanged; only the live display rolls each day.
-func (c *ActivityLeaderboardConfig) displayPeriod(now time.Time) *ActivityLeaderboardConfig {
-	if c.Period != "daily" || now.Before(c.StartsAt) {
-		return c
-	}
-	result := *c
-	at := now
-	if !at.Before(c.EndsAt) {
-		at = c.EndsAt.Add(-time.Nanosecond)
-	}
-	local := at.In(time.FixedZone("Asia/Shanghai", 8*60*60))
-	result.StartsAt = time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, local.Location())
-	result.EndsAt = result.StartsAt.AddDate(0, 0, 1)
-	return &result
 }
 
 func (c *ActivityLeaderboardConfig) status(now time.Time) string {

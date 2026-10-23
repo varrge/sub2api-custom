@@ -15,13 +15,17 @@ func (s dailyRewardTestSettings) GetActivityLeaderboardConfig(context.Context) (
 	return s.cfg, nil
 }
 
-type dailyRewardTestRepo struct{ calls int }
+type dailyRewardTestRepo struct {
+	calls      int
+	start, end time.Time
+}
 
 func (r *dailyRewardTestRepo) ListSpending(context.Context, time.Time, time.Time) ([]ActivitySpending, error) {
 	return nil, nil
 }
 func (r *dailyRewardTestRepo) FreezeDailyRewards(_ context.Context, campaign, day string, start, end, now time.Time) (*ActivityRewardSnapshot, error) {
 	r.calls++
+	r.start, r.end = start, end
 	return &ActivityRewardSnapshot{Manifest: day, SHA256: campaign}, nil
 }
 
@@ -39,6 +43,8 @@ func TestDailyRewardsWindowAndOptIn(t *testing.T) {
 	at = at.Add(time.Minute)
 	_, err = s.SettleDay(context.Background(), c.campaignID(), "2026-10-24")
 	require.NoError(t, err)
+	require.True(t, start.Equal(r.start))
+	require.True(t, start.Add(24*time.Hour).Equal(r.end), "daily awards still cover only the selected day")
 	for _, day := range []string{"2026-10-23", "2026-10-28", "2026-10-25", "2026-10-32", "2026-1-1"} {
 		_, err = s.SettleDay(context.Background(), c.campaignID(), day)
 		require.Error(t, err, day)
@@ -49,12 +55,7 @@ func TestDailyRewardsWindowAndOptIn(t *testing.T) {
 	_, err = s.SettleDay(context.Background(), c.campaignID(), "2026-10-24")
 	require.ErrorIs(t, err, ErrActivitySettlementInvalid)
 	require.Equal(t, 1, r.calls)
-	for offset, want := range map[time.Duration]string{0: "2026-10-24", 24 * time.Hour: "2026-10-25", 4 * 24 * time.Hour: "2026-10-27"} {
-		display := c.displayPeriod(start.Add(offset))
-		require.Equal(t, want, display.StartsAt.Format("2006-01-02"))
-		require.Equal(t, 24*time.Hour, display.EndsAt.Sub(display.StartsAt))
-	}
-	require.Equal(t, start, c.StartsAt, "daily display must not mutate stored config")
+	require.Equal(t, start, c.StartsAt, "daily settlement must not mutate stored campaign dates")
 	c.StartsAt = c.StartsAt.Add(time.Minute)
 	require.Error(t, c.Validate())
 }

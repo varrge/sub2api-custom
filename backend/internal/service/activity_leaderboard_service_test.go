@@ -115,6 +115,52 @@ func TestActivityLeaderboardWindowCacheAndOwnRank(t *testing.T) {
 	require.NotEqual(t, ended.Me.Alias, other.Me.Alias)
 }
 
+func TestActivityLeaderboardDailyRewardsKeepWholeCampaignTotals(t *testing.T) {
+	start, err := time.Parse(time.RFC3339, "2026-10-24T00:00:00+08:00")
+	require.NoError(t, err)
+	cfg := &ActivityLeaderboardConfig{Enabled: true, Title: "Week activity", StartsAt: start,
+		EndsAt: start.AddDate(0, 0, 7), Period: "daily", AutoRewards: true}
+	repo := &activityRepoStub{rows: []ActivitySpending{{UserID: 42, Email: "private@example.test", Amount: "10.00000000"}}}
+	now := start.Add(12 * time.Hour)
+	s := NewActivityLeaderboardService(repo, &config.Config{JWT: config.JWTConfig{Secret: "test"}}, &activityConfigStub{cfg: cfg})
+	s.now = func() time.Time { return now }
+	first, err := s.Get(context.Background(), 42)
+	require.NoError(t, err)
+	alias := first.Me.Alias
+	for _, tc := range []struct {
+		at     time.Time
+		amount string
+		status string
+	}{
+		{start.Add(36 * time.Hour), "17.00000000", "active"},
+		{start.Add(6*24*time.Hour + 12*time.Hour), "72.00000000", "active"},
+		{cfg.EndsAt.Add(time.Hour), "85.00000000", "ended"},
+	} {
+		now = tc.at
+		repo.rows[0].Amount = tc.amount
+		got, err := s.Get(context.Background(), 42)
+		require.NoError(t, err)
+		require.Equal(t, start, repo.start, "daily awards must not reset cumulative ranking")
+		wantEnd := now
+		if wantEnd.After(cfg.EndsAt) {
+			wantEnd = cfg.EndsAt
+		}
+		require.Equal(t, wantEnd, repo.end)
+		require.Equal(t, start, got.StartsAt)
+		require.Equal(t, cfg.EndsAt, got.EndsAt)
+		require.Equal(t, cfg.campaignID(), got.CampaignID)
+		require.Equal(t, alias, got.Me.Alias)
+		require.Equal(t, tc.amount, got.Me.Amount)
+		require.Equal(t, tc.status, got.Status)
+		admin, err := s.GetAdmin(context.Background(), 0)
+		require.NoError(t, err)
+		require.Equal(t, start, admin.StartsAt)
+		require.Equal(t, cfg.EndsAt, admin.EndsAt)
+		require.Equal(t, got.CampaignID, admin.CampaignID)
+		require.Equal(t, tc.amount, admin.Entries[0].Amount)
+	}
+}
+
 func TestActivityLeaderboardCollapsesRefreshAndCancellation(t *testing.T) {
 	now := festivalStart.Add(time.Hour)
 	release := make(chan struct{})

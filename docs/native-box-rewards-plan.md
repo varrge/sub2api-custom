@@ -64,3 +64,7 @@ real grants, shared branch merges or releases in this implementation task.
 - KaWang's full suite has 50 pre-existing failures in unrelated membership tests;
   running the untouched base commit reproduced the same failure names exactly.
 - No production deployment, rates/coupon edits, real card grants or release tags.
+- Follow-up correction: cumulative leaderboard display/export is independent of
+  daily reward settlement. A regression reproduced loss of earlier-day usage
+  from the display; removed rolling display windows and retained daily award
+  selection only. This does not change the user's specified daily prize rules.

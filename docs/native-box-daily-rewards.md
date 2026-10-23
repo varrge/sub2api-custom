@@ -33,8 +33,9 @@ The server validates result identity and shape before the page clears retry stat
 
 1. Deploy the Sub migration `257_activity_reward_manifests.sql` and both codebases.
 2. Verify KaWang's saved connection/admin credential targets this Sub server.
-3. In Sub activity leaderboard settings, enable daily mode and automatic reward
-   settlement. Boundaries must be midnight Asia/Shanghai.
+3. In Sub activity leaderboard settings, enable daily **reward settlement** and
+   automatic reward lists. Ranking remains cumulative for the entire event;
+   this option affects only the award period. Boundaries must be midnight Asia/Shanghai.
 4. For the requested event set start `2026-10-24T00:00:00+08:00` and exclusive end
    `2026-10-28T00:00:00+08:00`. Disable demo data. Titles and prize descriptions
    remain operator-configured, not hardcoded.
@@ -50,8 +51,10 @@ The server validates result identity and shape before the page clears retry stat
 
 ## Accounting and delivery
 
-- The live leaderboard rolls each Shanghai day. The stored overall activity
-  dates are not rewritten daily.
+- The live leaderboard and its admin export always accumulate spending from the
+  event start through now (capped at event end). Dates, campaign identity and user
+  aliases remain stable across midnight. Enabling daily rewards never changes
+  the ranking window, clears consumption, or charges users again.
 - At 00:10 after each day, the KaWang maintenance loop requests the full private
   Sub snapshot. It retries every minute and catches up all unprocessed days after
   downtime. The last requested day is October 27, not October 28.
@@ -61,6 +64,10 @@ The server validates result identity and shape before the page clears retry stat
   Admin, enterprise and deleted users are excluded.
 - Top 1: high x1. Top 2: medium x2. Top 3: medium x1. Everyone else: low x1.
   Top-three users do not also get a participation card. Each day is independent.
+  These ranks belong to the daily reward manifest, not the cumulative public
+  leaderboard. The public leaderboard export is an event-total report; use the
+  box administration reward export to reconcile daily winners and issued cards.
+  A whole-event, one-time award policy is not implicitly enabled by this mode.
 - Date membership uses usage_logs.created_at, matching the existing leaderboard.
   A request recorded after midnight belongs to the next day. A persisted
   month-card recovery command older than day-end blocks freezing until recovery.

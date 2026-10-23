@@ -113,7 +113,7 @@ describe('ActivityLeaderboardSettings', () => {
     expect(inputValue('activity-leaderboard-title')).toBe('中秋国庆双节消费榜')
   })
 
-  it('persists daily rewards opt-in and disables it when returning to cumulative mode', async () => {
+  it('persists daily reward opt-in without changing cumulative campaign dates', async () => {
     mocks.getConfig.mockResolvedValue(configFixture({ period: 'daily', auto_rewards: true }))
     await mountSettings()
     const daily = wrapper!.get('[data-testid="activity-leaderboard-daily"]')
@@ -121,7 +121,11 @@ describe('ActivityLeaderboardSettings', () => {
     expect((daily.element as HTMLInputElement).checked).toBe(true)
     expect((rewards.element as HTMLInputElement).checked).toBe(true)
     await clickSave()
-    expect(mocks.updateConfig).toHaveBeenLastCalledWith(expect.objectContaining({ period: 'daily', auto_rewards: true }))
+    expect(mocks.updateConfig).toHaveBeenLastCalledWith(expect.objectContaining({
+      period: 'daily', auto_rewards: true,
+      starts_at: '2026-09-25T00:00:00+08:00', ends_at: '2026-10-08T00:00:00+08:00',
+    }))
+    expect(wrapper!.text()).toContain('admin.settings.activityLeaderboard.dailyHint')
     await daily.setValue(false)
     await clickSave()
     expect(mocks.updateConfig).toHaveBeenLastCalledWith(expect.objectContaining({ period: '', auto_rewards: false }))

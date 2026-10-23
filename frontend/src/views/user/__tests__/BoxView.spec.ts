@@ -486,6 +486,39 @@ describe('BoxView', () => {
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
   })
 
+  it('unblocks a new campaign only after authoritative confirmation that the closed request never drew', async () => {
+    const pending = { userId: '1', campaignId: 'old-event', requestId: 'box-never-recorded', cardTier: 'high' as const }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(pending))
+    bootstrapMock.mockResolvedValue(bootstrapFixture())
+    recoverMock.mockResolvedValue({
+      found: false, draw: null, resolution: 'closed_without_draw',
+      ...pending, connectionId: 'conn1',
+    })
+    const view = await mountView()
+    await view.get('[data-testid="box-retry-draw"]').trigger('click')
+    await flushPromises()
+    expect(drawMock).not.toHaveBeenCalled()
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
+    expect(view.get('[data-testid="box-open"]').attributes('disabled')).toBeUndefined()
+    expect(view.text()).toContain('未消耗卡片')
+  })
+
+  it.each(['userId', 'campaignId', 'requestId', 'cardTier'])('retains an unresolved request if terminal absence proof has the wrong %s', async field => {
+    const pending = { userId: '1', campaignId: 'old-event', requestId: 'box-never-recorded', cardTier: 'high' as const }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(pending))
+    bootstrapMock.mockResolvedValue(bootstrapFixture())
+    recoverMock.mockResolvedValue({
+      found: false, draw: null, resolution: 'closed_without_draw',
+      ...pending, [field]: 'wrong', connectionId: 'conn1',
+    })
+    const view = await mountView()
+    await view.get('[data-testid="box-retry-draw"]').trigger('click')
+    await flushPromises()
+    expect(drawMock).not.toHaveBeenCalled()
+    expect(localStorage.getItem(STORAGE_KEY)).not.toBeNull()
+    expect(view.get('[data-testid="box-open"]').attributes('disabled')).toBeDefined()
+  })
+
   it('does not discard the saved request after a malformed success response', async () => {
     bootstrapMock.mockResolvedValue(bootstrapFixture())
     drawMock.mockResolvedValue({ availableCards: 1, availableCardsByTier: { low: 1, medium: 0, high: 0 } } as never)

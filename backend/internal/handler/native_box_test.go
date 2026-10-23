@@ -77,6 +77,46 @@ func TestNativeBoxRejectsMalformedDrawSuccess(t *testing.T) {
 	}
 }
 
+func TestNativeBoxValidatesClosedWithoutDrawIdentity(t *testing.T) {
+	for _, changed := range []string{"", "resolution", "requestId", "campaignId", "cardTier", "userId", "connectionId"} {
+		t.Run("changed_"+changed, func(t *testing.T) {
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if strings.HasSuffix(r.URL.Path, "session-from-token") {
+					_, _ = w.Write([]byte(`{"sessionToken":"delegated"}`))
+					return
+				}
+				require.True(t, strings.HasSuffix(r.URL.Path, "/draws/recover"))
+				result := map[string]any{
+					"found": false, "draw": nil, "resolution": "closed_without_draw",
+					"requestId": "stable-draw-42", "campaignId": "closed-event", "cardTier": "high",
+					"userId": "42", "connectionId": "tenant", "sessionToken": "must-not-leak",
+				}
+				if changed != "" {
+					result[changed] = "wrong"
+				}
+				require.NoError(t, json.NewEncoder(w).Encode(result))
+			}))
+			defer upstream.Close()
+			h := &NativeBoxHandler{baseURL: upstream.URL, connectionID: "tenant", client: upstream.Client()}
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodPost, "/activities/box/draws/recover",
+				strings.NewReader(`{"requestId":"stable-draw-42","campaignId":"closed-event","cardTier":"high"}`))
+			c.Request.Header.Set("Authorization", "Bearer user-jwt")
+			c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 42})
+			h.Recover(c)
+			if changed == "" {
+				require.Equal(t, http.StatusOK, w.Code)
+				require.Contains(t, w.Body.String(), `"resolution":"closed_without_draw"`)
+			} else {
+				require.Equal(t, http.StatusBadGateway, w.Code)
+			}
+			require.NotContains(t, w.Body.String(), "must-not-leak")
+		})
+	}
+}
+
 func TestNativeBoxRejectsUnsafeOrMissingDestinations(t *testing.T) {
 	for _, base := range []string{"", "http://example.com", "https://user:pass@example.com", "https://example.com?token=secret", "file:///tmp/x"} {
 		h := &NativeBoxHandler{baseURL: base, connectionID: "tenant"}

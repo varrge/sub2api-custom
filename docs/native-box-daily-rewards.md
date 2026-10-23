@@ -28,6 +28,12 @@ New draws carry both the request ID and expected box campaign. Unknown results
 are persisted per authenticated user before sending. Lookup-only recovery stays
 available after the campaign closes and never consumes another campaign's card.
 The server validates result identity and shape before the page clears retry state.
+For a request that never reserved a card, KaWang can confirm terminal absence only
+after its matching campaign is `ended`. An identity-bound `closed_without_draw`
+response clears the pending pointer without drawing again. Ordinary negative
+lookups, missing campaigns and expired-but-not-terminal campaigns remain
+unresolved. Guarded activation prevents a stale write from reopening an ended
+campaign after that confirmation.
 
 ## Setup sequence
 
@@ -126,10 +132,10 @@ does not change these accounting rules.
 - Native frontend created by Kimi K3 using the configured `codeg-managed` model
   alias and interactive `--yolo` mode; root finished safety logic after subsequent
   upstream connection failures. No substitute model claimed as Kimi.
-- Frontend: 452 files / 3533 tests passing; production build and ESLint passing.
+- Frontend: 452 files / 3538 tests passing; production build and ESLint passing.
 - Go: full unit suite and targeted authenticated gateway/settlement tests passing;
   real isolated PostgreSQL snapshot concurrency regression passes with `-race`.
-- KaWang: 42 box-related tests passing. Full suite has 430 tests, 380 passing and
+- KaWang: 44 box-related tests passing. Full suite has 432 tests, 382 passing and
   50 failures. The untouched base has the identical 50 unrelated membership
   failures; no new failing test names were introduced.
 - Playwright: desktop/mobile/dark rendering, no horizontal overflow, no page
@@ -146,7 +152,7 @@ does not change these accounting rules.
 ## Release pairing and case animation
 
 Sub release `v0.2.17-custom.9` pairs with KaWang
-`native-box-rewards-20261023` (feature commit `ec3cc060bb221cc00fa93c42df88a7a07654e952`).
+`native-box-rewards-20261023` (feature commit `b18ed50`).
 Both changes preserve the existing KaWang database and operator-managed campaign.
 Tagging or upgrading Sub alone does not enable rewards or upgrade KaWang.
 The previously deployed KaWang version lacks the lookup-only recovery and reward
@@ -167,7 +173,7 @@ measured error). No horizontal overflow or page errors were observed. The draw
 checks used browser fixtures; no live reward credit was issued.
 
 Release verification reran the complete Sub frontend and Go unit suites and all
-42 KaWang box tests. The KaWang full-suite failure names were compared against
+44 KaWang box tests. The KaWang full-suite failure names were compared against
 the untouched `7cd3e00` base: the same 50 unrelated membership failures remain,
 with no new failures. This release does not claim that KaWang's full suite is
 green or that production reward issuance has been exercised.

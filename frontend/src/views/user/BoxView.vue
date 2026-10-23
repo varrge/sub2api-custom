@@ -243,7 +243,7 @@
         </section>
       </template>
       <!-- Recovery is independent of the currently active campaign. -->
-      <section v-if="(lastDraw || pendingRequest || drawFailedMessage) && !opening" class="space-y-3 border-t border-gray-200 py-6 text-center dark:border-dark-600" data-testid="box-result" aria-live="polite">
+      <section v-if="(lastDraw || pendingRequest || drawFailedMessage || drawNotice) && !opening" class="space-y-3 border-t border-gray-200 py-6 text-center dark:border-dark-600" data-testid="box-result" aria-live="polite">
         <template v-if="lastDraw?.prize">
           <p class="text-sm font-semibold" :style="{ color: rarityColor(lastDraw.prize.rarity) }">{{ t(`luckyBox.rarity${capitalize(lastDraw.prize.rarity)}`) }}</p>
           <p class="break-words text-xl font-semibold text-gray-900 dark:text-white">{{ lastDraw.prize.name }}</p>
@@ -252,6 +252,7 @@
           <button v-if="lastDraw.status === 'delivery_failed' || lastDraw.status === 'selected'" class="btn btn-secondary" :disabled="drawPending || hasUnresolvedDraw" @click="retryDelivery(lastDraw)">{{ t('luckyBox.retryDelivery') }}</button>
         </template>
         <p v-if="drawFailedMessage" class="text-sm text-red-600 dark:text-red-400" data-testid="box-draw-error">{{ drawFailedMessage }}</p>
+        <p v-if="drawNotice" class="text-sm text-gray-600 dark:text-dark-300">{{ drawNotice }}</p>
         <template v-if="pendingRequest">
           <p class="text-sm text-amber-700 dark:text-amber-400">{{ t('luckyBox.unresolvedDraw') }}</p>
           <button class="btn btn-secondary" data-testid="box-retry-draw" :disabled="drawPending" @click="retryDraw">{{ t('luckyBox.retryDraw') }}</button>
@@ -373,6 +374,7 @@ const revealTitle = computed(() => {
   return t(draw.prize?.type === 'empty' ? 'luckyBox.prizeEmpty' : 'luckyBox.resultTitle')
 })
 const drawFailedMessage = ref('')
+const drawNotice = ref('')
 const pendingRequest = ref<BoxDrawRequest | null>(null)
 const hasUnresolvedDraw = computed(() => pendingRequest.value !== null)
 let drawController: AbortController | null = null
@@ -554,6 +556,7 @@ const sendDraw = async (payload: BoxDrawRequest, recovery = false) => {
   const signal = drawController.signal
   drawPending.value = true
   drawFailedMessage.value = ''
+  drawNotice.value = ''
   showResultPopup.value = false
   lastDraw.value = null
   opening.value = false
@@ -564,6 +567,15 @@ const sendDraw = async (payload: BoxDrawRequest, recovery = false) => {
       if (signal.aborted || userId.value !== uid) return
       if (recovered.found) response = recovered
       else {
+        if (recovered.resolution) {
+          if (recovered.resolution !== 'closed_without_draw' || recovered.userId !== uid ||
+            recovered.requestId !== payload.requestId || recovered.campaignId !== payload.campaignId ||
+            recovered.cardTier !== payload.cardTier) throw new Error(t('luckyBox.invalidDraw'))
+          clearStoredPending(uid)
+          pendingRequest.value = null
+          drawNotice.value = t('luckyBox.closedWithoutDraw')
+          return
+        }
         now.value = Date.now()
         if (!isCampaignActive.value || campaign.value?.id !== payload.campaignId) throw new Error(t('luckyBox.noRecordedDraw'))
         response = await createBoxDraw(payload, signal)
@@ -647,6 +659,7 @@ watch(userId, (next, previous) => {
   lastDraw.value = null
   showResultPopup.value = false
   drawFailedMessage.value = ''
+  drawNotice.value = ''
   pendingRequest.value = null
   bootstrap.value = null
   draws.value = []

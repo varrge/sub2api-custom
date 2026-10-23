@@ -78,7 +78,15 @@ export interface BoxDrawRequest {
   campaignId: string
 }
 
-export async function recoverBoxDraw(payload: BoxDrawRequest, signal?: AbortSignal): Promise<(BoxDrawResponse & { found: true }) | { found: false; draw: null }> {
+export type BoxDrawRecovery = (BoxDrawResponse & { found: true }) | ({
+  found: false
+  draw: null
+  resolution?: 'closed_without_draw'
+  userId?: string
+  connectionId?: string
+} & Partial<BoxDrawRequest>)
+
+export async function recoverBoxDraw(payload: BoxDrawRequest, signal?: AbortSignal): Promise<BoxDrawRecovery> {
   const { data } = await apiClient.post('/activities/box/draws/recover', payload, { signal })
   return data
 }

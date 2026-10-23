@@ -166,6 +166,24 @@ func (h *NativeBoxHandler) draw(c *gin.Context, recoverOnly bool) {
 		return
 	}
 	if recoverOnly && string(result["found"]) == "false" && string(result["draw"]) == "null" {
+		if _, exists := result["resolution"]; exists {
+			subject, _ := middleware.GetAuthSubjectFromContext(c)
+			expected := map[string]string{
+				"resolution": "closed_without_draw", "requestId": req.RequestID, "campaignId": req.CampaignID,
+				"cardTier": req.CardTier, "userId": fmt.Sprint(subject.UserID), "connectionId": h.connectionID,
+			}
+			confirmed := map[string]any{"found": false, "draw": nil}
+			for key, value := range expected {
+				var actual string
+				if json.Unmarshal(result[key], &actual) != nil || actual != value {
+					response.Error(c, http.StatusBadGateway, "Unconfirmed recovery outcome; keep the same requestId")
+					return
+				}
+				confirmed[key] = value
+			}
+			response.Success(c, confirmed)
+			return
+		}
 		response.Success(c, map[string]any{"found": false, "draw": nil})
 		return
 	}

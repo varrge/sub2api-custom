@@ -16,6 +16,7 @@ export default {
     tierMedium: '中级卡',
     tierHigh: '高级卡',
     noRecordedDraw: '暂未查到原抽奖记录，未消耗新活动卡片。请稍后重试或联系客服核验。',
+    closedWithoutDraw: '原活动已结束，此请求未产生抽奖记录，也未消耗卡片。可以参与新的活动。',
     invalidDraw: '尚无法确认抽奖结果，请使用同一请求重试。',
     storageUnavailable: '浏览器暂时无法保存抽奖请求，请允许站点存储后重试。',
     open: '开箱',

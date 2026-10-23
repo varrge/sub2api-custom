@@ -1,6 +1,7 @@
 export default {
   luckyBox: {
     noRecordedDraw: 'The original draw was not found. No new campaign card was consumed. Retry later or contact support.',
+    closedWithoutDraw: 'The original event has closed. This request created no draw and consumed no card. You can join a new event.',
     invalidDraw: 'The draw result is not confirmed. Retry the same request.',
     storageUnavailable: 'Browser storage is unavailable. Allow site storage before drawing.',
     title: 'Lucky Box',

@@ -24,9 +24,12 @@ type ActivityLeaderboardConfig struct {
 	StartsAt          time.Time  `json:"starts_at"`
 	EndsAt            time.Time  `json:"ends_at"`
 	DemoExpiresAt     *time.Time `json:"demo_expires_at"`
-	// Period selects reward settlement windows; ranking always covers StartsAt..EndsAt.
-	Period      string `json:"period,omitempty"`
-	AutoRewards bool   `json:"auto_rewards,omitempty"`
+	DisplayMode       string     `json:"display_mode,omitempty"`
+	// Reward settlement is independent of DisplayMode and never clears usage.
+	Period                 string               `json:"period,omitempty"`
+	AutoRewards            bool                 `json:"auto_rewards,omitempty"`
+	SettlementDelayMinutes *int                 `json:"settlement_delay_minutes,omitempty"`
+	RewardRules            *ActivityRewardRules `json:"reward_rules,omitempty"`
 }
 
 func DefaultActivityLeaderboardConfig() *ActivityLeaderboardConfig {
@@ -43,11 +46,17 @@ func (c *ActivityLeaderboardConfig) Validate() error {
 	if c == nil {
 		return fmt.Errorf("activity leaderboard configuration is required")
 	}
-	if c.Period != "" && c.Period != "daily" {
-		return fmt.Errorf("period must be empty or daily")
+	if c.DisplayMode != "" && c.DisplayMode != "cumulative" && c.DisplayMode != "daily" && c.DisplayMode != "both" {
+		return fmt.Errorf("display_mode must be cumulative, daily or both")
 	}
-	if c.AutoRewards && c.Period != "daily" {
-		return fmt.Errorf("automatic rewards require daily mode")
+	if c.Period != "" && c.Period != "daily" && c.Period != "event" {
+		return fmt.Errorf("period must be daily or event")
+	}
+	if c.AutoRewards && c.Period == "" {
+		return fmt.Errorf("automatic rewards require a settlement period")
+	}
+	if err := c.RewardPolicy().Validate(); err != nil {
+		return err
 	}
 	if c.Period == "daily" {
 		zone := time.FixedZone("Asia/Shanghai", 8*60*60)
@@ -85,6 +94,34 @@ func (c *ActivityLeaderboardConfig) Validate() error {
 		return fmt.Errorf("demo_expires_at must be a valid date at or before starts_at")
 	}
 	return nil
+}
+
+func (c *ActivityLeaderboardConfig) displayWindow(now time.Time, requested string) (*ActivityLeaderboardConfig, string) {
+	view := "cumulative"
+	if c.DisplayMode == "daily" || (c.DisplayMode == "both" && requested == "daily") {
+		view = "daily"
+	}
+	if view != "daily" {
+		return c, view
+	}
+	copy := *c
+	at := now
+	if at.Before(c.StartsAt) {
+		at = c.StartsAt
+	}
+	if !at.Before(c.EndsAt) {
+		at = c.EndsAt.Add(-time.Nanosecond)
+	}
+	local := at.In(time.FixedZone("Asia/Shanghai", 8*60*60))
+	copy.StartsAt = time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, local.Location())
+	copy.EndsAt = copy.StartsAt.AddDate(0, 0, 1)
+	if copy.StartsAt.Before(c.StartsAt) {
+		copy.StartsAt = c.StartsAt
+	}
+	if copy.EndsAt.After(c.EndsAt) {
+		copy.EndsAt = c.EndsAt
+	}
+	return &copy, view
 }
 
 func (c *ActivityLeaderboardConfig) status(now time.Time) string {

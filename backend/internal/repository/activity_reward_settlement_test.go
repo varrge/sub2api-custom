@@ -111,7 +111,20 @@ VALUES('2026-10-25 00:00:00.001+08','missing-log',
 	repeated, err := freeze()
 	require.NoError(t, err)
 	require.Equal(t, first, repeated, "later source changes cannot alter a frozen award list")
+	changed := (&service.ActivityLeaderboardConfig{}).RewardPolicy()
+	changed.Rewards.Ranked[0].Quantity = 8
+	_, err = repo.FreezeDailyRewards(context.Background(), "activity-test", "2026-10-24", start, start.Add(24*time.Hour), start.Add(25*time.Hour), changed)
+	require.ErrorIs(t, err, service.ErrActivitySettlementInvalid, "frozen lists reject changed policy")
+	changed.Period = "event"
+	changed.Rewards.Participation.Enabled = false
+	custom, err := repo.FreezeDailyRewards(context.Background(), "activity-custom", "2026-10-24", start, start.Add(7*24*time.Hour), start.Add(8*24*time.Hour), changed)
+	require.NoError(t, err)
+	var customManifest service.ActivityRewardManifest
+	require.NoError(t, json.Unmarshal([]byte(custom.Manifest), &customManifest))
+	require.Equal(t, 8, customManifest.Entries[0].Quantity)
+	require.Equal(t, 0, customManifest.Entries[len(customManifest.Entries)-1].Quantity)
+	require.Equal(t, changed.Fingerprint(), customManifest.PolicyFingerprint)
 	var count int
 	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM activity_reward_manifests").Scan(&count))
-	require.Equal(t, 1, count)
+	require.Equal(t, 2, count)
 }

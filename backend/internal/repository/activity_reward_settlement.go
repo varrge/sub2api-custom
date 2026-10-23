@@ -12,7 +12,14 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
-func (r *activityLeaderboardRepository) FreezeDailyRewards(ctx context.Context, campaignID, day string, start, end, now time.Time) (*service.ActivityRewardSnapshot, error) {
+func (r *activityLeaderboardRepository) FreezeDailyRewards(ctx context.Context, campaignID, day string, start, end, now time.Time, policies ...service.ActivityRewardPolicy) (*service.ActivityRewardSnapshot, error) {
+	policy := (&service.ActivityLeaderboardConfig{}).RewardPolicy()
+	if len(policies) > 0 {
+		policy = policies[0]
+	}
+	if err := policy.Validate(); err != nil {
+		return nil, err
+	}
 	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return nil, err
@@ -21,6 +28,16 @@ func (r *activityLeaderboardRepository) FreezeDailyRewards(ctx context.Context, 
 	var existing service.ActivityRewardSnapshot
 	err = tx.QueryRowContext(ctx, `SELECT manifest,sha256 FROM activity_reward_manifests WHERE campaign_id=$1 AND day=$2`, campaignID, day).Scan(&existing.Manifest, &existing.SHA256)
 	if err == nil {
+		var manifest service.ActivityRewardManifest
+		if json.Unmarshal([]byte(existing.Manifest), &manifest) != nil {
+			return nil, service.ErrActivitySettlementInvalid
+		}
+		if manifest.PolicyFingerprint != "" && manifest.PolicyFingerprint != policy.Fingerprint() {
+			return nil, service.ErrActivitySettlementInvalid
+		}
+		if !manifest.StartsAt.Equal(start) || !manifest.EndsAt.Equal(end) {
+			return nil, service.ErrActivitySettlementInvalid
+		}
 		return &existing, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -57,11 +74,11 @@ ORDER BY SUM(ul.actual_cost) DESC,
 	}
 	manifest := service.ActivityRewardManifest{
 		CampaignID: campaignID, Day: day, StartsAt: start, EndsAt: end,
-		SettledAt: now, Rule: "daily-cards-v1", Entries: []service.ActivityRewardEntry{},
+		SettledAt: now, Rule: "configured-cards-v2", Policy: policy, PolicyFingerprint: policy.Fingerprint(), Entries: []service.ActivityRewardEntry{},
 	}
 	rank := 0
 	for rows.Next() {
-		entry := service.ActivityRewardEntry{CardTier: "low", Quantity: 1}
+		entry := service.ActivityRewardEntry{}
 		var positive bool
 		if err := rows.Scan(&entry.UserID, &entry.Email, &entry.Amount, &positive); err != nil {
 			_ = rows.Close()
@@ -70,15 +87,8 @@ ORDER BY SUM(ul.actual_cost) DESC,
 		if positive {
 			rank++
 			entry.Rank = rank
-			switch rank {
-			case 1:
-				entry.CardTier = "high"
-			case 2:
-				entry.CardTier, entry.Quantity = "medium", 2
-			case 3:
-				entry.CardTier = "medium"
-			}
 		}
+		entry.CardTier, entry.Quantity = policy.Award(entry.Rank)
 		manifest.Entries = append(manifest.Entries, entry)
 	}
 	err = rows.Err()

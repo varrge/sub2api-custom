@@ -20,7 +20,7 @@ type rewardHandlerRepo struct{ calls int }
 func (r *rewardHandlerRepo) ListSpending(context.Context, time.Time, time.Time) ([]service.ActivitySpending, error) {
 	return nil, nil
 }
-func (r *rewardHandlerRepo) FreezeDailyRewards(context.Context, string, string, time.Time, time.Time, time.Time) (*service.ActivityRewardSnapshot, error) {
+func (r *rewardHandlerRepo) FreezeDailyRewards(context.Context, string, string, time.Time, time.Time, time.Time, ...service.ActivityRewardPolicy) (*service.ActivityRewardSnapshot, error) {
 	r.calls++
 	return &service.ActivityRewardSnapshot{Manifest: `{"entries":[{"user_id":7,"email":"private@example.test"}]}`, SHA256: "digest"}, nil
 }

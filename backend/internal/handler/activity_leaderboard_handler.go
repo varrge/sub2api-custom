@@ -23,7 +23,7 @@ func (h *ActivityLeaderboardHandler) Get(c *gin.Context) {
 	}
 	// The response contains caller-specific ranking; proxies must never share it.
 	c.Header("Cache-Control", "private, no-store")
-	result, err := h.service.Get(c.Request.Context(), subject.UserID)
+	result, err := h.service.Get(c.Request.Context(), subject.UserID, c.Query("view"))
 	if err != nil {
 		response.InternalError(c, "Activity leaderboard temporarily unavailable")
 		return

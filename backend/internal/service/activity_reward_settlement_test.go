@@ -23,7 +23,7 @@ type dailyRewardTestRepo struct {
 func (r *dailyRewardTestRepo) ListSpending(context.Context, time.Time, time.Time) ([]ActivitySpending, error) {
 	return nil, nil
 }
-func (r *dailyRewardTestRepo) FreezeDailyRewards(_ context.Context, campaign, day string, start, end, now time.Time) (*ActivityRewardSnapshot, error) {
+func (r *dailyRewardTestRepo) FreezeDailyRewards(_ context.Context, campaign, day string, start, end, now time.Time, policies ...ActivityRewardPolicy) (*ActivityRewardSnapshot, error) {
 	r.calls++
 	r.start, r.end = start, end
 	return &ActivityRewardSnapshot{Manifest: day, SHA256: campaign}, nil

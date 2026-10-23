@@ -24,8 +24,9 @@ func (h *ActivityLeaderboardHandler) SettleDay(c *gin.Context) {
 		return
 	}
 	var req struct {
-		CampaignID string `json:"campaign_id"`
-		Day        string `json:"day"`
+		CampaignID        string `json:"campaign_id"`
+		Day               string `json:"day"`
+		PolicyFingerprint string `json:"policy_fingerprint"`
 	}
 	decoder := json.NewDecoder(http.MaxBytesReader(c.Writer, c.Request.Body, 2048))
 	decoder.DisallowUnknownFields()
@@ -33,7 +34,7 @@ func (h *ActivityLeaderboardHandler) SettleDay(c *gin.Context) {
 		response.BadRequest(c, "Expected campaign_id and day")
 		return
 	}
-	result, err := h.service.SettleDay(c.Request.Context(), req.CampaignID, req.Day)
+	result, err := h.service.SettleDay(c.Request.Context(), req.CampaignID, req.Day, req.PolicyFingerprint)
 	switch {
 	case errors.Is(err, service.ErrActivitySettlementInvalid):
 		response.BadRequest(c, "Daily rewards disabled, campaign changed, or invalid day")
@@ -63,7 +64,7 @@ func (h *ActivityLeaderboardHandler) GetAdmin(c *gin.Context) {
 	if !activityLeaderboardAdmin(c) {
 		return
 	}
-	result, err := h.service.GetAdmin(c.Request.Context(), 20)
+	result, err := h.service.GetAdmin(c.Request.Context(), 20, c.Query("view"))
 	if err != nil {
 		response.InternalError(c, "Activity leaderboard temporarily unavailable")
 		return
@@ -90,7 +91,7 @@ func (h *ActivityLeaderboardHandler) Export(c *gin.Context) {
 		response.BadRequest(c, "campaign_id is required")
 		return
 	}
-	result, err := h.service.GetAdmin(c.Request.Context(), limit)
+	result, err := h.service.GetAdmin(c.Request.Context(), limit, c.Query("view"))
 	if err != nil {
 		response.InternalError(c, "Activity leaderboard temporarily unavailable")
 		return

@@ -59,12 +59,28 @@ func TestActivityLeaderboardSettingsHandler(t *testing.T) {
 	cfg := service.DefaultActivityLeaderboardConfig()
 	cfg.Enabled = false
 	cfg.Title = "新榜单"
+	cfg.DisplayMode = "both"
+	cfg.Period = "event"
+	delay := 45
+	cfg.SettlementDelayMinutes = &delay
+	cfg.RewardRules = &service.ActivityRewardRules{
+		Ranked:        []service.ActivityRankReward{{Rank: 1, CardTier: "medium", Quantity: 5}},
+		Participation: service.ActivityParticipationReward{Enabled: false, CardTier: "low", Quantity: 1},
+	}
 	b, err := json.Marshal(cfg)
 	require.NoError(t, err)
 	w := call(http.MethodPut, string(b))
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	require.Equal(t, "private, no-store", w.Header().Get("Cache-Control"))
 	require.Contains(t, call(http.MethodGet, "").Body.String(), "新榜单")
+	var persisted struct {
+		Data service.ActivityLeaderboardConfig `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(call(http.MethodGet, "").Body.Bytes(), &persisted))
+	require.Equal(t, cfg.DisplayMode, persisted.Data.DisplayMode)
+	require.Equal(t, cfg.Period, persisted.Data.Period)
+	require.Equal(t, cfg.SettlementDelayMinutes, persisted.Data.SettlementDelayMinutes)
+	require.Equal(t, cfg.RewardRules, persisted.Data.RewardRules)
 	stored := repo.values[service.SettingKeyActivityLeaderboard]
 	for _, body := range []string{
 		`{}`, `null`, `{"enabled":false}`, string(b) + `{}`,

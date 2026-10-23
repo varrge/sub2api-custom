@@ -68,3 +68,9 @@ real grants, shared branch merges or releases in this implementation task.
   daily reward settlement. A regression reproduced loss of earlier-day usage
   from the display; removed rolling display windows and retained daily award
   selection only. This does not change the user's specified daily prize rules.
+- Configuration follow-up: display is independently cumulative/daily/both;
+  settlement is daily/event with a 10-1440 minute delay; rank tiers/quantities and
+  participation rules are editable. Jobs pin normalized policy hashes and
+  permit explicit same-event policy sync only before the event starts. Default
+  existing daily rules are preserved; display-only legacy events retain arbitrary
+  start times. New controls are not enabled in production by this implementation.

@@ -24,15 +24,18 @@ func (h *SettingHandler) GetActivityLeaderboardConfig(c *gin.Context) {
 func (h *SettingHandler) UpdateActivityLeaderboardConfig(c *gin.Context) {
 	// Pointer fields distinguish a deliberate empty/false value from an incomplete PUT.
 	var req struct {
-		Enabled           *bool      `json:"enabled"`
-		Title             *string    `json:"title"`
-		Subtitle          *string    `json:"subtitle"`
-		RewardDescription *string    `json:"reward_description"`
-		StartsAt          *time.Time `json:"starts_at"`
-		EndsAt            *time.Time `json:"ends_at"`
-		DemoExpiresAt     *time.Time `json:"demo_expires_at"`
-		Period            string     `json:"period"`
-		AutoRewards       bool       `json:"auto_rewards"`
+		Enabled                *bool                        `json:"enabled"`
+		Title                  *string                      `json:"title"`
+		Subtitle               *string                      `json:"subtitle"`
+		RewardDescription      *string                      `json:"reward_description"`
+		StartsAt               *time.Time                   `json:"starts_at"`
+		EndsAt                 *time.Time                   `json:"ends_at"`
+		DemoExpiresAt          *time.Time                   `json:"demo_expires_at"`
+		Period                 string                       `json:"period"`
+		AutoRewards            bool                         `json:"auto_rewards"`
+		DisplayMode            string                       `json:"display_mode"`
+		SettlementDelayMinutes *int                         `json:"settlement_delay_minutes"`
+		RewardRules            *service.ActivityRewardRules `json:"reward_rules"`
 	}
 	decoder := json.NewDecoder(http.MaxBytesReader(c.Writer, c.Request.Body, 16*1024))
 	decoder.DisallowUnknownFields()
@@ -53,6 +56,7 @@ func (h *SettingHandler) UpdateActivityLeaderboardConfig(c *gin.Context) {
 		RewardDescription: *req.RewardDescription, StartsAt: *req.StartsAt,
 		EndsAt: *req.EndsAt, DemoExpiresAt: req.DemoExpiresAt,
 		Period: req.Period, AutoRewards: req.AutoRewards,
+		DisplayMode: req.DisplayMode, SettlementDelayMinutes: req.SettlementDelayMinutes, RewardRules: req.RewardRules,
 	}
 	if err := cfg.Validate(); err != nil {
 		response.BadRequest(c, err.Error())

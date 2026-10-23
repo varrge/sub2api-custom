@@ -101,6 +101,21 @@ describe('ActivityLeaderboard', () => {
     vi.useRealTimers()
   })
 
+  it('switches daily and cumulative views only when configured for both', async () => {
+    configMock.mockResolvedValue({ ...configFixture(), display_mode: 'both' })
+    fetchMock.mockResolvedValue(fixture())
+    await open()
+    expect(fetchMock).toHaveBeenLastCalledWith(expect.any(AbortSignal), 'cumulative')
+    const daily = document.querySelector('[data-testid="leaderboard-view-daily"]') as HTMLButtonElement
+    daily.click()
+    await flushPromises()
+    expect(fetchMock).toHaveBeenLastCalledWith(expect.any(AbortSignal), 'daily')
+    expect(daily.getAttribute('aria-pressed')).toBe('true')
+    ;(document.querySelector('[data-testid="leaderboard-view-cumulative"]') as HTMLButtonElement).click()
+    await flushPromises()
+    expect(fetchMock).toHaveBeenLastCalledWith(expect.any(AbortSignal), 'cumulative')
+  })
+
   it('fetches on open, shows self outside top 20 and formats Beijing time and billed credits', async () => {
     fetchMock.mockResolvedValue(fixture())
     await open()

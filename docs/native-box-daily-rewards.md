@@ -126,7 +126,7 @@ does not change these accounting rules.
 - Native frontend created by Kimi K3 using the configured `codeg-managed` model
   alias and interactive `--yolo` mode; root finished safety logic after subsequent
   upstream connection failures. No substitute model claimed as Kimi.
-- Frontend: 451 files / 3524 tests passing; production build and ESLint passing.
+- Frontend: 452 files / 3533 tests passing; production build and ESLint passing.
 - Go: full unit suite and targeted authenticated gateway/settlement tests passing;
   real isolated PostgreSQL snapshot concurrency regression passes with `-race`.
 - KaWang: 42 box-related tests passing. Full suite has 430 tests, 380 passing and
@@ -142,3 +142,32 @@ does not change these accounting rules.
 - Configuration review regressions cover independent display/settlement,
   bounded dual-view caching, legacy non-midnight events, custom reward payloads,
   frozen-policy rejection, event-only scheduling and pre-event policy sync races.
+
+## Release pairing and case animation
+
+Sub release `v0.2.17-custom.9` pairs with KaWang
+`native-box-rewards-20261023` (feature commit `ec3cc060bb221cc00fa93c42df88a7a07654e952`).
+Both changes preserve the existing KaWang database and operator-managed campaign.
+Tagging or upgrading Sub alone does not enable rewards or upgrade KaWang.
+The previously deployed KaWang version lacks the lookup-only recovery and reward
+job endpoints; upgrade that service before connecting the native production page.
+
+The native page restores the original horizontal 5.4-second decelerating case
+reel, fixed center pointer, rarity highlight, optional sound and result dialog.
+Only the server-returned prize determines the landing position. Decorative
+fillers neither select the prize nor change its probabilities. Opening, tier
+switching and refresh remain locked until reveal. Recovery does not replay a new
+draw. Failed or pending delivery is never labeled as delivered.
+
+The independent China preview was updated without changing production rates,
+campaigns, cards or balances. Browser checks on the deployed build covered
+1440px, 390px and 320px widths, real horizontal movement, delayed reveal, reduced
+motion, one intercepted draw request and exact final center alignment (0px
+measured error). No horizontal overflow or page errors were observed. The draw
+checks used browser fixtures; no live reward credit was issued.
+
+Release verification reran the complete Sub frontend and Go unit suites and all
+42 KaWang box tests. The KaWang full-suite failure names were compared against
+the untouched `7cd3e00` base: the same 50 unrelated membership failures remain,
+with no new failures. This release does not claim that KaWang's full suite is
+green or that production reward issuance has been exercised.

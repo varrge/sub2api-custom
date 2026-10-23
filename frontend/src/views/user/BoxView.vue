@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <div class="mx-auto max-w-2xl space-y-8">
+    <div class="mx-auto w-full min-w-0 max-w-5xl space-y-8">
       <!-- Loading -->
       <div v-if="loading" class="flex items-center justify-center gap-3 py-16">
         <svg class="h-6 w-6 animate-spin text-primary-500" fill="none" viewBox="0 0 24 24">
@@ -66,6 +66,14 @@
           </div>
         </header>
 
+        <BoxReel
+          :key="userId"
+          ref="reel"
+          :prizes="prizes"
+          :tier="selectedTier"
+          :waiting="drawPending && !opening"
+        />
+
         <!-- Tier selector + open -->
         <section>
           <div class="grid grid-cols-3 gap-2">
@@ -73,7 +81,7 @@
               v-for="tier in tiers"
               :key="tier.value"
               type="button"
-              :disabled="tier.count <= 0 || hasUnresolvedDraw"
+              :disabled="tier.count <= 0 || hasUnresolvedDraw || drawPending"
               :aria-pressed="selectedTier === tier.value"
               :data-testid="`box-tier-${tier.value}`"
               :class="['rounded-lg border px-2 py-3 text-center transition-colors', tierButtonClass(tier.value)]"
@@ -114,15 +122,7 @@
           </p>
         </section>
 
-        <!-- Opening animation -->
-        <transition name="fade">
-          <div v-if="opening" class="flex flex-col items-center gap-3 py-10" data-testid="box-opening">
-            <div class="box-cube">
-              <Icon name="cube" size="xl" class="h-12 w-12 text-amber-500" />
-            </div>
-            <p class="text-sm text-gray-500 dark:text-dark-400">{{ t('luckyBox.opening') }}</p>
-          </div>
-        </transition>
+        <p v-if="opening" class="sr-only" data-testid="box-opening" role="status">{{ t('luckyBox.opening') }}</p>
 
         <!-- Prize pool -->
         <section>
@@ -258,6 +258,23 @@
         </template>
       </section>
     </div>
+    <BaseDialog :show="showResultPopup && !!lastDraw?.prize" :title="revealTitle" width="narrow" @close="showResultPopup = false">
+      <div v-if="lastDraw?.prize" class="box-reveal" :style="{ '--reward-color': rarityColor(lastDraw.prize.rarity) }" data-testid="box-reveal">
+        <p class="box-reveal__rarity">{{ t(`luckyBox.rarity${capitalize(lastDraw.prize.rarity)}`) }}</p>
+        <div class="box-reveal__reward">
+          <span v-if="lastDraw.prize.type === 'balance' && lastDraw.prize.amount !== null" class="box-reveal__amount">${{ lastDraw.prize.amount.toFixed(2) }}</span>
+          <Icon v-else :name="lastDraw.prize.type === 'extra_draw' ? 'refresh' : 'gift'" size="xl" class="h-20 w-20" />
+        </div>
+        <p class="break-words text-xl font-bold text-gray-900 dark:text-white">{{ lastDraw.prize.name }}</p>
+        <p class="mt-3 text-sm" :class="lastDraw.status === 'delivery_failed' ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-dark-300'">{{ statusLabel(lastDraw.status) }}</p>
+      </div>
+      <template #footer>
+        <button class="btn btn-primary w-full" data-testid="box-reveal-close" @click="showResultPopup = false">
+          <Icon name="check" size="sm" class="mr-2" />
+          {{ lastDraw?.status === 'delivered' ? t('luckyBox.resultClose') : t('luckyBox.resultDismiss') }}
+        </button>
+      </template>
+    </BaseDialog>
   </AppLayout>
 </template>
 
@@ -278,6 +295,8 @@ import {
 } from '@/api/luckyBox'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
+import BoxReel from '@/components/luckyBox/BoxReel.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { formatDateTime } from '@/utils/format'
 
@@ -297,6 +316,7 @@ const prizes = computed<BoxPrize[]>(() => bootstrap.value?.prizes ?? [])
 const draws = ref<BoxDraw[]>([])
 
 const selectedTier = ref<BoxCardTier>('low')
+const reel = ref<InstanceType<typeof BoxReel>>()
 
 const TIER_ICONS: Record<BoxCardTier, 'sparkles' | 'fire' | 'trophy'> = {
   low: 'sparkles',
@@ -345,11 +365,17 @@ const isCampaignActive = computed(() => campaignPhase.value === 'active')
 const drawPending = ref(false)
 const opening = ref(false)
 const lastDraw = ref<BoxDraw | null>(null)
+const showResultPopup = ref(false)
+const revealTitle = computed(() => {
+  const draw = lastDraw.value
+  if (!draw) return ''
+  if (draw.status !== 'delivered') return statusLabel(draw.status)
+  return t(draw.prize?.type === 'empty' ? 'luckyBox.prizeEmpty' : 'luckyBox.resultTitle')
+})
 const drawFailedMessage = ref('')
 const pendingRequest = ref<BoxDrawRequest | null>(null)
 const hasUnresolvedDraw = computed(() => pendingRequest.value !== null)
 let drawController: AbortController | null = null
-let revealTimer: ReturnType<typeof setTimeout> | null = null
 let clockTimer: ReturnType<typeof setInterval> | null = null
 
 // A draw whose outcome is unknown is persisted before the request is sent so a
@@ -507,20 +533,6 @@ const fetchBootstrap = async () => {
   }
 }
 
-const prefersReducedMotion = () =>
-  typeof window !== 'undefined' &&
-  typeof window.matchMedia === 'function' &&
-  window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-const REVEAL_MS = 900
-
-const clearRevealTimer = () => {
-  if (revealTimer !== null) {
-    clearTimeout(revealTimer)
-    revealTimer = null
-  }
-}
-
 const validDrawResponse = (value: BoxDrawResponse, payload: BoxDrawRequest, uid: string) => {
   const d = value?.draw
   return !!d && typeof d.id === 'string' && d.id.length > 0 && d.requestId === payload.requestId &&
@@ -542,6 +554,8 @@ const sendDraw = async (payload: BoxDrawRequest, recovery = false) => {
   const signal = drawController.signal
   drawPending.value = true
   drawFailedMessage.value = ''
+  showResultPopup.value = false
+  lastDraw.value = null
   opening.value = false
   try {
     let response: BoxDrawResponse
@@ -562,15 +576,15 @@ const sendDraw = async (payload: BoxDrawRequest, recovery = false) => {
       pendingRequest.value = null
       clearStoredPending(uid)
     } else pendingRequest.value = payload
+    if (!recovery && response.draw.status !== 'voided' && reel.value) {
+      opening.value = true
+      await reel.value.play(response.draw)
+      if (signal.aborted || userId.value !== uid) return
+    }
     if (response.draw.campaignId === campaign.value?.id) applyDrawResponse(response)
     lastDraw.value = response.draw
-    opening.value = true
-    clearRevealTimer()
-    const delay = prefersReducedMotion() ? 60 : REVEAL_MS
-    revealTimer = setTimeout(() => {
-      opening.value = false
-      revealTimer = null
-    }, delay)
+    opening.value = false
+    showResultPopup.value = !recovery && response.draw.status !== 'voided'
   } catch (error) {
     if (signal.aborted || userId.value !== uid) return
     // Outcome unknown: keep the same requestId (in memory and in storage) and
@@ -602,6 +616,7 @@ const startDraw = () => {
     drawFailedMessage.value = t('luckyBox.storageUnavailable')
     return
   }
+  reel.value?.prepareSound()
   pendingRequest.value = payload
   void sendDraw(payload)
 }
@@ -627,10 +642,10 @@ const retryDelivery = (draw: BoxDraw) => {
 watch(userId, (next, previous) => {
   if (previous === undefined || next === previous) return
   drawController?.abort()
-  clearRevealTimer()
   drawPending.value = false
   opening.value = false
   lastDraw.value = null
+  showResultPopup.value = false
   drawFailedMessage.value = ''
   pendingRequest.value = null
   bootstrap.value = null
@@ -650,7 +665,6 @@ onMounted(() => {
 onUnmounted(() => {
   bootstrapController?.abort()
   drawController?.abort()
-  clearRevealTimer()
   if (clockTimer !== null) {
     clearInterval(clockTimer)
     clockTimer = null
@@ -659,45 +673,15 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.fade-enter-active,
-.fade-leave-active {
-  transition: all 0.3s ease;
+.box-reveal { padding: 12px 0 20px; text-align: center; }
+.box-reveal__rarity { color: var(--reward-color); font-size: 13px; font-weight: 700; }
+.box-reveal__reward {
+  display: flex; align-items: center; justify-content: center; min-height: 152px; margin: 16px 0;
+  border-top: 2px solid var(--reward-color); border-bottom: 2px solid var(--reward-color);
+  background: color-mix(in srgb, var(--reward-color) 10%, transparent); color: var(--reward-color);
+  animation: reward-arrive 300ms ease-out;
 }
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
-}
-
-@keyframes box-shake {
-  0%,
-  100% {
-    transform: scale(1) rotate(0deg);
-  }
-  25% {
-    transform: scale(1.08) rotate(-6deg);
-  }
-  50% {
-    transform: scale(1.15) rotate(6deg);
-  }
-  75% {
-    transform: scale(1.08) rotate(-4deg);
-  }
-}
-
-.box-cube {
-  animation: box-shake 0.9s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .box-cube {
-    animation: none;
-  }
-
-  .fade-enter-active,
-  .fade-leave-active {
-    transition: opacity 0.1s ease;
-  }
-}
+.box-reveal__amount { max-width: 100%; overflow-wrap: anywhere; font-size: 44px; line-height: 1.2; font-weight: 800; }
+@keyframes reward-arrive { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .box-reveal__reward { animation: none; } }
 </style>

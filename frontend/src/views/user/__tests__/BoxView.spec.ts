@@ -155,6 +155,7 @@ describe('BoxView', () => {
     wrapper = undefined
     document.body.innerHTML = ''
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it('renders tier counts and selects the highest tier with cards by default', async () => {
@@ -181,6 +182,14 @@ describe('BoxView', () => {
     expect(view.get('[data-testid="box-prize-p2"]').text()).toContain('70.00%')
   })
 
+  it('renders a horizontal prize reel with a fixed center marker', async () => {
+    bootstrapMock.mockResolvedValue(bootstrapFixture())
+    const view = await mountView()
+    expect(view.find('[data-testid="box-reel-viewport"]').exists()).toBe(true)
+    expect(view.find('[data-testid="box-reel-marker"]').exists()).toBe(true)
+    expect(view.findAll('[data-testid="box-reel-item"]').length).toBeGreaterThan(6)
+  })
+
   it('disables the open button while a draw is pending', async () => {
     bootstrapMock.mockResolvedValue(bootstrapFixture())
     let resolveDraw!: (value: ReturnType<typeof drawResponse>) => void
@@ -197,7 +206,33 @@ describe('BoxView', () => {
 
     resolveDraw(drawResponse(drawFixture({ requestId: drawMock.mock.calls[0][0].requestId }), 1))
     await flushPromises()
+    expect(view.get('[data-testid="box-open"]').attributes('disabled')).toBeDefined()
+    await vi.advanceTimersByTimeAsync(100)
+    await flushPromises()
     expect(view.get('[data-testid="box-open"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('keeps every draw control locked during the full reel animation and lands on the server prize', async () => {
+    vi.spyOn(window, 'matchMedia').mockReturnValue({ matches: false } as MediaQueryList)
+    bootstrapMock.mockResolvedValue(bootstrapFixture())
+    drawMock.mockImplementation(async request => drawResponse(drawFixture({ requestId: request.requestId }), 1))
+    const view = await mountView()
+    await view.get('[data-testid="box-open"]').trigger('click')
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(view.get('[data-testid="box-open"]').attributes('disabled')).toBeDefined()
+    expect(view.get('[data-testid="box-tier-low"]').attributes('disabled')).toBeDefined()
+    expect(view.get('[data-testid="box-refresh"]').attributes('disabled')).toBeDefined()
+    expect(view.find('[data-testid="box-result"]').exists()).toBe(false)
+    expect(view.find('[data-testid="box-draw-d1"]').exists()).toBe(false)
+    expect(view.get('[data-target-prize]').text()).toContain('余额 5 元')
+    await view.get('[data-testid="box-open"]').trigger('click')
+    expect(drawMock).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(4700)
+    await flushPromises()
+    expect(view.get('[data-testid="box-result"]').text()).toContain('余额 5 元')
+    expect(view.get('[data-testid="box-open"]').attributes('disabled')).toBeUndefined()
+    vi.mocked(window.matchMedia).mockRestore()
   })
 
   it('reveals the server-returned prize and upserts it into history', async () => {
@@ -222,6 +257,39 @@ describe('BoxView', () => {
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
   })
 
+  it('does not expose the previous account prize when the account changes mid-animation', async () => {
+    vi.spyOn(window, 'matchMedia').mockReturnValue({ matches: false } as MediaQueryList)
+    bootstrapMock.mockResolvedValue(bootstrapFixture())
+    drawMock.mockImplementation(async request => drawResponse(drawFixture({ requestId: request.requestId }), 1))
+    const view = await mountView()
+    await view.get('[data-testid="box-open"]').trigger('click')
+    await flushPromises()
+    expect(view.find('[data-testid="box-opening"]').exists()).toBe(true)
+    authUser.value = { id: 2, username: 'bob' }
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(6000)
+    await flushPromises()
+    expect(view.find('[data-testid="box-draw-d1"]').exists()).toBe(false)
+    expect(view.find('[data-testid="box-result"]').exists()).toBe(false)
+    expect(document.querySelector('[data-testid="box-reveal"]')).toBeNull()
+    expect(view.get('[data-testid="box-open"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('shows the fixed result if the campaign ends during the reel animation', async () => {
+    vi.spyOn(window, 'matchMedia').mockReturnValue({ matches: false } as MediaQueryList)
+    vi.setSystemTime(new Date('2026-10-31T23:59:58+08:00'))
+    bootstrapMock.mockResolvedValue(bootstrapFixture())
+    drawMock.mockImplementation(async request => drawResponse(drawFixture({ requestId: request.requestId }), 1))
+    const view = await mountView()
+    await view.get('[data-testid="box-open"]').trigger('click')
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(3000)
+    await flushPromises()
+    expect(view.text()).toContain('开箱活动已结束')
+    expect(view.get('[data-testid="box-result"]').text()).toContain('余额 5 元')
+    expect(drawMock).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps the exact same requestId when retrying a failed draw', async () => {
     bootstrapMock.mockResolvedValue(bootstrapFixture())
     drawMock
@@ -244,6 +312,21 @@ describe('BoxView', () => {
     expect(drawMock).toHaveBeenCalledTimes(2)
     expect(drawMock.mock.calls[1][0]).toEqual(firstCall)
     expect(view.get('[data-testid="box-result"]').text()).toContain('已发放')
+  })
+
+  it('does not claim a failed delivery has been awarded in the result popup', async () => {
+    bootstrapMock.mockResolvedValue(bootstrapFixture())
+    drawMock.mockImplementation(async request => drawResponse(drawFixture({ requestId: request.requestId, status: 'delivery_failed' }), 1))
+    const view = await mountView()
+    await view.get('[data-testid="box-open"]').trigger('click')
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(100)
+    await flushPromises()
+    const popup = document.querySelector('[data-testid="box-reveal"]')
+    expect(popup?.textContent).toContain('发放失败')
+    expect(popup?.textContent).not.toContain('已发放')
+    expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain('恭喜获得')
+    expect(localStorage.getItem(STORAGE_KEY)).not.toBeNull()
   })
 
   it('issues no new draw id after a failed draw: open and tier switches stay blocked', async () => {

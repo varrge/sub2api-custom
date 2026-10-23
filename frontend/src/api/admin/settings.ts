@@ -5,6 +5,7 @@
 
 import { apiClient } from "../client";
 import { listPlatformIds } from "@/constants/platformCatalog";
+import type { ActivityRewardRules, LeaderboardDisplayMode } from '../activityLeaderboard'
 import type {
   AccountPlatform,
   CustomEndpoint,
@@ -1417,6 +1418,11 @@ export async function updateSidebarGroups(settings: SidebarGroupsConfig): Promis
  * explicit timezone offset; `demo_expires_at` is null when unset.
  */
 export interface ActivityLeaderboardSettings {
+  period?: '' | 'daily' | 'event'
+  auto_rewards?: boolean
+  display_mode?: LeaderboardDisplayMode
+  settlement_delay_minutes?: number
+  reward_rules?: ActivityRewardRules
   enabled: boolean;
   title: string;
   subtitle: string;

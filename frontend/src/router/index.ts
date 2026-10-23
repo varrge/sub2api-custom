@@ -280,6 +280,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/activities/box',
+    name: 'Box',
+    component: () => import('@/views/user/BoxView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Lucky Box',
+      titleKey: 'luckyBox.title',
+      descriptionKey: 'luckyBox.description'
+    }
+  },
+  {
     path: '/affiliate',
     name: 'Affiliate',
     component: () => import('@/views/user/AffiliateView.vue'),
@@ -1101,7 +1113,8 @@ router.beforeEach(async (to, _from, next) => {
       '/subscriptions',
       '/my-group-buy',
       '/group-buy',
-      '/redeem'
+      '/redeem',
+      '/activities/box'
     ]
 
     if (restrictedPaths.some((path) => to.path.startsWith(path))) {

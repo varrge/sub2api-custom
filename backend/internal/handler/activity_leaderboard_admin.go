@@ -3,7 +3,10 @@ package handler
 import (
 	"bytes"
 	"encoding/csv"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -15,6 +18,34 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 )
+
+func (h *ActivityLeaderboardHandler) SettleDay(c *gin.Context) {
+	if !activityLeaderboardAdmin(c) {
+		return
+	}
+	var req struct {
+		CampaignID        string `json:"campaign_id"`
+		Day               string `json:"day"`
+		PolicyFingerprint string `json:"policy_fingerprint"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(c.Writer, c.Request.Body, 2048))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil || decoder.Decode(new(any)) != io.EOF {
+		response.BadRequest(c, "Expected campaign_id and day")
+		return
+	}
+	result, err := h.service.SettleDay(c.Request.Context(), req.CampaignID, req.Day, req.PolicyFingerprint)
+	switch {
+	case errors.Is(err, service.ErrActivitySettlementInvalid):
+		response.BadRequest(c, "Daily rewards disabled, campaign changed, or invalid day")
+	case errors.Is(err, service.ErrActivitySettlementPending):
+		response.Error(c, http.StatusConflict, "Day is not ready; retry after billing recovery")
+	case err != nil:
+		response.InternalError(c, "Unable to freeze reward manifest; retry later")
+	default:
+		response.Success(c, result)
+	}
+}
 
 func activityLeaderboardAdmin(c *gin.Context) bool {
 	c.Header("Cache-Control", "private, no-store")
@@ -33,7 +64,7 @@ func (h *ActivityLeaderboardHandler) GetAdmin(c *gin.Context) {
 	if !activityLeaderboardAdmin(c) {
 		return
 	}
-	result, err := h.service.GetAdmin(c.Request.Context(), 20)
+	result, err := h.service.GetAdmin(c.Request.Context(), 20, c.Query("view"))
 	if err != nil {
 		response.InternalError(c, "Activity leaderboard temporarily unavailable")
 		return
@@ -60,7 +91,7 @@ func (h *ActivityLeaderboardHandler) Export(c *gin.Context) {
 		response.BadRequest(c, "campaign_id is required")
 		return
 	}
-	result, err := h.service.GetAdmin(c.Request.Context(), limit)
+	result, err := h.service.GetAdmin(c.Request.Context(), limit, c.Query("view"))
 	if err != nil {
 		response.InternalError(c, "Activity leaderboard temporarily unavailable")
 		return

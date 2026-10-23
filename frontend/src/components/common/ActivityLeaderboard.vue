@@ -48,6 +48,13 @@
         </div>
 
         <div :aria-busy="loading" class="min-h-0 flex-1 space-y-3.5 overflow-y-auto overscroll-contain p-3.5">
+          <div v-if="config?.display_mode === 'both'" class="flex gap-1 rounded-lg bg-gray-100 p-1 dark:bg-dark-800" role="group" :aria-label="t('activityLeaderboard.viewLabel')">
+            <button v-for="view in ['cumulative', 'daily'] as const" :key="view" type="button"
+              :data-testid="`leaderboard-view-${view}`" :aria-pressed="selectedView === view"
+              class="flex-1 rounded px-3 py-1.5 text-xs font-medium"
+              :class="selectedView === view ? 'bg-white text-gray-900 shadow-sm dark:bg-dark-600 dark:text-white' : 'text-gray-500'"
+              @click="changeView(view)">{{ t(`activityLeaderboard.view${view === 'daily' ? 'Daily' : 'Cumulative'}`) }}</button>
+          </div>
           <div class="rounded-xl border border-amber-200/60 bg-gradient-to-br from-amber-50 via-orange-50/80 to-white px-3 py-2.5 dark:border-amber-400/15 dark:from-amber-950/40 dark:via-dark-800 dark:to-dark-900">
             <p v-if="displaySubtitle" class="break-words whitespace-pre-wrap text-xs font-medium text-amber-800 dark:text-amber-200">{{ displaySubtitle }}</p>
             <p v-if="data" class="mt-1 text-[11px] leading-5 text-gray-600 dark:text-dark-300">
@@ -176,6 +183,7 @@ import {
   type ActivityLeaderboard,
   type ActivityLeaderboardEntry,
   type ActivityLeaderboardPublicConfig,
+  type LeaderboardView,
 } from '@/api/activityLeaderboard'
 import { activityLeaderboardConfigVersion } from '@/utils/activityLeaderboardEvents'
 import Icon from '@/components/icons/Icon.vue'
@@ -190,6 +198,15 @@ const data = ref<DisplayLeaderboard | null>(null)
 const loading = ref(false)
 const error = ref(false)
 const config = ref<ActivityLeaderboardPublicConfig | null>(null)
+const selectedView = ref<LeaderboardView>('cumulative')
+const requestView = () => config.value?.display_mode === 'both' ? selectedView.value : undefined
+function changeView(view: LeaderboardView) {
+  if (selectedView.value === view) return
+  selectedView.value = view
+  stop()
+  data.value = null
+  void fetchLeaderboard()
+}
 const triggerRef = ref<HTMLButtonElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
 const panelStyle = ref({ top: '0px', left: '0px' })
@@ -224,6 +241,7 @@ async function fetchConfig() {
       const changed = JSON.stringify(config.value) !== JSON.stringify(result)
       config.value = result
       if (changed) {
+        selectedView.value = result.display_mode === 'daily' ? 'daily' : 'cumulative'
         stop()
         data.value = null
         error.value = false
@@ -274,8 +292,8 @@ async function fetchLeaderboard() {
   error.value = false
   try {
     const result: DisplayLeaderboard = authStore.isAdmin
-      ? { ...await getAdminActivityLeaderboard(request.signal), me: null }
-      : await getActivityLeaderboard(request.signal)
+      ? { ...await getAdminActivityLeaderboard(request.signal, requestView()), me: null }
+      : await getActivityLeaderboard(request.signal, requestView())
     if (!request.signal.aborted) {
       if (!result.enabled || result.status === 'disabled') {
         if (config.value) config.value = { ...config.value, enabled: false, status: 'disabled' }
@@ -305,7 +323,10 @@ async function download(scope: ActivityLeaderboardExportScope) {
   exporting.value = scope
   exportError.value = ''
   try {
-    const blob = await exportActivityLeaderboard(campaignID, scope, request.signal)
+    const view = requestView()
+    const blob = view
+      ? await exportActivityLeaderboard(campaignID, scope, request.signal, view)
+      : await exportActivityLeaderboard(campaignID, scope, request.signal)
     if (!request.signal.aborted && authStore.isAdmin) {
       saveAs(blob, `leaderboard-${campaignID}-${scope}.csv`)
     }

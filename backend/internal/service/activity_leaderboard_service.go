@@ -21,8 +21,10 @@ type ActivityLeaderboardConfigReader interface {
 
 type ActivityLeaderboardMetadata struct {
 	ActivityLeaderboardConfig
-	CampaignID string `json:"campaign_id"`
-	Status     string `json:"status"`
+	CampaignID        string               `json:"campaign_id"`
+	Status            string               `json:"status"`
+	RewardPolicy      ActivityRewardPolicy `json:"reward_policy"`
+	PolicyFingerprint string               `json:"policy_fingerprint"`
 }
 
 // ActivitySpending is private repository data. Never serialize user IDs to the public endpoint.
@@ -44,6 +46,8 @@ type ActivityLeaderboardEntry struct {
 }
 
 type ActivityLeaderboard struct {
+	DisplayMode       string                     `json:"display_mode"`
+	View              string                     `json:"view"`
 	Enabled           bool                       `json:"enabled"`
 	Title             string                     `json:"title"`
 	Subtitle          string                     `json:"subtitle"`
@@ -69,6 +73,7 @@ type AdminActivityLeaderboardEntry struct {
 }
 
 type AdminActivityLeaderboard struct {
+	View string `json:"view"`
 	ActivityLeaderboardMetadata
 	UpdatedAt        time.Time                       `json:"updated_at"`
 	RefreshSeconds   int                             `json:"refresh_seconds"`
@@ -86,13 +91,13 @@ type activityLeaderboardSnapshot struct {
 }
 
 type ActivityLeaderboardService struct {
-	repo     ActivityLeaderboardRepository
-	settings ActivityLeaderboardConfigReader
-	secret   []byte
-	now      func() time.Time
-	mu       sync.RWMutex
-	snapshot *activityLeaderboardSnapshot
-	refresh  singleflight.Group
+	repo      ActivityLeaderboardRepository
+	settings  ActivityLeaderboardConfigReader
+	secret    []byte
+	now       func() time.Time
+	mu        sync.RWMutex
+	snapshots map[string]*activityLeaderboardSnapshot
+	refresh   singleflight.Group
 }
 
 func NewActivityLeaderboardService(repo ActivityLeaderboardRepository, cfg *config.Config, settings ActivityLeaderboardConfigReader) *ActivityLeaderboardService {
@@ -104,14 +109,15 @@ func (s *ActivityLeaderboardService) GetConfig(ctx context.Context) (*ActivityLe
 	if err != nil {
 		return nil, err
 	}
-	return &ActivityLeaderboardMetadata{ActivityLeaderboardConfig: *cfg, CampaignID: cfg.campaignID(), Status: cfg.status(s.now())}, nil
+	policy := cfg.RewardPolicy()
+	return &ActivityLeaderboardMetadata{ActivityLeaderboardConfig: *cfg, CampaignID: cfg.campaignID(), Status: cfg.status(s.now()), RewardPolicy: policy, PolicyFingerprint: policy.Fingerprint()}, nil
 }
 
 func (s *ActivityLeaderboardService) cached(now time.Time, key, status string) *activityLeaderboardSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if s.snapshot != nil && s.snapshot.key == key && s.snapshot.status == status && now.Sub(s.snapshot.updatedAt) < activityLeaderboardTTL {
-		return s.snapshot
+	if snapshot := s.snapshots[key]; snapshot != nil && snapshot.status == status && now.Sub(snapshot.updatedAt) < activityLeaderboardTTL {
+		return snapshot
 	}
 	return nil
 }
@@ -122,13 +128,19 @@ func (s *ActivityLeaderboardService) alias(campaignID string, userID int64) stri
 	return hex.EncodeToString(mac.Sum(nil)[:6])
 }
 
-func (s *ActivityLeaderboardService) Get(ctx context.Context, userID int64) (*ActivityLeaderboard, error) {
+func (s *ActivityLeaderboardService) Get(ctx context.Context, userID int64, views ...string) (*ActivityLeaderboard, error) {
 	cfg, err := s.settings.GetActivityLeaderboardConfig(ctx)
 	if err != nil {
 		return nil, err
 	}
 	now := s.now()
+	requested := ""
+	if len(views) > 0 {
+		requested = views[0]
+	}
+	cfg, view := cfg.displayWindow(now, requested)
 	result := &ActivityLeaderboard{
+		DisplayMode: cfg.DisplayMode, View: view,
 		Enabled: cfg.Enabled, Title: cfg.Title, Subtitle: cfg.Subtitle, RewardDescription: cfg.RewardDescription,
 		CampaignID: cfg.campaignID(), StartsAt: cfg.StartsAt, EndsAt: cfg.EndsAt,
 		Status: cfg.status(now), UpdatedAt: now, RefreshSeconds: int(activityLeaderboardTTL.Seconds()),
@@ -181,13 +193,19 @@ func (s *ActivityLeaderboardService) Get(ctx context.Context, userID int64) (*Ac
 // GetAdmin shares the ranking snapshot with Get, but uses a separate response
 // type so private identities can never leak through the public JSON serializer.
 // A zero limit returns all participants for export; previews use a limit of 20.
-func (s *ActivityLeaderboardService) GetAdmin(ctx context.Context, limit int) (*AdminActivityLeaderboard, error) {
+func (s *ActivityLeaderboardService) GetAdmin(ctx context.Context, limit int, views ...string) (*AdminActivityLeaderboard, error) {
 	cfg, err := s.settings.GetActivityLeaderboardConfig(ctx)
 	if err != nil {
 		return nil, err
 	}
 	now := s.now()
+	requested := ""
+	if len(views) > 0 {
+		requested = views[0]
+	}
+	cfg, view := cfg.displayWindow(now, requested)
 	result := &AdminActivityLeaderboard{
+		View:                        view,
 		ActivityLeaderboardMetadata: ActivityLeaderboardMetadata{ActivityLeaderboardConfig: *cfg, CampaignID: cfg.campaignID(), Status: cfg.status(now)},
 		UpdatedAt:                   now, RefreshSeconds: int(activityLeaderboardTTL.Seconds()),
 		Entries: []AdminActivityLeaderboardEntry{},
@@ -241,7 +259,25 @@ func (s *ActivityLeaderboardService) getSnapshot(ctx context.Context, cfg *Activ
 				}
 			}
 			s.mu.Lock()
-			s.snapshot = fresh // Only one campaign snapshot is retained; no per-request cache keys.
+			if s.snapshots == nil {
+				s.snapshots = make(map[string]*activityLeaderboardSnapshot)
+			}
+			// Keep at most the two configured views, never per-user cache entries.
+			for existing, cached := range s.snapshots {
+				if now.Sub(cached.updatedAt) >= activityLeaderboardTTL {
+					delete(s.snapshots, existing)
+				}
+			}
+			if _, exists := s.snapshots[key]; !exists && len(s.snapshots) >= 2 {
+				oldestKey := ""
+				for existing, cached := range s.snapshots {
+					if oldestKey == "" || cached.updatedAt.Before(s.snapshots[oldestKey].updatedAt) {
+						oldestKey = existing
+					}
+				}
+				delete(s.snapshots, oldestKey)
+			}
+			s.snapshots[key] = fresh
 			s.mu.Unlock()
 			return fresh, nil
 		})

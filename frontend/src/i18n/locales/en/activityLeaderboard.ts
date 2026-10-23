@@ -1,5 +1,8 @@
 export default {
   activityLeaderboard: {
+    viewLabel: 'Leaderboard scope',
+    viewCumulative: 'Event total',
+    viewDaily: 'Daily spend',
     demo: 'Demo data',
     demoNotice: 'Preview only. All entries, including your rank, are simulated and do not count toward the event.',
     demoExpiry: 'Returns to the real leaderboard at {time} (Beijing time).',

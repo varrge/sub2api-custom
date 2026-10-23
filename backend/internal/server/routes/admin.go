@@ -39,7 +39,9 @@ func RegisterAdminRoutes(
 
 		// Private activity identities and award exports use administrator authentication.
 		admin.GET("/activities/leaderboard", panelRateLimiter.Heavy(), h.ActivityLeaderboard.GetAdmin)
+		admin.GET("/activities/leaderboard/config", h.ActivityLeaderboard.Config)
 		admin.GET("/activities/leaderboard/export", panelRateLimiter.Heavy(), h.ActivityLeaderboard.Export)
+		admin.POST("/activities/leaderboard/settlements", panelRateLimiter.Heavy(), h.ActivityLeaderboard.SettleDay)
 
 		// 用户管理
 		registerUserManagementRoutes(admin, h)

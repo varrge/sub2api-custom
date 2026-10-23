@@ -1,5 +1,8 @@
 export default {
   activityLeaderboard: {
+    viewLabel: '榜单范围',
+    viewCumulative: '活动累计',
+    viewDaily: '当日消费',
     demo: '演示数据',
     demoNotice: '仅供界面预览，含“我的排名”在内均为模拟数据，不计入正式消费榜。',
     demoExpiry: '{time}（北京时间）自动恢复正式榜单。',

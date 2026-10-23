@@ -32,6 +32,8 @@ func TestActivityLeaderboardSettingsRoutesRequireAdminAuthentication(t *testing.
 		{http.MethodPut, "/api/v1/admin/settings/activity-leaderboard"},
 		{http.MethodGet, "/api/v1/admin/activities/leaderboard"},
 		{http.MethodGet, "/api/v1/admin/activities/leaderboard/export"},
+		{http.MethodGet, "/api/v1/admin/activities/leaderboard/config"},
+		{http.MethodPost, "/api/v1/admin/activities/leaderboard/settlements"},
 	} {
 		method, path := endpoint.method, endpoint.path
 		for _, tc := range []struct {

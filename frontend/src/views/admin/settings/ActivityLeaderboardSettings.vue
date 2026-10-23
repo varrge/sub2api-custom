@@ -38,6 +38,51 @@
       </div>
 
       <template v-else>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="space-y-1 text-sm">
+            <span>{{ t('admin.settings.activityLeaderboard.displayMode') }}</span>
+            <select v-model="form.displayMode" class="input" data-testid="activity-leaderboard-display-mode">
+              <option value="cumulative">{{ t('admin.settings.activityLeaderboard.displayCumulative') }}</option>
+              <option value="daily">{{ t('admin.settings.activityLeaderboard.displayDaily') }}</option>
+              <option value="both">{{ t('admin.settings.activityLeaderboard.displayBoth') }}</option>
+            </select>
+          </label>
+          <label class="space-y-1 text-sm">
+            <span>{{ t('admin.settings.activityLeaderboard.settlementPeriod') }}</span>
+            <select v-model="form.period" class="input" data-testid="activity-leaderboard-settlement-period">
+              <option value="daily">{{ t('admin.settings.activityLeaderboard.settleDaily') }}</option>
+              <option value="event">{{ t('admin.settings.activityLeaderboard.settleEvent') }}</option>
+            </select>
+          </label>
+          <label class="space-y-1 text-sm">
+            <span>{{ t('admin.settings.activityLeaderboard.delayMinutes') }}</span>
+            <input v-model.number="form.delayMinutes" class="input" type="number" min="10" max="1440" step="1" data-testid="activity-leaderboard-delay" />
+          </label>
+          <label class="flex items-center gap-2">
+            <input v-model="form.autoRewards" data-testid="activity-leaderboard-auto-rewards" type="checkbox" />
+            {{ t('admin.settings.activityLeaderboard.autoRewards') }}
+          </label>
+        </div>
+        <p class="text-sm text-gray-500">
+          {{ t('admin.settings.activityLeaderboard.dailyHint') }}
+        </p>
+        <fieldset class="space-y-3 border-t border-gray-200 pt-4 dark:border-dark-700">
+          <legend class="text-sm font-semibold">{{ t('admin.settings.activityLeaderboard.rankRewards') }}</legend>
+          <div v-for="(reward, index) in form.rewardRules.ranked" :key="index" class="grid grid-cols-[1fr_1fr_1fr_auto] items-end gap-2" data-testid="activity-rank-reward">
+            <label class="text-xs">{{ t('admin.settings.activityLeaderboard.rankNumber') }}<input v-model.number="reward.rank" class="input mt-1" type="number" min="1" max="1000" :aria-label="t('admin.settings.activityLeaderboard.rankNumber')" /></label>
+            <label class="text-xs">{{ t('admin.settings.activityLeaderboard.cardTier') }}<select v-model="reward.card_tier" class="input mt-1" :aria-label="t('admin.settings.activityLeaderboard.cardTier')"><option v-for="tier in cardTiers" :key="tier" :value="tier">{{ t(`admin.settings.activityLeaderboard.tier${tier}`) }}</option></select></label>
+            <label class="text-xs">{{ t('admin.settings.activityLeaderboard.quantity') }}<input v-model.number="reward.quantity" class="input mt-1" type="number" min="1" max="100" :aria-label="t('admin.settings.activityLeaderboard.quantity')" /></label>
+            <button type="button" class="btn btn-secondary px-2" :title="t('common.delete')" :aria-label="t('common.delete')" @click="form.rewardRules.ranked.splice(index, 1)"><Icon name="x" size="sm" /></button>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" :disabled="form.rewardRules.ranked.length >= 20" data-testid="activity-add-rank" @click="addRankReward">{{ t('admin.settings.activityLeaderboard.addRank') }}</button>
+          <label class="flex items-center gap-2 text-sm"><input v-model="form.rewardRules.participation.enabled" type="checkbox" data-testid="activity-participation-enabled" />{{ t('admin.settings.activityLeaderboard.participation') }}</label>
+          <div v-if="form.rewardRules.participation.enabled" class="grid gap-3 sm:grid-cols-2">
+            <label class="text-sm">{{ t('admin.settings.activityLeaderboard.cardTier') }}<select v-model="form.rewardRules.participation.card_tier" class="input mt-1"><option v-for="tier in cardTiers" :key="tier" :value="tier">{{ t(`admin.settings.activityLeaderboard.tier${tier}`) }}</option></select></label>
+            <label class="text-sm">{{ t('admin.settings.activityLeaderboard.quantity') }}<input v-model.number="form.rewardRules.participation.quantity" class="input mt-1" type="number" min="1" max="100" /></label>
+            <label class="flex items-center gap-2 text-sm sm:col-span-2"><input v-model="form.rewardRules.participation.include_zero_cost" type="checkbox" />{{ t('admin.settings.activityLeaderboard.includeZeroCost') }}</label>
+          </div>
+          <p class="text-xs text-gray-500">{{ t('admin.settings.activityLeaderboard.policySnapshotHint') }}</p>
+        </fieldset>
         <div
           class="rounded-lg border border-sky-200 bg-sky-50 p-4 dark:border-sky-800 dark:bg-sky-900/20"
         >
@@ -257,6 +302,7 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { adminAPI } from "@/api/admin";
 import type { ActivityLeaderboardSettings } from "@/api/admin/settings";
+import type { ActivityRewardRules, LeaderboardDisplayMode } from '@/api/activityLeaderboard';
 import { useAppStore } from "@/stores";
 import { extractApiErrorMessage } from "@/utils/apiError";
 import { notifyActivityLeaderboardConfigSaved } from "@/utils/activityLeaderboardEvents";
@@ -279,6 +325,11 @@ const saving = ref(false);
 const showValidation = ref(false);
 
 const form = reactive({
+  displayMode: 'cumulative' as LeaderboardDisplayMode,
+  period: 'event' as 'daily' | 'event',
+  delayMinutes: 10,
+  rewardRules: defaultRewardRules(),
+  autoRewards: false,
   enabled: true,
   title: "",
   subtitle: "",
@@ -288,10 +339,26 @@ const form = reactive({
   demoExpiresAtInput: "",
 });
 
+const cardTiers = ['low', 'medium', 'high'] as const
+function defaultRewardRules(): ActivityRewardRules {
+  return { ranked: [{ rank: 1, card_tier: 'high', quantity: 1 }, { rank: 2, card_tier: 'medium', quantity: 2 }, { rank: 3, card_tier: 'medium', quantity: 1 }],
+    participation: { enabled: true, card_tier: 'low', quantity: 1, include_zero_cost: true } }
+}
+function addRankReward() {
+  if (form.rewardRules.ranked.length >= 20) return
+  const rank = Math.max(0, ...form.rewardRules.ranked.map(r => Number(r.rank) || 0)) + 1
+  form.rewardRules.ranked.push({ rank, card_tier: 'low', quantity: 1 })
+}
+
 const runeLength = (value: string) => [...value].length;
 
 const validationErrors = computed<string[]>(() => {
   const errors: string[] = [];
+  const positiveInt = (n: number, max: number) => Number.isInteger(n) && n >= 1 && n <= max
+  if (!Number.isInteger(form.delayMinutes) || form.delayMinutes < 10 || form.delayMinutes > 1440) errors.push('delay')
+  if (form.rewardRules.ranked.length > 20 || new Set(form.rewardRules.ranked.map(r => r.rank)).size !== form.rewardRules.ranked.length ||
+    form.rewardRules.ranked.some(r => !positiveInt(r.rank, 1000) || !positiveInt(r.quantity, 100) || !cardTiers.includes(r.card_tier)) ||
+    !positiveInt(form.rewardRules.participation.quantity, 100)) errors.push('rewardRules')
 
   const titleLength = runeLength(form.title.trim());
   if (titleLength < 1 || titleLength > 80) errors.push("title");
@@ -305,6 +372,7 @@ const validationErrors = computed<string[]>(() => {
   } else {
     if (startsAt >= endsAt) errors.push("periodOrder");
     else if (endsAt - startsAt > MAX_PERIOD_MS) errors.push("periodLength");
+    if (form.period === 'daily' && ((startsAt + 8 * 3600000) % 86400000 !== 0 || (endsAt + 8 * 3600000) % 86400000 !== 0)) errors.push('dailyMidnight')
   }
 
   if (form.demoExpiresAtInput) {
@@ -320,6 +388,11 @@ const validationErrors = computed<string[]>(() => {
 
 function applyConfig(config: ActivityLeaderboardSettings) {
   form.enabled = config.enabled;
+  form.period = config.period === 'daily' ? 'daily' : 'event';
+  form.displayMode = config.display_mode || 'cumulative';
+  form.delayMinutes = config.settlement_delay_minutes ?? 10;
+  form.rewardRules = config.reward_rules ? JSON.parse(JSON.stringify(config.reward_rules)) : defaultRewardRules();
+  form.autoRewards = config.auto_rewards ?? false;
   form.title = config.title;
   form.subtitle = config.subtitle;
   form.reward_description = config.reward_description;
@@ -355,6 +428,11 @@ async function saveConfig() {
   try {
     const updated = await adminAPI.settings.updateActivityLeaderboardSettings({
       enabled: form.enabled,
+      period: form.period,
+      auto_rewards: form.autoRewards,
+      display_mode: form.displayMode,
+      settlement_delay_minutes: form.delayMinutes,
+      reward_rules: form.rewardRules,
       title: form.title.trim(),
       subtitle: form.subtitle,
       reward_description: form.reward_description,

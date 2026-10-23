@@ -151,7 +151,8 @@ does not change these accounting rules.
 
 ## Release pairing and case animation
 
-Sub release `v0.2.17-custom.9` pairs with KaWang
+Sub release `v0.2.17-custom.10` (a test-only lint correction of
+`v0.2.17-custom.9`, with unchanged runtime code) pairs with KaWang
 `native-box-rewards-20261023` (feature commit `b18ed50`).
 Both changes preserve the existing KaWang database and operator-managed campaign.
 Tagging or upgrading Sub alone does not enable rewards or upgrade KaWang.

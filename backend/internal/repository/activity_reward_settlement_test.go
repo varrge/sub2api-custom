@@ -50,7 +50,8 @@ INSERT INTO month_card_billing_pending(created_at) VALUES('2026-10-24 01:00:00+0
 	require.NoError(t, err)
 	_, err = db.Exec(string(migration))
 	require.NoError(t, err)
-	repo := NewActivityLeaderboardRepository(db).(service.ActivitySettlementRepository)
+	repo, ok := NewActivityLeaderboardRepository(db).(service.ActivitySettlementRepository)
+	require.True(t, ok, "repository must implement ActivitySettlementRepository")
 	start, err := time.Parse(time.RFC3339, "2026-10-24T00:00:00+08:00")
 	require.NoError(t, err)
 	freeze := func() (*service.ActivityRewardSnapshot, error) {

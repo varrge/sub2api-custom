@@ -38,6 +38,19 @@
       </div>
 
       <template v-else>
+        <div class="flex flex-wrap items-center gap-6">
+          <label class="flex items-center gap-2">
+            <input v-model="form.daily" data-testid="activity-leaderboard-daily" type="checkbox" @change="form.autoRewards = false" />
+            {{ t('admin.settings.activityLeaderboard.daily') }}
+          </label>
+          <label class="flex items-center gap-2">
+            <input v-model="form.autoRewards" data-testid="activity-leaderboard-auto-rewards" type="checkbox" :disabled="!form.daily" />
+            {{ t('admin.settings.activityLeaderboard.autoRewards') }}
+          </label>
+        </div>
+        <p v-if="form.daily" class="text-sm text-gray-500">
+          {{ t('admin.settings.activityLeaderboard.dailyHint') }}
+        </p>
         <div
           class="rounded-lg border border-sky-200 bg-sky-50 p-4 dark:border-sky-800 dark:bg-sky-900/20"
         >
@@ -279,6 +292,8 @@ const saving = ref(false);
 const showValidation = ref(false);
 
 const form = reactive({
+  daily: false,
+  autoRewards: false,
   enabled: true,
   title: "",
   subtitle: "",
@@ -320,6 +335,8 @@ const validationErrors = computed<string[]>(() => {
 
 function applyConfig(config: ActivityLeaderboardSettings) {
   form.enabled = config.enabled;
+  form.daily = config.period === 'daily';
+  form.autoRewards = config.auto_rewards ?? false;
   form.title = config.title;
   form.subtitle = config.subtitle;
   form.reward_description = config.reward_description;
@@ -355,6 +372,8 @@ async function saveConfig() {
   try {
     const updated = await adminAPI.settings.updateActivityLeaderboardSettings({
       enabled: form.enabled,
+      period: form.daily ? 'daily' : '',
+      auto_rewards: form.daily && form.autoRewards,
       title: form.title.trim(),
       subtitle: form.subtitle,
       reward_description: form.reward_description,

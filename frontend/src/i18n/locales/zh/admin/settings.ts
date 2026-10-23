@@ -206,6 +206,9 @@ export default {
         auditRetentionHint: '超过该天数的操作日志将被自动清理；填 0 表示永久保留（仅支持手动清空）。'
       },
       activityLeaderboard: {
+        daily: '每日独立排名（北京时间）',
+        autoRewards: '允许自动结算奖励名单',
+        dailyHint: '起止时间须为北京时间零点。每日结束10分钟后可结算；自动发卡还需在开箱管理中绑定消费榜任务。',
         title: '消费榜活动',
         description: '配置用户端顶栏奖杯入口展示的消费榜活动。此配置独立于其他系统设置，使用本卡片的保存按钮单独保存。',
         enabled: '启用消费榜',

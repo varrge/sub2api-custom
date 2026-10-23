@@ -113,6 +113,21 @@ describe('ActivityLeaderboardSettings', () => {
     expect(inputValue('activity-leaderboard-title')).toBe('中秋国庆双节消费榜')
   })
 
+  it('persists daily rewards opt-in and disables it when returning to cumulative mode', async () => {
+    mocks.getConfig.mockResolvedValue(configFixture({ period: 'daily', auto_rewards: true }))
+    await mountSettings()
+    const daily = wrapper!.get('[data-testid="activity-leaderboard-daily"]')
+    const rewards = wrapper!.get('[data-testid="activity-leaderboard-auto-rewards"]')
+    expect((daily.element as HTMLInputElement).checked).toBe(true)
+    expect((rewards.element as HTMLInputElement).checked).toBe(true)
+    await clickSave()
+    expect(mocks.updateConfig).toHaveBeenLastCalledWith(expect.objectContaining({ period: 'daily', auto_rewards: true }))
+    await daily.setValue(false)
+    await clickSave()
+    expect(mocks.updateConfig).toHaveBeenLastCalledWith(expect.objectContaining({ period: '', auto_rewards: false }))
+    expect((rewards.element as HTMLInputElement).disabled).toBe(true)
+  })
+
   it('blocks saving and shows client-side validation errors', async () => {
     await mountSettings()
     await setInput('activity-leaderboard-title', '')
@@ -157,6 +172,8 @@ describe('ActivityLeaderboardSettings', () => {
 
     expect(mocks.updateConfig).toHaveBeenCalledTimes(1)
     expect(mocks.updateConfig).toHaveBeenCalledWith({
+      period: '',
+      auto_rewards: false,
       enabled: true,
       title: '双旦消费榜',
       subtitle: '月满算力，双节开工！',

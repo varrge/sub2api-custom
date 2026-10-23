@@ -1417,6 +1417,8 @@ export async function updateSidebarGroups(settings: SidebarGroupsConfig): Promis
  * explicit timezone offset; `demo_expires_at` is null when unset.
  */
 export interface ActivityLeaderboardSettings {
+  period?: '' | 'daily'
+  auto_rewards?: boolean
   enabled: boolean;
   title: string;
   subtitle: string;

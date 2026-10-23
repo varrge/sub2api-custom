@@ -128,6 +128,7 @@ func (s *ActivityLeaderboardService) Get(ctx context.Context, userID int64) (*Ac
 		return nil, err
 	}
 	now := s.now()
+	cfg = cfg.displayPeriod(now)
 	result := &ActivityLeaderboard{
 		Enabled: cfg.Enabled, Title: cfg.Title, Subtitle: cfg.Subtitle, RewardDescription: cfg.RewardDescription,
 		CampaignID: cfg.campaignID(), StartsAt: cfg.StartsAt, EndsAt: cfg.EndsAt,
@@ -187,6 +188,7 @@ func (s *ActivityLeaderboardService) GetAdmin(ctx context.Context, limit int) (*
 		return nil, err
 	}
 	now := s.now()
+	cfg = cfg.displayPeriod(now)
 	result := &AdminActivityLeaderboard{
 		ActivityLeaderboardMetadata: ActivityLeaderboardMetadata{ActivityLeaderboardConfig: *cfg, CampaignID: cfg.campaignID(), Status: cfg.status(now)},
 		UpdatedAt:                   now, RefreshSeconds: int(activityLeaderboardTTL.Seconds()),

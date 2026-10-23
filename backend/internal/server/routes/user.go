@@ -103,6 +103,10 @@ func RegisterUserRoutes(
 
 		authenticated.GET("/activities/leaderboard/config", h.ActivityLeaderboard.Config)
 		authenticated.GET("/activities/leaderboard", panelRateLimiter.Heavy(), h.ActivityLeaderboard.Get)
+		nativeBox := handler.NewNativeBoxHandler()
+		authenticated.GET("/activities/box/bootstrap", panelRateLimiter.Heavy(), nativeBox.Bootstrap)
+		authenticated.POST("/activities/box/draws", panelRateLimiter.Heavy(), nativeBox.Draw)
+		authenticated.POST("/activities/box/draws/recover", panelRateLimiter.Heavy(), nativeBox.Recover)
 		authenticated.GET("/activities/double-festival/leaderboard", panelRateLimiter.Heavy(), h.ActivityLeaderboard.Get)
 
 		// 使用记录（聚合统计属重查询，叠加更严格的按用户限流）

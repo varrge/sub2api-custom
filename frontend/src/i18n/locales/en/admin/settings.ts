@@ -206,6 +206,9 @@ export default {
         auditRetentionHint: 'Audit logs older than this are cleaned up automatically. Set to 0 to keep them forever (manual clear only).'
       },
       activityLeaderboard: {
+        daily: 'Daily ranking (Asia/Shanghai)',
+        autoRewards: 'Allow automatic reward settlement',
+        dailyHint: 'Boundaries must be midnight in Asia/Shanghai. Settlement opens 10 minutes after each day ends. Link a reward job in box administration to issue cards.',
         title: 'Activity Leaderboard',
         description: 'Configure the consumption leaderboard shown from the trophy entry in the user header. This configuration is saved independently via this card’s save button, not the global save.',
         enabled: 'Enable leaderboard',

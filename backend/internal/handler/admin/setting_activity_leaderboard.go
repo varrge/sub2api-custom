@@ -31,6 +31,8 @@ func (h *SettingHandler) UpdateActivityLeaderboardConfig(c *gin.Context) {
 		StartsAt          *time.Time `json:"starts_at"`
 		EndsAt            *time.Time `json:"ends_at"`
 		DemoExpiresAt     *time.Time `json:"demo_expires_at"`
+		Period            string     `json:"period"`
+		AutoRewards       bool       `json:"auto_rewards"`
 	}
 	decoder := json.NewDecoder(http.MaxBytesReader(c.Writer, c.Request.Body, 16*1024))
 	decoder.DisallowUnknownFields()
@@ -50,6 +52,7 @@ func (h *SettingHandler) UpdateActivityLeaderboardConfig(c *gin.Context) {
 		Enabled: *req.Enabled, Title: *req.Title, Subtitle: *req.Subtitle,
 		RewardDescription: *req.RewardDescription, StartsAt: *req.StartsAt,
 		EndsAt: *req.EndsAt, DemoExpiresAt: req.DemoExpiresAt,
+		Period: req.Period, AutoRewards: req.AutoRewards,
 	}
 	if err := cfg.Validate(); err != nil {
 		response.BadRequest(c, err.Error())

@@ -24,6 +24,8 @@ type ActivityLeaderboardConfig struct {
 	StartsAt          time.Time  `json:"starts_at"`
 	EndsAt            time.Time  `json:"ends_at"`
 	DemoExpiresAt     *time.Time `json:"demo_expires_at"`
+	Period            string     `json:"period,omitempty"`
+	AutoRewards       bool       `json:"auto_rewards,omitempty"`
 }
 
 func DefaultActivityLeaderboardConfig() *ActivityLeaderboardConfig {
@@ -39,6 +41,21 @@ func DefaultActivityLeaderboardConfig() *ActivityLeaderboardConfig {
 func (c *ActivityLeaderboardConfig) Validate() error {
 	if c == nil {
 		return fmt.Errorf("activity leaderboard configuration is required")
+	}
+	if c.Period != "" && c.Period != "daily" {
+		return fmt.Errorf("period must be empty or daily")
+	}
+	if c.AutoRewards && c.Period != "daily" {
+		return fmt.Errorf("automatic rewards require daily mode")
+	}
+	if c.Period == "daily" {
+		zone := time.FixedZone("Asia/Shanghai", 8*60*60)
+		for _, at := range []time.Time{c.StartsAt, c.EndsAt} {
+			local := at.In(zone)
+			if local.Hour() != 0 || local.Minute() != 0 || local.Second() != 0 || local.Nanosecond() != 0 {
+				return fmt.Errorf("daily activity boundaries must be midnight Asia/Shanghai")
+			}
+		}
 	}
 	for _, field := range []struct {
 		name, value string
@@ -67,6 +84,22 @@ func (c *ActivityLeaderboardConfig) Validate() error {
 		return fmt.Errorf("demo_expires_at must be a valid date at or before starts_at")
 	}
 	return nil
+}
+
+// The stored campaign remains unchanged; only the live display rolls each day.
+func (c *ActivityLeaderboardConfig) displayPeriod(now time.Time) *ActivityLeaderboardConfig {
+	if c.Period != "daily" || now.Before(c.StartsAt) {
+		return c
+	}
+	result := *c
+	at := now
+	if !at.Before(c.EndsAt) {
+		at = c.EndsAt.Add(-time.Nanosecond)
+	}
+	local := at.In(time.FixedZone("Asia/Shanghai", 8*60*60))
+	result.StartsAt = time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, local.Location())
+	result.EndsAt = result.StartsAt.AddDate(0, 0, 1)
+	return &result
 }
 
 func (c *ActivityLeaderboardConfig) status(now time.Time) string {

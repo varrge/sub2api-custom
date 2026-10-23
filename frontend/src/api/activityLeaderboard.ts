@@ -17,6 +17,8 @@ export interface ActivityLeaderboardConfig {
   starts_at: string
   ends_at: string
   demo_expires_at: string | null
+  period?: '' | 'daily'
+  auto_rewards?: boolean
 }
 
 /** Lightweight public config: the stored config plus campaign metadata. */

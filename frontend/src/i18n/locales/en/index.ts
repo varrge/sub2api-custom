@@ -1,4 +1,5 @@
 import activityLeaderboard from './activityLeaderboard'
+import luckyBox from './luckyBox'
 import groupBuy from './groupBuy'
 import landing from './landing'
 import common from './common'
@@ -18,6 +19,7 @@ import enterprisePayment from './enterprisePayment'
 
 export default {
   ...activityLeaderboard,
+  ...luckyBox,
   ...groupBuy,
   ...landing,
   ...common,

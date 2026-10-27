@@ -57,8 +57,6 @@
 .festival-dates { display: flex; align-items: flex-start; gap: .35rem; max-width: 23rem; color: var(--fest-muted); font-size: .64rem; line-height: 1.6; }
 .festival-dates svg { flex-shrink: 0; }
 .festival-dates-wrap { display: flex; min-width: 0; flex-direction: column; gap: .25rem; }
-.festival-credit { color: var(--fest-muted); font-size: .62rem; line-height: 1.5; overflow-wrap: anywhere; }
-.festival-credit a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .festival-progress { position: relative; border-color: var(--fest-edge); background: var(--fest-paper); }
 .festival-section-tag { display: inline-block; margin: -1px 0 .65rem; color: var(--fest-muted); font-size: .6rem; font-weight: 800; letter-spacing: .13em; }
 .festival-progress::after { position: absolute; right: 1rem; top: 1rem; content: '✦'; color: var(--fest-gold); font-size: 1rem; }

@@ -54,7 +54,7 @@
       </div>
 
       <template v-else-if="campaign">
-        <!-- Decorative Hero section with unchanged whale-girl PNG and attribution -->
+        <!-- Decorative Hero section with unchanged whale-girl PNG -->
         <header class="festival-hero" data-testid="d11-hero">
           <div class="festival-marquee" aria-hidden="true">
             <span>✦ DOUBLE ELEVEN ✦</span><span>{{ t('activityCampaigns.festival.marquee') }}</span><span>✦ 11.11 ✦</span>
@@ -122,11 +122,6 @@
             </div>
             <div class="festival-dates-wrap">
               <p class="festival-dates"><Icon name="calendar" size="sm" />{{ t('activityCampaigns.window', { start: formatCn(campaign.starts_at), end: formatCn(campaign.ends_at) }) }}</p>
-              <div class="festival-credit">
-                {{ t('activityCampaigns.festival.artworkCredit') }}:
-                <a href="https://github.com/YunYueSama/codex-deepseek-pet" target="_blank" rel="noopener noreferrer">YunYueSama / codex-deepseek-pet</a>
-                · <a href="/activity-campaigns/whale-girl-license.txt" target="_blank" rel="noopener noreferrer">{{ t('activityCampaigns.festival.artworkLicense') }}</a>
-              </div>
             </div>
           </div>
         </header>

@@ -2428,6 +2428,12 @@ func (s *AccountTestService) testGeminiAccountConnection(c *gin.Context, account
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Failed to build request: %s", err.Error()))
 	}
 
+	if account.IsGeminiOpenAIUpstream() {
+		req, err = prepareGeminiOpenAIRequest(req, account)
+		if err != nil {
+			return s.sendErrorAndEnd(c, err.Error())
+		}
+	}
 	// Send test_start event
 	s.sendEvent(c, TestEvent{Type: "test_start", Model: testModelID})
 
@@ -2448,6 +2454,13 @@ func (s *AccountTestService) testGeminiAccountConnection(c *gin.Context, account
 		return s.sendErrorAndEnd(c, fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body)))
 	}
 
+	if account.IsGeminiOpenAIUpstream() {
+		adapted, adaptErr := adaptGeminiOpenAIResponse(resp, account.GetGeminiUpstreamProtocol(), true)
+		if adaptErr != nil {
+			return s.sendErrorAndEnd(c, adaptErr.Error())
+		}
+		resp = adapted
+	}
 	// Process SSE stream
 	return s.processGeminiStream(c, resp.Body)
 }

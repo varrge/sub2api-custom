@@ -124,6 +124,17 @@ func (s *GeminiMessagesCompatService) ForwardListModels(ctx context.Context, acc
 	if account == nil {
 		return nil, errors.New("account is nil")
 	}
+	if account.IsGeminiOpenAIUpstream() {
+		ids, failure, err := s.listGeminiOpenAIModels(ctx, account)
+		if err != nil || failure != nil {
+			return failure, err
+		}
+		models := make([]gemini.Model, 0, len(ids))
+		for _, id := range ids {
+			models = append(models, gemini.FallbackModel(id))
+		}
+		return geminiModelsJSONResult(http.StatusOK, gemini.ModelsListResponse{Models: models})
+	}
 	if !account.IsVertexServiceAccount() {
 		return s.forwardGeminiModelsGET(ctx, account, "/v1beta/models")
 	}
@@ -151,6 +162,19 @@ func (s *GeminiMessagesCompatService) ForwardGetModel(ctx context.Context, accou
 	if account == nil {
 		return nil, errors.New("account is nil")
 	}
+	if account.IsGeminiOpenAIUpstream() {
+		ids, failure, err := s.listGeminiOpenAIModels(ctx, account)
+		if err != nil || failure != nil {
+			return failure, err
+		}
+		model = strings.TrimPrefix(model, "models/")
+		if slices.Contains(ids, model) {
+			return geminiModelsJSONResult(http.StatusOK, gemini.FallbackModel(model))
+		}
+		return geminiModelsJSONResult(http.StatusNotFound, map[string]any{"error": map[string]any{
+			"code": http.StatusNotFound, "status": "NOT_FOUND", "message": "Model not found",
+		}})
+	}
 	if !account.IsVertexServiceAccount() {
 		return s.forwardGeminiModelsGET(ctx, account, "/v1beta/models/"+model)
 	}
@@ -175,6 +199,23 @@ func (s *GeminiMessagesCompatService) ForwardGetModel(ctx context.Context, accou
 			"status":  googleapi.HTTPStatusToGoogleStatus(http.StatusNotFound),
 		},
 	})
+}
+
+func (s *GeminiMessagesCompatService) listGeminiOpenAIModels(ctx context.Context, account *Account) ([]string, *UpstreamHTTPResult, error) {
+	builder := &AccountTestService{cfg: s.cfg}
+	req, err := builder.buildGeminiUpstreamModelsRequest(ctx, account)
+	if err != nil {
+		return nil, nil, err
+	}
+	result, err := s.doGeminiModelsGET(req, account)
+	if err != nil {
+		return nil, nil, err
+	}
+	if result.StatusCode < 200 || result.StatusCode >= 300 {
+		return nil, result, nil
+	}
+	ids, err := extractUpstreamModelIDs(result.Body)
+	return ids, nil, err
 }
 
 // forwardGeminiModelsGET 向 AI Studio 兼容上游转发模型接口的 GET 请求。

@@ -1523,6 +1523,11 @@ export default {
         modelPassthroughDesc: '所有模型请求将直接转发至 Gemini API，不进行模型限制或映射。',
         baseUrlHint: '留空使用官方 Gemini API',
         apiKeyHint: 'AI Studio 新建的 Key 以 AQ. 开头（旧版以 AIza 开头）；第三方上游填写其提供的 Key',
+        upstreamProtocol: {
+          label: '上游协议',
+          native: 'Gemini 原生（默认）',
+          hint: '选择上游实际使用的 API。原生协议保持现有 Gemini 行为；OpenAI 协议使用 Bearer 认证及 /v1/responses 或 /v1/chat/completions。'
+        },
         tier: {
           label: '账号等级',
           hint: '提示：系统会优先尝试自动识别账号等级；若自动识别不可用或失败，则使用你选择的等级作为回退（本地模拟配额）。',

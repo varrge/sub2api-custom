@@ -896,12 +896,65 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
   })
 })
 
-describe('CreateAccountModal gemini explicit cache upstream switch', () => {
+describe('CreateAccountModal Gemini API Key settings', () => {
   beforeEach(() => {
     authIsSimpleMode.value = true
     createAccountMock.mockReset().mockResolvedValue({ id: 43, platform: 'gemini', type: 'apikey' })
     probeUpstreamBillingMock.mockReset().mockResolvedValue({})
     syncUpstreamModelsMock.mockReset().mockResolvedValue({ models: [], metadata: {} })
+  })
+
+  it.each(['native', 'responses', 'chat_completions'])(
+    'creates a Gemini API Key account using the %s upstream protocol',
+    async (protocol) => {
+      const wrapper = mountModal()
+      await selectButtonByText(wrapper, 'Gemini')
+      await selectButtonByText(wrapper, 'admin.accounts.gemini.accountType.apiKeyTitle')
+      const selector = wrapper.getComponent('[data-testid="gemini-upstream-protocol"]')
+      expect(selector.props('modelValue')).toBe('native')
+      selector.vm.$emit('update:modelValue', protocol)
+      await wrapper.get('form#create-account-form input[type="text"]').setValue('Gemini upstream')
+      await wrapper.get('form#create-account-form input[type="password"]').setValue('upstream-key')
+      await wrapper.get('form#create-account-form').trigger('submit.prevent')
+      await flushPromises()
+
+      expect(createAccountMock).toHaveBeenCalledTimes(1)
+      expect(createAccountMock.mock.calls[0]?.[0]).toMatchObject({
+        platform: 'gemini',
+        type: 'apikey',
+        credentials: { api_key: 'upstream-key', gemini_upstream_protocol: protocol }
+      })
+      wrapper.unmount()
+    }
+  )
+
+  it('only offers the upstream protocol for Gemini API Key accounts', async () => {
+    const wrapper = mountModal()
+    expect(wrapper.find('[data-testid="gemini-upstream-protocol"]').exists()).toBe(false)
+    await selectButtonByText(wrapper, 'Gemini')
+    expect(wrapper.find('[data-testid="gemini-upstream-protocol"]').exists()).toBe(false)
+    await selectButtonByText(wrapper, 'admin.accounts.gemini.accountType.apiKeyTitle')
+    expect(wrapper.find('[data-testid="gemini-upstream-protocol"]').exists()).toBe(true)
+    await selectButtonByText(wrapper, 'admin.accounts.vertexLabel')
+    expect(wrapper.find('[data-testid="gemini-upstream-protocol"]').exists()).toBe(false)
+    await selectButtonByText(wrapper, 'admin.accounts.gemini.accountType.apiKeyTitle')
+    await selectButtonByText(wrapper, 'OpenAI')
+    await selectButtonByText(wrapper, 'API Key')
+    expect(wrapper.find('[data-testid="gemini-upstream-protocol"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('resets the upstream protocol when reopening the create dialog', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'Gemini')
+    await selectButtonByText(wrapper, 'admin.accounts.gemini.accountType.apiKeyTitle')
+    wrapper.getComponent('[data-testid="gemini-upstream-protocol"]').vm.$emit('update:modelValue', 'responses')
+    await wrapper.setProps({ show: false })
+    await wrapper.setProps({ show: true })
+    await selectButtonByText(wrapper, 'Gemini')
+    await selectButtonByText(wrapper, 'admin.accounts.gemini.accountType.apiKeyTitle')
+    expect(wrapper.getComponent('[data-testid="gemini-upstream-protocol"]').props('modelValue')).toBe('native')
+    wrapper.unmount()
   })
 
   it('only offers the switch for a custom base url and sends it on create', async () => {

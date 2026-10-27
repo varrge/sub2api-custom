@@ -84,6 +84,7 @@ func (p *GeminiAPIBatchImageProvider) SupportsAccount(account *Account) bool {
 	return account != nil &&
 		account.Platform == PlatformGemini &&
 		account.Type == AccountTypeAPIKey &&
+		!account.IsGeminiOpenAIUpstream() &&
 		batchImageProviderAPIKey(account) != ""
 }
 

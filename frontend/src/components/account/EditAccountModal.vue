@@ -28,6 +28,22 @@
 
       <!-- API Key fields (only for apikey type) -->
       <div v-if="account.type === 'apikey'" class="space-y-4">
+        <div v-if="account.platform === 'gemini'">
+          <label for="edit-gemini-upstream-protocol" class="input-label">{{ t('admin.accounts.gemini.upstreamProtocol.label') }}</label>
+          <Select
+            id="edit-gemini-upstream-protocol"
+            v-model="editGeminiUpstreamProtocol"
+            data-testid="gemini-upstream-protocol"
+            :aria-label="t('admin.accounts.gemini.upstreamProtocol.label')"
+            aria-describedby="edit-gemini-upstream-protocol-hint"
+            :options="[
+              { value: 'native', label: t('admin.accounts.gemini.upstreamProtocol.native') },
+              { value: 'responses', label: 'OpenAI Responses' },
+              { value: 'chat_completions', label: 'OpenAI Chat Completions' }
+            ]"
+          />
+          <p id="edit-gemini-upstream-protocol-hint" class="input-hint">{{ t('admin.accounts.gemini.upstreamProtocol.hint') }}</p>
+        </div>
         <div v-if="!isCNApiKeyAccount || editApiProtocol !== 'adaptive'">
           <label class="input-label">{{ t('admin.accounts.baseUrl') }}</label>
           <input
@@ -3523,6 +3539,7 @@ interface TempUnschedRuleForm {
 const submitting = ref(false)
 const editBaseUrl = ref('https://api.anthropic.com')
 const editApiKey = ref('')
+const editGeminiUpstreamProtocol = ref<'native' | 'responses' | 'chat_completions'>('native')
 
 // ── 国产供应商（Kimi / Zhipu / DeepSeek）account_mode / api_protocol 编辑 ──
 // account_mode 决定额度/余额监控路径，api_protocol 决定转发端点与格式；
@@ -4341,6 +4358,11 @@ const syncFormFromAccount = (newAccount: Account | null) => {
 
   // Load intercept warmup requests setting (applies to all account types)
   const credentials = newAccount.credentials as Record<string, unknown> | undefined
+  const storedGeminiProtocol = credentials?.gemini_upstream_protocol
+  editGeminiUpstreamProtocol.value =
+    storedGeminiProtocol === 'responses' || storedGeminiProtocol === 'chat_completions'
+      ? storedGeminiProtocol
+      : 'native'
   interceptWarmupRequests.value = credentials?.intercept_warmup_requests === true
   autoPauseOnExpired.value = newAccount.auto_pause_on_expired === true
   editVertexProjectId.value = ''
@@ -5405,6 +5427,9 @@ const handleSubmit = async () => {
       const newCredentials: Record<string, unknown> = {
         ...currentCredentials,
         base_url: newBaseUrl
+      }
+      if (props.account.platform === 'gemini') {
+        newCredentials.gemini_upstream_protocol = editGeminiUpstreamProtocol.value
       }
 
       // 国产供应商：模式与协议写入凭据（决定额度/余额探测与转发端点/格式）。

@@ -1228,7 +1228,11 @@ func (s *AccountTestService) buildGeminiUpstreamModelsRequest(ctx context.Contex
 		return nil, newUpstreamModelSyncConfigError("Invalid Gemini base URL", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, buildGeminiModelsURL(normalizedBaseURL), nil)
+	modelsURL := buildGeminiModelsURL(normalizedBaseURL)
+	if account.IsGeminiOpenAIUpstream() {
+		modelsURL = buildOpenAIModelsURL(normalizedBaseURL)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, modelsURL, nil)
 	if err != nil {
 		return nil, newUpstreamModelSyncConfigError("Invalid Gemini model list URL", err)
 	}
@@ -1240,7 +1244,11 @@ func (s *AccountTestService) buildGeminiUpstreamModelsRequest(ctx context.Contex
 		if apiKey == "" {
 			return nil, newUpstreamModelSyncConfigError("No Gemini API key is available", nil)
 		}
-		req.Header.Set("x-goog-api-key", apiKey)
+		if account.IsGeminiOpenAIUpstream() {
+			req.Header.Set("Authorization", "Bearer "+apiKey)
+		} else {
+			req.Header.Set("x-goog-api-key", apiKey)
+		}
 	case AccountTypeOAuth:
 		if strings.TrimSpace(account.GetCredential("project_id")) != "" {
 			return nil, newUpstreamModelSyncUnsupportedError("Gemini Code Assist model listing is not supported by this sync button", nil)

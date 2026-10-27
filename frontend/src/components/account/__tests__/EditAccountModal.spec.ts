@@ -1911,7 +1911,7 @@ describe('EditAccountModal OpenAI 自动使用重置卡', () => {
   })
 })
 
-describe('EditAccountModal gemini explicit cache upstream switch', () => {
+describe('EditAccountModal Gemini API Key settings', () => {
   function buildGeminiApiKeyAccount(credentials: Record<string, unknown>) {
     return {
       id: 21,
@@ -1937,6 +1937,59 @@ describe('EditAccountModal gemini explicit cache upstream switch', () => {
     authIsSimpleMode.value = true
     updateAccountMock.mockReset()
     checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+  })
+
+  it.each([
+    [undefined, 'native'],
+    ['native', 'native'],
+    ['responses', 'responses'],
+    ['chat_completions', 'chat_completions'],
+    ['unknown-protocol', 'native']
+  ])('loads %s as %s and preserves other credentials when saving', async (storedProtocol, expectedProtocol) => {
+    const account = buildGeminiApiKeyAccount({
+      base_url: 'https://upstream.example.com',
+      model_mapping: { 'gemini-2.5-flash': 'upstream-model' },
+      custom_setting: { enabled: true },
+      ...(storedProtocol === undefined ? {} : { gemini_upstream_protocol: storedProtocol })
+    })
+    updateAccountMock.mockResolvedValue(account)
+    const wrapper = mountModal(account)
+    expect(wrapper.get<HTMLSelectElement>('[data-testid="gemini-upstream-protocol"]').element.value).toBe(expectedProtocol)
+
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.credentials).toMatchObject({
+      ...account.credentials,
+      gemini_upstream_protocol: expectedProtocol
+    })
+    expect(account.credentials.gemini_upstream_protocol).toBe(storedProtocol)
+    wrapper.unmount()
+  })
+
+  it.each(['responses', 'chat_completions'])('can switch %s back to native', async (protocol) => {
+    const account = buildGeminiApiKeyAccount({
+      base_url: 'https://upstream.example.com',
+      gemini_upstream_protocol: protocol
+    })
+    updateAccountMock.mockResolvedValue(account)
+    const wrapper = mountModal(account)
+    await wrapper.get('[data-testid="gemini-upstream-protocol"]').setValue('native')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock.mock.calls[0]?.[1]?.credentials.gemini_upstream_protocol).toBe('native')
+    wrapper.unmount()
+  })
+
+  it.each(['oauth', 'service_account'])('hides the upstream protocol for Gemini %s accounts', (type) => {
+    const wrapper = mountModal({ ...buildVertexAccount(), type })
+    expect(wrapper.find('[data-testid="gemini-upstream-protocol"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('hides the upstream protocol for other API Key platforms', () => {
+    const wrapper = mountModal(buildAccount())
+    expect(wrapper.find('[data-testid="gemini-upstream-protocol"]').exists()).toBe(false)
+    wrapper.unmount()
   })
 
   it('hides the switch for the official AI Studio address', () => {

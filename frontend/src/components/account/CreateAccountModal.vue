@@ -1501,6 +1501,22 @@
 
       <!-- API Key input (only for apikey type, excluding Antigravity which has its own fields) -->
       <div v-if="form.type === 'apikey' && form.platform !== 'antigravity'" class="space-y-4">
+        <div v-if="form.platform === 'gemini' && accountCategory === 'apikey'">
+          <label for="create-gemini-upstream-protocol" class="input-label">{{ t('admin.accounts.gemini.upstreamProtocol.label') }}</label>
+          <Select
+            id="create-gemini-upstream-protocol"
+            v-model="geminiUpstreamProtocol"
+            data-testid="gemini-upstream-protocol"
+            :aria-label="t('admin.accounts.gemini.upstreamProtocol.label')"
+            aria-describedby="create-gemini-upstream-protocol-hint"
+            :options="[
+              { value: 'native', label: t('admin.accounts.gemini.upstreamProtocol.native') },
+              { value: 'responses', label: 'OpenAI Responses' },
+              { value: 'chat_completions', label: 'OpenAI Chat Completions' }
+            ]"
+          />
+          <p id="create-gemini-upstream-protocol-hint" class="input-hint">{{ t('admin.accounts.gemini.upstreamProtocol.hint') }}</p>
+        </div>
         <div v-if="!isMultiProtocolPlatform || apiProtocol !== 'adaptive'">
           <label class="input-label">{{ t('admin.accounts.baseUrl') }}</label>
           <input
@@ -4395,6 +4411,7 @@ const accountCategory = ref<'oauth-based' | 'apikey' | 'bedrock' | 'service_acco
 const addMethod = ref<AddMethod>('oauth') // For oauth-based: 'oauth' or 'setup-token'
 const apiKeyBaseUrl = ref('https://api.anthropic.com')
 const apiKeyValue = ref('')
+const geminiUpstreamProtocol = ref<'native' | 'responses' | 'chat_completions'>('native')
 const upstreamBillingAutoProbeEnabled = ref(true)
 
 // ── 国产供应商（Kimi / Zhipu / DeepSeek）账号类型、API 协议与端点 ──
@@ -5631,6 +5648,7 @@ const resetForm = () => {
   adaptiveBaseUrls.value = { chat_completions: '', anthropic: '', responses: '' }
   apiKeyBaseUrl.value = 'https://api.anthropic.com'
   apiKeyValue.value = ''
+  geminiUpstreamProtocol.value = 'native'
   upstreamRequestIdHeader.value = ''
   upstreamBillingAutoProbeEnabled.value = true
   editQuotaLimit.value = null
@@ -6122,6 +6140,9 @@ const handleSubmit = async () => {
   const credentials: Record<string, unknown> = {
     base_url: apiKeyBaseUrl.value.trim() || defaultBaseUrl,
     api_key: apiKeyValue.value.trim()
+  }
+  if (form.platform === 'gemini') {
+    credentials.gemini_upstream_protocol = geminiUpstreamProtocol.value
   }
   if (form.platform === 'gemini' && isOfficialGeminiBaseUrl(apiKeyBaseUrl.value)) {
     credentials.tier_id = geminiTierAIStudio.value

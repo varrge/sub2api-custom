@@ -26,12 +26,14 @@ func TestFilterSchedulerCredentialsKeepsGeminiExplicitCacheKeys(t *testing.T) {
 		"base_url":             "https://gw.example.com",
 		"auth_mode":            "apikey",
 		"service_account_json": "secret",
+		service.GeminiUpstreamProtocolCredentialKey:            "responses",
 		service.GeminiExplicitCacheUpstreamCredentialKey:       true,
 		service.GeminiExplicitCacheUpstreamMaxTTLCredentialKey: 3600,
 	})
 
 	require.Equal(t, "https://gw.example.com", filtered["base_url"])
 	require.Equal(t, "apikey", filtered["auth_mode"])
+	require.Equal(t, "responses", filtered[service.GeminiUpstreamProtocolCredentialKey])
 	require.Equal(t, true, filtered[service.GeminiExplicitCacheUpstreamCredentialKey])
 	require.Equal(t, 3600, filtered[service.GeminiExplicitCacheUpstreamMaxTTLCredentialKey])
 	require.NotContains(t, filtered, "service_account_json")

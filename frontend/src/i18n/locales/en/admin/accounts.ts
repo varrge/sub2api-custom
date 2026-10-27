@@ -1432,6 +1432,11 @@ export default {
           'All model requests are forwarded directly to the Gemini API without model restrictions or mappings.',
         baseUrlHint: 'Leave default for official Gemini API',
         apiKeyHint: 'New AI Studio keys start with AQ. (legacy keys start with AIza); for a third-party upstream, use the key it provides',
+        upstreamProtocol: {
+          label: 'Upstream protocol',
+          native: 'Gemini native (default)',
+          hint: 'Choose the actual upstream API. Native preserves existing Gemini behavior. OpenAI protocols use Bearer authentication with /v1/responses or /v1/chat/completions.'
+        },
         tier: {
           label: 'Account Tier',
           hint: 'Tip: The system will try to auto-detect the tier first; if auto-detection is unavailable or fails, your selected tier is used as a fallback (simulated quota).',

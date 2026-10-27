@@ -533,6 +533,9 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	if err != nil {
 		return nil, err
 	}
+	if err := ValidateGeminiUpstreamProtocol(account.Platform, account.Type, account.Credentials); err != nil {
+		return nil, err
+	}
 	if err := s.ValidateAccountGroupBindings(ctx, groupIDs); err != nil {
 		return nil, err
 	}
@@ -661,6 +664,9 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		}
 		// Strip SSO/password residue that must never sit next to OAuth tokens.
 		account.Credentials = SanitizeStoredCredentials(account.Platform, account.Credentials)
+	}
+	if err := ValidateGeminiUpstreamProtocol(account.Platform, account.Type, account.Credentials); err != nil {
+		return nil, err
 	}
 	// Extra 使用 map：需要区分“未提供(nil)”与“显式清空({})”。
 	// 关闭配额限制时前端会删除 quota_* 键并提交 extra:{}，此时也必须落库。
@@ -1015,6 +1021,18 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 	for _, account := range cachedTargets {
 		if account != nil {
 			targetsByID[account.ID] = account
+			if len(input.Credentials) > 0 {
+				credentials := make(map[string]any, len(account.Credentials)+len(input.Credentials))
+				for k, v := range account.Credentials {
+					credentials[k] = v
+				}
+				for k, v := range input.Credentials {
+					credentials[k] = v
+				}
+				if err := ValidateGeminiUpstreamProtocol(account.Platform, account.Type, credentials); err != nil {
+					return nil, err
+				}
+			}
 		}
 	}
 	if openAISettings.any() {

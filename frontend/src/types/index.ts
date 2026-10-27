@@ -1087,6 +1087,7 @@ export interface ProxyQualityCheckResult {
 
 // Gemini credentials structure for OAuth and API Key authentication
 export interface GeminiCredentials {
+  gemini_upstream_protocol?: 'native' | 'responses' | 'chat_completions'
   // API Key authentication
   api_key?: string
   base_url?: string

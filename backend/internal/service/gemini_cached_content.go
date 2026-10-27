@@ -138,7 +138,7 @@ type GeminiCachedContentRepository interface {
 
 // IsGeminiExplicitCacheAccountType 只按平台与账号类型判断是否可能支持显式缓存，适用于调度快照账号。
 func IsGeminiExplicitCacheAccountType(account *Account) bool {
-	if account == nil || account.Platform != PlatformGemini {
+	if account == nil || account.Platform != PlatformGemini || account.IsGeminiOpenAIUpstream() {
 		return false
 	}
 	return account.Type == AccountTypeAPIKey || account.Type == AccountTypeServiceAccount

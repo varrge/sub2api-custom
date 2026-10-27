@@ -141,7 +141,7 @@ func (h *ActivityCampaignHandler) AdminSave(c *gin.Context) {
 		}
 		raw, _ := json.Marshal(target)
 		if err != nil || json.Unmarshal(raw, &pool) != nil || pool.ID != cfg.BoxCampaignID ||
-			pool.Status != "active" || pool.StartAt.After(cfg.StartsAt) || pool.EndAt.Before(cfg.EndsAt) ||
+			(pool.Status != "active" && pool.Status != "scheduled") || pool.StartAt.After(cfg.StartsAt) || pool.EndAt.Before(cfg.EndsAt) ||
 			pool.StartAt.IsZero() || pool.EndAt.IsZero() {
 			response.Error(c, http.StatusBadRequest, "摇摇卡卡池不可用或有效期未覆盖活动时间，请检查连接和卡池")
 			return

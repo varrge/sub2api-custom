@@ -87,6 +87,7 @@ func TestActivityCampaignEnablingValidatesScheduledPool(t *testing.T) {
 		status       int
 	}{
 		{"valid scheduled pool", `{"id":"pool","status":"active","startAt":"2026-11-01T00:00:00+08:00","endAt":"2026-11-07T00:00:00+08:00"}`, 200},
+		{"future scheduled pool", `{"id":"pool","status":"scheduled","startAt":"2026-11-01T00:00:00+08:00","endAt":"2026-11-07T00:00:00+08:00"}`, 200},
 		{"wrong pool", `{"id":"other","status":"active","startAt":"2026-11-01T00:00:00+08:00","endAt":"2026-11-07T00:00:00+08:00"}`, 400},
 		{"ends too early", `{"id":"pool","status":"active","startAt":"2026-11-01T00:00:00+08:00","endAt":"2026-11-03T00:00:00+08:00"}`, 400},
 		{"inactive", `{"id":"pool","status":"ended","startAt":"2026-11-01T00:00:00+08:00","endAt":"2026-11-07T00:00:00+08:00"}`, 400},

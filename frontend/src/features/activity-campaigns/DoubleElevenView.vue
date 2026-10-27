@@ -262,7 +262,7 @@
                   :data-testid="`d11-reward-${reward.task}`"
                 >
                   <div
-                    class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg"
+                    class="festival-ticket-icon flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg"
                     :class="reward.delivered
                       ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
                       : reward.earned
@@ -406,7 +406,7 @@
               <!-- Product 1 (58) -->
               <div class="rounded-xl border border-gray-200 dark:border-dark-600 bg-gray-50/50 dark:bg-dark-800/30 p-4 text-center flex flex-col justify-between">
                 <div>
-                  <h3 class="text-sm font-bold text-gray-900 dark:text-white">Premium Card (￥58)</h3>
+                  <h3 class="text-sm font-bold text-gray-900 dark:text-white">{{ t('activityCampaigns.wave2.monthlyCard', { price: 58 }) }}</h3>
                   <p class="text-xs text-gray-400 mt-0.5">{{ t('activityCampaigns.wave2.originalPrice') }}: ￥58</p>
                   <hr class="my-3 border-dashed border-gray-200 dark:border-dark-700" />
                   <div class="space-y-2 text-left text-xs">
@@ -426,9 +426,8 @@
 
               <!-- Product 2 (128) -->
               <div class="rounded-xl border border-primary-200 dark:border-primary-900 bg-primary-50/20 dark:bg-primary-900/10 p-4 text-center flex flex-col justify-between relative overflow-hidden">
-                <span class="absolute top-0 right-0 bg-[#E2AD64] text-[#603e29] text-[9px] font-bold px-2 py-0.5 rounded-bl-lg">POPULAR</span>
                 <div>
-                  <h3 class="text-sm font-bold text-gray-900 dark:text-white">Silver Card (￥128)</h3>
+                  <h3 class="text-sm font-bold text-gray-900 dark:text-white">{{ t('activityCampaigns.wave2.monthlyCard', { price: 128 }) }}</h3>
                   <p class="text-xs text-gray-400 mt-0.5">{{ t('activityCampaigns.wave2.originalPrice') }}: ￥128</p>
                   <hr class="my-3 border-dashed border-gray-200 dark:border-primary-900/50" />
                   <div class="space-y-2 text-left text-xs">
@@ -449,7 +448,7 @@
               <!-- Product 3 (198) -->
               <div class="rounded-xl border border-[#B86943]/30 bg-[#B86943]/5 dark:bg-[#B86943]/10 p-4 text-center flex flex-col justify-between">
                 <div>
-                  <h3 class="text-sm font-bold text-[#B86943] dark:text-[#E9A485]">Gold Card (￥198)</h3>
+                  <h3 class="text-sm font-bold text-[#B86943] dark:text-[#E9A485]">{{ t('activityCampaigns.wave2.monthlyCard', { price: 198 }) }}</h3>
                   <p class="text-xs text-gray-400 mt-0.5">{{ t('activityCampaigns.wave2.originalPrice') }}: ￥198</p>
                   <hr class="my-3 border-dashed border-[#B86943]/20" />
                   <div class="space-y-2 text-left text-xs">
@@ -530,7 +529,7 @@
                 <ul class="space-y-2">
                   <!-- Purchase task -->
                   <li
-                    class="festival-reward-ticket flex items-center justify-between gap-3 rounded-xl border p-3"
+                    class="festival-reward-ticket festival-reward-ticket-group flex items-center justify-between gap-3 rounded-xl border p-3"
                     :class="getRewardStatus(purchase.purchase_task).delivered
                       ? 'border-emerald-200 bg-emerald-50/30 dark:border-emerald-800'
                       : getRewardStatus(purchase.purchase_task).earned
@@ -538,9 +537,9 @@
                         : 'border-gray-200 dark:border-dark-700'"
                     :data-testid="`d11-purchase-gift-${purchase.card_id}`"
                   >
-                    <div class="flex items-center gap-3">
+                    <div class="festival-ticket-content flex items-center gap-3">
                       <div
-                        class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full"
+                        class="festival-ticket-icon flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full"
                         :class="getRewardStatus(purchase.purchase_task).delivered
                           ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30'
                           : getRewardStatus(purchase.purchase_task).earned
@@ -557,7 +556,7 @@
                       </div>
                     </div>
 
-                    <div class="flex items-center">
+                    <div class="festival-ticket-status flex items-center">
                       <span
                         v-if="!purchase.eligible"
                         class="text-xs font-medium text-red-500 bg-red-50 dark:bg-red-950/20 px-2 py-1 rounded"
@@ -593,7 +592,7 @@
                   <!-- Group Buy/Team task -->
                   <li
                     v-if="purchase.team_task"
-                    class="festival-reward-ticket flex items-center justify-between gap-3 rounded-xl border p-3"
+                    class="festival-reward-ticket festival-reward-ticket-group flex items-center justify-between gap-3 rounded-xl border p-3"
                     :class="getRewardStatus(purchase.team_task).delivered
                       ? 'border-emerald-200 bg-emerald-50/30 dark:border-emerald-800'
                       : getRewardStatus(purchase.team_task).earned
@@ -601,9 +600,9 @@
                         : 'border-gray-200 dark:border-dark-700'"
                     :data-testid="`d11-team-gift-${purchase.card_id}`"
                   >
-                    <div class="flex items-center gap-3">
+                    <div class="festival-ticket-content flex items-center gap-3">
                       <div
-                        class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full"
+                        class="festival-ticket-icon flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full"
                         :class="getRewardStatus(purchase.team_task).delivered
                           ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30'
                           : getRewardStatus(purchase.team_task).earned
@@ -628,7 +627,7 @@
                       </div>
                     </div>
 
-                    <div class="flex items-center">
+                    <div class="festival-ticket-status flex items-center">
                       <span
                         v-if="!purchase.eligible"
                         class="text-xs font-medium text-red-500 bg-red-50 px-2 py-1 rounded"
@@ -696,7 +695,7 @@
             <ul class="mt-5 space-y-2.5">
               <!-- Threshold 3 whales found -->
               <li
-                class="festival-reward-ticket flex items-center justify-between gap-3 rounded-xl border p-3 transition-all"
+                class="festival-reward-ticket festival-reward-ticket-group flex items-center justify-between gap-3 rounded-xl border p-3 transition-all"
                 :class="getRewardStatus('treasure_three').delivered
                   ? 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-800 dark:bg-emerald-900/10'
                   : getRewardStatus('treasure_three').earned
@@ -704,9 +703,9 @@
                     : 'border-gray-200 dark:border-dark-600'"
                 data-testid="d11-reward-treasure-three"
               >
-                <div class="flex items-center gap-3">
+                <div class="festival-ticket-content flex items-center gap-3">
                   <div
-                    class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg"
+                    class="festival-ticket-icon flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg"
                     :class="getRewardStatus('treasure_three').delivered
                       ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30'
                       : getRewardStatus('treasure_three').earned
@@ -721,7 +720,7 @@
                   </div>
                 </div>
 
-                <div class="flex items-center">
+                <div class="festival-ticket-status flex items-center">
                   <span
                     v-if="getRewardStatus('treasure_three').delivered"
                     class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
@@ -750,7 +749,7 @@
 
               <!-- Threshold 5 whales found -->
               <li
-                class="festival-reward-ticket flex items-center justify-between gap-3 rounded-xl border p-3 transition-all"
+                class="festival-reward-ticket festival-reward-ticket-group flex items-center justify-between gap-3 rounded-xl border p-3 transition-all"
                 :class="getRewardStatus('treasure_five').delivered
                   ? 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-800 dark:bg-emerald-900/10'
                   : getRewardStatus('treasure_five').earned
@@ -758,9 +757,9 @@
                     : 'border-gray-200 dark:border-dark-600'"
                 data-testid="d11-reward-treasure-five"
               >
-                <div class="flex items-center gap-3">
+                <div class="festival-ticket-content flex items-center gap-3">
                   <div
-                    class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg"
+                    class="festival-ticket-icon flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg"
                     :class="getRewardStatus('treasure_five').delivered
                       ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30'
                       : getRewardStatus('treasure_five').earned
@@ -775,7 +774,7 @@
                   </div>
                 </div>
 
-                <div class="flex items-center">
+                <div class="festival-ticket-status flex items-center">
                   <span
                     v-if="getRewardStatus('treasure_five').delivered"
                     class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"

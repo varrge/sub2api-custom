@@ -38,7 +38,7 @@ func readPurchases(ctx context.Context, q queryer, userID int64) ([]Purchase, er
 		p.team_qualified_at IS NOT NULL,o.status='COMPLETED' AND c.status NOT IN ('revoked','converted')
 		FROM activity_campaign_purchases p JOIN month_card_cards c ON c.id=p.card_id
 		JOIN payment_orders o ON o.id=p.order_id LEFT JOIN month_card_teams t ON t.id=c.team_id
-		WHERE p.campaign_id=$1 AND p.user_id=$2 ORDER BY p.slot`, WaveTwo, userID)
+		WHERE p.campaign_id=$1 AND p.user_id=$2 ORDER BY p.paid_at,p.order_id`, WaveTwo, userID)
 	if err != nil {
 		return nil, err
 	}

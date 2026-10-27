@@ -80,6 +80,7 @@ export default {
       wave3: 'Wave 3 · Whale Hunting',
     },
     wave2: {
+      monthlyCard: '¥{price} Monthly Card',
       title: 'Month Card Groups · More Purchases, More Rewards',
       description: 'Eligible month cards earn a purchase gift and an extra gift after the team reaches 3 paid seats. The first 3 eligible cards per account participate. Repeat purchases and filling your own team are supported.',
       productsTitle: 'Group Buy Package Details',

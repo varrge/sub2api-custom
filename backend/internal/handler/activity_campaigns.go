@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -15,9 +16,13 @@ import (
 )
 
 type ActivityCampaignHandler struct {
-	store *campaign.Store
-	box   *NativeBoxHandler
+	store      *campaign.Store
+	box        *NativeBoxHandler
+	stopWorker context.CancelFunc
+	workerDone chan struct{}
 }
+
+var errActivityDelivery = errors.New("activity reward delivery not confirmed")
 
 func NewActivityCampaignHandler(db *sql.DB) *ActivityCampaignHandler {
 	box := NewNativeBoxHandler(db)
@@ -45,6 +50,8 @@ func activityResult(c *gin.Context, value any, err error) {
 		response.Error(c, 403, "活动仅限有效的个人账号参与")
 	case errors.Is(err, campaign.ErrNotReady):
 		response.Error(c, 503, "活动发卡服务未配置")
+	case errors.Is(err, errActivityDelivery):
+		response.Error(c, 502, "奖励已记录，发卡暂未确认，请点击重试")
 	default:
 		response.InternalError(c, "活动服务暂时不可用，请稍后重试")
 	}
@@ -62,6 +69,12 @@ func (h *ActivityCampaignHandler) Get(c *gin.Context) {
 	user, ok := requireAuth(c)
 	if !ok {
 		return
+	}
+	if c.Param("id") == campaign.WaveTwo {
+		if err := h.store.SyncPurchases(c.Request.Context(), user.UserID); err != nil {
+			activityResult(c, nil, err)
+			return
+		}
 	}
 	state, err := h.store.State(c.Request.Context(), c.Param("id"), user.UserID)
 	activityResult(c, state, err)
@@ -140,10 +153,15 @@ func (h *ActivityCampaignHandler) AdminSave(c *gin.Context) {
 			Status  string    `json:"status"`
 		}
 		raw, _ := json.Marshal(target)
+		requiredEnd, coverageErr := h.store.RequiredPoolEnd(c.Request.Context(), cfg)
+		if coverageErr != nil {
+			activityResult(c, nil, coverageErr)
+			return
+		}
 		if err != nil || json.Unmarshal(raw, &pool) != nil || pool.ID != cfg.BoxCampaignID ||
-			(pool.Status != "active" && pool.Status != "scheduled") || pool.StartAt.After(cfg.StartsAt) || pool.EndAt.Before(cfg.EndsAt) ||
+			(pool.Status != "active" && pool.Status != "scheduled") || pool.StartAt.After(cfg.StartsAt) || pool.EndAt.Before(requiredEnd) ||
 			pool.StartAt.IsZero() || pool.EndAt.IsZero() {
-			response.Error(c, http.StatusBadRequest, "摇摇卡卡池不可用或有效期未覆盖活动时间，请检查连接和卡池")
+			response.Error(c, http.StatusBadRequest, "摇摇卡卡池不可用或有效期不足；第二弹还需覆盖最长招募期及额外24小时补发期，请检查连接和卡池")
 			return
 		}
 	}
@@ -167,52 +185,93 @@ func (h *ActivityCampaignHandler) Claim(c *gin.Context) {
 	if !ok {
 		return
 	}
-	r, err := h.store.Source(c.Request.Context(), c.Param("id"), user.UserID, c.Param("task"))
-	if err != nil {
-		activityResult(c, nil, err)
-		return
-	}
-	if !r.Enabled {
-		activityResult(c, nil, campaign.ErrClosed)
-		return
-	}
-	if r.ConnectionID != h.box.connectionID {
-		activityResult(c, nil, campaign.ErrNotReady)
-		return
-	}
-	session, ok := h.box.session(c)
-	if !ok {
-		return
-	}
-	var token string
-	if json.Unmarshal(session["sessionToken"], &token) != nil || token == "" {
-		response.Error(c, 502, "无法验证发卡账号，请重试")
-		return
-	}
-	payload, _, err := h.box.call(c.Request.Context(), "/api/public/sub2api/shake/activity-rewards/claim", token, map[string]string{"activityId": r.CampaignID, "task": r.Task})
-	if err != nil {
-		response.Error(c, 502, "奖励已记录，发卡暂未确认，请点击重试")
-		return
-	}
-	expected := map[string]string{"activityId": r.CampaignID, "userId": strconv.FormatInt(user.UserID, 10), "task": r.Task, "connectionId": r.ConnectionID, "campaignId": r.BoxCampaignID, "cardTier": "low"}
-	for k, want := range expected {
-		var got string
-		if json.Unmarshal(payload[k], &got) != nil || got != want {
-			response.Error(c, 502, "发卡结果未确认，请重试")
-			return
-		}
-	}
-	var granted bool
-	var quantity int
-	if json.Unmarshal(payload["granted"], &granted) != nil || !granted || json.Unmarshal(payload["quantity"], &quantity) != nil || quantity != 1 {
-		response.Error(c, 502, "发卡结果未确认，请重试")
-		return
-	}
-	if err = h.store.Delivered(c.Request.Context(), r.CampaignID, user.UserID, r.Task); err != nil {
+	if err := h.deliver(c.Request.Context(), c.Param("id"), user.UserID, c.Param("task")); err != nil {
 		activityResult(c, nil, err)
 		return
 	}
 	c.Set("audit_action", "activity.reward.claim")
-	c.Set("audit_resource_id", r.CampaignID+":"+r.Task)
+	c.Set("audit_resource_id", c.Param("id")+":"+c.Param("task"))
+	h.Get(c)
+}
+
+func (h *ActivityCampaignHandler) deliver(ctx context.Context, id string, userID int64, task string) error {
+	r, err := h.store.Source(ctx, id, userID, task)
+	if err != nil {
+		return err
+	}
+	if !r.Enabled {
+		return campaign.ErrClosed
+	}
+	if r.ConnectionID != h.box.connectionID {
+		return campaign.ErrNotReady
+	}
+	session, err := h.box.sessionForUser(ctx, userID)
+	if err != nil {
+		return errors.Join(errActivityDelivery, err)
+	}
+	var token string
+	if json.Unmarshal(session["sessionToken"], &token) != nil || token == "" {
+		return errActivityDelivery
+	}
+	payload, _, err := h.box.call(ctx, "/api/public/sub2api/shake/activity-rewards/claim", token, map[string]string{"activityId": r.CampaignID, "task": r.Task})
+	if err != nil {
+		return errors.Join(errActivityDelivery, err)
+	}
+	expected := map[string]string{"activityId": r.CampaignID, "userId": strconv.FormatInt(userID, 10), "task": r.Task, "connectionId": r.ConnectionID, "campaignId": r.BoxCampaignID, "cardTier": r.CardTier}
+	for k, want := range expected {
+		var got string
+		if json.Unmarshal(payload[k], &got) != nil || got != want {
+			return errActivityDelivery
+		}
+	}
+	var granted bool
+	var quantity int
+	if json.Unmarshal(payload["granted"], &granted) != nil || !granted || json.Unmarshal(payload["quantity"], &quantity) != nil || quantity != r.Quantity {
+		return errActivityDelivery
+	}
+	return h.store.Delivered(ctx, r.CampaignID, userID, r.Task)
+}
+
+func (h *ActivityCampaignHandler) TreasureVisit(c *gin.Context) {
+	user, ok := requireAuth(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		Path string `json:"path"`
+	}
+	if !activityJSON(c, &req) {
+		return
+	}
+	if c.Param("id") != campaign.WaveThree {
+		activityResult(c, nil, campaign.ErrInvalid)
+		return
+	}
+	treasure, err := h.store.VisitTreasure(c.Request.Context(), user.UserID, req.Path)
+	activityResult(c, map[string]any{"treasure": treasure}, err)
+}
+
+func (h *ActivityCampaignHandler) TreasureFind(c *gin.Context) {
+	user, ok := requireAuth(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		ID    string `json:"id"`
+		Token string `json:"token"`
+	}
+	if !activityJSON(c, &req) {
+		return
+	}
+	if c.Param("id") != campaign.WaveThree {
+		activityResult(c, nil, campaign.ErrInvalid)
+		return
+	}
+	if err := h.store.FindTreasure(c.Request.Context(), user.UserID, req.ID, req.Token); err != nil {
+		activityResult(c, nil, err)
+		return
+	}
+	c.Set("audit_action", "activity.treasure.find")
+	c.Set("audit_resource_id", campaign.WaveThree+":"+req.ID)
 	h.Get(c)
 }

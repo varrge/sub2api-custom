@@ -109,28 +109,36 @@ func (h *NativeBoxHandler) session(c *gin.Context) (map[string]json.RawMessage, 
 		response.Error(c, http.StatusServiceUnavailable, "Box service authentication is not configured")
 		return nil, false
 	}
-	key, err := h.adminKey(c.Request.Context())
-	if err != nil || key == "" {
-		response.Error(c, http.StatusServiceUnavailable, "Box service authentication is not configured")
-		return nil, false
-	}
-	now := time.Now()
-	sso, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"connectionId": h.connectionID, "userId": fmt.Sprint(subject.UserID),
-		"iat": now.Unix(), "exp": now.Add(time.Minute).Unix(),
-	}).SignedString([]byte(key))
-	if err != nil {
-		response.Error(c, http.StatusBadGateway, "Unable to verify box account")
-		return nil, false
-	}
-	payload, _, err := h.call(c.Request.Context(), "/api/public/sub2api/shake/session", "", map[string]string{
-		"sso": sso,
-	})
+	payload, err := h.sessionForUser(c.Request.Context(), subject.UserID)
 	if err != nil {
 		response.Error(c, http.StatusBadGateway, "Unable to verify box account")
 		return nil, false
 	}
 	return payload, true
+}
+
+// Automatic campaign delivery uses a short-lived server credential for the
+// already verified reward owner, identical to an interactive claim.
+func (h *NativeBoxHandler) sessionForUser(ctx context.Context, userID int64) (map[string]json.RawMessage, error) {
+	if !h.configured() || h.adminKey == nil || userID <= 0 {
+		return nil, errors.New("box service authentication is not configured")
+	}
+	key, err := h.adminKey(ctx)
+	if err != nil || key == "" {
+		return nil, errors.New("box service authentication is not configured")
+	}
+	now := time.Now()
+	sso, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"connectionId": h.connectionID, "userId": fmt.Sprint(userID),
+		"iat": now.Unix(), "exp": now.Add(time.Minute).Unix(),
+	}).SignedString([]byte(key))
+	if err != nil {
+		return nil, err
+	}
+	payload, _, err := h.call(ctx, "/api/public/sub2api/shake/session", "", map[string]string{
+		"sso": sso,
+	})
+	return payload, err
 }
 
 func (h *NativeBoxHandler) Bootstrap(c *gin.Context) {

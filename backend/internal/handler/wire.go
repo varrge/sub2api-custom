@@ -247,7 +247,7 @@ var ProviderSet = wire.NewSet(
 	NewAPIKeyHandler,
 	NewUsageHandler,
 	NewActivityLeaderboardHandler,
-	NewActivityCampaignHandler,
+	ProvideActivityCampaignHandler,
 	NewRedeemHandler,
 	NewSubscriptionHandler,
 	NewAnnouncementHandler,

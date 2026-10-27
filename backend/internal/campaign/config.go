@@ -10,6 +10,8 @@ import (
 )
 
 const WaveOne = "double11-2026-wave1"
+const WaveTwo = "double11-2026-wave2"
+const WaveThree = "double11-2026-wave3"
 const FeatureKey = "activity_campaigns_enabled"
 
 var (
@@ -45,7 +47,7 @@ type Config struct {
 }
 
 func (c Config) Validate() error {
-	if c.ID != WaveOne || c.Revision < 1 {
+	if (c.ID != WaveOne && c.ID != WaveTwo && c.ID != WaveThree) || c.Revision < 1 {
 		return ErrInvalid
 	}
 	for _, f := range []struct {
@@ -63,6 +65,12 @@ func (c Config) Validate() error {
 	}
 	if (c.Enabled || c.BoxCampaignID != "") && !identifier.MatchString(c.BoxCampaignID) {
 		return ErrInvalid
+	}
+	if c.ID != WaveOne {
+		if len(c.Questions) != 0 {
+			return ErrInvalid
+		}
+		return nil
 	}
 	if len(c.Questions) < 3 || len(c.Questions) > 10 {
 		return ErrInvalid

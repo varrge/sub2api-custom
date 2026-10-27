@@ -44,6 +44,18 @@ func campaignDB(t *testing.T) (*Store, *sql.DB) {
 	require.NoError(t, err)
 	_, err = db.Exec(string(raw))
 	require.NoError(t, err)
+	_, err = db.Exec(`CREATE TABLE payment_orders(id BIGINT PRIMARY KEY,user_id BIGINT,status TEXT,order_type TEXT DEFAULT 'month_card',paid_at TIMESTAMPTZ,provider_snapshot JSONB);
+	CREATE TABLE month_card_teams(id BIGINT PRIMARY KEY,code TEXT,closes_at TIMESTAMPTZ,status TEXT DEFAULT 'recruiting');
+	CREATE TABLE month_card_cards(id BIGINT PRIMARY KEY,order_id BIGINT UNIQUE,user_id BIGINT,code TEXT,product_name TEXT,team_id BIGINT,status TEXT DEFAULT 'active',retain_team_seat BOOLEAN DEFAULT FALSE);`)
+	require.NoError(t, err)
+	raw, err = os.ReadFile(filepath.Join("..", "..", "migrations", "259_activity_campaign_waves.sql"))
+	require.NoError(t, err)
+	_, err = db.Exec(string(raw))
+	require.NoError(t, err)
+	raw, err = os.ReadFile(filepath.Join("..", "..", "migrations", "260_month_card_three_seat_milestone.sql"))
+	require.NoError(t, err)
+	_, err = db.Exec(string(raw))
+	require.NoError(t, err)
 	s := NewStore(db, "test-connection")
 	s.now = func() time.Time { return time.Date(2026, 11, 1, 12, 0, 0, 0, China) }
 	return s, db

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -31,7 +32,7 @@ func TestActivityCampaignClaimDoesNotConfirmMismatchedDelivery(t *testing.T) {
 			mock.ExpectQuery(regexp.QuoteMeta(`SELECT status='active' AND account_type='personal' AND deleted_at IS NULL FROM users WHERE id=$1`)).WithArgs(int64(42)).
 				WillReturnRows(sqlmock.NewRows([]string{"allowed"}).AddRow(true))
 			mock.ExpectQuery("SELECT box_campaign_id,connection_id,earned_at").WithArgs(campaign.WaveOne, int64(42), "quiz").
-				WillReturnRows(sqlmock.NewRows([]string{"box", "connection", "earned"}).AddRow("pool", "tenant", time.Now()))
+				WillReturnRows(sqlmock.NewRows([]string{"box", "connection", "earned", "tier", "quantity", "order"}).AddRow("pool", "tenant", time.Now(), "low", 1, nil))
 			mock.ExpectCommit()
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
@@ -64,7 +65,7 @@ func TestActivityCampaignClaimDoesNotConfirmMismatchedDelivery(t *testing.T) {
 }
 func TestActivityCampaignActionsRequireIdentityAndStrictAnswers(t *testing.T) {
 	h := NewActivityCampaignHandler(nil)
-	for _, fn := range []func(*gin.Context){h.Get, h.Checkin, h.Quiz, h.Claim} {
+	for _, fn := range []func(*gin.Context){h.Get, h.Checkin, h.Quiz, h.Claim, h.TreasureVisit, h.TreasureFind} {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest("POST", "/", nil)
@@ -138,4 +139,77 @@ func TestActivityCampaignEnablingValidatesScheduledPool(t *testing.T) {
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}
+}
+
+func TestActivityCampaignDeliverPurchaseTierAndQuantity(t *testing.T) {
+	for _, award := range []struct {
+		tier     string
+		qty      int
+		eligible bool
+	}{
+		{"medium", 1, true}, {"low", 2, true}, {"low", 1, false},
+	} {
+		t.Run(award.tier+strconv.Itoa(award.qty)+strconv.FormatBool(award.eligible), func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer func() { _ = db.Close() }()
+			mock.ExpectBegin()
+			mock.ExpectQuery("SELECT value FROM settings").WithArgs(campaign.FeatureKey).
+				WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("true"))
+			mock.ExpectQuery("SELECT config,revision").WithArgs(campaign.WaveTwo).
+				WillReturnRows(sqlmock.NewRows([]string{"config", "revision"}).AddRow(`{"enabled":true}`, 1))
+			mock.ExpectQuery("SELECT status='active'").WithArgs(int64(42)).
+				WillReturnRows(sqlmock.NewRows([]string{"allowed"}).AddRow(true))
+			mock.ExpectQuery("SELECT box_campaign_id,connection_id,earned_at").WithArgs(campaign.WaveTwo, int64(42), "purchase_5").
+				WillReturnRows(sqlmock.NewRows([]string{"box", "connection", "earned", "tier", "quantity", "order"}).
+					AddRow("pool", "tenant", time.Now(), award.tier, award.qty, 5))
+			mock.ExpectQuery("SELECT EXISTS").WithArgs(int64(5), int64(42)).
+				WillReturnRows(sqlmock.NewRows([]string{"eligible"}).AddRow(award.eligible))
+			mock.ExpectCommit()
+			calls := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				w.Header().Set("Content-Type", "application/json")
+				if strings.HasSuffix(r.URL.Path, "/session") {
+					_, _ = w.Write([]byte(`{"sessionToken":"private-session"}`))
+					return
+				}
+				require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+					"granted": true, "activityId": campaign.WaveTwo, "userId": "42", "task": "purchase_5",
+					"connectionId": "tenant", "campaignId": "pool", "cardTier": award.tier, "quantity": award.qty,
+				}))
+			}))
+			defer server.Close()
+			h := &ActivityCampaignHandler{store: campaign.NewStore(db, "tenant"), box: &NativeBoxHandler{
+				baseURL: server.URL, connectionID: "tenant", client: server.Client(),
+				adminKey: func(context.Context) (string, error) { return "admin-secret", nil },
+			}}
+			if award.eligible {
+				mock.ExpectExec("UPDATE activity_campaign_rewards").WithArgs(campaign.WaveTwo, int64(42), "purchase_5", sqlmock.AnyArg()).
+					WillReturnResult(sqlmock.NewResult(0, 1))
+				require.NoError(t, h.deliver(context.Background(), campaign.WaveTwo, 42, "purchase_5"))
+				require.Equal(t, 2, calls)
+			} else {
+				require.ErrorIs(t, h.deliver(context.Background(), campaign.WaveTwo, 42, "purchase_5"), campaign.ErrClosed)
+				require.Zero(t, calls)
+			}
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestActivityWaveTwoPoolMustCoverRecruitmentAndRetryPeriod(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	s := campaign.NewStore(db, "tenant")
+	end := time.Date(2026, 11, 12, 0, 0, 0, 0, campaign.China)
+	mock.ExpectQuery("SELECT GREATEST").WillReturnRows(sqlmock.NewRows([]string{"hours"}).AddRow(72))
+	got, err := s.RequiredPoolEnd(context.Background(), campaign.Config{ID: campaign.WaveTwo, EndsAt: end})
+	require.NoError(t, err)
+	require.Equal(t, end.Add(96*time.Hour), got)
+	got, err = s.RequiredPoolEnd(context.Background(), campaign.Config{ID: campaign.WaveThree, EndsAt: end})
+	require.NoError(t, err)
+	require.Equal(t, end, got)
+	require.NoError(t, mock.ExpectationsWereMet())
 }

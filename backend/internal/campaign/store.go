@@ -182,9 +182,10 @@ func (s *Store) State(ctx context.Context, id string, userID int64) (State, erro
 	if err != nil {
 		return result, err
 	}
-	if id == WaveTwo {
+	switch id {
+	case WaveTwo:
 		result.Purchases, err = readPurchases(ctx, tx, userID)
-	} else if id == WaveThree {
+	case WaveThree:
 		result.Treasures, err = readTreasures(ctx, tx, c, userID, now)
 	}
 	if err != nil {

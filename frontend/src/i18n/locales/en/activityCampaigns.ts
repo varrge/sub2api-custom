@@ -7,6 +7,8 @@ export default {
       free: "Free to join",
       threeCards: "Three tasks · three gifts",
       lucky: "A whale lot of luck!",
+      artworkCredit: "Artwork",
+      artworkLicense: "License",
       passport: "YOUR LUCKY PASSPORT",
       checkinTag: "STAMP STATION",
       rewardsTag: "GIFT COUNTER",

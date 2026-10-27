@@ -90,3 +90,19 @@ describe('FeatureFlags.nativeBoxEntry', () => {
     expect(visible()).toBe(false)
   })
 })
+
+describe('FeatureFlags.activityCampaigns', () => {
+  it('starts hidden, reads the injected switch and follows a later disable', () => {
+    setActivePinia(createPinia())
+    delete (window as any).__APP_CONFIG__
+    const flag = FeatureFlags.activityCampaigns
+    expect(resolveFeatureFlag({}, flag)).toBe(false)
+    ;(window as any).__APP_CONFIG__ = { activity_campaigns_enabled: true }
+    const store = useAppStore()
+    expect(store.initFromInjectedConfig()).toBe(true)
+    const visible = makeSidebarFlag(flag)
+    expect(visible()).toBe(true)
+    store.cachedPublicSettings = { activity_campaigns_enabled: false } as PublicSettings
+    expect(visible()).toBe(false)
+  })
+})

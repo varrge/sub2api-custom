@@ -103,6 +103,12 @@ func RegisterUserRoutes(
 
 		authenticated.GET("/activities/leaderboard/config", h.ActivityLeaderboard.Config)
 		authenticated.GET("/activities/leaderboard", panelRateLimiter.Heavy(), h.ActivityLeaderboard.Get)
+		if h.ActivityCampaigns != nil {
+			authenticated.GET("/activities/campaigns/:id", h.ActivityCampaigns.Get)
+			authenticated.POST("/activities/campaigns/:id/checkin", panelRateLimiter.Heavy(), h.ActivityCampaigns.Checkin)
+			authenticated.POST("/activities/campaigns/:id/quiz", panelRateLimiter.Heavy(), h.ActivityCampaigns.Quiz)
+			authenticated.POST("/activities/campaigns/:id/rewards/:task/claim", panelRateLimiter.Heavy(), h.ActivityCampaigns.Claim)
+		}
 		nativeBox := handler.NewNativeBoxHandler()
 		authenticated.GET("/activities/box/bootstrap", panelRateLimiter.Heavy(), nativeBox.Bootstrap)
 		authenticated.POST("/activities/box/draws", panelRateLimiter.Heavy(), nativeBox.Draw)

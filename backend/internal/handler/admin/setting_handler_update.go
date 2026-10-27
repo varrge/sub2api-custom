@@ -364,8 +364,9 @@ type UpdateSettingsRequest struct {
 	ModelPlazaDescription *string `json:"model_plaza_description"`
 
 	// Plugin management menu visibility switch; plugin runtime is unaffected.
-	PluginManagementEnabled *bool `json:"plugin_management_enabled"`
-	NativeBoxEntryEnabled   *bool `json:"native_box_entry_enabled"`
+	PluginManagementEnabled  *bool `json:"plugin_management_enabled"`
+	NativeBoxEntryEnabled    *bool `json:"native_box_entry_enabled"`
+	ActivityCampaignsEnabled *bool `json:"activity_campaigns_enabled"`
 
 	// Affiliate (邀请返利) feature switch
 	AffiliateEnabled *bool `json:"affiliate_enabled"`
@@ -2066,6 +2067,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.NativeBoxEntryEnabled
 		}(),
+		ActivityCampaignsEnabled: func() bool {
+			if req.ActivityCampaignsEnabled != nil {
+				return *req.ActivityCampaignsEnabled
+			}
+			return previousSettings.ActivityCampaignsEnabled
+		}(),
 		AffiliateEnabled: func() bool {
 			if req.AffiliateEnabled != nil {
 				return *req.AffiliateEnabled
@@ -2511,11 +2518,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		SupportTicketEnabled:     updatedSettings.SupportTicketEnabled,
 		SubscriptionEnabled:      updatedSettings.SubscriptionEnabled,
 
-		ModelPlazaEnabled:       updatedSettings.ModelPlazaEnabled,
-		ModelPlazaRequireAuth:   updatedSettings.ModelPlazaRequireAuth,
-		ModelPlazaDescription:   updatedSettings.ModelPlazaDescription,
-		PluginManagementEnabled: updatedSettings.PluginManagementEnabled,
-		NativeBoxEntryEnabled:   updatedSettings.NativeBoxEntryEnabled,
+		ModelPlazaEnabled:        updatedSettings.ModelPlazaEnabled,
+		ModelPlazaRequireAuth:    updatedSettings.ModelPlazaRequireAuth,
+		ModelPlazaDescription:    updatedSettings.ModelPlazaDescription,
+		PluginManagementEnabled:  updatedSettings.PluginManagementEnabled,
+		NativeBoxEntryEnabled:    updatedSettings.NativeBoxEntryEnabled,
+		ActivityCampaignsEnabled: updatedSettings.ActivityCampaignsEnabled,
 
 		AffiliateEnabled: updatedSettings.AffiliateEnabled,
 

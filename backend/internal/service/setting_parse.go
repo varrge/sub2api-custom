@@ -209,11 +209,12 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeySubscriptionEnabled: "true",
 
 		// Model plaza feature (default disabled; opt-in, public unless require_auth)
-		SettingKeyModelPlazaEnabled:       "false",
-		SettingKeyModelPlazaRequireAuth:   "false",
-		SettingKeyModelPlazaDescription:   "",
-		SettingKeyPluginManagementEnabled: "false",
-		SettingKeyNativeBoxEntryEnabled:   "false",
+		SettingKeyModelPlazaEnabled:        "false",
+		SettingKeyModelPlazaRequireAuth:    "false",
+		SettingKeyModelPlazaDescription:    "",
+		SettingKeyPluginManagementEnabled:  "false",
+		SettingKeyNativeBoxEntryEnabled:    "false",
+		SettingKeyActivityCampaignsEnabled: "false",
 
 		// Affiliate (邀请返利) feature (default disabled; opt-in)
 		SettingKeyAffiliateEnabled:              "false",
@@ -845,6 +846,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result.ModelPlazaDescription = settings[SettingKeyModelPlazaDescription]
 	result.PluginManagementEnabled = settings[SettingKeyPluginManagementEnabled] == "true"
 	result.NativeBoxEntryEnabled = settings[SettingKeyNativeBoxEntryEnabled] == "true"
+	result.ActivityCampaignsEnabled = settings[SettingKeyActivityCampaignsEnabled] == "true"
 
 	// Affiliate (邀请返利) feature (default: disabled; strict true)
 	result.AffiliateEnabled = settings[SettingKeyAffiliateEnabled] == "true"

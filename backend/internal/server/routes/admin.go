@@ -37,6 +37,11 @@ func RegisterAdminRoutes(
 		// 仪表盘
 		registerDashboardRoutes(admin, h)
 
+		if h.ActivityCampaigns != nil {
+			admin.GET("/activities/campaigns/:id", h.ActivityCampaigns.AdminGet)
+			admin.PUT("/activities/campaigns/:id", h.ActivityCampaigns.AdminSave)
+			admin.GET("/activities/campaigns/:id/rewards/:userID/:task", h.ActivityCampaigns.Source)
+		}
 		// Private activity identities and award exports use administrator authentication.
 		admin.GET("/activities/leaderboard", panelRateLimiter.Heavy(), h.ActivityLeaderboard.GetAdmin)
 		admin.GET("/activities/leaderboard/config", h.ActivityLeaderboard.Config)

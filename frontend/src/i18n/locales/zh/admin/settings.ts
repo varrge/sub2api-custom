@@ -2,7 +2,9 @@ export default {
     settings: {
       title: '系统设置',
       description: '管理注册、邮箱验证、默认值和 SMTP 设置',
-      tabs: {
+      campaignFeature: { title: "活动中心", hint: "控制活动入口、参与及奖励领取。单个活动还需在活动管理中启用并设置开放时间；关闭不会清空参与记录和已获得奖励。", enabled: "开启活动", configure: "管理活动页面与时间" },
+    tabs: {
+      activities: "活动管理",
         general: '通用设置',
         agreement: '登录条款',
         features: '功能开关',

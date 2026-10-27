@@ -766,6 +766,7 @@ export interface SystemSettings {
   model_plaza_description: string;
   plugin_management_enabled: boolean;
   native_box_entry_enabled: boolean;
+  activity_campaigns_enabled: boolean;
 
   // Affiliate (邀请返利) feature switch
   affiliate_enabled: boolean;
@@ -1089,6 +1090,7 @@ export interface UpdateSettingsRequest {
   model_plaza_description?: string;
   plugin_management_enabled?: boolean;
   native_box_entry_enabled?: boolean;
+  activity_campaigns_enabled?: boolean;
 
   // Affiliate (邀请返利) feature switch
   affiliate_enabled?: boolean;

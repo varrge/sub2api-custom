@@ -312,6 +312,7 @@ export interface PublicSettings {
   plugin_management_enabled: boolean
   /** Sidebar visibility only; does not disable draws or leaderboard rewards. */
   native_box_entry_enabled: boolean
+  activity_campaigns_enabled: boolean
   service_quota_enabled: boolean
   affiliate_enabled: boolean
   allow_user_view_error_requests?: boolean

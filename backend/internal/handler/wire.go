@@ -184,6 +184,7 @@ func ProvideAdminSettingHandler(settingService *service.SettingService, emailSer
 // ProvideHandlers creates the Handlers struct
 func ProvideHandlers(
 	activityLeaderboardHandler *ActivityLeaderboardHandler,
+	activityCampaignHandler *ActivityCampaignHandler,
 	authHandler *AuthHandler,
 	userHandler *UserHandler,
 	apiKeyHandler *APIKeyHandler,
@@ -212,6 +213,7 @@ func ProvideHandlers(
 ) *Handlers {
 	return &Handlers{
 		ActivityLeaderboard: activityLeaderboardHandler,
+		ActivityCampaigns:   activityCampaignHandler,
 		Auth:                authHandler,
 		User:                userHandler,
 		APIKey:              apiKeyHandler,
@@ -245,6 +247,7 @@ var ProviderSet = wire.NewSet(
 	NewAPIKeyHandler,
 	NewUsageHandler,
 	NewActivityLeaderboardHandler,
+	NewActivityCampaignHandler,
 	NewRedeemHandler,
 	NewSubscriptionHandler,
 	NewAnnouncementHandler,

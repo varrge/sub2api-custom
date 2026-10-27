@@ -2,7 +2,9 @@ export default {
     settings: {
       title: 'System Settings',
       description: 'Manage registration, email verification, default values, and SMTP settings',
-      tabs: {
+      campaignFeature: { title: "Activity center", hint: "Controls activity entry, participation and reward claims. Enable each activity and set its schedule in Activity management. Turning off preserves progress and earned rewards.", enabled: "Enable activities", configure: "Manage pages and schedules" },
+    tabs: {
+      activities: "Activity management",
         general: 'General',
         agreement: 'Agreement',
         features: 'Feature Switches',

@@ -26,15 +26,19 @@ type Reward struct {
 	Task        string     `json:"task"`
 	EarnedAt    time.Time  `json:"earned_at"`
 	DeliveredAt *time.Time `json:"delivered_at"`
+	CardTier    string     `json:"card_tier"`
+	Quantity    int        `json:"quantity"`
 }
 type State struct {
-	Campaign      Config    `json:"campaign"`
-	Status        string    `json:"status"`
-	ServerTime    time.Time `json:"server_time"`
-	Today         string    `json:"today"`
-	CheckinDates  []string  `json:"checkin_dates"`
-	QuizCompleted bool      `json:"quiz_completed"`
-	Rewards       []Reward  `json:"rewards"`
+	Campaign      Config     `json:"campaign"`
+	Status        string     `json:"status"`
+	ServerTime    time.Time  `json:"server_time"`
+	Today         string     `json:"today"`
+	CheckinDates  []string   `json:"checkin_dates"`
+	QuizCompleted bool       `json:"quiz_completed"`
+	Rewards       []Reward   `json:"rewards"`
+	Purchases     []Purchase `json:"purchases"`
+	Treasures     []Treasure `json:"treasures"`
 }
 type SourceReward struct {
 	CampaignID    string    `json:"campaign_id"`
@@ -139,7 +143,7 @@ func (s *Store) State(ctx context.Context, id string, userID int64) (State, erro
 		return State{}, err
 	}
 	now := s.now()
-	result := State{Campaign: c.Public(), Status: c.Status(enabled, now), ServerTime: now, Today: now.In(China).Format("2006-01-02"), CheckinDates: []string{}, Rewards: []Reward{}}
+	result := State{Campaign: c.Public(), Status: c.Status(enabled, now), ServerTime: now, Today: now.In(China).Format("2006-01-02"), CheckinDates: []string{}, Rewards: []Reward{}, Purchases: []Purchase{}, Treasures: []Treasure{}}
 	rows, err := tx.QueryContext(ctx, `SELECT day::text FROM activity_campaign_checkins WHERE campaign_id=$1 AND user_id=$2 ORDER BY day`, id, userID)
 	if err != nil {
 		return result, err
@@ -161,13 +165,13 @@ func (s *Store) State(ctx context.Context, id string, userID int64) (State, erro
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return result, err
 	}
-	rows, err = tx.QueryContext(ctx, `SELECT task,earned_at,delivered_at FROM activity_campaign_rewards WHERE campaign_id=$1 AND user_id=$2 ORDER BY earned_at,task`, id, userID)
+	rows, err = tx.QueryContext(ctx, `SELECT task,earned_at,delivered_at,card_tier,quantity FROM activity_campaign_rewards WHERE campaign_id=$1 AND user_id=$2 ORDER BY earned_at,task`, id, userID)
 	if err != nil {
 		return result, err
 	}
 	for rows.Next() {
 		var r Reward
-		if err = rows.Scan(&r.Task, &r.EarnedAt, &r.DeliveredAt); err != nil {
+		if err = rows.Scan(&r.Task, &r.EarnedAt, &r.DeliveredAt, &r.CardTier, &r.Quantity); err != nil {
 			_ = rows.Close()
 			return result, err
 		}
@@ -178,9 +182,20 @@ func (s *Store) State(ctx context.Context, id string, userID int64) (State, erro
 	if err != nil {
 		return result, err
 	}
+	if id == WaveTwo {
+		result.Purchases, err = readPurchases(ctx, tx, userID)
+	} else if id == WaveThree {
+		result.Treasures, err = readTreasures(ctx, tx, c, userID, now)
+	}
+	if err != nil {
+		return result, err
+	}
 	return result, tx.Commit()
 }
 func (s *Store) Participate(ctx context.Context, id string, userID int64, quiz bool, revision int64, answers map[string]int) error {
+	if id != WaveOne {
+		return ErrInvalid
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -276,7 +291,8 @@ func (s *Store) Source(ctx context.Context, id string, userID int64, task string
 	if err := checkUser(ctx, tx, userID, "FOR SHARE"); err != nil {
 		return r, err
 	}
-	err = tx.QueryRowContext(ctx, `SELECT box_campaign_id,connection_id,earned_at FROM activity_campaign_rewards WHERE campaign_id=$1 AND user_id=$2 AND task=$3`, id, userID, task).Scan(&r.BoxCampaignID, &r.ConnectionID, &r.EarnedAt)
+	var orderID sql.NullInt64
+	err = tx.QueryRowContext(ctx, `SELECT box_campaign_id,connection_id,earned_at,card_tier,quantity,order_id FROM activity_campaign_rewards WHERE campaign_id=$1 AND user_id=$2 AND task=$3`, id, userID, task).Scan(&r.BoxCampaignID, &r.ConnectionID, &r.EarnedAt, &r.CardTier, &r.Quantity, &orderID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return r, ErrNotFound
 	}
@@ -284,6 +300,18 @@ func (s *Store) Source(ctx context.Context, id string, userID int64, task string
 		return r, err
 	}
 	r.Enabled = global && c.Enabled
+	if id == WaveThree {
+		r.Enabled = r.Enabled && c.Status(global, s.now()) == "active"
+	}
+	if orderID.Valid {
+		var eligible bool
+		err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM payment_orders o JOIN month_card_cards c ON c.order_id=o.id
+			WHERE o.id=$1 AND o.user_id=$2 AND c.user_id=$2 AND o.status='COMPLETED' AND c.status NOT IN ('revoked','converted'))`, orderID.Int64, userID).Scan(&eligible)
+		if err != nil {
+			return r, err
+		}
+		r.Enabled = r.Enabled && eligible
+	}
 	return r, tx.Commit()
 }
 func (s *Store) Delivered(ctx context.Context, id string, userID int64, task string) error {

@@ -19,6 +19,9 @@
         <slot />
       </main>
     </div>
+
+    <!-- Hidden Whale Challenge (Wave 3) -->
+    <HiddenWhaleChallenge />
   </div>
 </template>
 
@@ -32,6 +35,7 @@ import { useOnboardingStore } from '@/stores/onboarding'
 import AppSidebar from './AppSidebar.vue'
 import AppHeader from './AppHeader.vue'
 import AmbientLines from '@/components/common/AmbientLines.vue'
+import HiddenWhaleChallenge from '@/features/activity-campaigns/HiddenWhaleChallenge.vue'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()

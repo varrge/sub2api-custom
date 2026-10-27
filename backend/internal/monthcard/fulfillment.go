@@ -171,6 +171,13 @@ func (s *Store) Fulfill(ctx context.Context, orderID, userID int64, paidAt time.
 		return nil, err
 	}
 	if team != nil {
+		if team.MemberCount >= 3 {
+			// Preserve the milestone for all members before any later refunds.
+			// Every accepted seat has a verified payment before recruitment ends.
+			if _, err = tx.ExecContext(ctx, `UPDATE month_card_teams SET three_seat_at=COALESCE(three_seat_at,$2) WHERE id=$1`, team.ID, s.now()); err != nil {
+				return nil, err
+			}
+		}
 		// Lock in a stable order before a multi-card upgrade. Do not acquire other
 		// members' user locks: settlement holds user -> own cards and no team.
 		rows, err := tx.QueryContext(ctx, `SELECT id FROM month_card_cards WHERE team_id=$1 ORDER BY id FOR UPDATE`, team.ID)

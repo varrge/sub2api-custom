@@ -84,7 +84,7 @@ func TestProgressConcurrentRetriesThreeChinaDaysAndQuiz(t *testing.T) {
 	require.NoError(t, err)
 	require.NotContains(t, string(raw), `"answer"`)
 	require.ErrorIs(t, s.Participate(ctx, WaveOne, 1, true, cfg.Revision, map[string]int{}), ErrAnswers)
-	require.ErrorIs(t, s.Participate(ctx, WaveOne, 1, true, 1, map[string]int{"clock": 1, "keyboard": 0, "rainbow": 1}), ErrConflict)
+	require.ErrorIs(t, s.Participate(ctx, WaveOne, 1, true, 1, map[string]int{"whale-race": 1, "weight": 2, "emoji": 1}), ErrConflict)
 	for _, at := range []time.Time{
 		time.Date(2026, 11, 2, 15, 59, 59, 0, time.UTC), // Shanghai Nov 2
 		time.Date(2026, 11, 2, 16, 0, 0, 0, time.UTC),   // Shanghai Nov 3
@@ -93,7 +93,7 @@ func TestProgressConcurrentRetriesThreeChinaDaysAndQuiz(t *testing.T) {
 		require.NoError(t, s.Participate(ctx, WaveOne, 1, false, 0, nil))
 	}
 	for i := 0; i < 3; i++ {
-		require.NoError(t, s.Participate(ctx, WaveOne, 1, true, cfg.Revision, map[string]int{"clock": 1, "keyboard": 0, "rainbow": 1}))
+		require.NoError(t, s.Participate(ctx, WaveOne, 1, true, cfg.Revision, map[string]int{"whale-race": 1, "weight": 2, "emoji": 1}))
 	}
 	state, err = s.State(ctx, WaveOne, 1)
 	require.NoError(t, err)

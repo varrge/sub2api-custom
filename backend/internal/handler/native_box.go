@@ -3,7 +3,9 @@ package handler
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // The destination and tenant are operator-owned, never supplied by the browser.
@@ -22,16 +25,28 @@ type NativeBoxHandler struct {
 	baseURL      string
 	connectionID string
 	client       *http.Client
+	adminKey     func(context.Context) (string, error)
 }
 
-func NewNativeBoxHandler() *NativeBoxHandler {
-	return &NativeBoxHandler{
+func NewNativeBoxHandler(db ...*sql.DB) *NativeBoxHandler {
+	h := &NativeBoxHandler{
 		baseURL:      strings.TrimRight(os.Getenv("NATIVE_BOX_SERVICE_URL"), "/"),
 		connectionID: os.Getenv("NATIVE_BOX_CONNECTION_ID"),
 		client: &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse
 		}},
 	}
+	if len(db) > 0 && db[0] != nil {
+		h.adminKey = func(ctx context.Context) (string, error) {
+			var key string
+			err := db[0].QueryRowContext(ctx, `SELECT value FROM settings WHERE key='admin_api_key'`).Scan(&key)
+			if errors.Is(err, sql.ErrNoRows) {
+				return "", nil
+			}
+			return key, err
+		}
+	}
+	return h
 }
 
 func (h *NativeBoxHandler) configured() bool {
@@ -90,13 +105,26 @@ func (h *NativeBoxHandler) session(c *gin.Context) (map[string]json.RawMessage, 
 		response.Error(c, http.StatusServiceUnavailable, "Box service is not configured")
 		return nil, false
 	}
-	auth := strings.Fields(c.GetHeader("Authorization"))
-	if len(auth) != 2 || !strings.EqualFold(auth[0], "Bearer") {
-		response.Unauthorized(c, "User token required")
+	if h.adminKey == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Box service authentication is not configured")
 		return nil, false
 	}
-	payload, _, err := h.call(c.Request.Context(), "/api/public/sub2api/shake/session-from-token", "", map[string]string{
-		"connectionId": h.connectionID, "accessToken": auth[1], "userId": fmt.Sprint(subject.UserID),
+	key, err := h.adminKey(c.Request.Context())
+	if err != nil || key == "" {
+		response.Error(c, http.StatusServiceUnavailable, "Box service authentication is not configured")
+		return nil, false
+	}
+	now := time.Now()
+	sso, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"connectionId": h.connectionID, "userId": fmt.Sprint(subject.UserID),
+		"iat": now.Unix(), "exp": now.Add(time.Minute).Unix(),
+	}).SignedString([]byte(key))
+	if err != nil {
+		response.Error(c, http.StatusBadGateway, "Unable to verify box account")
+		return nil, false
+	}
+	payload, _, err := h.call(c.Request.Context(), "/api/public/sub2api/shake/session", "", map[string]string{
+		"sso": sso,
 	})
 	if err != nil {
 		response.Error(c, http.StatusBadGateway, "Unable to verify box account")

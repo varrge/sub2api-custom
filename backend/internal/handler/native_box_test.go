@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,12 +21,16 @@ func TestNativeBoxGatewayUsesVerifiedIdentityAndKeepsTokensServerSide(t *testing
 		require.Empty(t, r.URL.RawQuery)
 		requests = append(requests, r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		if strings.HasSuffix(r.URL.Path, "session-from-token") {
+		if strings.HasSuffix(r.URL.Path, "/session") {
 			var body map[string]string
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-			require.Equal(t, "42", body["userId"])
-			require.Equal(t, "source-tenant", body["connectionId"])
-			require.Equal(t, "user-jwt", body["accessToken"])
+			require.Len(t, body, 1)
+			token, err := jwt.Parse(body["sso"], func(*jwt.Token) (any, error) { return []byte("admin-secret"), nil }, jwt.WithValidMethods([]string{"HS256"}))
+			require.NoError(t, err)
+			claims := token.Claims.(jwt.MapClaims)
+			require.Equal(t, "42", claims["userId"])
+			require.Equal(t, "source-tenant", claims["connectionId"])
+			require.NotEmpty(t, claims["exp"])
 			_, _ = w.Write([]byte(`{"sessionToken":"delegated-secret","refreshedAuth":{"accessToken":"private"},"campaign":null,"availableCards":0,"draws":[]}`))
 		} else {
 			require.Equal(t, "Bearer delegated-secret", r.Header.Get("Authorization"))
@@ -37,7 +43,7 @@ func TestNativeBoxGatewayUsesVerifiedIdentityAndKeepsTokensServerSide(t *testing
 		}
 	}))
 	defer upstream.Close()
-	h := &NativeBoxHandler{baseURL: upstream.URL, connectionID: "source-tenant", client: upstream.Client()}
+	h := &NativeBoxHandler{baseURL: upstream.URL, connectionID: "source-tenant", client: upstream.Client(), adminKey: func(context.Context) (string, error) { return "admin-secret", nil }}
 	call := func(draw, authenticated bool, body string) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -82,7 +88,7 @@ func TestNativeBoxValidatesClosedWithoutDrawIdentity(t *testing.T) {
 		t.Run("changed_"+changed, func(t *testing.T) {
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
-				if strings.HasSuffix(r.URL.Path, "session-from-token") {
+				if strings.HasSuffix(r.URL.Path, "/session") {
 					_, _ = w.Write([]byte(`{"sessionToken":"delegated"}`))
 					return
 				}
@@ -98,7 +104,7 @@ func TestNativeBoxValidatesClosedWithoutDrawIdentity(t *testing.T) {
 				require.NoError(t, json.NewEncoder(w).Encode(result))
 			}))
 			defer upstream.Close()
-			h := &NativeBoxHandler{baseURL: upstream.URL, connectionID: "tenant", client: upstream.Client()}
+			h := &NativeBoxHandler{baseURL: upstream.URL, connectionID: "tenant", client: upstream.Client(), adminKey: func(context.Context) (string, error) { return "admin-secret", nil }}
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
 			c.Request = httptest.NewRequest(http.MethodPost, "/activities/box/draws/recover",

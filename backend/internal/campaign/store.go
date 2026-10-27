@@ -258,23 +258,33 @@ func (s *Store) Participate(ctx context.Context, id string, userID int64, quiz b
 }
 func (s *Store) Source(ctx context.Context, id string, userID int64, task string) (SourceReward, error) {
 	r := SourceReward{CampaignID: id, UserID: userID, Task: task, CardTier: "low", Quantity: 1}
-	if err := checkUser(ctx, s.db, userID, ""); err != nil {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
 		return r, err
 	}
-	err := s.db.QueryRowContext(ctx, `SELECT box_campaign_id,connection_id,earned_at FROM activity_campaign_rewards WHERE campaign_id=$1 AND user_id=$2 AND task=$3`, id, userID, task).Scan(&r.BoxCampaignID, &r.ConnectionID, &r.EarnedAt)
+	defer func() { _ = tx.Rollback() }()
+	// Lock the switches in the same order as participation. A claim authorized
+	// before a switch closes can still finish at the remote card service.
+	global, err := readEnabled(ctx, tx, "FOR SHARE")
+	if err != nil {
+		return r, err
+	}
+	c, err := readConfig(ctx, tx, id, "FOR SHARE")
+	if err != nil {
+		return r, err
+	}
+	if err := checkUser(ctx, tx, userID, "FOR SHARE"); err != nil {
+		return r, err
+	}
+	err = tx.QueryRowContext(ctx, `SELECT box_campaign_id,connection_id,earned_at FROM activity_campaign_rewards WHERE campaign_id=$1 AND user_id=$2 AND task=$3`, id, userID, task).Scan(&r.BoxCampaignID, &r.ConnectionID, &r.EarnedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return r, ErrNotFound
 	}
 	if err != nil {
 		return r, err
 	}
-	c, err := s.Config(ctx, id)
-	if err != nil {
-		return r, err
-	}
-	global, err := readEnabled(ctx, s.db, "")
 	r.Enabled = global && c.Enabled
-	return r, err
+	return r, tx.Commit()
 }
 func (s *Store) Delivered(ctx context.Context, id string, userID int64, task string) error {
 	_, err := s.db.ExecContext(ctx, `UPDATE activity_campaign_rewards SET delivered_at=COALESCE(delivered_at,$4) WHERE campaign_id=$1 AND user_id=$2 AND task=$3`, id, userID, task, s.now())

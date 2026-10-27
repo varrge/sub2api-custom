@@ -514,6 +514,10 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		return
 	}
 	omitted := omittedSettingKeys(sentFields)
+	// An unrelated settings save must not restore an outdated activity switch.
+	if req.ActivityCampaignsEnabled == nil {
+		omitted[service.SettingKeyActivityCampaignsEnabled] = struct{}{}
+	}
 
 	previousSettings, err := h.settingService.GetAllSettings(c.Request.Context())
 	if err != nil {

@@ -11546,11 +11546,14 @@ const claudeSyncedVersionLabel = computed(() => {
   });
 });
 
+const loadedActivityCampaignsEnabled = ref(false);
+
 async function loadSettings() {
   loading.value = true;
   loadFailed.value = false;
   try {
     const settings = await adminAPI.settings.getSettings();
+    loadedActivityCampaignsEnabled.value = Boolean(settings.activity_campaigns_enabled);
     settings.payment_load_balance_strategy =
       settings.payment_load_balance_strategy || "round-robin";
     // Only assign non-null values from backend (null means unconfigured, keep defaults)
@@ -12327,13 +12330,16 @@ async function saveSettings() {
       model_plaza_require_auth: form.model_plaza_require_auth,
       model_plaza_description: form.model_plaza_description,
       plugin_management_enabled: form.plugin_management_enabled,
-      activity_campaigns_enabled: form.activity_campaigns_enabled,
       native_box_entry_enabled: form.native_box_entry_enabled,
       // Affiliate (邀请返利) feature switch
       affiliate_enabled: form.affiliate_enabled,
       allow_user_view_error_requests: form.allow_user_view_error_requests,
     };
 
+    // Do not overwrite another administrator's activity switch from a stale form.
+    if (form.activity_campaigns_enabled !== loadedActivityCampaignsEnabled.value) {
+      payload.activity_campaigns_enabled = form.activity_campaigns_enabled;
+    }
     // 仅当 openai_fast_policy_settings 已成功从后端加载时才回写，
     // 否则省略整个字段，让后端保留既有规则（含默认值）。
     if (openaiFastPolicyLoaded.value) {
@@ -12438,6 +12444,8 @@ async function saveSettings() {
       form.wechat_connect_mode,
     );
     form.oidc_connect_client_secret = "";
+    form.activity_campaigns_enabled = Boolean(updated.activity_campaigns_enabled);
+    loadedActivityCampaignsEnabled.value = form.activity_campaigns_enabled;
     // Refresh OpenAI fast/flex policy from server response
     if (
       updated.openai_fast_policy_settings &&

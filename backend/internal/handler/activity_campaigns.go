@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/campaign"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
@@ -19,9 +20,12 @@ type ActivityCampaignHandler struct {
 }
 
 func NewActivityCampaignHandler(db *sql.DB) *ActivityCampaignHandler {
-	box := NewNativeBoxHandler()
+	box := NewNativeBoxHandler(db)
 	return &ActivityCampaignHandler{store: campaign.NewStore(db, box.connectionID), box: box}
 }
+
+// NativeBox shares the same trusted identity exchange for the user's box page.
+func (h *ActivityCampaignHandler) NativeBox() *NativeBoxHandler { return h.box }
 func activityResult(c *gin.Context, value any, err error) {
 	c.Header("Cache-Control", "private, no-store")
 	switch {
@@ -104,9 +108,44 @@ func (h *ActivityCampaignHandler) AdminSave(c *gin.Context) {
 		activityResult(c, nil, campaign.ErrInvalid)
 		return
 	}
+	if err := cfg.Validate(); err != nil {
+		activityResult(c, nil, err)
+		return
+	}
 	if cfg.Enabled && !h.box.configured() {
 		activityResult(c, nil, campaign.ErrNotReady)
 		return
+	}
+	old, err := h.store.Config(c.Request.Context(), cfg.ID)
+	if err != nil {
+		activityResult(c, nil, err)
+		return
+	}
+	if cfg.Enabled && (!old.Enabled || old.BoxCampaignID != cfg.BoxCampaignID ||
+		!old.StartsAt.Equal(cfg.StartsAt) || !old.EndsAt.Equal(cfg.EndsAt)) {
+		session, ok := h.box.session(c)
+		if !ok {
+			return
+		}
+		var token string
+		if json.Unmarshal(session["sessionToken"], &token) != nil || token == "" {
+			response.Error(c, http.StatusBadGateway, "无法验证摇摇卡连接")
+			return
+		}
+		target, _, err := h.box.call(c.Request.Context(), "/api/public/sub2api/shake/activity-target", token, map[string]string{"campaignId": cfg.BoxCampaignID})
+		var pool struct {
+			ID      string    `json:"id"`
+			StartAt time.Time `json:"startAt"`
+			EndAt   time.Time `json:"endAt"`
+			Status  string    `json:"status"`
+		}
+		raw, _ := json.Marshal(target)
+		if err != nil || json.Unmarshal(raw, &pool) != nil || pool.ID != cfg.BoxCampaignID ||
+			pool.Status != "active" || pool.StartAt.After(cfg.StartsAt) || pool.EndAt.Before(cfg.EndsAt) ||
+			pool.StartAt.IsZero() || pool.EndAt.IsZero() {
+			response.Error(c, http.StatusBadRequest, "摇摇卡卡池不可用或有效期未覆盖活动时间，请检查连接和卡池")
+			return
+		}
 	}
 	result, err := h.store.Save(c.Request.Context(), cfg)
 	activityResult(c, result, err)

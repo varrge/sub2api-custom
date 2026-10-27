@@ -17,7 +17,10 @@ var ErrFixedChargeInsufficient = errors.New("insufficient entitlement and balanc
 
 // FixedChargeKeyUsage is read inside the reservation transaction, avoiding a
 // second pooled connection while the user's accounting lock is held.
-type FixedChargeKeyUsage struct{ QuotaUsed, Usage5h, Usage1d, Usage7d float64 }
+type FixedChargeKeyUsage struct {
+	QuotaUsed, Usage5h, Usage1d, Usage7d        float64
+	Window5hStart, Window1dStart, Window7dStart *time.Time
+}
 
 // ReserveFixedCharge projects outstanding fixed charges through the real
 // allocator inside a savepoint. Only the reservation survives the transaction;
@@ -90,8 +93,9 @@ func (s *Store) ReserveFixedCharge(ctx context.Context, id string, snap *Snapsho
 		err := tx.QueryRowContext(ctx, `SELECT quota_used,
             CASE WHEN window_5h_start IS NULL OR window_5h_start+INTERVAL '5 hours'<=NOW() THEN 0 ELSE usage_5h END,
             CASE WHEN window_1d_start IS NULL OR window_1d_start+INTERVAL '1 day'<=NOW() THEN 0 ELSE usage_1d END,
-            CASE WHEN window_7d_start IS NULL OR window_7d_start+INTERVAL '7 days'<=NOW() THEN 0 ELSE usage_7d END
-            FROM api_keys WHERE id=$1 AND user_id=$2`, keyID, snap.UserID).Scan(&used.QuotaUsed, &used.Usage5h, &used.Usage1d, &used.Usage7d)
+            CASE WHEN window_7d_start IS NULL OR window_7d_start+INTERVAL '7 days'<=NOW() THEN 0 ELSE usage_7d END,
+            window_5h_start,window_1d_start,window_7d_start
+            FROM api_keys WHERE id=$1 AND user_id=$2`, keyID, snap.UserID).Scan(&used.QuotaUsed, &used.Usage5h, &used.Usage1d, &used.Usage7d, &used.Window5hStart, &used.Window1dStart, &used.Window7dStart)
 		if err != nil {
 			return err
 		}

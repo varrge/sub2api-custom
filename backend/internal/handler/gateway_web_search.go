@@ -86,7 +86,7 @@ func (h *GatewayHandler) WebSearch(c *gin.Context) {
 		if retryAfter > 0 {
 			c.Header("Retry-After", strconv.Itoa(retryAfter))
 		}
-		c.JSON(status, gin.H{"error": gin.H{"type": code, "message": message}})
+		h.chatCompletionsErrorResponse(c, status, code, message)
 		return
 	}
 
@@ -97,7 +97,7 @@ func (h *GatewayHandler) WebSearch(c *gin.Context) {
 		if retryAfter > 0 {
 			c.Header("Retry-After", strconv.Itoa(retryAfter))
 		}
-		c.JSON(status, gin.H{"error": gin.H{"type": code, "message": message}})
+		h.chatCompletionsErrorResponse(c, status, code, message)
 		return
 	}
 	defer inflightDone()

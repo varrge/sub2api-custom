@@ -103,6 +103,14 @@ func writeAPIKeyGroupResolutionError(c *gin.Context, err error, google bool) {
 		status, code, message = resolution.Status, resolution.Code, resolution.Message
 	}
 	if google {
+		if service.IsAPIKeySpendingLimitCode(code) {
+			service.SetOpsLocalErrorType(c, "billing_error", code)
+			c.AbortWithStatusJSON(status, gin.H{"error": gin.H{
+				"code": status, "message": message, "status": "RESOURCE_EXHAUSTED",
+				"details": []gin.H{{"@type": "type.googleapis.com/google.rpc.ErrorInfo", "reason": code}},
+			}})
+			return
+		}
 		abortWithGoogleError(c, status, message)
 		return
 	}

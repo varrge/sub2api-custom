@@ -529,7 +529,7 @@ export default {
       modelPlaceholder: 'Search model', allCategories: 'All categories', allStatuses: 'All status codes',
       empty: 'No error requests', failedToLoad: 'Failed to load error requests',
       categories: {
-        auth: 'Auth failed', rate_limit: 'Rate limited', quota: 'Balance/Subscription',
+        auth: 'Auth failed', rate_limit: 'Rate limited', quota: 'Spending quota/Balance/Subscription',
         invalid_request: 'Invalid request', service_unavailable: 'Service unavailable',
         upstream: 'Upstream error', internal: 'Platform error', other: 'Other', cyber: 'Cyber policy',
       },

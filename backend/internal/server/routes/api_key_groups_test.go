@@ -124,6 +124,11 @@ func TestMultiGroupRoutingDoesNotSwitchPinnedOrGlobalLimitedRequest(t *testing.T
 	p.globalErr = service.ErrAPIKeyRateLimit1dExceeded
 	_, err = r.resolve(routingContext("POST", "/v1/responses", `{"model":"x"}`), key)
 	require.Error(t, err)
+	var limitErr *middleware.APIKeyGroupResolutionError
+	require.ErrorAs(t, err, &limitErr)
+	require.Equal(t, "api_key_1d_quota_exceeded", limitErr.Code)
+	require.Equal(t, http.StatusTooManyRequests, limitErr.Status)
+	require.Contains(t, limitErr.Message, "消费额度已用完")
 	require.Equal(t, []int64{1}, p.seen)
 	p.seen = nil
 	key.Quota = 1

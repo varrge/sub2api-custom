@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/monthcard"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
@@ -190,6 +191,12 @@ func TestFixedChargeMonthCardKeyWindowsUseSameConnection(t *testing.T) {
 			require.NoError(t, err)
 			_, err = svc.ReserveFixedCharge(ctx, key.User, key, key.Group, sub, 0.1)
 			require.ErrorIs(t, err, tt.want)
+			details := infraerrors.FromError(err)
+			require.Equal(t, "api_key_"+tt.name+"_quota_exceeded", details.Reason)
+			require.Equal(t, "1.00000000", details.Metadata["used_usd"])
+			require.Equal(t, "1.10000000", details.Metadata["pending_usd"])
+			require.Equal(t, "2.00000000", details.Metadata["limit_usd"])
+			require.NotEmpty(t, details.Metadata["window_resets_at"], "window comes from the same locked transaction")
 			hold.HandlerDone()
 			_, err = db.Exec(`UPDATE api_keys SET ` + tt.window + `=NOW()-INTERVAL '8 days' WHERE id=1`)
 			require.NoError(t, err)

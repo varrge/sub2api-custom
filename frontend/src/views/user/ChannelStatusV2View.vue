@@ -483,6 +483,7 @@ import RelayPulseMatrix from '@/features/channel-monitor-v2/RelayPulseMatrix.vue
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
+import { formatBeijingDateTime } from '@/utils/beijingDateTime'
 import { isChannelMonitorThroughputHidden, isChannelMonitorUserRankingHidden } from '@/utils/featureFlags'
 import * as api from '@/api/channelMonitorV2'
 import type {
@@ -878,12 +879,12 @@ function latencyKpiSecondary(metric: {
   return formatLatencyKpiSecondary(metric.avg_ms, metric.p90_ms, metric.p95_ms)
 }
 function formatTime(value: string) {
-  return new Intl.DateTimeFormat(locale.value || undefined, {
+  return formatBeijingDateTime(value, {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(new Date(value))
+  }, locale.value)
 }
 function statusDot(health?: MonitorHealth | HealthState) {
   if (!health || typeof health === 'string') {

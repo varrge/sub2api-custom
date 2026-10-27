@@ -6,8 +6,9 @@ import PolicyPanel from '../components/PolicyPanel.vue'
 import EventWorkspace from '../components/EventWorkspace.vue'
 import EventDetailDialog from '../components/EventDetailDialog.vue'
 import FilterDeleteDialog from '../components/FilterDeleteDialog.vue'
-import type { PromptAuditDraft, PromptAuditEndpointDraft, PromptAuditEvent, PromptEventFilters } from '../types'
-import { emptyEventFilters, resolveDeleteRangeFilters, SCANNER_CATALOG } from '../viewModel'
+import RuntimeOverview from '../components/RuntimeOverview.vue'
+import type { PromptAuditDraft, PromptAuditEndpointDraft, PromptAuditEvent, PromptAuditRuntime, PromptEventFilters } from '../types'
+import { emptyEventFilters, SCANNER_CATALOG } from '../viewModel'
 
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
@@ -98,6 +99,7 @@ describe('Prompt Audit components', () => {
     expect(wrapper.text()).toContain('alice-key')
     expect(wrapper.text()).toContain('admin.promptAudit.decisions.critical · admin.promptAudit.riskLevels.critical')
     expect(wrapper.text()).toContain('admin.promptAudit.scanners.pii')
+    expect(wrapper.get('[data-test="event-1"]').findAll('td')[1].text()).toBe('7/16/26, 08:00:00')
     expect(wrapper.get('[data-test="filter-delete"]').attributes()).not.toHaveProperty('disabled')
     await wrapper.get('[data-test="filter-delete"]').trigger('click')
     expect(wrapper.emitted('preview-delete')).toHaveLength(1)
@@ -105,16 +107,18 @@ describe('Prompt Audit components', () => {
     expect(wrapper.emitted('selection')?.at(-1)?.[0]).toEqual([1])
   })
 
-  it('resolves delete range presets to an epoch start and a cutoff end', () => {
-    const now = Date.parse('2026-07-17T12:00:00.000Z')
-    const sevenDays = resolveDeleteRangeFilters(emptyEventFilters(), '7d', now)
-    expect(sevenDays.start_at).toBe('1970-01-01T00:00:00.000Z')
-    expect(sevenDays.end_at).toBe('2026-07-10T12:00:00.000Z')
-    const all = resolveDeleteRangeFilters(emptyEventFilters(), 'all', now)
-    expect(all.start_at).toBe('1970-01-01T00:00:00.000Z')
-    expect(all.end_at).toBe('2026-07-17T12:00:00.000Z')
-    const customSource = { ...emptyEventFilters(), start_at: '2026-07-01T00:00', end_at: '2026-07-02T00:00' }
-    expect(resolveDeleteRangeFilters(customSource, 'custom', now)).toEqual(customSource)
+  it('displays the latest runtime timestamp in Beijing time without a timezone suffix', () => {
+    const runtime: PromptAuditRuntime = {
+      process_status: 'running', effective_mode: 'async_audit', expected_config_version: 1, active_config_version: 1,
+      worker_total: 4, worker_active: 1, queue_capacity: 100,
+      queue: { staging: 0, queued: 0, processing: 1, retry: 0, done: 5, failed: 0, active: 1 },
+      processed_total: 5, failed_total: 0, enqueued_total: 5, dropped_total: 0, database_status: 'ok', redis_status: 'ok', endpoints: {},
+      guard_metrics: { total: 1, allowed: 1, flagged: 0, blocked: 0, unavailable: 0, invalid: 0, timeouts: 0, failovers: 0, bulkhead_full: 0, record_failed: 0 },
+      last_processed_at: '2026-07-16T20:34:56Z',
+    }
+    const wrapper = mount(RuntimeOverview, { props: { runtime, loading: false, error: '' } })
+    const latest = wrapper.findAll('h3').find((heading) => heading.text() === 'admin.promptAudit.runtime.latest')!
+    expect(latest.element.nextElementSibling?.textContent?.trim()).toBe('Jul 17, 2026, 04:34:56')
   })
 
   it('drives filter deletion through presets, custom validation, preview, and confirm', async () => {
@@ -163,6 +167,7 @@ describe('Prompt Audit components', () => {
       preview: { matched_count: 3, filter_summary: {}, snapshot_max_id: 9, filter_hash: 'b'.repeat(64), confirmation_token: 'tok', expires_at: '2026-07-16T00:05:00Z' },
     })
     expect(wrapper.get('[data-test="delete-preview-result"]').text()).toContain('admin.promptAudit.events.filterDeleteCount')
+    expect(wrapper.get('[data-test="delete-preview-result"]').findAll('dd').at(-1)?.text()).toBe('Jul 16, 2026, 08:05:00')
     expect(wrapper.find('[data-test="confirm-disabled-reason"]').exists()).toBe(false)
     expect(wrapper.get('[data-test="confirm-filter-delete"]').attributes()).not.toHaveProperty('disabled')
     await wrapper.get('[data-test="confirm-filter-delete"]').trigger('click')

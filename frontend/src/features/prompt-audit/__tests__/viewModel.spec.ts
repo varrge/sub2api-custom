@@ -6,7 +6,9 @@ import {
   draftFingerprint,
   emptyEventFilters,
   eventFilterPayload,
+  eventQueryParams,
   hasExplicitDeleteRange,
+  resolveDeleteRangeFilters,
   SCANNER_CATALOG,
 } from '../viewModel'
 
@@ -71,17 +73,81 @@ describe('Prompt Audit view model', () => {
     expect(draftFingerprint(changed)).not.toBe(draftFingerprint(original))
   })
 
-  it('requires a valid explicit range and sends canonical ISO timestamps for filter deletion', () => {
+  it('uses Beijing time for both list and delete filters, including the previous UTC day', () => {
     const filters = emptyEventFilters()
     expect(hasExplicitDeleteRange(filters)).toBe(false)
-    filters.start_at = '2026-07-15T10:00'
-    filters.end_at = '2026-07-16T10:00'
+    filters.start_at = '2026-07-15T00:00'
+    filters.end_at = '2026-07-16T00:00:15'
     filters.group_id = '9'
     expect(hasExplicitDeleteRange(filters)).toBe(true)
-    expect(eventFilterPayload(filters)).toMatchObject({
+    const expected = {
       group_id: 9,
-      start_at: new Date(filters.start_at).toISOString(),
-      end_at: new Date(filters.end_at).toISOString(),
+      start_at: '2026-07-14T16:00:00.000Z',
+      end_at: '2026-07-15T16:00:15.000Z',
+    }
+    expect(eventQueryParams(filters)).toEqual(expected)
+    expect(eventFilterPayload(filters)).toEqual(expected)
+  })
+
+  it.each([
+    ['2026-01-15T00:00', '2026-01-14T16:00:00.000Z'],
+    ['2026-03-08T02:30', '2026-03-07T18:30:00.000Z'],
+    ['2026-11-01T01:30', '2026-10-31T17:30:00.000Z'],
+  ])('interprets %s as Beijing time regardless of local daylight saving rules', (start_at, expected) => {
+    expect(eventFilterPayload({ ...emptyEventFilters(), start_at })).toEqual({ start_at: expected })
+  })
+
+  it.each(['', 'invalid', '2026-02-30T12:00', '2026-07-15T24:00', 'invalidZ'])(
+    'rejects the invalid start time %j for explicit deletion',
+    (start_at) => {
+      const filters = { ...emptyEventFilters(), start_at, end_at: '2026-07-16T00:00' }
+      expect(hasExplicitDeleteRange(filters)).toBe(false)
+      expect(eventFilterPayload(filters)).not.toHaveProperty('start_at')
+    },
+  )
+
+  it.each(['2026-07-16T00:00', '2026-07-17T00:00'])('rejects empty or reversed delete ranges starting at %s', (start_at) => {
+    expect(hasExplicitDeleteRange({ ...emptyEventFilters(), start_at, end_at: '2026-07-16T00:00' })).toBe(false)
+  })
+
+  it('preserves absolute timestamps with explicit offsets', () => {
+    const filters = {
+      ...emptyEventFilters(),
+      start_at: '2026-07-15T00:00:00+08:00',
+      end_at: '2026-07-15T02:00:00-07:00',
+    }
+    expect(hasExplicitDeleteRange(filters)).toBe(true)
+    expect(eventFilterPayload(filters)).toEqual({
+      start_at: '2026-07-14T16:00:00.000Z',
+      end_at: '2026-07-15T09:00:00.000Z',
+    })
+  })
+
+  it.each([
+    ['1d', '2026-07-16T12:00:00.123Z'],
+    ['7d', '2026-07-10T12:00:00.123Z'],
+    ['30d', '2026-06-17T12:00:00.123Z'],
+    ['90d', '2026-04-18T12:00:00.123Z'],
+    ['all', '2026-07-17T12:00:00.123Z'],
+  ] as const)('preserves the absolute epoch and cutoff in the %s delete payload', (preset, end_at) => {
+    const filters = { ...emptyEventFilters(), decision: 'critical' }
+    const resolved = resolveDeleteRangeFilters(filters, preset, Date.parse('2026-07-17T12:00:00.123Z'))
+    const expected = { decision: 'critical', start_at: '1970-01-01T00:00:00.000Z', end_at }
+    expect(resolved).toMatchObject(expected)
+    expect(hasExplicitDeleteRange(resolved)).toBe(true)
+    expect(eventFilterPayload(resolved)).toEqual(expected)
+    expect(filters.start_at).toBe('')
+    expect(filters.end_at).toBe('')
+  })
+
+  it('keeps a custom delete range in Beijing time until building the payload', () => {
+    const filters = { ...emptyEventFilters(), start_at: '2026-07-01T00:00', end_at: '2026-07-02T00:00' }
+    const resolved = resolveDeleteRangeFilters(filters, 'custom')
+    expect(resolved).toEqual(filters)
+    expect(resolved).not.toBe(filters)
+    expect(eventFilterPayload(resolved)).toEqual({
+      start_at: '2026-06-30T16:00:00.000Z',
+      end_at: '2026-07-01T16:00:00.000Z',
     })
   })
 })

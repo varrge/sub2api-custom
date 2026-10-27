@@ -6045,10 +6045,7 @@ const temporaryRateStatusLabel = (fields: TemporaryRateFields): string =>
   temporaryRateStatusText(temporaryRateStatus(fields, temporaryRateNow.value));
 
 const temporaryRateRange = (fields: TemporaryRateFields): string =>
-  temporaryRateDateRange(
-    fields,
-    appStore.cachedPublicSettings?.server_timezone,
-  );
+  temporaryRateDateRange(fields);
 
 const editTemporaryRateStatus = computed<TemporaryRateStatus>(() => {
   if (!editingGroup.value) return "none";

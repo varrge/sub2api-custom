@@ -49,6 +49,7 @@ import type { Column } from '@/components/common/types'
 import DataTable from '@/components/common/DataTable.vue'
 import OrderStatusBadge from '@/components/payment/OrderStatusBadge.vue'
 import { currencySymbol } from '@/components/payment/currency'
+import { formatOrderDateTime as formatDate } from '@/components/payment/orderUtils'
 
 const { t } = useI18n()
 
@@ -57,8 +58,6 @@ const props = defineProps<{
   loading: boolean
   showUser?: boolean
 }>()
-
-function formatDate(dateStr: string) { return new Date(dateStr).toLocaleString() }
 
 const creditedAmountSymbol = currencySymbol('USD')
 

@@ -150,6 +150,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorCode, extractApiErrorMessage } from '@/utils/apiError'
+import { formatBeijingDateTime } from '@/utils/beijingDateTime'
 import RuntimeOverview from './components/RuntimeOverview.vue'
 import EndpointPool from './components/EndpointPool.vue'
 import PolicyPanel from './components/PolicyPanel.vue'
@@ -425,7 +426,7 @@ async function confirmFilterDelete(filters?: PromptEventFilters) {
   } finally { loading.deleting = false }
 }
 function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium', timeStyle: 'medium' }).format(new Date(value))
+  return formatBeijingDateTime(value, { dateStyle: 'medium', timeStyle: 'medium' }, locale.value)
 }
 
 onMounted(loadInitial)

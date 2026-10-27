@@ -299,7 +299,7 @@ import Icon from '@/components/icons/Icon.vue'
 import BoxReel from '@/components/luckyBox/BoxReel.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import { useAuthStore } from '@/stores/auth'
-import { formatDateTime } from '@/utils/format'
+import { formatBeijingDateTime as formatDateTime } from '@/utils/beijingDateTime'
 
 const { t } = useI18n()
 const authStore = useAuthStore()

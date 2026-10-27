@@ -762,6 +762,7 @@ import Select, { type SelectOption } from '@/components/common/Select.vue'
 import SearchInput from '@/components/common/SearchInput.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useClipboard } from '@/composables/useClipboard'
+import { formatBeijingDateTime } from '@/utils/beijingDateTime'
 import { getPersistedPageSize, setPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { useAppStore } from '@/stores/app'
 import { keysAPI } from '@/api'
@@ -2591,12 +2592,12 @@ function batchImageErrorMessage(error: any, fallback: string) {
 
 function formatDate(timestamp: number) {
   if (!timestamp) return ''
-  return new Date(timestamp * 1000).toLocaleString()
+  return formatBeijingDateTime(new Date(timestamp * 1000))
 }
 
 function defaultTaskName(timestamp?: number) {
   const date = timestamp ? new Date(timestamp * 1000) : new Date()
-  return date.toLocaleString()
+  return formatBeijingDateTime(date)
 }
 
 onMounted(() => {

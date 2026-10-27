@@ -26,6 +26,18 @@ beforeEach(async () => {
 afterEach(async () => { await store.flush(); store.$dispose(); await flushPromises() })
 
 describe('image studio sessions', () => {
+  it('records generation time in Beijing time without a timezone suffix', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-26T16:30:45Z'))
+    generate.mockResolvedValue([{ src: 'data:image/png;base64,QUJD' }])
+    try {
+      await store.generate('secret', 'openai')
+      expect(store.activeSession!.results[0]?.createdAt).toBe('2026/10/27 00:30:45')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps background results in the originating session and excludes the API key from storage', async () => {
     let complete!: (images: { src: string }[]) => void
     generate.mockImplementation(() => new Promise(resolve => { complete = resolve }))

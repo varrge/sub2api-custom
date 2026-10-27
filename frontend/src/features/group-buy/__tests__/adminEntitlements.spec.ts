@@ -12,7 +12,7 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import { adminGroupBuyAPI } from '@/api/groupBuy'
 import type { AdminMonthCard, AdminTeamEntitlement } from '@/types/groupBuy'
 
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('vue-i18n', async () => ({ ...await vi.importActual<typeof import('vue-i18n')>('vue-i18n'), useI18n: () => ({ t: (key: string) => key }) }))
 vi.mock('@/api/groupBuy', () => ({ adminGroupBuyAPI: {
   entitlementTeams: vi.fn(), entitlementTeamCards: vi.fn(), soloEntitlements: vi.fn(), adjustQuotas: vi.fn(), resetUsage: vi.fn(), deleteCard: vi.fn(), cards: vi.fn(), allocations: vi.fn()
 } }))

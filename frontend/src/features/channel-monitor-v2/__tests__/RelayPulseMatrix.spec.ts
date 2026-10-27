@@ -115,6 +115,8 @@ describe('RelayPulseMatrix', () => {
     expect(cells).toHaveLength(3)
     // Hover tooltip content (privacy-safe: no absolute request/error counts)
     const tip = cells[0].text()
+    expect(tip).toContain('08/01 08:00 - 08:01')
+    expect(tip).not.toMatch(/GMT|UTC/)
     expect(tip).toContain('成功率')
     expect(tip).toContain('90.0%')
     expect(tip).toContain('首 Token')

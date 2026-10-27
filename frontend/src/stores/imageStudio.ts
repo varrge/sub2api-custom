@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, onScopeDispose, ref, toRaw, watch } from 'vue'
 import { generateImages, type GeneratedImage, type GenerateImageOptions, type ImageAspectRatio, type ImageQuality } from '@/api/imageGeneration'
 import type { GroupPlatform } from '@/types'
+import { formatBeijingDateTime } from '@/utils/beijingDateTime'
 import { useAuthStore } from './auth'
 import { loadImageStudio, saveImageStudio, type SavedImageStudio } from './imageStudioStorage'
 
@@ -168,7 +169,7 @@ export const useImageStudioStore = defineStore('imageStudio', () => {
       if (!isCurrent()) return 0
       if (!images.length) throw new Error('imageGeneration.noImageReturned')
       const results = images.map((image): ImageStudioResult => ({
-        ...image, id: crypto.randomUUID(), model: request.model, createdAt: new Date().toLocaleString(),
+        ...image, id: crypto.randomUUID(), model: request.model, createdAt: formatBeijingDateTime(new Date(), undefined, 'zh-CN'),
         aspectRatio: request.aspectRatio, mode: request.referenceImages.length ? 'image' : 'text', prompt: request.prompt,
       }))
       session.results.unshift(...results)

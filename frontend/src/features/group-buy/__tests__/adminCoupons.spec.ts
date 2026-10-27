@@ -4,9 +4,10 @@ import AdminCoupons from '../AdminCoupons.vue'
 import { adminGroupBuyAPI } from '@/api/groupBuy'
 import type { GroupBuyProduct, MonthCardCoupon } from '@/types/groupBuy'
 import zh from '@/i18n/locales/zh'
+import { i18n } from '@/i18n'
 
 vi.mock('@/components/common/BaseDialog.vue', () => ({ default: { props: ['show', 'title'], template: '<section v-if="show" role="dialog"><h2>{{ title }}</h2><slot /></section>' } }))
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string, params: Record<string, unknown> = {}) => {
+vi.mock('vue-i18n', async () => ({ ...await vi.importActual<typeof import('vue-i18n')>('vue-i18n'), useI18n: () => ({ t: (key: string, params: Record<string, unknown> = {}) => {
   const message = key.split('.').reduce((obj: any, part) => obj?.[part], zh) || key
   return String(message).replace(/\{(\w+)\}/g, (_, name: string) => String(params[name] ?? ''))
 } }) }))
@@ -21,7 +22,53 @@ async function open(existing?: MonthCardCoupon) {
   await button(view, existing ? '编辑' : '新增支付优惠码').trigger('click')
   return view
 }
-beforeEach(() => { vi.clearAllMocks(); vi.mocked(adminGroupBuyAPI.saveCoupon).mockResolvedValue(coupon()) })
+beforeEach(() => { vi.clearAllMocks(); i18n.global.locale.value = 'zh'; vi.mocked(adminGroupBuyAPI.saveCoupon).mockResolvedValue(coupon()) })
+
+describe('admin coupon expiry in Beijing time', () => {
+  it('displays and loads the next Beijing calendar year and preserves the instant and seconds on save', async () => {
+    const view = await open(coupon({ expires_at: '2026-12-31T23:30:45Z' }))
+    expect(view.get('tbody').text()).toContain('2027/01/01 07:30:45')
+    expect(view.get('tbody').text()).not.toMatch(/GMT|UTC|\+08/)
+    const expiry = view.get<HTMLInputElement>('input[type="datetime-local"]')
+    expect(expiry.element.value).toBe('2027-01-01T07:30:45.000')
+    expect(expiry.element.validity.valid).toBe(true)
+    await view.get('form').trigger('submit')
+    await flushPromises()
+    expect(adminGroupBuyAPI.saveCoupon).toHaveBeenCalledWith(expect.objectContaining({ expires_at: '2027-01-01T07:30:45+08:00' }))
+    view.unmount()
+  })
+
+  it.each([
+    ['2027-03-14T02:30', '2027-03-14T02:30:00+08:00'],
+    ['2027-03-14T02:30:15', '2027-03-14T02:30:15+08:00'],
+    ['', null]
+  ])('saves edited Beijing expiry %s, including an empty expiry', async (input, expected) => {
+    const view = await open(coupon({ expires_at: '2026-12-31T23:30:45Z' }))
+    await view.get('input[type="datetime-local"]').setValue(input)
+    await view.get('form').trigger('submit')
+    await flushPromises()
+    expect(adminGroupBuyAPI.saveCoupon).toHaveBeenCalledWith(expect.objectContaining({ expires_at: expected }))
+    view.unmount()
+  })
+
+  it.each(['invalid', '2027-02-30T12:00'])('rejects nonempty invalid expiry %s without removing its limit', async input => {
+    const view = await open(coupon({ expires_at: '2026-12-31T23:30:45Z' }))
+    const expiry = view.get<HTMLInputElement>('input[type="datetime-local"]')
+    // Bypass native sanitization to exercise malformed nonempty input.
+    expiry.element.type = 'text'
+    await expiry.setValue(input)
+    await view.get('form').trigger('submit')
+    await flushPromises()
+    expect(adminGroupBuyAPI.saveCoupon).not.toHaveBeenCalled()
+    expect(view.get('[role="alert"]').text()).toBe(zh.groupBuy.couponSaveFailed)
+    expect(view.find('[role="dialog"]').exists()).toBe(true)
+    await expiry.setValue('2027-01-02T07:30')
+    await view.get('form').trigger('submit')
+    await flushPromises()
+    expect(adminGroupBuyAPI.saveCoupon).toHaveBeenCalledWith(expect.objectContaining({ expires_at: '2027-01-02T07:30:00+08:00' }))
+    view.unmount()
+  })
+})
 
 describe('admin coupon product scope', () => {
   it('saves multiple selected products across search filters and allows unlimited personal uses', async () => {

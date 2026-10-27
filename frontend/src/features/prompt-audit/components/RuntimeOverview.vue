@@ -74,6 +74,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { formatBeijingDateTime } from '@/utils/beijingDateTime'
 import type { PromptAuditRuntime } from '../types'
 
 const props = defineProps<{ runtime: PromptAuditRuntime | null; loading: boolean; error: string }>()
@@ -109,7 +110,7 @@ const guardMetricItems = computed(() => {
 })
 
 function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium', timeStyle: 'medium' }).format(new Date(value))
+  return formatBeijingDateTime(value, { dateStyle: 'medium', timeStyle: 'medium' }, locale.value)
 }
 
 function statusDot(status: string): string {

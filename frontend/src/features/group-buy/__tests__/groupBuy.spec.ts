@@ -1,12 +1,13 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import zh from '@/i18n/locales/zh'
+import { i18n } from '@/i18n'
 import TeamCard from '../TeamCard.vue'
 import MonthCardCard from '../MonthCardCard.vue'
 import ConsumptionOrder from '../ConsumptionOrder.vue'
 import AllocationTable from '../AllocationTable.vue'
-import { availableQuota, canJoin, orderedEntitlements, purchaseQuery, remainingMembers } from '../model'
+import { availableQuota, canJoin, exactDate, orderedEntitlements, purchaseQuery, remainingMembers } from '../model'
 import { groupBuyAPI } from '@/api/groupBuy'
 import type { UserSubscription } from '@/types'
 import type { GroupBuyProduct, GroupBuyTeam, MonthCard, ChargeAllocation } from '@/types/groupBuy'
@@ -16,8 +17,30 @@ vi.mock('@/api/groupBuy', () => ({ groupBuyAPI: { setOrder: vi.fn().mockResolved
 const product: GroupBuyProduct = { id: 1, group_id: 10, group_name: 'Actual group', platform: 'openai', name: 'Monthly', description: '', price_cny: 198, base_quota_usd: 940, tiers: [{ members: 3, quota_usd: 960 }, { members: 6, quota_usd: 1000 }, { members: 10, quota_usd: 1100 }], max_members: 10, recruitment_hours: 48, for_sale: true, sort_order: 0 }
 const team: GroupBuyTeam = { id: 1, code: 'TEAM', product_id: 1, product, member_count: 4, current_quota_usd: 960, next_quota_usd: 1000, next_members: 6, starts_at: '2099-01-01T15:00:00Z', closes_at: '2099-01-03T15:00:00Z', status: 'recruiting', joined: false }
 const card: MonthCard = { id: 1, user_id: 1, group_id: 10, order_id: 1, code: 'CARD', group_name: 'Actual group', platform: 'openai', product_name: 'Monthly', team_code: 'TEAM', team_id: 1, status: 'active', total_quota_usd: 1100, total_used_usd: 1000, weekly_quota_usd: 275, weekly_used_usd: 0, starts_at: '2099-01-01T15:00:00Z', expires_at: '2099-01-31T15:00:00Z', weekly_window_start: '2099-01-29T15:00:00Z', weekly_window_end: '2099-01-31T15:00:00Z', priority: 0 }
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string, params: Record<string, unknown> = {}) => { const message = key.split('.').reduce((obj: any, part) => obj?.[part], zh) || key; return String(message).replace(/\{(\w+)\}/g, (_, name: string) => String(params[name] ?? '')) } }) }))
+vi.mock('vue-i18n', async () => ({ ...await vi.importActual<typeof import('vue-i18n')>('vue-i18n'), useI18n: () => ({ t: (key: string, params: Record<string, unknown> = {}) => { const message = key.split('.').reduce((obj: any, part) => obj?.[part], zh) || key; return String(message).replace(/\{(\w+)\}/g, (_, name: string) => String(params[name] ?? '')) } }) }))
 const global = () => ({ plugins: [createPinia()], stubs: { RouterLink: { template: '<a><slot /></a>' } } })
+
+describe('Beijing time display', () => {
+  const originalLocale = i18n.global.locale.value
+  afterEach(() => { i18n.global.locale.value = originalLocale })
+
+  it.each([
+    ['zh', '2027/01/01 07:30:45', '01/01 07:30'],
+    ['en', '01/01/2027, 07:30:45', '01/01, 07:30']
+  ])('shows the next Beijing calendar year in %s without a timezone suffix', (locale, full, short) => {
+    i18n.global.locale.value = locale
+    const timestamp = '2026-12-31T23:30:45Z'
+    expect(exactDate(timestamp)).toBe(full)
+    const teamView = mount(TeamCard, { props: { team: { ...team, closes_at: timestamp }, now: Date.parse(timestamp) - 1000 }, global: global() })
+    const deadline = teamView.get('.gb-team-card__footer p[title]')
+    expect(deadline.text()).toBe(`${zh.groupBuy.closes} ${short}`)
+    expect(deadline.attributes('title')).toBe(`${zh.groupBuy.closes} ${full}`)
+    const cardView = mount(MonthCardCard, { props: { card: { ...card, starts_at: timestamp } }, global: global() })
+    expect(cardView.get('dd').text()).toBe(full)
+    teamView.unmount()
+    cardView.unmount()
+  })
+})
 
 describe('group buy purchase and quota boundaries', () => {
   it('distinguishes two members to next tier from six to full team', () => {

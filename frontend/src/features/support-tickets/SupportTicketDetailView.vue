@@ -167,7 +167,7 @@ import TextArea from '@/components/common/TextArea.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore, useAuthStore, useSupportTicketStore } from '@/stores'
 import { extractApiErrorMessage } from '@/utils/apiError'
-import { formatDateTimeToMinute } from '@/utils/format'
+import { formatBeijingDateTimeToMinute as formatDateTimeToMinute } from '@/utils/beijingDateTime'
 import SupportTicketImagePicker from './SupportTicketImagePicker.vue'
 import { isSupportTicketFeatureDisabled, supportTicketsAdminAPI, supportTicketsUserAPI } from './api'
 import {

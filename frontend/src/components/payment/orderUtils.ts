@@ -3,6 +3,8 @@
  * Used by AdminOrderDetail, AdminOrderTable, AdminRefundDialog, AdminOrdersView, etc.
  */
 
+import { formatBeijingDateTime } from '@/utils/beijingDateTime'
+
 const STATUS_BADGE_MAP: Record<string, string> = {
   PENDING: 'badge-warning',
   PAID: 'badge-info',
@@ -30,6 +32,5 @@ export function canRefund(status: string): boolean {
 }
 
 export function formatOrderDateTime(dateStr: string): string {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString()
+  return formatBeijingDateTime(dateStr) || '-'
 }

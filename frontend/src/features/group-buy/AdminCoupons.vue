@@ -58,7 +58,7 @@
             <p v-if="!draft.product_ids.length" class="gb-notice gb-notice-error p-2 text-xs" role="alert">{{ t('groupBuy.couponSelectRequired') }}</p>
           </div>
         </fieldset>
-        <label class="block space-y-1"><span>{{ t('groupBuy.couponExpires') }}</span><input v-model="expiresLocal" type="datetime-local" class="input" :disabled="saving" /><span class="block text-xs text-gray-500">{{ t('groupBuy.couponExpiryHint') }}</span></label>
+        <label class="block space-y-1"><span>{{ t('groupBuy.couponExpires') }}</span><input v-model="expiresLocal" type="datetime-local" step="1" class="input" :disabled="saving" /><span class="block text-xs text-gray-500">{{ t('groupBuy.couponExpiryHint') }}</span></label>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label class="block space-y-1"><span>{{ t('groupBuy.couponMaxUses') }}</span><input v-model.number="draft.max_uses" type="number" min="0" max="2147483647" step="1" required class="input" :disabled="saving" /></label>
           <label class="block space-y-1"><span>{{ t('groupBuy.couponPerUser') }}</span><input v-model.number="draft.per_user_limit" type="number" min="0" max="2147483647" step="1" required class="input" data-test="coupon-per-user" :disabled="saving" /></label>
@@ -79,6 +79,7 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import { adminGroupBuyAPI } from '@/api/groupBuy'
 import type { GroupBuyProduct, MonthCardCoupon } from '@/types/groupBuy'
 import { extractApiErrorMessage } from '@/utils/apiError'
+import { beijingDateTimeLocalToRfc3339, toBeijingDateTimeLocal } from '@/utils/beijingDateTime'
 import { cny, exactDate } from './model'
 import './glass.css'
 
@@ -120,18 +121,22 @@ function edit(coupon?: MonthCardCoupon) {
   draft.value = coupon ? { ...coupon, product_ids: [...ids] } : { id: 0, code: '', kind: 'fixed', value: 10, product_id: null, product_ids: [], active: true, expires_at: null, max_uses: 0, per_user_limit: 1, used_count: 0 }
   productScope.value = ids.length ? 'selected' : 'all'
   productSearch.value = ''
-  const date = coupon?.expires_at ? new Date(coupon.expires_at) : null
-  expiresLocal.value = date ? new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : ''
+  expiresLocal.value = toBeijingDateTimeLocal(coupon?.expires_at)
 }
 function close() { if (!saving.value) draft.value = null }
 async function save() {
   if (!draft.value || saving.value) return
   formError.value = ''
   if (productScope.value === 'selected' && !draft.value.product_ids.length) return
+  const expiresAt = beijingDateTimeLocalToRfc3339(expiresLocal.value)
+  if (expiresLocal.value && !expiresAt) {
+    formError.value = t('groupBuy.couponSaveFailed')
+    return
+  }
   const productIDs = productScope.value === 'all' ? [] : [...new Set(draft.value.product_ids)].sort((a, b) => a - b)
   saving.value = true
   try {
-    await adminGroupBuyAPI.saveCoupon({ ...draft.value, product_ids: productIDs, product_id: productIDs[0] ?? null, code: draft.value.code.trim().toUpperCase(), expires_at: expiresLocal.value ? new Date(expiresLocal.value).toISOString() : null })
+    await adminGroupBuyAPI.saveCoupon({ ...draft.value, product_ids: productIDs, product_id: productIDs[0] ?? null, code: draft.value.code.trim().toUpperCase(), expires_at: expiresAt })
     draft.value = null
     await load()
   } catch (err) { formError.value = extractApiErrorMessage(err, t('groupBuy.couponSaveFailed')) }

@@ -181,12 +181,12 @@ const temporaryRateDisplay = computed(() => {
   if (status === 'upcoming') {
     return t('common.temporaryRate.upcoming', {
       rate: props.plan.temporary_rate_multiplier ?? 1,
-      range: temporaryRateDateRange(props.plan, appStore.cachedPublicSettings?.server_timezone)
+      range: temporaryRateDateRange(props.plan)
     })
   }
   if (status === 'active') {
     return t('common.temporaryRate.active', {
-      end: temporaryRateEndDate(props.plan, appStore.cachedPublicSettings?.server_timezone)
+      end: temporaryRateEndDate(props.plan)
     })
   }
   return ''

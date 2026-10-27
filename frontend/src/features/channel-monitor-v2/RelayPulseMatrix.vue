@@ -176,6 +176,7 @@ import type {
   MonitorMetric,
 } from '@/api/channelMonitorV2'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { formatBeijingDateTime } from '@/utils/beijingDateTime'
 import Icon from '@/components/icons/Icon.vue'
 import {
   formatLatencyPrivacy,
@@ -456,18 +457,18 @@ function formatMs(value: number | null) {
 }
 
 function formatAxisTime(value: string) {
-  return new Intl.DateTimeFormat(locale.value || undefined, {
+  return formatBeijingDateTime(value, {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(new Date(value))
+  }, locale.value)
 }
 
 function formatBucketRange(value: string) {
   const start = new Date(value)
   const end = new Date(start.getTime() + props.coverage.bucket_seconds * 1000)
-  return `${formatAxisTime(start.toISOString())} - ${new Intl.DateTimeFormat(locale.value || undefined, { hour: '2-digit', minute: '2-digit' }).format(end)}`
+  return `${formatAxisTime(value)} - ${formatBeijingDateTime(end, { hour: '2-digit', minute: '2-digit' }, locale.value)}`
 }
 </script>
 

@@ -155,11 +155,11 @@ const temporaryRateText = computed(() => {
   if (temporaryStatus.value === 'upcoming') {
     return t('common.temporaryRate.upcoming', {
       rate,
-      range: temporaryRateDateRange(temporaryFields.value, appStore.cachedPublicSettings?.server_timezone)
+      range: temporaryRateDateRange(temporaryFields.value)
     })
   }
   return t('common.temporaryRate.active', {
-    end: temporaryRateEndDate(temporaryFields.value, appStore.cachedPublicSettings?.server_timezone)
+    end: temporaryRateEndDate(temporaryFields.value)
   })
 })
 

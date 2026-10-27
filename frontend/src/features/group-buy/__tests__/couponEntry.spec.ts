@@ -6,7 +6,7 @@ import { monthCardFeeCNY } from '../model'
 import { groupBuyAPI } from '@/api/groupBuy'
 import type { CouponQuote, MonthCardSelection } from '@/types/groupBuy'
 
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string, params: Record<string, unknown> = {}) => { const message: unknown = key.split('.').reduce<unknown>((obj, part) => (obj as Record<string, unknown>)?.[part], zh); return String(message || key).replace(/\{(\w+)\}/g, (_, name: string) => String(params[name] ?? '')) } }) }))
+vi.mock('vue-i18n', async () => ({ ...await vi.importActual<typeof import('vue-i18n')>('vue-i18n'), useI18n: () => ({ t: (key: string, params: Record<string, unknown> = {}) => { const message: unknown = key.split('.').reduce<unknown>((obj, part) => (obj as Record<string, unknown>)?.[part], zh); return String(message || key).replace(/\{(\w+)\}/g, (_, name: string) => String(params[name] ?? '')) } }) }))
 vi.mock('@/api/groupBuy', () => ({ groupBuyAPI: { previewCoupon: vi.fn() } }))
 const selection: MonthCardSelection = { mode: 'create', product: { id: 1, group_id: 2, name: 'Monthly', group_name: 'OpenAI', platform: 'openai', description: '', price_cny: 198, base_quota_usd: 940, tiers: [], max_members: 10, recruitment_hours: 48, for_sale: true, sort_order: 0 } }
 const quote: CouponQuote = { coupon_id: 2, code: 'SAVE10', original_cny: 198, discount_cny: 19.8, amount_cny: 178.2 }

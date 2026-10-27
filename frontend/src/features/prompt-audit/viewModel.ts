@@ -1,3 +1,4 @@
+import { parseBeijingDateTimeLocal } from '@/utils/beijingDateTime'
 import type {
   PromptAuditConfig,
   PromptAuditDraft,
@@ -107,9 +108,11 @@ export function emptyEventFilters(): PromptEventFilters {
 }
 
 function toISO(value: string): string | undefined {
-  if (!value.trim()) return undefined
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? undefined : date.toISOString()
+  // Delete presets already contain absolute timestamps; only local inputs use Beijing time.
+  const timestamp = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)
+    ? Date.parse(value)
+    : parseBeijingDateTimeLocal(value)
+  return timestamp === null || !Number.isFinite(timestamp) ? undefined : new Date(timestamp).toISOString()
 }
 
 export function eventQueryParams(filters: PromptEventFilters): Record<string, string | number> {

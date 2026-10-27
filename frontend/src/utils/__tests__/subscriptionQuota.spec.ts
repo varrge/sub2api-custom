@@ -10,6 +10,16 @@ describe('subscription expiry timing', () => {
     expect(getExpirationDateRelation(new Date(2026, 2, 8, 3, 30), now)).toBe('tomorrow')
   })
 
+  it('uses Beijing calendar dates when the display uses the Beijing UTC offset', () => {
+    const beforeMidnight = new Date('2026-10-26T15:30:00Z')
+    const afterMidnight = new Date('2026-10-26T16:30:00Z')
+
+    expect(getExpirationDateRelation('2026-10-26T15:45:00Z', beforeMidnight, 8 * 60)).toBe('today')
+    expect(getExpirationDateRelation(afterMidnight, beforeMidnight, 8 * 60)).toBe('tomorrow')
+    expect(getExpirationDateRelation('2026-10-27T15:30:00Z', afterMidnight, 8 * 60)).toBe('today')
+    expect(getExpirationDateRelation(afterMidnight, afterMidnight, 8 * 60)).toBe('expired')
+  })
+
   it('treats the exact expiry instant and elapsed expiries as expired', () => {
     const now = new Date(2026, 6, 30, 9, 0)
 

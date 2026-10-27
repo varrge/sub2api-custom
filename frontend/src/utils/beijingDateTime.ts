@@ -1,13 +1,49 @@
 /**
- * Beijing time (UTC+08:00, no daylight saving) helpers for `datetime-local`
- * inputs. The values are converted with explicit UTC arithmetic so the result
- * never depends on the browser's local timezone.
+ * Beijing time display and `datetime-local` helpers, independent of the
+ * browser's local timezone.
  */
 
+import { formatDate } from './format'
+
 const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000
-const DATE_TIME_LOCAL = /^(\d{4,})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/
+// datetime-local can normalize whole seconds to a zero fractional component.
+const DATE_TIME_LOCAL = /^(\d{4,})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.0{1,3})?)?$/
 
 const pad = (value: number) => String(value).padStart(2, '0')
+
+/** Display Beijing time without a timezone suffix. */
+export function formatBeijingDateTime(
+  value: string | Date | null | undefined,
+  options: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  },
+  localeOverride?: string
+): string {
+  return formatDate(value, {
+    ...options,
+    timeZone: 'Asia/Shanghai',
+    timeZoneName: undefined,
+    hour12: false
+  }, localeOverride)
+}
+
+export function formatBeijingDateTimeToMinute(
+  value: string | Date | null | undefined,
+  localeOverride?: string
+): string {
+  return formatBeijingDateTime(value, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  }, localeOverride)
+}
 
 /**
  * RFC3339 timestamp → `datetime-local` value (YYYY-MM-DDTHH:mm) in Beijing time.

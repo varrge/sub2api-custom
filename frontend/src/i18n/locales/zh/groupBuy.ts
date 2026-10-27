@@ -125,7 +125,7 @@ export default {
     "couponValueCNY": "减免金额（元）",
     "couponValuePercent": "减免比例（%）",
     "couponPercentHint": "例如：填写 10 即减免 10%，用户支付原价的 90%（九折）。",
-    "couponExpiryHint": "使用当前设备时区，留空表示长期有效。",
+    "couponExpiryHint": "按北京时间填写，留空表示长期有效。",
     "couponMaxUses": "总使用次数（0 为不限）",
     "couponPerUser": "每人限用次数（0 为不限）",
     "couponLimitsHint": "未支付订单暂占次数，取消或过期后释放；已使用次数不随退款返还。每单限用一个码，优惠后金额至少 ¥0.01。每人限用与总次数在该码适用的全部商品间共享；填 0 仅解除对应限制，不影响其他限制。",

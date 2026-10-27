@@ -264,7 +264,7 @@ import { userGroupsAPI } from '@/api/groups'
 import type { UserSubscription } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
-import { formatDateTimeToMinute } from '@/utils/format'
+import { formatBeijingDateTimeToMinute as formatDateTimeToMinute } from '@/utils/beijingDateTime'
 import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
 import {
   effectiveGroupRate,
@@ -329,12 +329,12 @@ function subscriptionTemporaryRateLabel(subscription: UserSubscription): string 
   if (status === 'upcoming') {
     return t('common.temporaryRate.upcoming', {
       rate: group.temporary_rate_multiplier,
-      range: temporaryRateDateRange(group, appStore.cachedPublicSettings?.server_timezone)
+      range: temporaryRateDateRange(group)
     })
   }
   if (status === 'active') {
     return t('common.temporaryRate.active', {
-      end: temporaryRateEndDate(group, appStore.cachedPublicSettings?.server_timezone)
+      end: temporaryRateEndDate(group)
     })
   }
   return ''
@@ -376,7 +376,7 @@ function formatExpirationDate(expiresAt: string): string {
   const expires = new Date(expiresAt)
   const diff = expires.getTime() - now.getTime()
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24))
-  const relation = getExpirationDateRelation(expires, now)
+  const relation = getExpirationDateRelation(expires, now, 8 * 60)
 
   if (relation === null) return ''
 

@@ -72,12 +72,12 @@ export function temporaryRateInputDate(
   return calendarDateTime(timestamp, timeZone)
 }
 
-export function temporaryRateDateRange(fields: TemporaryRateFields, timeZone?: string): string {
-  const start = temporaryRateInputDate(fields.temporary_rate_starts_at, timeZone).replace('T', ' ')
-  const end = temporaryRateEndDate(fields, timeZone)
+export function temporaryRateDateRange(fields: TemporaryRateFields): string {
+  const start = temporaryRateInputDate(fields.temporary_rate_starts_at, 'Asia/Shanghai').replace('T', ' ')
+  const end = temporaryRateEndDate(fields)
   return start && end ? `${start} – ${end}` : ''
 }
 
-export function temporaryRateEndDate(fields: TemporaryRateFields, timeZone?: string): string {
-  return temporaryRateInputDate(fields.temporary_rate_ends_at, timeZone).replace('T', ' ')
+export function temporaryRateEndDate(fields: TemporaryRateFields): string {
+  return temporaryRateInputDate(fields.temporary_rate_ends_at, 'Asia/Shanghai').replace('T', ' ')
 }

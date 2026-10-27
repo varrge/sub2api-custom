@@ -185,6 +185,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import type { GroupBuyTeam } from '@/types/groupBuy'
+import { formatBeijingDateTime } from '@/utils/beijingDateTime'
 import {
   canJoin,
   cny,
@@ -229,13 +230,12 @@ const usdShort = (amount: number) =>
         maximumFractionDigits: 2
       }).format(amount)
 const shortDate = (value: string) =>
-  new Intl.DateTimeFormat(undefined, {
+  formatBeijingDateTime(value, {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
-  }).format(new Date(value))
+    minute: '2-digit'
+  })
 const shareLink = computed(
   () =>
     `${window.location.origin}/group-buy?team_code=${encodeURIComponent(props.team.code)}`

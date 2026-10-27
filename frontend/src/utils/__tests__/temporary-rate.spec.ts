@@ -37,8 +37,8 @@ describe('temporary group rate', () => {
       temporary_rate_ends_at: '2026-09-05T04:34:57Z'
     }
     expect(temporaryRateInputDate(fields.temporary_rate_starts_at, 'Asia/Shanghai')).toBe('2026-09-05T12:34:56')
-    expect(temporaryRateDateRange(fields, 'Asia/Shanghai')).toBe('2026-09-05 12:34:56 – 2026-09-05 12:34:57')
-    expect(temporaryRateEndDate(fields, 'Asia/Shanghai')).toBe('2026-09-05 12:34:57')
+    expect(temporaryRateDateRange(fields)).toBe('2026-09-05 12:34:56 – 2026-09-05 12:34:57')
+    expect(temporaryRateEndDate(fields)).toBe('2026-09-05 12:34:57')
     expect(temporaryRateInputDate(fields.temporary_rate_starts_at, 'UTC')).toBe('2026-09-05T04:34:56')
     expect(temporaryRateInputDate('invalid', 'Asia/Shanghai')).toBe('')
   })

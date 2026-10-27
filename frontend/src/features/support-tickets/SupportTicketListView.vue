@@ -178,7 +178,7 @@ import type { Column } from '@/components/common/types'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { useAppStore, useAuthStore, useSupportTicketStore } from '@/stores'
 import { extractApiErrorMessage } from '@/utils/apiError'
-import { formatDateTimeToMinute } from '@/utils/format'
+import { formatBeijingDateTimeToMinute as formatDateTimeToMinute } from '@/utils/beijingDateTime'
 import { isSupportTicketFeatureDisabled, supportTicketsAdminAPI, supportTicketsUserAPI } from './api'
 import {
   supportTicketCategories,

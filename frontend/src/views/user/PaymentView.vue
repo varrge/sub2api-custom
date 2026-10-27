@@ -468,12 +468,12 @@ function temporaryRateLabel(group?: DisplayRateGroup | null): string {
   if (status === 'upcoming') {
     return t('common.temporaryRate.upcoming', {
       rate: group.temporary_rate_multiplier ?? 1,
-      range: temporaryRateDateRange(group, appStore.cachedPublicSettings?.server_timezone)
+      range: temporaryRateDateRange(group)
     })
   }
   if (status === 'active') {
     return t('common.temporaryRate.active', {
-      end: temporaryRateEndDate(group, appStore.cachedPublicSettings?.server_timezone)
+      end: temporaryRateEndDate(group)
     })
   }
   return ''

@@ -40,10 +40,10 @@
         </label>
         <div class="grid gap-3 md:grid-cols-2">
           <label class="text-sm">{{ t('groupBuy.freezePolicyStarts') }}
-            <input v-model="freezePolicyStarts" type="datetime-local" class="input mt-1 w-full" />
+            <input v-model="freezePolicyStarts" type="datetime-local" step="1" class="input mt-1 w-full" />
           </label>
           <label class="text-sm">{{ t('groupBuy.freezePolicyEnds') }}
-            <input v-model="freezePolicyEnds" type="datetime-local" class="input mt-1 w-full" />
+            <input v-model="freezePolicyEnds" type="datetime-local" step="1" class="input mt-1 w-full" />
           </label>
         </div>
         <button class="btn btn-primary" :disabled="freezePolicySaving" @click="saveFreezePolicy">
@@ -392,6 +392,7 @@ import type {
 import type { AdminGroup } from '@/types'
 import { exactDate, cny, usd } from './model'
 import { extractApiErrorMessage } from '@/utils/apiError'
+import { beijingDateTimeLocalToRfc3339, toBeijingDateTimeLocal } from '@/utils/beijingDateTime'
 import './glass.css'
 const { t } = useI18n()
 const app = useAppStore()
@@ -444,8 +445,8 @@ async function load() {
     if (adminGroupBuyAPI.freezePolicy) {
       const policy = await adminGroupBuyAPI.freezePolicy()
       freezePolicyEnabled.value = policy.enabled
-      freezePolicyStarts.value = toLocalDateTime(policy.starts_at)
-      freezePolicyEnds.value = toLocalDateTime(policy.ends_at)
+      freezePolicyStarts.value = toBeijingDateTimeLocal(policy.starts_at)
+      freezePolicyEnds.value = toBeijingDateTimeLocal(policy.ends_at)
     }
   } catch (err) {
     error.value = extractApiErrorMessage(err, t('groupBuy.loadFailed'))
@@ -453,19 +454,20 @@ async function load() {
     loading.value = false
   }
 }
-function toLocalDateTime(value?: string | null) {
-  if (!value) return ''
-  const date = new Date(value)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
 async function saveFreezePolicy() {
+  error.value = ''
+  const startsAt = beijingDateTimeLocalToRfc3339(freezePolicyStarts.value)
+  const endsAt = beijingDateTimeLocalToRfc3339(freezePolicyEnds.value)
+  if ((freezePolicyStarts.value && !startsAt) || (freezePolicyEnds.value && !endsAt)) {
+    error.value = t('groupBuy.freezePolicyFailed')
+    return
+  }
   freezePolicySaving.value = true
   try {
     await adminGroupBuyAPI.setFreezePolicy({
       enabled: freezePolicyEnabled.value,
-      starts_at: freezePolicyStarts.value ? new Date(freezePolicyStarts.value).toISOString() : null,
-      ends_at: freezePolicyEnds.value ? new Date(freezePolicyEnds.value).toISOString() : null
+      starts_at: startsAt,
+      ends_at: endsAt
     })
     app.showSuccess(t('groupBuy.freezePolicySaved'))
   } catch (err) {

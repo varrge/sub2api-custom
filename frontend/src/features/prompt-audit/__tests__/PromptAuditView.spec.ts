@@ -118,6 +118,12 @@ describe('PromptAuditView', () => {
     expect(wrapper.get('[data-test="tab-panel-config"]').attributes('style') || '').not.toContain('display: none')
   })
 
+  it('displays the config update timestamp in Beijing time without a timezone suffix', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.get('p.mt-1').text()).toBe('Jul 16, 2026, 08:00:00')
+  })
+
   it('requires confirmation for blocking and disables it when audit is turned off', async () => {
     const wrapper = mountView()
     await flushPromises()

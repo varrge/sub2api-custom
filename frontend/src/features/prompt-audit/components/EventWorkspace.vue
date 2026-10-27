@@ -107,6 +107,7 @@
 import { computed, defineComponent, h, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Pagination from '@/components/common/Pagination.vue'
+import { formatBeijingDateTime } from '@/utils/beijingDateTime'
 import type { PromptAuditEvent, PromptEventFilters } from '../types'
 import { cloneData, emptyEventFilters, SCANNER_CATALOG } from '../viewModel'
 
@@ -181,7 +182,7 @@ function toggleAll() {
   emit('selection', allSelected.value ? [] : props.events.map((event) => event.id))
 }
 function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(locale.value, { dateStyle: 'short', timeStyle: 'medium' }).format(new Date(value))
+  return formatBeijingDateTime(value, { dateStyle: 'short', timeStyle: 'medium' }, locale.value)
 }
 function decisionClass(decision: string): string {
   if (decision === 'critical') return 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300'

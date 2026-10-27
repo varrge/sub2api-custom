@@ -51,16 +51,7 @@ export function monthCardFeeCNY(amount: number, rate: number): number {
   const basisPoints = BigInt(Math.round(rate * 100))
   return Number((cents * basisPoints + 9999n) / 10000n) / 100
 }
-export const exactDate = (value: string) =>
-  new Date(value).toLocaleString(undefined, {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    timeZoneName: 'short'
-  })
+export { formatBeijingDateTime as exactDate } from '@/utils/beijingDateTime'
 export const progress = (used: number, total: number) =>
   total > 0 ? Math.min(100, Math.max(0, (used / total) * 100)) : 0
 export const availableQuota = (card: MonthCard) =>

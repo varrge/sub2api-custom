@@ -49,7 +49,8 @@ export function getRemainingDurationParts(
 
 export function getExpirationDateRelation(
   targetAt: Date | string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  utcOffsetMinutes?: number
 ): ExpirationDateRelation | null {
   const target = targetAt instanceof Date ? targetAt : new Date(targetAt)
   const targetTime = target.getTime()
@@ -58,8 +59,13 @@ export function getExpirationDateRelation(
   if (!Number.isFinite(targetTime) || !Number.isFinite(nowTime)) return null
   if (targetTime <= nowTime) return 'expired'
 
-  const targetDay = Date.UTC(target.getFullYear(), target.getMonth(), target.getDate())
-  const currentDay = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+  // A supplied UTC offset uses that calendar; other callers retain browser-local dates.
+  const targetDay = utcOffsetMinutes === undefined
+    ? Date.UTC(target.getFullYear(), target.getMonth(), target.getDate())
+    : Math.floor((targetTime + utcOffsetMinutes * 60_000) / ONE_DAY_MS) * ONE_DAY_MS
+  const currentDay = utcOffsetMinutes === undefined
+    ? Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+    : Math.floor((nowTime + utcOffsetMinutes * 60_000) / ONE_DAY_MS) * ONE_DAY_MS
   const calendarDays = Math.round((targetDay - currentDay) / ONE_DAY_MS)
 
   if (calendarDays === 0) return 'today'

@@ -125,7 +125,7 @@ export default {
     "couponValueCNY": "Amount off (CNY)",
     "couponValuePercent": "Percentage off (%)",
     "couponPercentHint": "For example, 10 means 10% off; the customer pays 90% of the original price.",
-    "couponExpiryHint": "Uses this device’s time zone. Leave empty for no expiry.",
+    "couponExpiryHint": "Enter Beijing time. Leave empty for no expiry.",
     "couponMaxUses": "Total uses (0 = unlimited)",
     "couponPerUser": "Uses per customer (0 = unlimited)",
     "couponLimitsHint": "Unpaid orders reserve a use until cancelled or expired. Redeemed uses are not restored after refunds. One code per order; discounted price must be at least CNY 0.01. Per-customer and total limits are shared across every eligible product; 0 only removes that particular cap.",

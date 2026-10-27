@@ -120,6 +120,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
+import { formatBeijingDateTime } from '@/utils/beijingDateTime'
 import type { PromptDeletePreview, PromptEventFilters } from '../types'
 import {
   DELETE_RANGE_PRESETS,
@@ -189,6 +190,6 @@ function requestConfirm() {
   emit('confirm', resolveDeleteRangeFilters(local, preset.value))
 }
 function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium', timeStyle: 'medium' }).format(new Date(value))
+  return formatBeijingDateTime(value, { dateStyle: 'medium', timeStyle: 'medium' }, locale.value)
 }
 </script>

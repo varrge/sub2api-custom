@@ -1,5 +1,19 @@
 export default {
   activityCampaigns: {
+    festival: {
+      marquee: "THE LUCKY CARNIVAL",
+      wave: "WAVE 01 · WELCOME GIFTS",
+      overline: "11.11 LUCKY CARNIVAL",
+      free: "Free to join",
+      threeCards: "Three tasks · three gifts",
+      lucky: "A little moo-re luck!",
+      passport: "YOUR LUCKY PASSPORT",
+      checkinTag: "STAMP STATION",
+      rewardsTag: "GIFT COUNTER",
+      quizTag: "QUIZ CORNER",
+      stampDay: "DAY {n}",
+      stamped: "STAMPED",
+    },
     loading: 'Loading the Double 11 event…',
     loadFailed: 'Failed to load the event. Please try again.',
     retry: 'Retry',

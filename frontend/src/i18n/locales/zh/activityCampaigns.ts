@@ -1,5 +1,19 @@
 export default {
   activityCampaigns: {
+    festival: {
+      marquee: "双十一 · 好运游园会",
+      wave: "第一弹 · 开门礼",
+      overline: "11.11 LUCKY CARNIVAL",
+      free: "免费参与",
+      threeCards: "三份任务 · 三张好礼",
+      lucky: "好运，牛起来！",
+      passport: "我的好运通行证",
+      checkinTag: "签到集章站",
+      rewardsTag: "好礼兑换处",
+      quizTag: "趣味挑战屋",
+      stampDay: "第 {n} 天",
+      stamped: "已盖章",
+    },
     loading: '正在加载双 11 活动…',
     loadFailed: '活动加载失败，请重试。',
     retry: '重试',

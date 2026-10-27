@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <div class="mx-auto w-full min-w-0 max-w-5xl space-y-6">
+    <div class="festival-page mx-auto w-full min-w-0 max-w-5xl space-y-6">
       <!-- Loading -->
       <div v-if="loading" class="flex items-center justify-center gap-3 py-16">
         <svg class="h-6 w-6 animate-spin text-primary-500" fill="none" viewBox="0 0 24 24">
@@ -31,59 +31,107 @@
       </div>
 
       <template v-else-if="campaign">
-        <!-- Hero -->
-        <header
-          class="relative overflow-hidden rounded-2xl bg-gradient-primary p-5 text-on-primary shadow-glow sm:p-7"
-          data-testid="d11-hero"
-        >
-          <Icon
-            name="sparkles"
-            size="xl"
-            class="pointer-events-none absolute -right-3 -top-4 h-28 w-28 opacity-20"
-          />
-          <Icon
-            name="gift"
-            size="xl"
-            class="pointer-events-none absolute -bottom-5 right-24 hidden h-24 w-24 opacity-10 sm:block"
-          />
-          <div class="relative">
-            <div class="flex flex-wrap items-center gap-2">
-              <span
-                class="inline-flex items-center gap-1 rounded-full bg-black/15 px-2.5 py-0.5 text-xs font-semibold"
-                data-testid="d11-phase"
-              >
-                <Icon :name="phase === 'active' ? 'fire' : phase === 'upcoming' ? 'clock' : 'checkCircle'" size="xs" />
-                {{ phaseLabel }}
-              </span>
-              <span class="text-xs opacity-80">Double 11 · Wave 1</span>
+        <!-- The illustrated scene is decorative; live event details stay text. -->
+        <header class="festival-hero" data-testid="d11-hero">
+          <div class="festival-marquee" aria-hidden="true">
+            <span>✦ DOUBLE ELEVEN ✦</span><span>{{ t('activityCampaigns.festival.marquee') }}</span><span>✦ 11.11 ✦</span>
+          </div>
+          <div class="festival-hero-main">
+            <div class="festival-copy">
+              <div class="festival-eyebrow">
+                <span class="festival-wave">{{ t('activityCampaigns.festival.wave') }}</span>
+                <span class="festival-phase" data-testid="d11-phase"><i></i>{{ phaseLabel }}</span>
+              </div>
+              <p class="festival-overline">{{ t('activityCampaigns.festival.overline') }}</p>
+              <h1>{{ campaign.title }}</h1>
+              <p v-if="campaign.subtitle" class="festival-subtitle">{{ campaign.subtitle }}</p>
+              <p v-if="campaign.description" class="festival-description">{{ campaign.description }}</p>
+              <div class="festival-perks">
+                <span><Icon name="gift" size="sm" />{{ t('activityCampaigns.festival.free') }}</span>
+                <span><Icon name="sparkles" size="sm" />{{ t('activityCampaigns.festival.threeCards') }}</span>
+              </div>
             </div>
-            <h1 class="mt-2 break-words text-2xl font-extrabold sm:text-3xl">{{ campaign.title }}</h1>
-            <p v-if="campaign.subtitle" class="mt-1 break-words text-sm font-medium opacity-90">
-              {{ campaign.subtitle }}
-            </p>
-            <p v-if="campaign.description" class="mt-2 max-w-2xl whitespace-pre-line break-words text-sm opacity-80">
-              {{ campaign.description }}
-            </p>
-
-            <!-- Countdown, anchored to server_time -->
-            <div v-if="phase === 'upcoming' || phase === 'active'" class="mt-4">
-              <p class="text-xs font-semibold uppercase tracking-wide opacity-80">
-                {{ phase === 'upcoming' ? t('activityCampaigns.countdownToStart') : t('activityCampaigns.countdownToEnd') }}
-              </p>
-              <div class="mt-1.5 flex items-center gap-1.5" data-testid="d11-countdown">
+            <div class="festival-art" aria-hidden="true">
+              <svg viewBox="0 0 430 350" fill="none" focusable="false">
+                <defs>
+                  <linearGradient id="d11-gold" x1="90" y1="20" x2="300" y2="300" gradientUnits="userSpaceOnUse"><stop stop-color="#FFE5A6"/><stop offset="1" stop-color="#D9904B"/></linearGradient>
+                  <linearGradient id="d11-rust" x1="150" y1="190" x2="290" y2="330" gradientUnits="userSpaceOnUse"><stop stop-color="#BC5B43"/><stop offset="1" stop-color="#873E30"/></linearGradient>
+                </defs>
+                <circle cx="228" cy="181" r="147" fill="#F2D8AD" fill-opacity=".6"/>
+                <circle cx="228" cy="181" r="133" stroke="#C79865" stroke-opacity=".35" stroke-dasharray="3 9"/>
+                <text x="26" y="105" fill="#B86943" fill-opacity=".17" font-size="101" font-weight="900" font-family="Arial, sans-serif" letter-spacing="-8">11.11</text>
+                <ellipse cx="234" cy="327" rx="160" ry="13" fill="#7E482A" fill-opacity=".1"/>
+                <!-- Ribbon curls and cut-paper confetti -->
+                <g class="festival-confetti">
+                  <path d="M39 156c-13-16 17-16 10-30s-19 0-12 8" stroke="#B96147" stroke-width="5" stroke-linecap="round"/>
+                  <path d="M381 117c18 11-13 19-3 31s17-6 10-12" stroke="#C4954A" stroke-width="5" stroke-linecap="round"/>
+                  <path d="m335 52 4 15 15 4-15 4-4 15-4-15-15-4 15-4z" fill="#B45139"/>
+                  <path d="m86 199 3 10 10 3-10 3-3 10-3-10-10-3 10-3z" fill="#B58A44"/>
+                  <path d="m366 219 3 10 10 3-10 3-3 10-3-10-10-3 10-3z" fill="#B45139"/>
+                  <path d="m70 69 7-12M393 196l9 5M131 27l-3-10" stroke="#C88B55" stroke-width="5" stroke-linecap="round"/>
+                  <path d="m291 24 8 4-4 8-8-4zM52 247l7-2 2 8-7 2z" fill="#B65D44"/>
+                  <circle cx="398" cy="80" r="4" fill="#B58A44"/><circle cx="24" cy="208" r="3" fill="#B45139"/>
+                </g>
+                <!-- Left present -->
+                <g transform="rotate(-9 87 283)">
+                  <rect x="38" y="264" width="96" height="61" rx="8" fill="#B75B43"/>
+                  <rect x="32" y="250" width="108" height="25" rx="5" fill="#C76F52"/>
+                  <path d="M81 250v75" stroke="#F1C983" stroke-width="17"/>
+                  <path d="M89 250c-50 0-46-36-24-25 9 5 16 16 24 25Zm0 0c42-6 44-35 23-27-8 4-15 16-23 27Z" fill="#F1C983" stroke="#E2AD64" stroke-width="3"/>
+                </g>
+                <!-- Lucky cow mascot -->
+                <g class="festival-cow">
+                  <path d="M158 221c-17 31-19 81-8 100h142c12-35 1-78-15-100Z" fill="url(#d11-rust)"/>
+                  <path d="m201 222 21 23 20-23" stroke="#F9D698" stroke-width="4"/>
+                  <circle cx="222" cy="260" r="3" fill="#F9D698"/>
+                  <path d="M157 121c-15-8-25-21-21-38 17 5 26 15 31 29M275 121c15-8 25-21 21-38-17 5-26 15-31 29" fill="#F9E1AA" stroke="#9C714B" stroke-width="3"/>
+                  <path d="M154 139c-44-25-58 0-28 20 12 9 21 6 31-2M278 139c44-25 58 0 28 20-12 9-21 6-31-2" fill="#F9F1DF" stroke="#9C714B" stroke-width="3"/>
+                  <path d="M146 146c-21-12-27-3-11 6M286 146c21-12 27-3 11 6" stroke="#D59A83" stroke-width="8" stroke-linecap="round"/>
+                  <path d="M148 155c0-44 27-62 69-62s69 18 69 62v24c0 40-27 61-69 61s-69-21-69-61z" fill="#FFFAEA" stroke="#9C714B" stroke-width="3"/>
+                  <path d="M155 126c11-24 35-33 57-33 0 19-10 24-23 26-13 1-12 26-32 28z" fill="#986A4E"/>
+                  <path d="M252 116c19 6 25 24 22 39-3 12-27 17-34 4-7-13 1-33 12-43" fill="#A77A59"/>
+                  <ellipse cx="187" cy="164" rx="6" ry="9" fill="#4C3529"/><ellipse cx="246" cy="164" rx="6" ry="9" fill="#4C3529"/>
+                  <circle cx="189" cy="161" r="2" fill="white"/><circle cx="248" cy="161" r="2" fill="white"/>
+                  <ellipse cx="168" cy="184" rx="12" ry="7" fill="#EFB89D"/><ellipse cx="266" cy="184" rx="12" ry="7" fill="#EFB89D"/>
+                  <rect x="178" y="181" width="77" height="44" rx="22" fill="#F0D1A6"/>
+                  <ellipse cx="198" cy="197" rx="3" ry="4" fill="#936448"/><ellipse cx="234" cy="197" rx="3" ry="4" fill="#936448"/>
+                  <path d="M210 210q7 6 14 0" stroke="#936448" stroke-width="2.5" stroke-linecap="round"/>
+                  <!-- Party crown -->
+                  <path d="m190 97-7-27 19 9 14-24 13 24 20-10-8 29z" fill="url(#d11-gold)" stroke="#C28C45" stroke-width="2.5"/>
+                  <circle cx="216" cy="84" r="4" fill="#B4523C"/>
+                  <!-- Three reward tickets -->
+                  <g transform="rotate(-13 221 276)"><rect x="163" y="249" width="110" height="64" rx="9" fill="#DCA861" stroke="#B77A3C" stroke-width="2"/></g>
+                  <g transform="rotate(8 221 276)"><rect x="168" y="246" width="110" height="64" rx="9" fill="#AF543E" stroke="#8A402E" stroke-width="2"/></g>
+                  <path d="M177 245h87a8 8 0 0 1 8 8v12a10 10 0 0 0 0 20v12a8 8 0 0 1-8 8h-87a8 8 0 0 1-8-8v-12a10 10 0 0 0 0-20v-12a8 8 0 0 1 8-8Z" fill="#FFF0C8" stroke="#CA954F" stroke-width="2"/>
+                  <path d="M246 253v44" stroke="#D4A46C" stroke-dasharray="3 4"/>
+                  <path d="m207 255 4 10 11 1-8 7 3 11-10-6-9 6 2-11-8-7 11-1z" fill="#BD7950"/>
+                  <path d="M193 293h30" stroke="#D1A273" stroke-width="3" stroke-linecap="round"/>
+                  <text x="253" y="281" font-size="19" fill="#98613C" font-family="Arial, sans-serif" font-weight="800">1</text>
+                  <ellipse cx="156" cy="273" rx="13" ry="19" fill="#FFF4DD" stroke="#9C714B" stroke-width="2.5" transform="rotate(-19 156 273)"/>
+                  <ellipse cx="285" cy="273" rx="13" ry="19" fill="#FFF4DD" stroke="#9C714B" stroke-width="2.5" transform="rotate(19 285 273)"/>
+                </g>
+                <!-- Right present -->
+                <g transform="rotate(10 340 291)">
+                  <rect x="305" y="274" width="76" height="51" rx="6" fill="url(#d11-gold)"/>
+                  <rect x="299" y="260" width="88" height="21" rx="5" fill="#F4D69A"/>
+                  <path d="M343 260v65" stroke="#AD5841" stroke-width="13"/>
+                  <path d="M343 260c-35-1-35-26-20-20 8 3 13 13 20 20Zm0 0c30-5 33-29 17-23-8 3-11 15-17 23Z" fill="#AD5841"/>
+                </g>
+              </svg>
+              <span class="festival-art-sticker">{{ t('activityCampaigns.festival.lucky') }}<Icon name="sparkles" size="sm" /></span>
+            </div>
+          </div>
+          <div class="festival-ticket-footer">
+            <div v-if="phase === 'upcoming' || phase === 'active'" class="festival-countdown-wrap">
+              <span class="festival-countdown-label">{{ phase === 'upcoming' ? t('activityCampaigns.countdownToStart') : t('activityCampaigns.countdownToEnd') }}</span>
+              <div class="festival-countdown" data-testid="d11-countdown">
                 <span v-if="countdown.days > 0" class="d11-digit">{{ t('activityCampaigns.countdownDays', { n: countdown.days }) }}</span>
-                <span class="d11-digit">{{ countdown.hours }}</span>
-                <span class="font-bold opacity-70">:</span>
-                <span class="d11-digit">{{ countdown.minutes }}</span>
-                <span class="font-bold opacity-70">:</span>
+                <span class="d11-digit">{{ countdown.hours }}</span><b>:</b>
+                <span class="d11-digit">{{ countdown.minutes }}</span><b>:</b>
                 <span class="d11-digit">{{ countdown.seconds }}</span>
               </div>
             </div>
-
-            <p class="mt-3 flex items-center gap-1 text-xs opacity-80">
-              <Icon name="calendar" size="xs" />
-              {{ t('activityCampaigns.window', { start: formatCn(campaign.starts_at), end: formatCn(campaign.ends_at) }) }}
-            </p>
+            <p class="festival-dates"><Icon name="calendar" size="sm" />{{ t('activityCampaigns.window', { start: formatCn(campaign.starts_at), end: formatCn(campaign.ends_at) }) }}</p>
           </div>
         </header>
 
@@ -103,7 +151,8 @@
         </p>
 
         <!-- Progress -->
-        <section class="card p-4 sm:p-5" data-testid="d11-progress">
+        <section class="festival-progress card p-4 sm:p-5" data-testid="d11-progress">
+          <span class="festival-section-tag">{{ t('activityCampaigns.festival.passport') }}</span>
           <div class="flex items-center justify-between gap-3">
             <h2 class="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-dark-300">
               <Icon name="chart" size="sm" class="text-primary-500" />
@@ -124,7 +173,8 @@
         <!-- Check-in + rewards grid -->
         <div class="grid gap-6 lg:grid-cols-2">
           <!-- Check-in -->
-          <section class="card p-4 sm:p-5" data-testid="d11-checkin">
+          <section class="festival-task festival-checkin card p-4 sm:p-5" data-testid="d11-checkin">
+            <div class="festival-task-label"><span>01</span>{{ t('activityCampaigns.festival.checkinTag') }}<Icon name="sparkles" size="sm" /></div>
             <h2 class="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-dark-300">
               <Icon name="calendar" size="sm" class="text-primary-500" />
               {{ t('activityCampaigns.checkin.title') }}
@@ -133,20 +183,21 @@
               {{ t('activityCampaigns.checkin.description') }}
             </p>
 
-            <div class="mt-4 flex items-center gap-2">
+            <div class="festival-stamps">
               <span
                 v-for="day in 3"
                 :key="day"
-                class="flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold transition-colors"
+                class="festival-stamp"
                 :class="checkinCount >= day
-                  ? 'border-primary-500 bg-gradient-primary text-on-primary'
-                  : 'border-gray-200 text-gray-400 dark:border-dark-600 dark:text-dark-500'"
+                  ? 'festival-stamp-done' : ''"
                 :data-testid="`d11-checkin-dot-${day}`"
               >
-                <Icon v-if="checkinCount >= day" name="check" size="sm" />
-                <template v-else>{{ day }}</template>
+                <small>{{ t('activityCampaigns.festival.stampDay', { n: day }) }}</small>
+                <Icon v-if="checkinCount >= day" name="check" size="lg" />
+                <Icon v-else :name="day === 2 ? 'sparkles' : 'gift'" size="lg" />
+                <em>{{ checkinCount >= day ? t('activityCampaigns.festival.stamped') : '✦' }}</em>
               </span>
-              <span class="ml-1 text-xs font-medium text-gray-600 dark:text-dark-300">
+              <span class="festival-stamp-count">
                 {{ t('activityCampaigns.checkin.days', { count: checkinCount }) }}
               </span>
             </div>
@@ -189,7 +240,8 @@
           </section>
 
           <!-- Rewards -->
-          <section class="card p-4 sm:p-5" data-testid="d11-rewards">
+          <section class="festival-task festival-rewards card p-4 sm:p-5" data-testid="d11-rewards">
+            <div class="festival-task-label"><span>02</span>{{ t('activityCampaigns.festival.rewardsTag') }}<Icon name="gift" size="sm" /></div>
             <h2 class="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-dark-300">
               <Icon name="gift" size="sm" class="text-primary-500" />
               {{ t('activityCampaigns.rewards.title') }}
@@ -202,7 +254,7 @@
               <li
                 v-for="reward in rewardCards"
                 :key="reward.task"
-                class="flex items-center gap-3 rounded-xl border p-3 transition-colors"
+                class="festival-reward-ticket flex items-center gap-3 rounded-xl border p-3 transition-colors"
                 :class="reward.delivered
                   ? 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-800 dark:bg-emerald-900/10'
                   : reward.earned
@@ -220,7 +272,7 @@
                 >
                   <Icon :name="reward.icon" size="md" />
                 </div>
-                <div class="min-w-0 flex-1">
+                <div class="festival-ticket-copy min-w-0 flex-1">
                   <p class="text-sm font-medium text-gray-900 dark:text-white">{{ reward.label }}</p>
                   <p class="text-xs text-gray-500 dark:text-dark-400">{{ t('activityCampaigns.rewards.rewardPerTask') }}</p>
                 </div>
@@ -265,7 +317,8 @@
         </div>
 
         <!-- Quiz -->
-        <section class="card p-4 sm:p-5" data-testid="d11-quiz">
+        <section class="festival-task festival-quiz card p-4 sm:p-5" data-testid="d11-quiz">
+          <div class="festival-task-label"><span>03</span>{{ t('activityCampaigns.festival.quizTag') }}<Icon name="questionCircle" size="sm" /></div>
           <h2 class="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-dark-300">
             <Icon name="questionCircle" size="sm" class="text-primary-500" />
             {{ t('activityCampaigns.quiz.title') }}
@@ -288,7 +341,7 @@
               <li
                 v-for="(question, qi) in campaign.questions"
                 :key="question.id"
-                class="rounded-xl bg-gray-50 p-4 dark:bg-dark-800"
+                class="festival-question rounded-xl bg-gray-50 p-4 dark:bg-dark-800"
                 :data-testid="`d11-quiz-question-${qi}`"
               >
                 <p class="text-sm font-medium text-gray-900 dark:text-white">
@@ -302,7 +355,7 @@
                     v-for="(option, oi) in question.options"
                     :key="oi"
                     type="button"
-                    class="rounded-lg border px-3 py-2.5 text-left text-sm transition-colors"
+                    class="festival-answer rounded-lg border px-3 py-2.5 text-left text-sm transition-colors"
                     :class="answers[question.id] === oi
                       ? 'border-primary-500 bg-primary-50 font-semibold text-primary-700 dark:border-primary-500 dark:bg-primary-900/30 dark:text-primary-400'
                       : 'border-gray-200 text-gray-600 hover:border-primary-300 hover:bg-primary-50/60 dark:border-dark-600 dark:text-dark-300 dark:hover:border-primary-700'"
@@ -629,18 +682,4 @@ onUnmounted(() => {
 })
 </script>
 
-<style scoped>
-.d11-digit {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 2.5rem;
-  padding: 0.375rem 0.5rem;
-  border-radius: 0.5rem;
-  background: rgba(0, 0, 0, 0.15);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 1.125rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-</style>
+<style scoped src="./festival.css"></style>

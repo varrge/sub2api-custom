@@ -55,7 +55,7 @@
               <svg viewBox="0 0 430 350" fill="none" focusable="false">
                 <defs>
                   <linearGradient id="d11-gold" x1="90" y1="20" x2="300" y2="300" gradientUnits="userSpaceOnUse"><stop stop-color="#FFE5A6"/><stop offset="1" stop-color="#D9904B"/></linearGradient>
-                  <linearGradient id="d11-rust" x1="150" y1="190" x2="290" y2="330" gradientUnits="userSpaceOnUse"><stop stop-color="#BC5B43"/><stop offset="1" stop-color="#873E30"/></linearGradient>
+                  <linearGradient id="d11-whale" x1="150" y1="120" x2="300" y2="290" gradientUnits="userSpaceOnUse"><stop stop-color="#7FB4D8"/><stop offset="1" stop-color="#4E80A8"/></linearGradient>
                 </defs>
                 <circle cx="228" cy="181" r="147" fill="#F2D8AD" fill-opacity=".6"/>
                 <circle cx="228" cy="181" r="133" stroke="#C79865" stroke-opacity=".35" stroke-dasharray="3 9"/>
@@ -79,26 +79,29 @@
                   <path d="M81 250v75" stroke="#F1C983" stroke-width="17"/>
                   <path d="M89 250c-50 0-46-36-24-25 9 5 16 16 24 25Zm0 0c42-6 44-35 23-27-8 4-15 16-23 27Z" fill="#F1C983" stroke="#E2AD64" stroke-width="3"/>
                 </g>
-                <!-- Lucky cow mascot -->
-                <g class="festival-cow">
-                  <path d="M158 221c-17 31-19 81-8 100h142c12-35 1-78-15-100Z" fill="url(#d11-rust)"/>
-                  <path d="m201 222 21 23 20-23" stroke="#F9D698" stroke-width="4"/>
-                  <circle cx="222" cy="260" r="3" fill="#F9D698"/>
-                  <path d="M157 121c-15-8-25-21-21-38 17 5 26 15 31 29M275 121c15-8 25-21 21-38-17 5-26 15-31 29" fill="#F9E1AA" stroke="#9C714B" stroke-width="3"/>
-                  <path d="M154 139c-44-25-58 0-28 20 12 9 21 6 31-2M278 139c44-25 58 0 28 20-12 9-21 6-31-2" fill="#F9F1DF" stroke="#9C714B" stroke-width="3"/>
-                  <path d="M146 146c-21-12-27-3-11 6M286 146c21-12 27-3 11 6" stroke="#D59A83" stroke-width="8" stroke-linecap="round"/>
-                  <path d="M148 155c0-44 27-62 69-62s69 18 69 62v24c0 40-27 61-69 61s-69-21-69-61z" fill="#FFFAEA" stroke="#9C714B" stroke-width="3"/>
-                  <path d="M155 126c11-24 35-33 57-33 0 19-10 24-23 26-13 1-12 26-32 28z" fill="#986A4E"/>
-                  <path d="M252 116c19 6 25 24 22 39-3 12-27 17-34 4-7-13 1-33 12-43" fill="#A77A59"/>
-                  <ellipse cx="187" cy="164" rx="6" ry="9" fill="#4C3529"/><ellipse cx="246" cy="164" rx="6" ry="9" fill="#4C3529"/>
-                  <circle cx="189" cy="161" r="2" fill="white"/><circle cx="248" cy="161" r="2" fill="white"/>
-                  <ellipse cx="168" cy="184" rx="12" ry="7" fill="#EFB89D"/><ellipse cx="266" cy="184" rx="12" ry="7" fill="#EFB89D"/>
-                  <rect x="178" y="181" width="77" height="44" rx="22" fill="#F0D1A6"/>
-                  <ellipse cx="198" cy="197" rx="3" ry="4" fill="#936448"/><ellipse cx="234" cy="197" rx="3" ry="4" fill="#936448"/>
-                  <path d="M210 210q7 6 14 0" stroke="#936448" stroke-width="2.5" stroke-linecap="round"/>
+                <!-- Lucky whale mascot -->
+                <g class="festival-whale">
+                  <!-- Upturned forked tail -->
+                  <path d="M292 186 C312 174 324 160 328 144 L346 150 C338 172 318 190 296 196 Z" fill="#4E80A8"/>
+                  <path d="M324 150 298 110 C311 110 325 119 332 133 L335 137 C343 121 357 111 370 113 L347 154 C339 158 330 156 324 150 Z" fill="#63A0C6" stroke="#3F6C8E" stroke-width="3" stroke-linejoin="round"/>
+                  <!-- Rounded body -->
+                  <path d="M136 212 C136 156 176 120 230 120 C284 120 314 158 314 210 C314 254 284 286 228 288 C180 290 136 258 136 212 Z" fill="url(#d11-whale)" stroke="#3F6C8E" stroke-width="3"/>
+                  <!-- Cream belly -->
+                  <path d="M148 238 C160 268 194 283 228 282 C262 281 292 262 302 234 C286 252 256 261 226 260 C196 259 164 253 148 238 Z" fill="#FFFAEA"/>
+                  <!-- Side fin -->
+                  <path d="M160 242 C145 252 139 271 149 279 C161 286 175 268 175 250 Z" fill="#4E80A8" stroke="#3F6C8E" stroke-width="2.5"/>
+                  <!-- Smiling face and blush -->
+                  <path d="M150 220 C168 240 198 248 224 244" stroke="#3F6C8E" stroke-width="3" stroke-linecap="round"/>
+                  <circle cx="188" cy="188" r="7" fill="#2F4A5C"/>
+                  <circle cx="191" cy="185" r="2.4" fill="white"/>
+                  <ellipse cx="162" cy="206" rx="10" ry="6" fill="#EFB89D"/>
+                  <!-- Splash droplets -->
+                  <path d="M168 96 C163 87 165 78 171 73 C176 80 176 89 172 96 Z" fill="#8FC0DE"/>
+                  <circle cx="153" cy="84" r="4" fill="#8FC0DE"/>
+                  <circle cx="184" cy="80" r="3.2" fill="#8FC0DE"/>
                   <!-- Party crown -->
-                  <path d="m190 97-7-27 19 9 14-24 13 24 20-10-8 29z" fill="url(#d11-gold)" stroke="#C28C45" stroke-width="2.5"/>
-                  <circle cx="216" cy="84" r="4" fill="#B4523C"/>
+                  <path d="m204 118-6-24 17 8 12-21 12 21 18-9-7 26z" fill="url(#d11-gold)" stroke="#C28C45" stroke-width="2.5"/>
+                  <circle cx="227" cy="105" r="3.6" fill="#B4523C"/>
                   <!-- Three reward tickets -->
                   <g transform="rotate(-13 221 276)"><rect x="163" y="249" width="110" height="64" rx="9" fill="#DCA861" stroke="#B77A3C" stroke-width="2"/></g>
                   <g transform="rotate(8 221 276)"><rect x="168" y="246" width="110" height="64" rx="9" fill="#AF543E" stroke="#8A402E" stroke-width="2"/></g>
@@ -107,8 +110,8 @@
                   <path d="m207 255 4 10 11 1-8 7 3 11-10-6-9 6 2-11-8-7 11-1z" fill="#BD7950"/>
                   <path d="M193 293h30" stroke="#D1A273" stroke-width="3" stroke-linecap="round"/>
                   <text x="253" y="281" font-size="19" fill="#98613C" font-family="Arial, sans-serif" font-weight="800">1</text>
-                  <ellipse cx="156" cy="273" rx="13" ry="19" fill="#FFF4DD" stroke="#9C714B" stroke-width="2.5" transform="rotate(-19 156 273)"/>
-                  <ellipse cx="285" cy="273" rx="13" ry="19" fill="#FFF4DD" stroke="#9C714B" stroke-width="2.5" transform="rotate(19 285 273)"/>
+                  <ellipse cx="156" cy="273" rx="13" ry="19" fill="#63A0C6" stroke="#3F6C8E" stroke-width="2.5" transform="rotate(-19 156 273)"/>
+                  <ellipse cx="285" cy="273" rx="13" ry="19" fill="#63A0C6" stroke="#3F6C8E" stroke-width="2.5" transform="rotate(19 285 273)"/>
                 </g>
                 <!-- Right present -->
                 <g transform="rotate(10 340 291)">

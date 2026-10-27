@@ -6,7 +6,7 @@ export default {
       overline: "11.11 LUCKY CARNIVAL",
       free: "免费参与",
       threeCards: "三份任务 · 三张好礼",
-      lucky: "好运，牛起来！",
+      lucky: "鲸喜好礼，游向你！",
       passport: "我的好运通行证",
       checkinTag: "签到集章站",
       rewardsTag: "好礼兑换处",

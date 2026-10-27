@@ -6,7 +6,7 @@ export default {
       overline: "11.11 LUCKY CARNIVAL",
       free: "Free to join",
       threeCards: "Three tasks · three gifts",
-      lucky: "A little moo-re luck!",
+      lucky: "A whale lot of luck!",
       passport: "YOUR LUCKY PASSPORT",
       checkinTag: "STAMP STATION",
       rewardsTag: "GIFT COUNTER",

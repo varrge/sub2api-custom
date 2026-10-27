@@ -76,6 +76,15 @@ func NewErrorResponse(code, message string) ErrorResponse {
 
 // AbortWithError 中断请求并返回JSON错误
 func AbortWithError(c *gin.Context, statusCode int, code, message string) {
+	if service.IsAPIKeySpendingLimitCode(code) {
+		// Keep the legacy top-level fields while exposing the same detailed
+		// quota error to OpenAI/Anthropic clients that read error.message.
+		c.AbortWithStatusJSON(statusCode, gin.H{
+			"code": code, "message": message, "type": "error",
+			"error": gin.H{"type": "billing_error", "code": code, "message": message},
+		})
+		return
+	}
 	c.JSON(statusCode, NewErrorResponse(code, message))
 	c.Abort()
 }

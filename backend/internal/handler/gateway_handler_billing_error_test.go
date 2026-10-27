@@ -3,11 +3,17 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
+	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 )
 
 func TestBillingErrorDetails_MapsGroupRPMExceededToTooManyRequests(t *testing.T) {
@@ -28,16 +34,97 @@ func TestBillingErrorDetails_MapsUserRPMExceededToTooManyRequests(t *testing.T) 
 	require.LessOrEqual(t, retryAfter, 60)
 }
 
-func TestBillingErrorDetails_APIKeyRateLimitStillMaps(t *testing.T) {
-	// 回归保护：加 RPM 分支后不应影响已有 APIKey rate limit 的映射。
-	for _, err := range []error{
-		service.ErrAPIKeyRateLimit5hExceeded,
-		service.ErrAPIKeyRateLimit1dExceeded,
-		service.ErrAPIKeyRateLimit7dExceeded,
+func TestBillingErrorDetails_APIKeySpendingLimitHasDistinctCode(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		code string
+	}{
+		{service.ErrAPIKeyRateLimit5hExceeded, "api_key_5h_quota_exceeded"},
+		{service.ErrAPIKeyRateLimit1dExceeded, "api_key_1d_quota_exceeded"},
+		{service.ErrAPIKeyRateLimit7dExceeded, "api_key_7d_quota_exceeded"},
 	} {
-		status, code, _, _ := billingErrorDetails(err)
-		require.Equal(t, http.StatusTooManyRequests, status, "status for %v", err)
-		require.Equal(t, "rate_limit_exceeded", code)
+		status, code, message, retry := billingErrorDetails(tc.err)
+		require.Equal(t, http.StatusTooManyRequests, status)
+		require.Equal(t, tc.code, code)
+		require.Contains(t, message, "消费额度已用完")
+		require.Zero(t, retry, "do not suggest a short RPM-style retry for a spending limit")
+	}
+}
+
+func TestAPIKeySpendingLimitErrorSurvivesGatewayProtocolsAndOps(t *testing.T) {
+	openai := &OpenAIGatewayHandler{}
+	gateway := &GatewayHandler{}
+	status, code, message, _ := billingErrorDetails(service.ErrAPIKeyRateLimit7dExceeded)
+	for _, tc := range []struct {
+		name   string
+		path   string
+		stream bool
+		write  func(*gin.Context)
+	}{
+		{"openai_json", "/v1/responses", false, func(c *gin.Context) { openai.errorResponse(c, status, code, message) }},
+		{"openai_responses_sse", "/v1/responses", true, func(c *gin.Context) { openai.handleStreamingAwareError(c, status, code, message, true) }},
+		{"openai_chat_sse", "/v1/chat/completions", true, func(c *gin.Context) { openai.handleStreamingAwareError(c, status, code, message, true) }},
+		{"messages_json", "/v1/messages", false, func(c *gin.Context) { gateway.errorResponse(c, status, code, message) }},
+		{"openai_backed_messages_json", "/v1/messages", false, func(c *gin.Context) { openai.anthropicErrorResponse(c, status, code, message) }},
+		{"openai_backed_messages_sse", "/v1/messages", true, func(c *gin.Context) { openai.anthropicStreamingAwareError(c, status, code, message, true) }},
+		{"messages_sse", "/v1/messages", true, func(c *gin.Context) { gateway.handleStreamingAwareError(c, status, code, message, true) }},
+		{"messages_responses_sse", "/v1/responses", true, func(c *gin.Context) { gateway.handleStreamingAwareError(c, status, code, message, true) }},
+		{"converted_responses", "/v1/responses", false, func(c *gin.Context) { gateway.responsesErrorResponse(c, status, code, message) }},
+		{"converted_chat", "/v1/chat/completions", false, func(c *gin.Context) { gateway.chatCompletionsErrorResponse(c, status, code, message) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodPost, tc.path, nil)
+			if tc.stream {
+				c.Writer.Header().Set("Content-Type", "text/event-stream")
+				c.Writer.WriteHeader(http.StatusOK)
+				c.Writer.Flush()
+			}
+			tc.write(c)
+			var parsed parsedOpsError
+			if tc.stream {
+				var found bool
+				parsed, found = parseOpsSSEFailure(rec.Body.Bytes())
+				require.True(t, found)
+				require.Equal(t, http.StatusTooManyRequests, inferStreamFailureStatus(c, parsed))
+			} else {
+				require.Equal(t, http.StatusTooManyRequests, rec.Code)
+				require.Equal(t, code, gjson.Get(rec.Body.String(), "error.code").String())
+				parsed = parseOpsErrorResponse(rec.Body.Bytes())
+			}
+			require.Equal(t, code, parsed.Code)
+			require.Equal(t, message, parsed.Message)
+			errType := normalizeOpsErrorType(parsed.ErrorType, parsed.Code)
+			phase, limited, owner, _ := classifyOpsErrorLog(c, errType, parsed.Message, parsed.Code, status)
+			require.Equal(t, "billing_error", errType)
+			require.Equal(t, "request", phase)
+			require.True(t, limited)
+			require.Equal(t, "client", owner)
+			require.Equal(t, "quota", service.MapUserErrorCategory(phase, errType))
+		})
+	}
+}
+
+func TestAPIKeySpendingLimitGrokSearchRejectsBeforeUpstream(t *testing.T) {
+	for _, xSearch := range []bool{false, true} {
+		cfg := &config.Config{RunMode: config.RunModeSimple, SimpleModeKeyRateLimitEnabled: true}
+		billing := service.NewBillingCacheService(nil, nil, nil, &simpleModeWSRateLimitRepo{rejectAt: 1}, nil, nil, cfg, nil)
+		t.Cleanup(billing.Stop)
+		h := &GatewayHandler{billingCacheService: billing}
+		rec := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(rec)
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/web_search", strings.NewReader(`{"query":"example"}`))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Set("grok_x_search_endpoint", xSearch)
+		c.Set(string(middleware2.ContextKeyAPIKey), &service.APIKey{
+			ID: 1, RateLimit5h: 1, User: &service.User{ID: 1}, Group: &service.Group{ID: 1, Platform: service.PlatformGrok},
+		})
+		h.WebSearch(c)
+		require.Equal(t, http.StatusTooManyRequests, rec.Code)
+		require.Equal(t, "billing_error", gjson.Get(rec.Body.String(), "error.type").String())
+		require.Equal(t, "api_key_5h_quota_exceeded", gjson.Get(rec.Body.String(), "error.code").String())
+		require.Contains(t, gjson.Get(rec.Body.String(), "error.message").String(), "5 小时消费额度")
 	}
 }
 

@@ -396,6 +396,10 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 
 // chatCompletionsErrorResponse writes an error in OpenAI Chat Completions format.
 func (h *GatewayHandler) chatCompletionsErrorResponse(c *gin.Context, status int, errType, message string) {
+	if service.IsAPIKeySpendingLimitCode(errType) {
+		c.JSON(status, gin.H{"error": gin.H{"type": "billing_error", "code": errType, "message": message}})
+		return
+	}
 	c.JSON(status, gin.H{
 		"error": gin.H{
 			"type":    errType,

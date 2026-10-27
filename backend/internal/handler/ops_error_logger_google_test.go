@@ -81,6 +81,21 @@ func TestOpsErrorLoggerMiddleware_GoogleBillingErrorMatchesClaudeFormat(t *testi
 	require.True(t, entry.IsBusinessLimited)
 }
 
+func TestOpsErrorLoggerMiddleware_GoogleAPIKeySpendingLimitIsLocalQuota(t *testing.T) {
+	entry := recordGoogleFormatOpsError(t, func(c *gin.Context) {
+		status, code, message, _ := billingErrorDetails(service.ErrAPIKeyRateLimit7dExceeded)
+		googleErrorWithType(c, status, code, "", message)
+	})
+	require.Equal(t, http.StatusTooManyRequests, entry.StatusCode)
+	require.Equal(t, "billing_error", entry.ErrorType)
+	require.Equal(t, "request", entry.ErrorPhase)
+	require.Equal(t, "client", entry.ErrorOwner)
+	require.Equal(t, "P3", entry.Severity)
+	require.True(t, entry.IsBusinessLimited)
+	require.Nil(t, entry.UpstreamStatusCode)
+	require.Contains(t, entry.ErrorBody, "api_key_7d_quota_exceeded")
+}
+
 func TestOpsErrorLoggerMiddleware_GoogleConcurrencyErrorClassifiedAsRequest(t *testing.T) {
 	entry := recordGoogleFormatOpsError(t, func(c *gin.Context) {
 		googleConcurrencyError(c, &ConcurrencyError{SlotType: "user"}, "user")

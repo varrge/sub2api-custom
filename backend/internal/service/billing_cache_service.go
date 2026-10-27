@@ -689,13 +689,13 @@ func (s *BillingCacheService) evaluateRateLimits(ctx context.Context, apiKey *AP
 		return limit > 0 && (usage >= limit || usage+pending > limit)
 	}
 	if exceeds(usage5h, apiKey.RateLimit5h) {
-		return ErrAPIKeyRateLimit5hExceeded
+		return apiKeySpendingLimitError(ErrAPIKeyRateLimit5hExceeded, apiKey.RateLimit5h, usage5h, pending, w5h, RateLimitWindow5h)
 	}
 	if exceeds(usage1d, apiKey.RateLimit1d) {
-		return ErrAPIKeyRateLimit1dExceeded
+		return apiKeySpendingLimitError(ErrAPIKeyRateLimit1dExceeded, apiKey.RateLimit1d, usage1d, pending, w1d, RateLimitWindow1d)
 	}
 	if exceeds(usage7d, apiKey.RateLimit7d) {
-		return ErrAPIKeyRateLimit7dExceeded
+		return apiKeySpendingLimitError(ErrAPIKeyRateLimit7dExceeded, apiKey.RateLimit7d, usage7d, pending, w7d, RateLimitWindow7d)
 	}
 	return nil
 }
@@ -847,11 +847,11 @@ func (s *BillingCacheService) ReserveFixedCharge(ctx context.Context, user *User
 			case exceeds(used.QuotaUsed, apiKey.Quota):
 				return ErrAPIKeyQuotaExhausted
 			case exceeds(used.Usage5h, apiKey.RateLimit5h):
-				return ErrAPIKeyRateLimit5hExceeded
+				return apiKeySpendingLimitError(ErrAPIKeyRateLimit5hExceeded, apiKey.RateLimit5h, used.Usage5h, pending, used.Window5hStart, RateLimitWindow5h)
 			case exceeds(used.Usage1d, apiKey.RateLimit1d):
-				return ErrAPIKeyRateLimit1dExceeded
+				return apiKeySpendingLimitError(ErrAPIKeyRateLimit1dExceeded, apiKey.RateLimit1d, used.Usage1d, pending, used.Window1dStart, RateLimitWindow1d)
 			case exceeds(used.Usage7d, apiKey.RateLimit7d):
-				return ErrAPIKeyRateLimit7dExceeded
+				return apiKeySpendingLimitError(ErrAPIKeyRateLimit7dExceeded, apiKey.RateLimit7d, used.Usage7d, pending, used.Window7dStart, RateLimitWindow7d)
 			}
 			return nil
 		})
@@ -953,11 +953,11 @@ func (s *BillingCacheService) checkFixedChargeAPIKey(ctx context.Context, apiKey
 	case exceeds(data.QuotaUsed, apiKey.Quota):
 		return ErrAPIKeyQuotaExhausted
 	case exceeds(data.EffectiveUsage5h(), apiKey.RateLimit5h):
-		return ErrAPIKeyRateLimit5hExceeded
+		return apiKeySpendingLimitError(ErrAPIKeyRateLimit5hExceeded, apiKey.RateLimit5h, data.EffectiveUsage5h(), pending, data.Window5hStart, RateLimitWindow5h)
 	case exceeds(data.EffectiveUsage1d(), apiKey.RateLimit1d):
-		return ErrAPIKeyRateLimit1dExceeded
+		return apiKeySpendingLimitError(ErrAPIKeyRateLimit1dExceeded, apiKey.RateLimit1d, data.EffectiveUsage1d(), pending, data.Window1dStart, RateLimitWindow1d)
 	case exceeds(data.EffectiveUsage7d(), apiKey.RateLimit7d):
-		return ErrAPIKeyRateLimit7dExceeded
+		return apiKeySpendingLimitError(ErrAPIKeyRateLimit7dExceeded, apiKey.RateLimit7d, data.EffectiveUsage7d(), pending, data.Window7dStart, RateLimitWindow7d)
 	}
 	return nil
 }
@@ -979,13 +979,13 @@ func (s *BillingCacheService) checkSimpleModeAPIKeyRateLimits(ctx context.Contex
 		return ErrBillingServiceUnavailable
 	}
 	if apiKey.RateLimit5h > 0 && data.EffectiveUsage5h() >= apiKey.RateLimit5h {
-		return ErrAPIKeyRateLimit5hExceeded
+		return apiKeySpendingLimitError(ErrAPIKeyRateLimit5hExceeded, apiKey.RateLimit5h, data.EffectiveUsage5h(), 0, data.Window5hStart, RateLimitWindow5h)
 	}
 	if apiKey.RateLimit1d > 0 && data.EffectiveUsage1d() >= apiKey.RateLimit1d {
-		return ErrAPIKeyRateLimit1dExceeded
+		return apiKeySpendingLimitError(ErrAPIKeyRateLimit1dExceeded, apiKey.RateLimit1d, data.EffectiveUsage1d(), 0, data.Window1dStart, RateLimitWindow1d)
 	}
 	if apiKey.RateLimit7d > 0 && data.EffectiveUsage7d() >= apiKey.RateLimit7d {
-		return ErrAPIKeyRateLimit7dExceeded
+		return apiKeySpendingLimitError(ErrAPIKeyRateLimit7dExceeded, apiKey.RateLimit7d, data.EffectiveUsage7d(), 0, data.Window7dStart, RateLimitWindow7d)
 	}
 	return nil
 }

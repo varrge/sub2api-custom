@@ -2021,6 +2021,10 @@ func (h *GatewayHandler) mapUpstreamError(statusCode int) (int, string, string) 
 
 // handleStreamingAwareError handles errors that may occur after streaming has started
 func (h *GatewayHandler) handleStreamingAwareError(c *gin.Context, status int, errType, message string, streamStarted bool) {
+	if service.IsAPIKeySpendingLimitCode(errType) {
+		h.handleStreamingAwareErrorWithCode(c, status, "billing_error", errType, message, streamStarted)
+		return
+	}
 	h.handleStreamingAwareErrorWithCode(c, status, errType, "", message, streamStarted)
 }
 
@@ -2158,6 +2162,9 @@ func (h *GatewayHandler) errorResponse(c *gin.Context, status int, errType, mess
 }
 
 func (h *GatewayHandler) errorResponseWithCode(c *gin.Context, status int, errType, code, message string) {
+	if code == "" && service.IsAPIKeySpendingLimitCode(errType) {
+		errType, code = "billing_error", errType
+	}
 	errorObject := gin.H{"type": errType, "message": message}
 	if code != "" {
 		errorObject["code"] = code
@@ -2540,17 +2547,8 @@ func billingErrorDetails(err error) (status int, code, message string, retryAfte
 		}
 		return http.StatusServiceUnavailable, "billing_service_error", msg, 0
 	}
-	if errors.Is(err, service.ErrAPIKeyRateLimit5hExceeded) {
-		msg := pkgerrors.Message(err)
-		return http.StatusTooManyRequests, "rate_limit_exceeded", msg, 0
-	}
-	if errors.Is(err, service.ErrAPIKeyRateLimit1dExceeded) {
-		msg := pkgerrors.Message(err)
-		return http.StatusTooManyRequests, "rate_limit_exceeded", msg, 0
-	}
-	if errors.Is(err, service.ErrAPIKeyRateLimit7dExceeded) {
-		msg := pkgerrors.Message(err)
-		return http.StatusTooManyRequests, "rate_limit_exceeded", msg, 0
+	if service.IsAPIKeySpendingLimitCode(pkgerrors.Reason(err)) {
+		return http.StatusTooManyRequests, pkgerrors.Reason(err), pkgerrors.Message(err), 0
 	}
 	// 用户/分组 RPM 超限统一映射为 HTTP 429；保留与其它 rate_limit 一致的错误码便于客户端分类。
 	// 返回 Retry-After 秒数（当前分钟剩余秒数），让 SDK 自动退避。

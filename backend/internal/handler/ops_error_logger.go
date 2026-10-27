@@ -2044,6 +2044,9 @@ func sanitizeOpsSSEDataForPersistence(body []byte) string {
 }
 
 func inferResponsesFailedOpsErrorType(code string) string {
+	if service.IsAPIKeySpendingLimitCode(code) {
+		return "billing_error"
+	}
 	switch strings.TrimSpace(code) {
 	case "rate_limit_exceeded":
 		return "rate_limit_error"
@@ -2065,6 +2068,9 @@ func inferResponsesFailedOpsErrorType(code string) string {
 func inferStreamFailureStatus(_ *gin.Context, parsed parsedOpsError) int {
 	if parsed.StatusCode >= 400 && parsed.StatusCode <= 599 {
 		return parsed.StatusCode
+	}
+	if service.IsAPIKeySpendingLimitCode(parsed.Code) {
+		return http.StatusTooManyRequests
 	}
 	switch strings.TrimSpace(parsed.Code) {
 	case "rate_limit_exceeded":
@@ -2161,6 +2167,9 @@ func isKnownOpsErrorType(t string) bool {
 }
 
 func normalizeOpsErrorType(errType string, code string) string {
+	if service.IsAPIKeySpendingLimitCode(code) || service.IsAPIKeySpendingLimitCode(errType) {
+		return "billing_error"
+	}
 	if errType != "" && isKnownOpsErrorType(errType) {
 		return errType
 	}
@@ -2311,6 +2320,9 @@ func isOpsClientAuthError(code string, msg string) bool {
 }
 
 func isOpsLocalBusinessLimitError(code string, msg string) bool {
+	if service.IsAPIKeySpendingLimitCode(code) {
+		return true
+	}
 	switch strings.TrimSpace(code) {
 	case opsCodeInsufficientBalance,
 		opsCodeUsageLimitExceeded,

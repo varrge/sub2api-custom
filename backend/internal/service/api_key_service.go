@@ -41,9 +41,9 @@ var (
 	ErrAPIKeyQuotaExhausted = infraerrors.TooManyRequests("API_KEY_QUOTA_EXHAUSTED", "api key 额度已用完")
 
 	// Rate limit errors
-	ErrAPIKeyRateLimit5hExceeded = infraerrors.TooManyRequests("API_KEY_RATE_5H_EXCEEDED", "api key 5小时限额已用完")
-	ErrAPIKeyRateLimit1dExceeded = infraerrors.TooManyRequests("API_KEY_RATE_1D_EXCEEDED", "api key 日限额已用完")
-	ErrAPIKeyRateLimit7dExceeded = infraerrors.TooManyRequests("API_KEY_RATE_7D_EXCEEDED", "api key 7天限额已用完")
+	ErrAPIKeyRateLimit5hExceeded = infraerrors.TooManyRequests("api_key_5h_quota_exceeded", "该 API Key 的 5 小时消费额度已用完，请调整此 Key 的费用限额或等待窗口重置；立即重试无效")
+	ErrAPIKeyRateLimit1dExceeded = infraerrors.TooManyRequests("api_key_1d_quota_exceeded", "该 API Key 的 1 天消费额度已用完，请调整此 Key 的费用限额或等待窗口重置；立即重试无效")
+	ErrAPIKeyRateLimit7dExceeded = infraerrors.TooManyRequests("api_key_7d_quota_exceeded", "该 API Key 的 7 天消费额度已用完，请调整此 Key 的费用限额或等待窗口重置；立即重试无效")
 )
 
 const (

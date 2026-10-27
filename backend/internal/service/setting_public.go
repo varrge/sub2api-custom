@@ -244,6 +244,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyModelPlazaRequireAuth,
 		SettingKeyPluginManagementEnabled,
 		SettingKeyNativeBoxEntryEnabled,
+		SettingKeyActivityCampaignsEnabled,
 		SettingKeyAffiliateEnabled,
 		SettingKeyRiskControlEnabled,
 		SettingKeyAllowUserViewErrorRequests,
@@ -376,10 +377,11 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SupportTicketEnabled:     settings[SettingKeySupportTicketEnabled] == "true",
 		SubscriptionEnabled:      !isFalseSettingValue(settings[SettingKeySubscriptionEnabled]),
 
-		ModelPlazaEnabled:       settings[SettingKeyModelPlazaEnabled] == "true",
-		ModelPlazaRequireAuth:   settings[SettingKeyModelPlazaRequireAuth] == "true",
-		PluginManagementEnabled: settings[SettingKeyPluginManagementEnabled] == "true",
-		NativeBoxEntryEnabled:   settings[SettingKeyNativeBoxEntryEnabled] == "true",
+		ModelPlazaEnabled:        settings[SettingKeyModelPlazaEnabled] == "true",
+		ModelPlazaRequireAuth:    settings[SettingKeyModelPlazaRequireAuth] == "true",
+		PluginManagementEnabled:  settings[SettingKeyPluginManagementEnabled] == "true",
+		NativeBoxEntryEnabled:    settings[SettingKeyNativeBoxEntryEnabled] == "true",
+		ActivityCampaignsEnabled: settings[SettingKeyActivityCampaignsEnabled] == "true",
 
 		AffiliateEnabled: settings[SettingKeyAffiliateEnabled] == "true",
 
@@ -654,6 +656,7 @@ type PublicSettingsInjectionPayload struct {
 	ModelPlazaRequireAuth         bool `json:"model_plaza_require_auth"`
 	PluginManagementEnabled       bool `json:"plugin_management_enabled"`
 	NativeBoxEntryEnabled         bool `json:"native_box_entry_enabled"`
+	ActivityCampaignsEnabled      bool `json:"activity_campaigns_enabled"`
 	AffiliateEnabled              bool `json:"affiliate_enabled"`
 	RiskControlEnabled            bool `json:"risk_control_enabled"`
 	AllowUserViewErrorRequests    bool `json:"allow_user_view_error_requests"`
@@ -743,6 +746,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		ModelPlazaRequireAuth:                settings.ModelPlazaRequireAuth,
 		PluginManagementEnabled:              settings.PluginManagementEnabled,
 		NativeBoxEntryEnabled:                settings.NativeBoxEntryEnabled,
+		ActivityCampaignsEnabled:             settings.ActivityCampaignsEnabled,
 		AffiliateEnabled:                     settings.AffiliateEnabled,
 		RiskControlEnabled:                   settings.RiskControlEnabled,
 		AllowUserViewErrorRequests:           settings.AllowUserViewErrorRequests,

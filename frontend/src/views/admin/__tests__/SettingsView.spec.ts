@@ -92,6 +92,10 @@ vi.mock("@/views/admin/settings/PrivilegeSettingsPanel.vue", () => ({
   },
 }));
 
+vi.mock("@/views/admin/settings/ActivityCampaignSettings.vue", () => ({
+  default: { template: '<div data-testid="activity-settings-stub" />' },
+}));
+
 vi.mock("@/api", () => ({
   adminAPI: {
     settings: {
@@ -947,6 +951,28 @@ describe("admin SettingsView payment visible method controls", () => {
       expect.objectContaining({ image_generation_enabled: false }),
     );
     expect(fetchPublicSettings).toHaveBeenCalledWith(true);
+  });
+
+  it("saves the activity switch and keeps the activity tab independent of general settings submit", async () => {
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+    const toggle = wrapper.get('[data-testid="activity-campaigns-enabled"]');
+    expect((toggle.element as HTMLInputElement).checked).toBe(false);
+    await toggle.setValue(true);
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ activity_campaigns_enabled: true }),
+    );
+    expect(fetchPublicSettings).toHaveBeenCalledWith(true);
+    updateSettings.mockClear();
+    await wrapper.get('[data-testid="activity-campaigns-feature"] button').trigger("click");
+    await flushPromises();
+    expect(wrapper.find('[data-testid="activity-settings-stub"]').exists()).toBe(true);
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings).not.toHaveBeenCalled();
   });
 
   it("defaults the native box entry switch off and saves it from the Features tab", async () => {
@@ -2482,7 +2508,7 @@ describe("admin SettingsView tab navigation (responsive)", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders all 12 tabs with full labels, ARIA roles, and no truncation classes", async () => {
+  it("renders all 13 tabs with full labels, ARIA roles, and no truncation classes", async () => {
     const wrapper = mountView(document.body);
     await flushPromises();
     await flushPromises();
@@ -2492,7 +2518,7 @@ describe("admin SettingsView tab navigation (responsive)", () => {
     expect(tablist.attributes("aria-label")).toBe("admin.settings.title");
 
     const tabs = wrapper.findAll('[role="tab"]');
-    expect(tabs).toHaveLength(12);
+    expect(tabs).toHaveLength(13);
 
     for (const tab of tabs) {
       expect(tab.attributes("aria-selected")).toBeDefined();

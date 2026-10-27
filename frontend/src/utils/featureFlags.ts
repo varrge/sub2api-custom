@@ -134,6 +134,11 @@ export const FeatureFlags = {
     mode: 'opt-in',
     label: 'Lucky Box Entry',
   }),
+  activityCampaigns: defineFlag({
+    key: 'activity_campaigns_enabled',
+    mode: 'opt-in',
+    label: 'Activity Campaigns',
+  }),
   payment: defineFlag({
     key: 'payment_enabled',
     mode: 'opt-out',

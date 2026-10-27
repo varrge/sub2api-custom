@@ -7236,6 +7236,15 @@
 
         <!-- Tab: Features (功能开关) -->
         <div v-show="activeTab === 'features'" class="space-y-6">
+          <div class="card p-6 space-y-4" data-testid="activity-campaigns-feature">
+            <h2 class="text-lg font-semibold">{{ t('admin.settings.campaignFeature.title') }}</h2>
+            <p class="text-sm text-gray-500">{{ t('admin.settings.campaignFeature.hint') }}</p>
+            <label class="flex items-center justify-between gap-4">
+              <span>{{ t('admin.settings.campaignFeature.enabled') }}</span>
+              <Toggle v-model="form.activity_campaigns_enabled" data-testid="activity-campaigns-enabled" :aria-label="t('admin.settings.campaignFeature.enabled')" />
+            </label>
+            <button type="button" class="btn btn-secondary" @click="activeTab = 'activities'">{{ t('admin.settings.campaignFeature.configure') }}</button>
+          </div>
 
         <div class="card" data-testid="top-quick-menu-settings">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
@@ -9198,6 +9207,7 @@
         <!-- /Tab: Email -->
 
         <!-- Tab: Leaderboard -->
+        <div v-if="activeTab === 'activities'"><ActivityCampaignSettings /></div>
         <div v-show="activeTab === 'leaderboard'">
           <ActivityLeaderboardSettings />
         </div>
@@ -9218,7 +9228,7 @@
 
         <!-- Save Button -->
         <div
-          v-show="activeTab !== 'backup' && activeTab !== 'leaderboard' && activeTab !== 'sidebar' && activeTab !== 'privileges'"
+          v-show="activeTab !== 'activities' && activeTab !== 'backup' && activeTab !== 'leaderboard' && activeTab !== 'sidebar' && activeTab !== 'privileges'"
           class="flex justify-end"
         >
           <button
@@ -9354,6 +9364,7 @@ import { sanitizeSvg } from "@/utils/sanitize";
 import BackupSettings from "@/views/admin/BackupView.vue";
 import PrivilegeSettingsPanel from "@/views/admin/settings/PrivilegeSettingsPanel.vue";
 import SidebarGroupsSettings from "@/components/admin/SidebarGroupsSettings.vue";
+import ActivityCampaignSettings from "@/views/admin/settings/ActivityCampaignSettings.vue";
 import ActivityLeaderboardSettings from "@/views/admin/settings/ActivityLeaderboardSettings.vue";
 import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue";
 import RechargeBonusTierEditor from "@/components/admin/settings/RechargeBonusTierEditor.vue";
@@ -9445,6 +9456,7 @@ type SettingsTab =
   | "gateway"
   | "payment"
   | "email"
+  | "activities"
   | "leaderboard"
   | "sidebar"
   | "backup";
@@ -9460,6 +9472,7 @@ const settingsTabs = [
   { key: "gateway" as SettingsTab, icon: "server" as const },
   { key: "payment" as SettingsTab, icon: "creditCard" as const },
   { key: "email" as SettingsTab, icon: "mail" as const },
+  { key: "activities" as SettingsTab, icon: "gift" as const },
   { key: "leaderboard" as SettingsTab, icon: "trophy" as const },
   { key: "sidebar" as SettingsTab, icon: "menu" as const },
   { key: "backup" as SettingsTab, icon: "database" as const },
@@ -10516,6 +10529,7 @@ const form = reactive<SettingsForm>({
   model_plaza_description: '',
   // Plugin management menu visibility; plugin runtime is unaffected.
   plugin_management_enabled: false,
+  activity_campaigns_enabled: false,
   native_box_entry_enabled: false,
   // Affiliate (邀请返利) feature switch
   affiliate_enabled: false,
@@ -11815,7 +11829,7 @@ async function saveSettings() {
     return;
   }
   // These tabs have their own save endpoint; implicit Enter must not submit other settings.
-  if (activeTab.value === "leaderboard" || activeTab.value === "sidebar") return;
+  if (activeTab.value === "activities" || activeTab.value === "leaderboard" || activeTab.value === "sidebar") return;
   saving.value = true;
   try {
     const enterpriseRechargeMultiplier = Number(form.payment_enterprise_balance_recharge_multiplier);
@@ -12313,6 +12327,7 @@ async function saveSettings() {
       model_plaza_require_auth: form.model_plaza_require_auth,
       model_plaza_description: form.model_plaza_description,
       plugin_management_enabled: form.plugin_management_enabled,
+      activity_campaigns_enabled: form.activity_campaigns_enabled,
       native_box_entry_enabled: form.native_box_entry_enabled,
       // Affiliate (邀请返利) feature switch
       affiliate_enabled: form.affiliate_enabled,

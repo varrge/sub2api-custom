@@ -603,6 +603,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.NativeBoxEntryEnabled != after.NativeBoxEntryEnabled {
 		changed = append(changed, service.SettingKeyNativeBoxEntryEnabled)
 	}
+	if before.ActivityCampaignsEnabled != after.ActivityCampaignsEnabled {
+		changed = append(changed, service.SettingKeyActivityCampaignsEnabled)
+	}
 	if before.SubscriptionEnabled != after.SubscriptionEnabled {
 		changed = append(changed, "subscription_enabled")
 	}

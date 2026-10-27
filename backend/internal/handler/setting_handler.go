@@ -118,10 +118,11 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 		SupportTicketEnabled:     settings.SupportTicketEnabled,
 		SubscriptionEnabled:      settings.SubscriptionEnabled,
 
-		ModelPlazaEnabled:       settings.ModelPlazaEnabled,
-		ModelPlazaRequireAuth:   settings.ModelPlazaRequireAuth,
-		PluginManagementEnabled: settings.PluginManagementEnabled,
-		NativeBoxEntryEnabled:   settings.NativeBoxEntryEnabled,
+		ModelPlazaEnabled:        settings.ModelPlazaEnabled,
+		ModelPlazaRequireAuth:    settings.ModelPlazaRequireAuth,
+		PluginManagementEnabled:  settings.PluginManagementEnabled,
+		NativeBoxEntryEnabled:    settings.NativeBoxEntryEnabled,
+		ActivityCampaignsEnabled: settings.ActivityCampaignsEnabled,
 
 		AffiliateEnabled: settings.AffiliateEnabled,
 

@@ -1,0 +1,17 @@
+Artwork: Whale-girl portrait, by YunYueSama
+Source: https://github.com/YunYueSama/codex-deepseek-pet
+Original file: assets/whale/portrait.png
+Original git blob: 4afdeae2b6f5212c6c17006ff22847bfa5d4d57e
+Changes to image: none (used as received)
+
+The contributor's full license and asset attribution notes are included in
+whale-girl-license.txt and whale-girl-asset-license.md. The contributor's grant
+covers only material the contributor is authorized to license; underlying
+third-party character, reference artwork, and branding rights remain subject
+to their respective permissions.
+
+Community character provenance: original whale-girl design by 上善无形;
+DeepSeek maid redesign by ZipZipPipe. The redesign is identified upstream as
+CC BY-NC-SA 4.0: https://github.com/Small-tailqwq/dsh-deep-whale
+The image contributor does not grant third-party rights; any promotional or
+other commercial use requires the relevant upstream permissions to be checked.

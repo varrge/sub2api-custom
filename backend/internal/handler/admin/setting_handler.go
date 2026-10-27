@@ -400,11 +400,12 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		SupportTicketEnabled:     settings.SupportTicketEnabled,
 		SubscriptionEnabled:      settings.SubscriptionEnabled,
 
-		ModelPlazaEnabled:       settings.ModelPlazaEnabled,
-		ModelPlazaRequireAuth:   settings.ModelPlazaRequireAuth,
-		PluginManagementEnabled: settings.PluginManagementEnabled,
-		NativeBoxEntryEnabled:   settings.NativeBoxEntryEnabled,
-		ModelPlazaDescription:   settings.ModelPlazaDescription,
+		ModelPlazaEnabled:        settings.ModelPlazaEnabled,
+		ModelPlazaRequireAuth:    settings.ModelPlazaRequireAuth,
+		PluginManagementEnabled:  settings.PluginManagementEnabled,
+		NativeBoxEntryEnabled:    settings.NativeBoxEntryEnabled,
+		ActivityCampaignsEnabled: settings.ActivityCampaignsEnabled,
+		ModelPlazaDescription:    settings.ModelPlazaDescription,
 
 		AffiliateEnabled: settings.AffiliateEnabled,
 

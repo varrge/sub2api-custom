@@ -1,3 +1,4 @@
+import activityCampaigns from './activityCampaigns'
 import activityLeaderboard from './activityLeaderboard'
 import luckyBox from './luckyBox'
 import groupBuy from './groupBuy'
@@ -20,6 +21,9 @@ import enterprisePayment from './enterprisePayment'
 export default {
   ...activityLeaderboard,
   ...luckyBox,
+  ...activityCampaigns,
+  activityCampaignsNav: '双十一活动',
+  activityCampaignsDescription: '签到答题领摇摇卡',
   ...groupBuy,
   ...landing,
   ...common,

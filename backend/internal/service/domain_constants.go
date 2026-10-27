@@ -563,6 +563,9 @@ const (
 	// SettingKeyNativeBoxEntryEnabled only controls navigation visibility, not draws or rewards.
 	SettingKeyNativeBoxEntryEnabled = "native_box_entry_enabled"
 
+	// SettingKeyActivityCampaignsEnabled gates campaign entry and new participation/reward claims.
+	SettingKeyActivityCampaignsEnabled = "activity_campaigns_enabled"
+
 	// SettingKeyUpstreamBillingProbeSettings stores the global enable switch and interval
 	// for probing remote Sub2API API-key billing metadata.
 	SettingKeyUpstreamBillingProbeSettings = "upstream_billing_probe_settings"

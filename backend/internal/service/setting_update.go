@@ -444,6 +444,7 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyModelPlazaDescription] = settings.ModelPlazaDescription
 	updates[SettingKeyPluginManagementEnabled] = strconv.FormatBool(settings.PluginManagementEnabled)
 	updates[SettingKeyNativeBoxEntryEnabled] = strconv.FormatBool(settings.NativeBoxEntryEnabled)
+	updates[SettingKeyActivityCampaignsEnabled] = strconv.FormatBool(settings.ActivityCampaignsEnabled)
 
 	// Affiliate (邀请返利) feature switch
 	updates[SettingKeyAffiliateEnabled] = strconv.FormatBool(settings.AffiliateEnabled)

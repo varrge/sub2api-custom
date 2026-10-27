@@ -263,3 +263,24 @@ func TestSettingHandler_GetPublicSettings_ExposesOnlyUserSidebarGroups(t *testin
 	require.NotContains(t, w.Body.String(), "private-admin")
 	require.NotContains(t, w.Body.String(), "/admin/")
 }
+
+func TestSettingHandler_GetPublicSettings_ExposesActivityCampaignsFlag(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, value := range []string{"", "true", "false"} {
+		t.Run(value, func(t *testing.T) {
+			h := NewSettingHandler(service.NewSettingService(&settingHandlerPublicRepoStub{values: map[string]string{
+				service.SettingKeyActivityCampaignsEnabled: value,
+			}}, &config.Config{}), "test-version")
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/settings/public", nil)
+			h.GetPublicSettings(c)
+			require.Equal(t, http.StatusOK, rec.Code)
+			var envelope struct {
+				Data map[string]any `json:"data"`
+			}
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
+			require.Equal(t, value == "true", envelope.Data["activity_campaigns_enabled"])
+		})
+	}
+}

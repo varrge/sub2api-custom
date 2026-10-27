@@ -15,7 +15,7 @@ import (
 func TestActivityLeaderboardSettingsRoutesRequireAdminAuthentication(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	handlers := &handler.Handlers{Admin: &handler.AdminHandlers{Setting: adminhandler.NewSettingHandler(nil, nil, nil, nil, nil, nil, nil)}}
+	handlers := &handler.Handlers{ActivityCampaigns: handler.NewActivityCampaignHandler(nil), Admin: &handler.AdminHandlers{Setting: adminhandler.NewSettingHandler(nil, nil, nil, nil, nil, nil, nil)}}
 	adminAuth := servermiddleware.AdminAuthMiddleware(func(c *gin.Context) {
 		if c.GetHeader("Authorization") == "" {
 			servermiddleware.AbortWithError(c, http.StatusUnauthorized, "UNAUTHORIZED", "Authorization required")
@@ -34,6 +34,9 @@ func TestActivityLeaderboardSettingsRoutesRequireAdminAuthentication(t *testing.
 		{http.MethodGet, "/api/v1/admin/activities/leaderboard/export"},
 		{http.MethodGet, "/api/v1/admin/activities/leaderboard/config"},
 		{http.MethodPost, "/api/v1/admin/activities/leaderboard/settlements"},
+		{http.MethodGet, "/api/v1/admin/activities/campaigns/double11-2026-wave1"},
+		{http.MethodPut, "/api/v1/admin/activities/campaigns/double11-2026-wave1"},
+		{http.MethodGet, "/api/v1/admin/activities/campaigns/double11-2026-wave1/rewards/1/quiz"},
 	} {
 		method, path := endpoint.method, endpoint.path
 		for _, tc := range []struct {

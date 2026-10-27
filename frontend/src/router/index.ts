@@ -292,6 +292,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/activities/double11',
+    name: 'DoubleEleven',
+    component: () => import('@/features/activity-campaigns/DoubleElevenView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Double Eleven',
+      titleKey: 'activityCampaignsNav',
+      descriptionKey: 'activityCampaignsDescription'
+    }
+  },
+  {
     path: '/affiliate',
     name: 'Affiliate',
     component: () => import('@/views/user/AffiliateView.vue'),
@@ -1114,7 +1126,8 @@ router.beforeEach(async (to, _from, next) => {
       '/my-group-buy',
       '/group-buy',
       '/redeem',
-      '/activities/box'
+      '/activities/box',
+      '/activities/double11'
     ]
 
     if (restrictedPaths.some((path) => to.path.startsWith(path))) {

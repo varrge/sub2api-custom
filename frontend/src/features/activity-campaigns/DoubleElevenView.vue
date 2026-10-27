@@ -55,7 +55,9 @@
               <svg viewBox="0 0 430 350" fill="none" focusable="false">
                 <defs>
                   <linearGradient id="d11-gold" x1="90" y1="20" x2="300" y2="300" gradientUnits="userSpaceOnUse"><stop stop-color="#FFE5A6"/><stop offset="1" stop-color="#D9904B"/></linearGradient>
-                  <linearGradient id="d11-whale" x1="150" y1="120" x2="300" y2="290" gradientUnits="userSpaceOnUse"><stop stop-color="#7FB4D8"/><stop offset="1" stop-color="#4E80A8"/></linearGradient>
+                  <linearGradient id="d11-hair" x1="180" y1="55" x2="270" y2="230" gradientUnits="userSpaceOnUse"><stop stop-color="#AAD6EF"/><stop offset=".55" stop-color="#6FA8CE"/><stop offset="1" stop-color="#4E80A8"/></linearGradient>
+                  <linearGradient id="d11-dress" x1="200" y1="165" x2="250" y2="258" gradientUnits="userSpaceOnUse"><stop stop-color="#46719A"/><stop offset="1" stop-color="#2B4E71"/></linearGradient>
+                  <linearGradient id="d11-tail" x1="252" y1="244" x2="348" y2="156" gradientUnits="userSpaceOnUse"><stop stop-color="#7FB4D8"/><stop offset="1" stop-color="#4E80A8"/></linearGradient>
                 </defs>
                 <circle cx="228" cy="181" r="147" fill="#F2D8AD" fill-opacity=".6"/>
                 <circle cx="228" cy="181" r="133" stroke="#C79865" stroke-opacity=".35" stroke-dasharray="3 9"/>
@@ -79,30 +81,64 @@
                   <path d="M81 250v75" stroke="#F1C983" stroke-width="17"/>
                   <path d="M89 250c-50 0-46-36-24-25 9 5 16 16 24 25Zm0 0c42-6 44-35 23-27-8 4-15 16-23 27Z" fill="#F1C983" stroke="#E2AD64" stroke-width="3"/>
                 </g>
-                <!-- Lucky whale mascot -->
+                <!-- Lucky whale-girl mascot -->
                 <g class="festival-whale">
-                  <!-- Upturned forked tail -->
-                  <path d="M292 186 C312 174 324 160 328 144 L346 150 C338 172 318 190 296 196 Z" fill="#4E80A8"/>
-                  <path d="M324 150 298 110 C311 110 325 119 332 133 L335 137 C343 121 357 111 370 113 L347 154 C339 158 330 156 324 150 Z" fill="#63A0C6" stroke="#3F6C8E" stroke-width="3" stroke-linejoin="round"/>
-                  <!-- Rounded body -->
-                  <path d="M136 212 C136 156 176 120 230 120 C284 120 314 158 314 210 C314 254 284 286 228 288 C180 290 136 258 136 212 Z" fill="url(#d11-whale)" stroke="#3F6C8E" stroke-width="3"/>
-                  <!-- Cream belly -->
-                  <path d="M148 238 C160 268 194 283 228 282 C262 281 292 262 302 234 C286 252 256 261 226 260 C196 259 164 253 148 238 Z" fill="#FFFAEA"/>
-                  <!-- Side fin -->
-                  <path d="M160 242 C145 252 139 271 149 279 C161 286 175 268 175 250 Z" fill="#4E80A8" stroke="#3F6C8E" stroke-width="2.5"/>
-                  <!-- Smiling face and blush -->
-                  <path d="M150 220 C168 240 198 248 224 244" stroke="#3F6C8E" stroke-width="3" stroke-linecap="round"/>
-                  <circle cx="188" cy="188" r="7" fill="#2F4A5C"/>
-                  <circle cx="191" cy="185" r="2.4" fill="white"/>
-                  <ellipse cx="162" cy="206" rx="10" ry="6" fill="#EFB89D"/>
-                  <!-- Splash droplets -->
-                  <path d="M168 96 C163 87 165 78 171 73 C176 80 176 89 172 96 Z" fill="#8FC0DE"/>
-                  <circle cx="153" cy="84" r="4" fill="#8FC0DE"/>
-                  <circle cx="184" cy="80" r="3.2" fill="#8FC0DE"/>
-                  <!-- Party crown -->
-                  <path d="m204 118-6-24 17 8 12-21 12 21 18-9-7 26z" fill="url(#d11-gold)" stroke="#C28C45" stroke-width="2.5"/>
-                  <circle cx="227" cy="105" r="3.6" fill="#B4523C"/>
-                  <!-- Three reward tickets -->
+                  <!-- Big whale tail sweeping up to the right -->
+                  <path d="M250 226 C288 220 310 202 317 182 C314 170 320 156 334 151 C332 163 329 171 327 177 C339 179 349 187 352 199 C340 200 329 194 323 187 C313 211 288 234 256 246 Z" fill="url(#d11-tail)" stroke="#3F6C8E" stroke-width="3" stroke-linejoin="round"/>
+                  <path d="M264 240 C290 232 306 216 314 198" stroke="#CFE6F4" stroke-width="5" stroke-linecap="round" opacity=".7"/>
+                  <!-- Long fluffy back hair -->
+                  <path d="M222 52 C262 52 285 88 283 134 C282 162 288 194 273 211 C261 222 249 215 248 199 C247 185 251 171 249 159 L195 159 C193 171 197 185 196 199 C195 215 183 222 171 211 C156 194 162 162 161 134 C159 88 182 52 222 52 Z" fill="url(#d11-hair)" stroke="#3F6C8E" stroke-width="3" stroke-linejoin="round"/>
+                  <!-- Whale fin ears -->
+                  <path d="M176 116 C163 106 151 107 146 118 C153 126 165 130 177 128 Z" fill="#6FA8CE" stroke="#3F6C8E" stroke-width="2.5" stroke-linejoin="round"/>
+                  <path d="M268 116 C281 106 293 107 298 118 C291 126 279 130 267 128 Z" fill="#6FA8CE" stroke="#3F6C8E" stroke-width="2.5" stroke-linejoin="round"/>
+                  <!-- Deep-blue dress with puff sleeves -->
+                  <path d="M196 180 C196 170 206 164 222 164 C238 164 248 170 248 180 C256 204 262 226 264 246 C244 257 200 257 180 246 C182 226 188 204 196 180 Z" fill="url(#d11-dress)" stroke="#24425F" stroke-width="2.5" stroke-linejoin="round"/>
+                  <circle cx="195" cy="183" r="12" fill="url(#d11-dress)" stroke="#24425F" stroke-width="2.5"/>
+                  <circle cx="249" cy="183" r="12" fill="url(#d11-dress)" stroke="#24425F" stroke-width="2.5"/>
+                  <!-- Cream collar and apron -->
+                  <path d="M207 168 C212 176 218 179 222 179 C226 179 232 176 237 168 C232 164 227 162 222 162 C217 162 212 164 207 168 Z" fill="#FFFAEA" stroke="#E3C793" stroke-width="2"/>
+                  <path d="M203 190 C212 196 232 196 241 190 C248 208 252 226 253 243 C238 250 206 250 191 243 C192 226 196 208 203 190 Z" fill="#FFFAEA" stroke="#E3C793" stroke-width="2" stroke-linejoin="round"/>
+                  <path d="M196 238 C210 244 234 244 248 238" stroke="#E3C793" stroke-width="2" stroke-linecap="round"/>
+                  <!-- Side hair strands over the shoulders -->
+                  <path d="M186 118 C176 148 173 190 181 220 C186 231 197 229 199 218 C194 192 196 160 201 134 Z" fill="url(#d11-hair)" stroke="#3F6C8E" stroke-width="2.5" stroke-linejoin="round"/>
+                  <path d="M258 118 C268 148 271 190 263 220 C258 231 247 229 245 218 C250 192 248 160 243 134 Z" fill="url(#d11-hair)" stroke="#3F6C8E" stroke-width="2.5" stroke-linejoin="round"/>
+                  <!-- Arms reaching down to the tickets -->
+                  <path d="M193 194 C185 214 181 234 182 252" stroke="#FFDFC2" stroke-width="11" stroke-linecap="round"/>
+                  <path d="M251 194 C259 214 263 234 262 252" stroke="#FFDFC2" stroke-width="11" stroke-linecap="round"/>
+                  <!-- Warm face -->
+                  <ellipse cx="222" cy="126" rx="41" ry="37" fill="#FFE1C4"/>
+                  <ellipse cx="192" cy="143" rx="7.5" ry="4.5" fill="#F5A08C" opacity=".8"/>
+                  <ellipse cx="252" cy="143" rx="7.5" ry="4.5" fill="#F5A08C" opacity=".8"/>
+                  <!-- Big sparkling eyes -->
+                  <ellipse cx="205" cy="128" rx="8.5" ry="10.5" fill="white"/>
+                  <ellipse cx="205.5" cy="129.5" rx="6" ry="8" fill="#33566E"/>
+                  <ellipse cx="205.5" cy="132.5" rx="3.4" ry="4" fill="#6FA8CE"/>
+                  <circle cx="203" cy="125" r="2.6" fill="white"/>
+                  <circle cx="208.5" cy="133" r="1.2" fill="white"/>
+                  <ellipse cx="239" cy="128" rx="8.5" ry="10.5" fill="white"/>
+                  <ellipse cx="238.5" cy="129.5" rx="6" ry="8" fill="#33566E"/>
+                  <ellipse cx="238.5" cy="132.5" rx="3.4" ry="4" fill="#6FA8CE"/>
+                  <circle cx="236" cy="125" r="2.6" fill="white"/>
+                  <circle cx="241.5" cy="133" r="1.2" fill="white"/>
+                  <!-- Lash lines and brows -->
+                  <path d="M197 121 C200 114 210 113 213 119" stroke="#2F4A5C" stroke-width="2.5" stroke-linecap="round"/>
+                  <path d="M247 121 C244 114 234 113 231 119" stroke="#2F4A5C" stroke-width="2.5" stroke-linecap="round"/>
+                  <path d="M198 107 C202 104 208 104 211 106" stroke="#4E80A8" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M246 107 C242 104 236 104 233 106" stroke="#4E80A8" stroke-width="2" stroke-linecap="round"/>
+                  <!-- Nose and happy smile -->
+                  <path d="M220 139 C221 140.5 223 140.5 224 139" stroke="#E0A67E" stroke-width="1.8" stroke-linecap="round"/>
+                  <path d="M213 147 C217 154 227 154 231 147 C227 151 217 151 213 147 Z" fill="#B45A4A"/>
+                  <!-- Scalloped bangs -->
+                  <path d="M181 120 C181 92 199 76 222 76 C245 76 263 92 263 120 C258 108 252 105 249 116 C245 104 236 102 233 114 C229 102 226 100 222 108 C218 100 215 102 211 114 C208 102 199 104 195 116 C192 105 186 108 181 120 Z" fill="url(#d11-hair)" stroke="#3F6C8E" stroke-width="2.5" stroke-linejoin="round"/>
+                  <!-- Little ahoge cowlick -->
+                  <path d="M221 55 C218 43 224 34 234 33" stroke="#4E80A8" stroke-width="4" stroke-linecap="round"/>
+                  <!-- Small golden festival crown -->
+                  <g transform="rotate(14 252 84)">
+                    <path d="m240 88-4-16 10 6 6-13 7 13 10-6-4 16z" fill="url(#d11-gold)" stroke="#C28C45" stroke-width="2" stroke-linejoin="round"/>
+                    <circle cx="252" cy="82" r="2.4" fill="#B4523C"/>
+                  </g>
+                  <path d="m170 82 3 8 8 3-8 3-3 8-3-8-8-3 8-3z" fill="url(#d11-gold)"/>
+                  <!-- Three reward tickets she is holding -->
                   <g transform="rotate(-13 221 276)"><rect x="163" y="249" width="110" height="64" rx="9" fill="#DCA861" stroke="#B77A3C" stroke-width="2"/></g>
                   <g transform="rotate(8 221 276)"><rect x="168" y="246" width="110" height="64" rx="9" fill="#AF543E" stroke="#8A402E" stroke-width="2"/></g>
                   <path d="M177 245h87a8 8 0 0 1 8 8v12a10 10 0 0 0 0 20v12a8 8 0 0 1-8 8h-87a8 8 0 0 1-8-8v-12a10 10 0 0 0 0-20v-12a8 8 0 0 1 8-8Z" fill="#FFF0C8" stroke="#CA954F" stroke-width="2"/>
@@ -110,8 +146,12 @@
                   <path d="m207 255 4 10 11 1-8 7 3 11-10-6-9 6 2-11-8-7 11-1z" fill="#BD7950"/>
                   <path d="M193 293h30" stroke="#D1A273" stroke-width="3" stroke-linecap="round"/>
                   <text x="253" y="281" font-size="19" fill="#98613C" font-family="Arial, sans-serif" font-weight="800">1</text>
-                  <ellipse cx="156" cy="273" rx="13" ry="19" fill="#63A0C6" stroke="#3F6C8E" stroke-width="2.5" transform="rotate(-19 156 273)"/>
-                  <ellipse cx="285" cy="273" rx="13" ry="19" fill="#63A0C6" stroke="#3F6C8E" stroke-width="2.5" transform="rotate(19 285 273)"/>
+                  <!-- Little hands on the ticket edges -->
+                  <circle cx="183" cy="261" r="8.5" fill="#FFDFC2" stroke="#E0A67E" stroke-width="2"/>
+                  <circle cx="261" cy="261" r="8.5" fill="#FFDFC2" stroke="#E0A67E" stroke-width="2"/>
+                  <!-- Tiny shoes peeking out -->
+                  <ellipse cx="206" cy="313" rx="11" ry="6.5" fill="#2B4E71"/>
+                  <ellipse cx="238" cy="313" rx="11" ry="6.5" fill="#2B4E71"/>
                 </g>
                 <!-- Right present -->
                 <g transform="rotate(10 340 291)">

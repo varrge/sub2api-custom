@@ -382,8 +382,9 @@
               <!-- Import to CC Switch Button -->
               <button
                 v-if="!publicSettings?.hide_ccs_import_button"
+                :disabled="!publicSettingsLoaded"
                 @click="importToCcswitch(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 disabled:cursor-wait disabled:opacity-50 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
               >
                 <Icon name="upload" size="sm" />
                 <span class="text-xs">{{ t('keys.importToCcSwitch') }}</span>
@@ -1375,6 +1376,7 @@ const selectedKey = ref<ApiKey | null>(null)
 const copiedKeyId = ref<number | null>(null)
 const groupSelectorKeyId = ref<number | null>(null)
 const publicSettings = ref<PublicSettings | null>(null)
+const publicSettingsLoaded = ref(false)
 const columnDropdownRef = ref<HTMLElement | null>(null)
 const inlineGroupIds = ref<number[]>([])
 const savingGroups = ref(false)
@@ -1615,6 +1617,8 @@ const loadPublicSettings = async () => {
     publicSettings.value = await authAPI.getPublicSettings()
   } catch (error) {
     console.error('Failed to load public settings:', error)
+  } finally {
+    publicSettingsLoaded.value = true
   }
 }
 
@@ -1984,6 +1988,8 @@ const executeCcsImport = (row: ApiKey, clientType: CcSwitchClientType) => {
     clientType,
     providerName,
     apiKey: row.key,
+    codexDefaultModel: publicSettings.value?.ccs_codex_default_model,
+    grokDefaultModel: publicSettings.value?.ccs_grok_default_model,
     usageScript
   })
 

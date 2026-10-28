@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
@@ -345,6 +347,16 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyHomeContent] = settings.HomeContent
 	updates[SettingKeyCompactHomeEnabled] = strconv.FormatBool(settings.CompactHomeEnabled)
 	updates[SettingKeyHideCcsImportButton] = strconv.FormatBool(settings.HideCcsImportButton)
+	for key, raw := range map[string]string{
+		SettingKeyCcsCodexDefaultModel: settings.CcsCodexDefaultModel,
+		SettingKeyCcsGrokDefaultModel:  settings.CcsGrokDefaultModel,
+	} {
+		model := strings.TrimSpace(raw)
+		if utf8.RuneCountInString(model) > 200 || strings.IndexFunc(model, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) >= 0 {
+			return nil, infraerrors.BadRequest("INVALID_CCS_DEFAULT_MODEL", key+" must be at most 200 characters without spaces or control characters")
+		}
+		updates[key] = model
+	}
 	updates[SettingKeyPurchaseSubscriptionEnabled] = strconv.FormatBool(settings.PurchaseSubscriptionEnabled)
 	updates[SettingKeyPurchaseSubscriptionURL] = strings.TrimSpace(settings.PurchaseSubscriptionURL)
 	tableDefaultPageSize, tablePageSizeOptions := normalizeTablePreferences(

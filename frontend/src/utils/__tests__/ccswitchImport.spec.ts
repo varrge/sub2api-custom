@@ -29,6 +29,30 @@ describe('ccswitchImport utils', () => {
   }
 
   it.each([
+    ['openai', 'codex', 'gpt-6.1-sol'],
+    ['grok', 'grokbuild', 'custom/grok:v2'],
+  ] as const)('uses the configured model for %s and keeps the import envelope intact', (platform, app, model) => {
+    const params = paramsFromDeeplink(buildCcSwitchImportDeeplink({
+      ...baseInput, platform, clientType: 'claude',
+      codexDefaultModel: ' gpt-6.1-sol ', grokDefaultModel: ' custom/grok:v2 ',
+    }))
+    expect(params.get('model')).toBe(model)
+    expect(params.get('app')).toBe(app)
+    expect(params.get('name')).toBe(baseInput.providerName)
+    expect(params.get('apiKey')).toBe(baseInput.apiKey)
+    expect(atob(params.get('usageScript')!)).toBe(baseInput.usageScript)
+  })
+
+  it.each(['', '   ', undefined])('falls back to built-in models for an empty override %s', model => {
+    for (const platform of ['openai', 'grok'] as const) {
+      const params = paramsFromDeeplink(buildCcSwitchImportDeeplink({
+        ...baseInput, platform, clientType: 'claude', codexDefaultModel: model, grokDefaultModel: model,
+      }))
+      expect(params.get('model')).toBe(platform === 'openai' ? OPENAI_CC_SWITCH_CODEX_MODEL : GROK_CC_SWITCH_MODEL)
+    }
+  })
+
+  it.each([
     ['https://api.example.com', 'https://api.example.com'],
     ['https://api.example.com/', 'https://api.example.com'],
     ['https://api.example.com/v1', 'https://api.example.com/v1'],

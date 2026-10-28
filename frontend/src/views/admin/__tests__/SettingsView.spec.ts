@@ -895,6 +895,40 @@ describe("admin SettingsView payment visible method controls", () => {
     );
   });
 
+  it("loads, saves and clears CCS model defaults independently", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      ccs_codex_default_model: "gpt-6.1-sol",
+      ccs_grok_default_model: "custom/grok:v2",
+    });
+    const wrapper = mountView();
+    await flushPromises();
+    const codex = wrapper.get<HTMLInputElement>("#ccs-codex-default-model");
+    const grok = wrapper.get<HTMLInputElement>("#ccs-grok-default-model");
+    expect(codex.element.value).toBe("gpt-6.1-sol");
+    expect(grok.element.value).toBe("custom/grok:v2");
+    expect(codex.attributes("maxlength")).toBeUndefined();
+    expect(grok.attributes("maxlength")).toBeUndefined();
+    await codex.setValue(" gpt-6.1-sol-ultrafast ");
+    await grok.setValue("");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({
+      ccs_codex_default_model: "gpt-6.1-sol-ultrafast",
+      ccs_grok_default_model: "",
+    }));
+    expect(fetchPublicSettings).toHaveBeenCalledWith(true);
+    wrapper.unmount();
+  });
+
+  it("keeps CCS defaults blank when an older server omits them", async () => {
+    const wrapper = mountView();
+    await flushPromises();
+    expect(wrapper.get<HTMLInputElement>("#ccs-codex-default-model").element.value).toBe("");
+    expect(wrapper.get<HTMLInputElement>("#ccs-grok-default-model").element.value).toBe("");
+    wrapper.unmount();
+  });
+
   it.each([
     ["recharge_only", false, false],
     ["subscription_only", true, true],

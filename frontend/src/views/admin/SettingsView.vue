@@ -6515,6 +6515,47 @@
                 </p>
               </div>
 
+              <div class="space-y-3">
+                <h3 class="text-sm font-medium text-gray-900 dark:text-white">
+                  {{ t("admin.settings.site.ccsDefaultModels") }}
+                </h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                  {{ t("admin.settings.site.ccsDefaultModelsHint") }}
+                </p>
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label for="ccs-codex-default-model" class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {{ t("admin.settings.site.ccsCodexDefaultModel") }}
+                    </label>
+                    <input
+                      id="ccs-codex-default-model"
+                      v-model.trim="form.ccs_codex_default_model"
+                      type="text"
+                      class="input font-mono text-sm"
+                      :placeholder="OPENAI_CC_SWITCH_CODEX_MODEL"
+                    />
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t("admin.settings.site.ccsDefaultModelFallback", { model: OPENAI_CC_SWITCH_CODEX_MODEL }) }}
+                    </p>
+                  </div>
+                  <div>
+                    <label for="ccs-grok-default-model" class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {{ t("admin.settings.site.ccsGrokDefaultModel") }}
+                    </label>
+                    <input
+                      id="ccs-grok-default-model"
+                      v-model.trim="form.ccs_grok_default_model"
+                      type="text"
+                      class="input font-mono text-sm"
+                      :placeholder="GROK_CC_SWITCH_MODEL"
+                    />
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t("admin.settings.site.ccsDefaultModelFallback", { model: GROK_CC_SWITCH_MODEL }) }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <!-- Global Table Preferences -->
               <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
                 <h3 class="text-sm font-medium text-gray-900 dark:text-white">
@@ -9361,6 +9402,7 @@ import ProxySelector from "@/components/common/ProxySelector.vue";
 import ImageUpload from "@/components/common/ImageUpload.vue";
 import { sidebarIconPresets } from "@/features/sidebar/iconPresets";
 import { sanitizeSvg } from "@/utils/sanitize";
+import { OPENAI_CC_SWITCH_CODEX_MODEL, GROK_CC_SWITCH_MODEL } from "@/utils/ccswitchImport";
 import BackupSettings from "@/views/admin/BackupView.vue";
 import PrivilegeSettingsPanel from "@/views/admin/settings/PrivilegeSettingsPanel.vue";
 import SidebarGroupsSettings from "@/components/admin/SidebarGroupsSettings.vue";
@@ -10265,6 +10307,8 @@ const form = reactive<SettingsForm>({
   site_logo: "",
   site_subtitle: "Subscription to API Conversion Platform",
   api_base_url: "",
+  ccs_codex_default_model: "",
+  ccs_grok_default_model: "",
   contact_info: "",
   doc_url: "",
   home_content: "",
@@ -12038,6 +12082,8 @@ async function saveSettings() {
       site_logo: form.site_logo,
       site_subtitle: form.site_subtitle,
       api_base_url: form.api_base_url,
+      ccs_codex_default_model: form.ccs_codex_default_model,
+      ccs_grok_default_model: form.ccs_grok_default_model,
       contact_info: form.contact_info,
       doc_url: form.doc_url,
       home_content: form.home_content,

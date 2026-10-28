@@ -729,6 +729,11 @@ export default {
         siteSubtitlePlaceholder: 'Subscription to API Conversion Platform',
         siteSubtitleHint: 'Displayed on login and register pages',
         apiBaseUrl: 'API Base URL',
+        ccsDefaultModels: 'CCS import default models',
+        ccsDefaultModelsHint: 'Enter a model ID supported by the relevant site groups, including custom aliases. Applies to new imports only; existing client configurations need to be reimported or edited.',
+        ccsCodexDefaultModel: 'Codex default model',
+        ccsGrokDefaultModel: 'Grok default model',
+        ccsDefaultModelFallback: 'Leave empty to use {model}.',
         apiBaseUrlPlaceholder: 'https://api.example.com',
         apiBaseUrlHint:
           'Used for "Use Key", "Import to CC Switch", and callback URL suggestions. Leave empty to use current site URL.',

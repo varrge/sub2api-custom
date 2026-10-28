@@ -163,6 +163,8 @@ type UpdateSettingsRequest struct {
 	HomeContent                 string                `json:"home_content"`
 	CompactHomeEnabled          bool                  `json:"compact_home_enabled"`
 	HideCcsImportButton         bool                  `json:"hide_ccs_import_button"`
+	CcsCodexDefaultModel        string                `json:"ccs_codex_default_model"`
+	CcsGrokDefaultModel         string                `json:"ccs_grok_default_model"`
 	PurchaseSubscriptionEnabled *bool                 `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL     *string               `json:"purchase_subscription_url"`
 	TableDefaultPageSize        int                   `json:"table_default_page_size"`
@@ -523,6 +525,17 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
+	}
+	// Keep the audit snapshot accurate while the omitted-key mask protects storage.
+	if _, sent := sentFields[service.SettingKeyCcsCodexDefaultModel]; !sent {
+		req.CcsCodexDefaultModel = previousSettings.CcsCodexDefaultModel
+	} else {
+		req.CcsCodexDefaultModel = strings.TrimSpace(req.CcsCodexDefaultModel)
+	}
+	if _, sent := sentFields[service.SettingKeyCcsGrokDefaultModel]; !sent {
+		req.CcsGrokDefaultModel = previousSettings.CcsGrokDefaultModel
+	} else {
+		req.CcsGrokDefaultModel = strings.TrimSpace(req.CcsGrokDefaultModel)
 	}
 	previousAuthSourceDefaults, err := h.settingService.GetAuthSourceDefaultSettings(c.Request.Context())
 	if err != nil {
@@ -1680,6 +1693,8 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		HomeContent:                            req.HomeContent,
 		CompactHomeEnabled:                     req.CompactHomeEnabled,
 		HideCcsImportButton:                    req.HideCcsImportButton,
+		CcsCodexDefaultModel:                   req.CcsCodexDefaultModel,
+		CcsGrokDefaultModel:                    req.CcsGrokDefaultModel,
 		PurchaseSubscriptionEnabled:            purchaseEnabled,
 		PurchaseSubscriptionURL:                purchaseURL,
 		TableDefaultPageSize:                   req.TableDefaultPageSize,
@@ -2383,6 +2398,8 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		HomeContent:                                            updatedSettings.HomeContent,
 		CompactHomeEnabled:                                     updatedSettings.CompactHomeEnabled,
 		HideCcsImportButton:                                    updatedSettings.HideCcsImportButton,
+		CcsCodexDefaultModel:                                   updatedSettings.CcsCodexDefaultModel,
+		CcsGrokDefaultModel:                                    updatedSettings.CcsGrokDefaultModel,
 		PurchaseSubscriptionEnabled:                            updatedSettings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:                                updatedSettings.PurchaseSubscriptionURL,
 		TableDefaultPageSize:                                   updatedSettings.TableDefaultPageSize,

@@ -255,6 +255,8 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		HomeContent:                                            settings.HomeContent,
 		CompactHomeEnabled:                                     settings.CompactHomeEnabled,
 		HideCcsImportButton:                                    settings.HideCcsImportButton,
+		CcsCodexDefaultModel:                                   settings.CcsCodexDefaultModel,
+		CcsGrokDefaultModel:                                    settings.CcsGrokDefaultModel,
 		PurchaseSubscriptionEnabled:                            settings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:                                settings.PurchaseSubscriptionURL,
 		TableDefaultPageSize:                                   settings.TableDefaultPageSize,

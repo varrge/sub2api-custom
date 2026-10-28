@@ -124,6 +124,27 @@ func TestSettingHandler_GetPublicSettings_ExposesNativeBoxEntryFlag(t *testing.T
 	}
 }
 
+func TestSettingHandler_GetPublicSettings_ExposesCcsDefaultModels(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, models := range []map[string]string{
+		{},
+		{"ccs_codex_default_model": "gpt-6.1-sol", "ccs_grok_default_model": "custom/grok:v2"},
+	} {
+		h := NewSettingHandler(service.NewSettingService(&settingHandlerPublicRepoStub{values: models}, &config.Config{}), "test")
+		rec := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(rec)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/settings/public", nil)
+		h.GetPublicSettings(c)
+		require.Equal(t, http.StatusOK, rec.Code)
+		var response struct {
+			Data map[string]any `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		require.Equal(t, models["ccs_codex_default_model"], response.Data["ccs_codex_default_model"])
+		require.Equal(t, models["ccs_grok_default_model"], response.Data["ccs_grok_default_model"])
+	}
+}
+
 func TestSettingHandler_GetPublicSettings_ExposesSubscriptionOnlyMode(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	h := NewSettingHandler(service.NewSettingService(&settingHandlerPublicRepoStub{values: map[string]string{

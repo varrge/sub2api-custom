@@ -236,7 +236,7 @@ const IconStub = {
   template: '<span data-test="icon">{{ name }}</span>',
 }
 
-const mountView = async () => {
+const mountView = async (waitForSetup = true) => {
   const wrapper = mount(KeysView, {
     global: {
       stubs: {
@@ -263,8 +263,10 @@ const mountView = async () => {
       },
     },
   })
-  await flushPromises()
-  await nextTick()
+  if (waitForSetup) {
+    await flushPromises()
+    await nextTick()
+  }
   return wrapper
 }
 
@@ -328,6 +330,67 @@ describe('user KeysView column settings', () => {
     expect(badge.props('userRates')).toEqual({ 7: 0.8, 8: 0.7 })
     expect(badge.props('ratesUnavailable')).toBe(false)
     wrapper.unmount()
+  })
+
+  it.each([
+    ['openai', 'gpt-6.1-sol', 'codex'],
+    ['grok', 'custom/grok:v2', 'grokbuild'],
+  ] as const)('imports the public %s default from the key row', async (platform, model, app) => {
+    const key = createApiKey()
+    listKeys.mockResolvedValue({
+      items: [{ ...key, group: { ...key.group, id: 1, platform } }], total: 1, pages: 1,
+    })
+    getPublicSettings.mockResolvedValue({
+      site_name: 'Test Site', api_base_url: 'https://api.example.com',
+      ccs_codex_default_model: 'gpt-6.1-sol', ccs_grok_default_model: 'custom/grok:v2',
+    })
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null)
+    const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(false)
+    const wrapper = await mountView()
+    try {
+      await getButtonByText(wrapper, 'keys.importToCcSwitch').trigger('click')
+      expect(open).toHaveBeenCalledOnce()
+      const url = new URL(String(open.mock.calls[0][0]))
+      expect(url.protocol).toBe('ccswitch:')
+      expect(url.searchParams.get('model')).toBe(model)
+      expect(url.searchParams.get('app')).toBe(app)
+      expect(url.searchParams.get('apiKey')).toBe(key.key)
+      expect(url.searchParams.get('name')).toBe('Test Site')
+    } finally {
+      wrapper.unmount()
+      open.mockRestore()
+      focus.mockRestore()
+    }
+  })
+
+  it('disables import until public settings load', async () => {
+    const key = createApiKey()
+    listKeys.mockResolvedValue({
+      items: [{ ...key, group: { ...key.group, id: 1, platform: 'openai' } }], total: 1, pages: 1,
+    })
+    let resolveSettings!: (settings: { site_name: string; ccs_codex_default_model: string }) => void
+    getPublicSettings.mockReturnValueOnce(new Promise(resolve => { resolveSettings = resolve }))
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null)
+    const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(false)
+    const wrapper = await mountView(false)
+    try {
+      await nextTick()
+      const importButton = getButtonByText(wrapper, 'keys.importToCcSwitch')
+      expect(importButton.attributes('disabled')).toBeDefined()
+      resolveSettings({ site_name: 'Test Site', ccs_codex_default_model: 'gpt-6.1-sol' })
+      await flushPromises()
+      expect(importButton.attributes('disabled')).toBeUndefined()
+      expect(open).not.toHaveBeenCalled()
+      await importButton.trigger('click')
+      expect(open).toHaveBeenCalledOnce()
+      const url = new URL(String(open.mock.calls[0][0]))
+      expect(url.searchParams.get('model')).toBe('gpt-6.1-sol')
+      expect(url.searchParams.get('name')).toBe('Test Site')
+    } finally {
+      wrapper.unmount()
+      open.mockRestore()
+      focus.mockRestore()
+    }
   })
 
   it.each([false, true])('does not reload groups or prices when the same identity profile is replaced (enterprise=%s)', async (enterprise) => {

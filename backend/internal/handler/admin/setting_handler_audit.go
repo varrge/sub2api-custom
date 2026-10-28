@@ -344,6 +344,12 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.HideCcsImportButton != after.HideCcsImportButton {
 		changed = append(changed, "hide_ccs_import_button")
 	}
+	if before.CcsCodexDefaultModel != after.CcsCodexDefaultModel {
+		changed = append(changed, service.SettingKeyCcsCodexDefaultModel)
+	}
+	if before.CcsGrokDefaultModel != after.CcsGrokDefaultModel {
+		changed = append(changed, service.SettingKeyCcsGrokDefaultModel)
+	}
 	if before.DefaultConcurrency != after.DefaultConcurrency {
 		changed = append(changed, "default_concurrency")
 	}

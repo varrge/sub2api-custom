@@ -18,12 +18,14 @@ export interface CcSwitchImportDeeplinkInput {
   providerName: string
   apiKey: string
   usageScript: string
+  codexDefaultModel?: string
+  grokDefaultModel?: string
 }
 
 /**
  * Balance query CC Switch runs against the imported provider. CC Switch fills
- * `{{baseUrl}}` with the provider's base URL as stored — Codex and Grok imports
- * carry a trailing `/v1` (see `withV1Endpoint`), Claude ones do not, and users
+ * `{{baseUrl}}` with the provider's base URL as stored — Grok imports carry a
+ * trailing `/v1`, other platforms keep the configured base URL, and users
  * may edit it either way afterwards — then evaluates the script, so the URL
  * strips an existing `/v1` instead of blindly appending one (`/v1/v1/usage`
  * is a 404 and CC Switch shows "query failed").
@@ -57,7 +59,8 @@ function withoutTrailingSlashes(baseUrl: string): string {
 export function resolveCcSwitchImportConfig(
   platform: GroupPlatform | undefined | null,
   clientType: CcSwitchClientType,
-  baseUrl: string
+  baseUrl: string,
+  models: Pick<CcSwitchImportDeeplinkInput, 'codexDefaultModel' | 'grokDefaultModel'> = {}
 ): CcSwitchImportConfig {
   switch (platform || 'anthropic') {
     case 'antigravity':
@@ -71,7 +74,7 @@ export function resolveCcSwitchImportConfig(
         // CC Switch's Codex provider appends the OpenAI-compatible path itself.
         // Passing /v1 here can make the client request /v1/v1/....
         endpoint: withoutTrailingSlashes(baseUrl),
-        model: OPENAI_CC_SWITCH_CODEX_MODEL
+        model: models.codexDefaultModel?.trim() || OPENAI_CC_SWITCH_CODEX_MODEL
       }
     case 'gemini':
       return {
@@ -82,7 +85,7 @@ export function resolveCcSwitchImportConfig(
       return {
         app: 'grokbuild',
         endpoint: withV1Endpoint(baseUrl),
-        model: GROK_CC_SWITCH_MODEL
+        model: models.grokDefaultModel?.trim() || GROK_CC_SWITCH_MODEL
       }
     default:
       return {
@@ -93,7 +96,7 @@ export function resolveCcSwitchImportConfig(
 }
 
 export function buildCcSwitchImportDeeplink(input: CcSwitchImportDeeplinkInput): string {
-  const config = resolveCcSwitchImportConfig(input.platform, input.clientType, input.baseUrl)
+  const config = resolveCcSwitchImportConfig(input.platform, input.clientType, input.baseUrl, input)
   const entries: [string, string][] = [
     ['resource', 'provider'],
     ['app', config.app],

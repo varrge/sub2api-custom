@@ -374,6 +374,8 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		HomeContent:                            settings[SettingKeyHomeContent],
 		CompactHomeEnabled:                     settings[SettingKeyCompactHomeEnabled] == "true",
 		HideCcsImportButton:                    settings[SettingKeyHideCcsImportButton] == "true",
+		CcsCodexDefaultModel:                   settings[SettingKeyCcsCodexDefaultModel],
+		CcsGrokDefaultModel:                    settings[SettingKeyCcsGrokDefaultModel],
 		PurchaseSubscriptionEnabled:            settings[SettingKeyPurchaseSubscriptionEnabled] == "true",
 		PurchaseSubscriptionURL:                strings.TrimSpace(settings[SettingKeyPurchaseSubscriptionURL]),
 		TopQuickMenuItems:                      settings[SettingKeyTopQuickMenuItems],

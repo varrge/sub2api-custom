@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -68,6 +69,79 @@ func TestEnterpriseSingleGroupFallbackKeepsCurrentAuthorization(t *testing.T) {
 
 func (r groupProbeAccountRepo) ListSchedulableByGroupIDAndPlatform(ctx context.Context, _ int64, platform string) ([]service.Account, error) {
 	return r.ListSchedulableByPlatform(ctx, platform)
+}
+
+func (r groupProbeAccountRepo) ListSchedulableByGroupIDAndPlatforms(context.Context, int64, []string) ([]service.Account, error) {
+	return r.accounts, nil
+}
+
+func TestAPIKeyGroupProbePreservesNativeClaudeModels(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, platform := range []string{service.PlatformAnthropic, service.PlatformAntigravity} {
+		for _, composite := range []bool{false, true} {
+			groupPlatform := platform
+			if composite {
+				groupPlatform = service.PlatformComposite
+			}
+			for _, model := range []string{"claude-opus-5-5", "claude-sonnet-5", "claude-haiku-5-5", "claude-fable-5-1"} {
+				t.Run(groupPlatform+"/"+platform+"/"+model, func(t *testing.T) {
+					group := &service.Group{ID: 13, Platform: groupPlatform, Status: service.StatusActive, Hydrated: true}
+					key := &service.APIKey{ID: 29, UserID: 1, GroupID: &group.ID, Group: group, GroupIDs: []int64{13}, MultiGroupEnabled: true, User: &service.User{ID: 1}}
+					account := service.Account{
+						ID: 63, Platform: platform, Type: service.AccountTypeAPIKey,
+						Status: service.StatusActive, Schedulable: true, Concurrency: 1, GroupIDs: []int64{13},
+						Credentials: map[string]any{"model_mapping": map[string]any{model: model}},
+					}
+					repo := groupProbeAccountRepo{codexModelsFailoverAccountRepo{accounts: []service.Account{account}}}
+					h := newGatewayModelsHandlerForTest(repo)
+					ctx := context.WithValue(context.Background(), ctxkey.Group, group)
+					if composite {
+						ctx = service.WithCompositeRouteDecision(ctx, service.CompositeRouteDecision{TargetPlatform: platform})
+					}
+					c, _ := gin.CreateTestContext(httptest.NewRecorder())
+					c.Request = httptest.NewRequest("POST", "/v1/messages", nil).WithContext(ctx)
+					req := service.APIKeyGroupRequest{Platform: platform, Path: "/v1/messages", Model: model}
+					available, err := h.gatewayService.ProbeAPIKeyGroup(ctx, key, req)
+					require.NoError(t, err)
+					require.True(t, available, "the native scheduler supports this configured Claude model")
+
+					available, global, err := h.ProbeAPIKeyGroup(ctx, key, req, c, []byte(`{"model":"`+model+`"}`))
+					require.NoError(t, err)
+					require.False(t, global)
+					require.True(t, available, "the group precheck must preserve the native model")
+				})
+			}
+		}
+	}
+}
+
+func TestAPIKeyGroupProbePreservesOpenAIMessagesDispatch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, groupPlatform := range []string{service.PlatformOpenAI, service.PlatformComposite} {
+		t.Run(groupPlatform, func(t *testing.T) {
+			group := &service.Group{ID: 3, Platform: groupPlatform, Status: service.StatusActive, Hydrated: true, AllowMessagesDispatch: true}
+			key := &service.APIKey{UserID: 1, GroupID: &group.ID, Group: group, User: &service.User{ID: 1}}
+			repo := groupProbeAccountRepo{codexModelsFailoverAccountRepo{accounts: []service.Account{{
+				ID: 72, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey,
+				Status: service.StatusActive, Schedulable: true, Concurrency: 1,
+				Credentials: map[string]any{"api_protocol": "chat_completions", "model_mapping": map[string]any{"gpt-5.4": "gpt-5.4"}},
+			}}}}
+			gateway := service.NewOpenAIGatewayService(repo, nil, nil, nil, nil, nil, nil, &config.Config{}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+			h := &GatewayHandler{gatewayService: &service.GatewayService{}, openAIGatewayService: gateway}
+			ctx := context.WithValue(context.Background(), ctxkey.Group, group)
+			if groupPlatform == service.PlatformComposite {
+				ctx = service.WithCompositeRouteDecision(ctx, service.CompositeRouteDecision{TargetPlatform: service.PlatformOpenAI})
+			}
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest("POST", "/v1/messages", nil).WithContext(ctx)
+			available, global, err := h.ProbeAPIKeyGroup(ctx, key, service.APIKeyGroupRequest{
+				Platform: service.PlatformOpenAI, Path: "/v1/messages", Model: "claude-opus-5-5",
+			}, c, []byte(`{"model":"claude-opus-5-5"}`))
+			require.NoError(t, err)
+			require.False(t, global)
+			require.True(t, available, "OpenAI targets still require their Claude-to-GPT dispatch mapping")
+		})
+	}
 }
 
 func TestAPIKeyGroupProbeAllowsPassiveCodexImageNamespace(t *testing.T) {

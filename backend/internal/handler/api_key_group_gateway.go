@@ -44,9 +44,6 @@ func (h *GatewayHandler) ProbeAPIKeyGroup(ctx context.Context, key *service.APIK
 		req.Capability = openAIResponsesRequiredCapabilityForRequest(imageIntent, strings.HasSuffix(req.Path, "/compact") || isOpenAIRemoteCompactionV2Request(body), req.Platform)
 	} else if strings.Contains(req.Path, "/messages") {
 		req.Capability = service.OpenAIEndpointCapabilityChatCompletions
-		if mapped := resolveOpenAIMessagesDispatchMappedModel(candidate, key, req.Model); mapped != "" {
-			req.Model = mapped
-		}
 	}
 	var groupRPMError error
 	if h.billingCacheService != nil {
@@ -71,6 +68,11 @@ func (h *GatewayHandler) ProbeAPIKeyGroup(ctx context.Context, key *service.APIK
 	case domain.UsesOpenAIGateway(req.Platform):
 		if h.openAIGatewayService == nil {
 			return false, false, service.ErrNoAvailableAccounts
+		}
+		if strings.Contains(req.Path, "/messages") {
+			if mapped := resolveOpenAIMessagesDispatchMappedModel(candidate, key, req.Model); mapped != "" {
+				req.Model = mapped
+			}
 		}
 		if req.Platform == service.PlatformOpenAI && strings.Contains(req.Path, "/images/") && !strings.Contains(req.Path, "/images/batches") {
 			parsed, parseErr := h.openAIGatewayService.ParseOpenAIImagesRequest(c, body)

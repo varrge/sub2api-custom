@@ -96,7 +96,10 @@ func TestAPIKeyGroupProbePreservesNativeClaudeModels(t *testing.T) {
 					h := newGatewayModelsHandlerForTest(repo)
 					ctx := context.WithValue(context.Background(), ctxkey.Group, group)
 					if composite {
-						ctx = service.WithCompositeRouteDecision(ctx, service.CompositeRouteDecision{TargetPlatform: platform})
+						ctx = service.WithCompositeRouteDecision(ctx, service.CompositeRouteDecision{Matched: true, TargetPlatform: platform})
+						resolved, ok := service.ResolvedTargetPlatformFromContext(ctx)
+						require.True(t, ok)
+						require.Equal(t, platform, resolved)
 					}
 					c, _ := gin.CreateTestContext(httptest.NewRecorder())
 					c.Request = httptest.NewRequest("POST", "/v1/messages", nil).WithContext(ctx)
@@ -130,7 +133,10 @@ func TestAPIKeyGroupProbePreservesOpenAIMessagesDispatch(t *testing.T) {
 			h := &GatewayHandler{gatewayService: &service.GatewayService{}, openAIGatewayService: gateway}
 			ctx := context.WithValue(context.Background(), ctxkey.Group, group)
 			if groupPlatform == service.PlatformComposite {
-				ctx = service.WithCompositeRouteDecision(ctx, service.CompositeRouteDecision{TargetPlatform: service.PlatformOpenAI})
+				ctx = service.WithCompositeRouteDecision(ctx, service.CompositeRouteDecision{Matched: true, TargetPlatform: service.PlatformOpenAI})
+				resolved, ok := service.ResolvedTargetPlatformFromContext(ctx)
+				require.True(t, ok)
+				require.Equal(t, service.PlatformOpenAI, resolved)
 			}
 			c, _ := gin.CreateTestContext(httptest.NewRecorder())
 			c.Request = httptest.NewRequest("POST", "/v1/messages", nil).WithContext(ctx)

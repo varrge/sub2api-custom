@@ -1,14 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
 import MonthCardFace from '../MonthCardFace.vue'
+import { exactDate } from '../model'
 import type { MonthCard } from '@/types/groupBuy'
-vi.mock('vue-i18n',()=>({useI18n:()=>({locale:{value:'zh-CN'},t:(key:string,p:Record<string,unknown>={})=>`${key}:${p.name??p.days??''}`})}))
+vi.mock('vue-i18n',async()=>({...await vi.importActual<typeof import('vue-i18n')>('vue-i18n'),useI18n:()=>({locale:{value:'zh-CN'},t:(key:string,p:Record<string,unknown>={})=>`${key}:${p.name??p.days??p.amount??''}`})}))
 enableAutoUnmount(afterEach)
 const card = {
   id:1,code:'C-INDIVIDUAL-12345678',team_code:'T-TEAM-87654321',product_name:'轻享月卡',
-  expires_at:'2026-11-30T00:00:00Z',status:'active'
+  expires_at:'2026-11-30T00:00:00Z',status:'active',starts_at:'2026-11-01T00:00:00Z',
+  group_name:'Codex Pro',platform:'openai',weekly_used_usd:61.8,weekly_quota_usd:165,
+  total_used_usd:226.8,total_quota_usd:660,weekly_window_start:'2026-11-01T00:00:00Z',weekly_window_end:'2026-11-08T00:00:00Z'
 } as MonthCard
-const props = {card,holder:'User',brand:'Private'}
+const props = {card,holder:'User',brand:'Private',now:Date.parse('2026-11-02T00:00:00Z')}
 describe('shared month card appearance',()=>{
   it('uses the identical default face across all product tiers, with per-card identity overlays',()=>{
     for(const name of ['轻享月卡','尊享月卡','顶级月卡']){
@@ -38,5 +41,25 @@ describe('shared month card appearance',()=>{
       await w.get('.month-card-stage').trigger('pointermove',{pointerType:'mouse',clientX:1,clientY:1})
       expect(w.get('[data-testid="month-card-face"]').attributes('style')).not.toContain('rotateX')
     }finally{window.matchMedia=original}
+  })
+  it('keeps usable amount, both quota limits and the next reset inside the card',()=>{
+    const w=mount(MonthCardFace,{props})
+    const face=w.get('[data-testid="month-card-face"]')
+    expect(face.attributes('role')).toBe('group')
+    expect(face.get('[data-testid="card-available"]').text()).toBe('$103.20')
+    expect(face.get('[data-testid="card-quotas"]').text()).toContain('$61.80 / $165.00')
+    expect(face.get('[data-testid="card-quotas"]').text()).toContain('$226.80 / $660.00')
+    expect(face.get('[data-testid="card-time-info"]').text()).toContain(exactDate(card.weekly_window_end))
+    expect(face.find('button').exists()).toBe(false)
+  })
+  it('shows zero spendable quota and paused time for frozen cards, and the final-week message at expiry',async()=>{
+    const w=mount(MonthCardFace,{props:{...props,card:{...card,status:'frozen',remaining_seconds:18*86400}}})
+    expect(w.get('[data-testid="card-available"]').text()).toBe('$0.00')
+    expect(w.get('[data-testid="card-time-info"]').text()).toContain('groupBuy.frozenRemaining:18')
+    expect(w.get('[data-testid="card-time-info"]').text()).toContain('$103.20')
+    expect(w.text()).not.toContain('groupBuy.nextReset')
+    await w.setProps({card:{...card,weekly_window_end:card.expires_at}})
+    expect(w.get('[data-testid="card-time-info"]').text()).toContain('groupBuy.finalWindow')
+    expect(w.text()).not.toContain('groupBuy.nextReset')
   })
 })

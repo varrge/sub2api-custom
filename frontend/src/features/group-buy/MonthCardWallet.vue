@@ -8,8 +8,7 @@ import type { MonthCardAppearance } from './cardAppearance'
 import MonthCardFace from './MonthCardFace.vue'
 import MonthCardWalletOrder from './MonthCardWalletOrder.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
-import { usd, cny, exactDate, progress, availableQuota } from './model'
-import { spendableQuota, cardDaysRemaining } from './walletModel'
+import { cny, exactDate } from './model'
 import './month-card-wallet.css'
 
 const props = defineProps<{
@@ -42,130 +41,22 @@ watch(() => props.selected?.id, () => { detailsOpen.value = false })
 
 const isFrozen = computed(() => props.selected?.status === 'frozen')
 
-const currentAvailable = computed(() => {
-  if (!props.selected) return 0
-  if (isFrozen.value) return 0
-  return spendableQuota(props.selected, props.now)
-})
-
-const daysLeft = computed(() => {
-  if (!props.selected) return 0
-  return cardDaysRemaining(props.selected, props.now)
-})
-
-const isFinalWindow = computed(() => {
-  if (!props.selected) return false
-  return Date.parse(props.selected.weekly_window_end) >= Date.parse(props.selected.expires_at)
-})
 </script>
 
 <template>
   <div class="mcw-container">
-    <!-- Hero Section -->
-    <div v-if="selected" class="mcw-hero">
-      <div class="mcw-hero-left">
-        <div class="mcw-glow"></div>
-        <MonthCardFace
-          :card="selected"
-          :holder="holder"
-          :brand="brand"
-          :appearance="appearance"
-        />
-      </div>
-
-      <div class="mcw-hero-right">
-        <div class="mcw-header-row">
-          <div class="mcw-titles">
-            <h2 class="mcw-product">{{ selected.product_name }}</h2>
-            <div class="mcw-subtitle">
-              <span class="mcw-group-name">{{ selected.group_name }}</span>
-              <span class="mcw-dot">·</span>
-              <span class="mcw-platform">{{ selected.platform }}</span>
-            </div>
-          </div>
-          <div class="mcw-badge" :class="`mcw-status-${selected.status}`">
-            {{ t(`groupBuy.${selected.status === 'frozen' ? 'frozen' : 'active'}`) }}
-          </div>
-        </div>
-
-        <div class="mcw-amount-panel">
-          <div class="mcw-amount-label">{{ t('groupBuy.wallet.availableLabel') }}</div>
-          <div class="mcw-amount-value">{{ usd(currentAvailable) }}</div>
-          <div class="mcw-amount-hint">{{ t('groupBuy.wallet.availableHint') }}</div>
-        </div>
-
-        <div class="mcw-bars">
-          <div class="mcw-bar-group">
-            <div class="mcw-bar-labels">
-              <span>{{ t('groupBuy.weeklyUsage') }}</span>
-              <span>{{ usd(selected.weekly_used_usd) }} / {{ usd(selected.weekly_quota_usd) }}</span>
-            </div>
-            <div class="mcw-progress-track">
-              <div
-                class="mcw-progress-fill"
-                :style="{ width: progress(selected.weekly_used_usd, selected.weekly_quota_usd) + '%' }"
-              ></div>
-            </div>
-          </div>
-
-          <div class="mcw-bar-group">
-            <div class="mcw-bar-labels">
-              <span>{{ t('groupBuy.totalUsage') }}</span>
-              <span>{{ usd(selected.total_used_usd) }} / {{ usd(selected.total_quota_usd) }}</span>
-            </div>
-            <div class="mcw-progress-track">
-              <div
-                class="mcw-progress-fill"
-                :style="{ width: progress(selected.total_used_usd, selected.total_quota_usd) + '%' }"
-              ></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="mcw-time-info">
-          <div class="mcw-days">
-            <span class="mcw-days-value">{{ t(isFrozen ? 'groupBuy.frozenRemaining' : 'groupBuy.wallet.daysLeft', { days: daysLeft }) }}</span>
-          </div>
-          <div class="mcw-time-details">
-            <template v-if="isFrozen">
-              <div class="mcw-frozen-note">{{ t('groupBuy.frozenHint') }}</div>
-              <div class="mcw-frozen-quota">
-                {{ t('groupBuy.frozenQuota', { amount: usd(availableQuota(selected)) }) }}
-              </div>
-            </template>
-            <template v-else>
-              <div v-if="isFinalWindow" class="mcw-final-window">
-                {{ t('groupBuy.finalWindow') }}
-              </div>
-              <div v-else class="mcw-next-reset">
-                {{ t('groupBuy.nextReset') }}: {{ exactDate(selected.weekly_window_end) }}
-              </div>
-            </template>
-          </div>
-        </div>
-
+    <section v-if="selected" class="mcw-hero" :aria-label="t('groupBuy.wallet.cardDetails')">
+      <MonthCardFace :card="selected" :holder="holder" :brand="brand" :appearance="appearance" :now="now" />
+      <div class="mcw-card-toolbar">
+        <p v-if="selected.freeze_allowed !== false" class="mcw-freeze-help">{{ t('groupBuy.freezeHelp') }}</p>
         <div class="mcw-actions">
-          <button
-            v-if="selected.freeze_allowed !== false"
-            class="mcw-btn mcw-btn-outline"
-            :disabled="saving || freezing || loading"
-            data-testid="wallet-freeze"
-            @click="emit('freeze', selected)"
-          >
-            {{ isFrozen ? t('groupBuy.thaw') : t('groupBuy.freeze') }}
-          </button>
-          <button
-            class="mcw-btn mcw-btn-primary"
-            data-testid="wallet-details"
-            @click="detailsOpen = true"
-          >
-            {{ t('groupBuy.wallet.cardDetails') }}
-          </button>
+          <button v-if="selected.freeze_allowed !== false" class="mcw-btn mcw-btn-outline" :disabled="saving || freezing || loading"
+            data-testid="wallet-freeze" @click="emit('freeze', selected)">{{ isFrozen ? t('groupBuy.thaw') : t('groupBuy.freeze') }}</button>
+          <button class="mcw-btn mcw-btn-primary" data-testid="wallet-details" @click="detailsOpen = true">{{ t('groupBuy.wallet.cardDetails') }}</button>
         </div>
-        <p v-if="selected.freeze_allowed !== false" class="mcw-detail-hint">{{ t('groupBuy.freezeHelp') }}</p>
-        <div v-if="freezeError" class="mcw-error-text" role="alert">{{ freezeError }}</div>
       </div>
-    </div>
+      <div v-if="freezeError" class="mcw-error-text" role="alert">{{ freezeError }}</div>
+    </section>
 
     <!-- Wallet Strip Section -->
     <div class="mcw-strip">

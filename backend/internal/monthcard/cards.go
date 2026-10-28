@@ -2,6 +2,7 @@ package monthcard
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 )
@@ -68,7 +69,46 @@ func (s *Store) ListCards(ctx context.Context, userID int64) ([]Card, error) {
 	for i := range items {
 		items[i].FreezeAllowed = allowed
 	}
+	if userID > 0 && len(items) > 0 {
+		if err := s.attachPurchasePrices(ctx, userID, items); err != nil {
+			return nil, err
+		}
+	}
 	return items, nil
+}
+
+// Prices are private to the purchaser and come from the order, not today's
+// product catalog. amount is the CNY purchase amount before payment fees.
+func (s *Store) attachPurchasePrices(ctx context.Context, userID int64, cards []Card) error {
+	rows, err := s.db.QueryContext(ctx, `SELECT c.id,o.amount,
+		CASE WHEN jsonb_typeof(o.provider_snapshot#>'{month_card_purchase,product,price_cny}')='number'
+		THEN (o.provider_snapshot#>>'{month_card_purchase,product,price_cny}')::numeric END
+		FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id
+		WHERE c.user_id=$1 AND o.user_id=$1 AND c.deleted_at IS NULL`, userID)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	byID := make(map[int64]*Card, len(cards))
+	for i := range cards {
+		byID[cards[i].ID] = &cards[i]
+	}
+	for rows.Next() {
+		var id int64
+		var paid, original sql.NullFloat64
+		if err := rows.Scan(&id, &paid, &original); err != nil {
+			return err
+		}
+		if c := byID[id]; c != nil {
+			if paid.Valid && paid.Float64 >= 0 {
+				c.PurchasePriceCNY = &paid.Float64
+			}
+			if original.Valid && original.Float64 > 0 {
+				c.OriginalPriceCNY = &original.Float64
+			}
+		}
+	}
+	return rows.Err()
 }
 
 func (s *Store) TeamCards(ctx context.Context, teamID int64) ([]Card, error) {

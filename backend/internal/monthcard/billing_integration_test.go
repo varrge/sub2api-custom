@@ -45,7 +45,7 @@ func billingDB(t *testing.T) *sql.DB {
 	_, err = db.Exec(`CREATE TABLE users(id BIGINT PRIMARY KEY,account_type TEXT NOT NULL DEFAULT 'personal',balance NUMERIC(20,8) NOT NULL DEFAULT 0,deleted_at TIMESTAMPTZ,updated_at TIMESTAMPTZ DEFAULT NOW());
  CREATE TABLE enterprise_conversion_cards(card_id BIGINT PRIMARY KEY,order_id BIGINT,credited_usd NUMERIC(20,8),refunded_at TIMESTAMPTZ);
  CREATE TABLE groups(id BIGINT PRIMARY KEY,name TEXT,platform TEXT,deleted_at TIMESTAMPTZ,daily_limit_usd NUMERIC(20,8),weekly_limit_usd NUMERIC(20,8),monthly_limit_usd NUMERIC(20,8));
- CREATE TABLE payment_orders(id BIGINT PRIMARY KEY,status TEXT NOT NULL DEFAULT 'COMPLETED');
+ CREATE TABLE payment_orders(id BIGINT PRIMARY KEY,status TEXT NOT NULL DEFAULT 'COMPLETED',user_id BIGINT DEFAULT 1,amount NUMERIC(20,2),provider_snapshot JSONB);
  CREATE TABLE api_keys(id BIGINT PRIMARY KEY,user_id BIGINT,group_id BIGINT,quota_used NUMERIC(20,8) DEFAULT 0,usage_5h NUMERIC(20,8) DEFAULT 0,usage_1d NUMERIC(20,8) DEFAULT 0,usage_7d NUMERIC(20,8) DEFAULT 0,window_5h_start TIMESTAMPTZ,window_1d_start TIMESTAMPTZ,window_7d_start TIMESTAMPTZ);
  CREATE TABLE user_subscriptions(id BIGINT PRIMARY KEY,user_id BIGINT,group_id BIGINT,starts_at TIMESTAMPTZ,expires_at TIMESTAMPTZ,status TEXT DEFAULT 'active',deleted_at TIMESTAMPTZ,updated_at TIMESTAMPTZ DEFAULT NOW(),daily_window_start TIMESTAMPTZ,weekly_window_start TIMESTAMPTZ,monthly_window_start TIMESTAMPTZ,daily_usage_usd NUMERIC(20,10) DEFAULT 0,weekly_usage_usd NUMERIC(20,10) DEFAULT 0,monthly_usage_usd NUMERIC(20,10) DEFAULT 0);
  CREATE TABLE usage_billing_dedup(id BIGSERIAL PRIMARY KEY,request_id TEXT,api_key_id BIGINT,request_fingerprint TEXT,UNIQUE(request_id,api_key_id));

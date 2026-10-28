@@ -56,6 +56,8 @@ export interface MonthCard {
   freeze_allowed?: boolean
   frozen_at?: string | null
   remaining_seconds?: number
+  original_price_cny?: number | null
+  purchase_price_cny?: number | null
 }
 export interface AdminTeamEntitlement extends GroupBuyTeam {
   active_cards: number

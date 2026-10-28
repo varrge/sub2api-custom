@@ -1,5 +1,9 @@
 <template>
-  <div class="relative flex min-h-screen items-center justify-center overflow-hidden p-4">
+  <AuthEntryLayout v-if="showcase" :site-name="siteName" :site-logo="siteLogo" :site-subtitle="appStore.cachedPublicSettings?.site_subtitle">
+    <slot />
+    <template v-if="$slots.footer" #footer><slot name="footer" /></template>
+  </AuthEntryLayout>
+  <div v-else class="relative flex min-h-screen items-center justify-center overflow-hidden p-4">
     <!-- Background -->
     <div
       class="absolute inset-0 bg-gradient-to-br from-gray-50 via-primary-50/30 to-gray-100 dark:from-dark-950 dark:via-dark-900 dark:to-dark-950"
@@ -70,6 +74,9 @@ import { computed, onMounted } from 'vue'
 import { useAppStore } from '@/stores'
 import { sanitizeUrl } from '@/utils/url'
 import AmbientLines from '@/components/common/AmbientLines.vue'
+import AuthEntryLayout from './AuthEntryLayout.vue'
+
+defineProps<{ showcase?: boolean }>()
 
 const appStore = useAppStore()
 

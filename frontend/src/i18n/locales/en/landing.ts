@@ -7,19 +7,20 @@ export default {
   home: {
     marketing: {
       skip: 'Skip to main content', navigation: 'Home navigation',
-      nav: { highlights: 'Highlights', start: 'Get connected', pricing: 'Pricing' },
-      eyebrow: 'Multi-model API · Built for your ideas', heroFirst: 'Your next idea.', heroSecond: 'Powered by AI.',
-      description: 'Connect to the models you need, with a clear view of every call.', browseModels: 'Explore models', discover: 'Scroll to explore',
+      nav: { highlights: 'Explore', start: 'Get connected', pricing: 'Pricing' },
+      eyebrow: 'LESS BETWEEN YOU AND YOUR NEXT IDEA.', heroFirst: 'Every idea deserves', heroSecond: 'a better beginning.',
+      explore: 'Explore more',
+      description: 'One key. More possibilities.\nBring the AI you need into your everyday tools.', browseModels: 'Explore models', discover: 'Scroll to explore',
       demo: {
-        title: 'Connection preview', choose: 'Choose a demo scenario', application: 'Your application', connection: 'API connection', model: 'Model capabilities',
+        title: 'WORKSPACE / CONNECTION PREVIEW', project: '01 / YOUR NEXT PROJECT', headline: 'Great ideas are one connection away.', choose: 'Choose a demo scenario', application: 'Your application', connection: 'API connection', model: 'Model capabilities',
         caption: 'Illustrative scenarios. Available models and capabilities depend on the service and your account permissions.',
         code: { label: 'Coding', prompt: 'Start with a problem', result: 'Explore solutions. Refine your code.' },
         write: { label: 'Writing', prompt: 'Start with an idea', result: 'Develop your thoughts. Find your words.' },
         build: { label: 'Building', prompt: 'Start with a need', result: 'Bring AI into your application.' }
       },
       highlights: { eyebrow: 'Ready for what comes next', title: 'Less to manage. More to create.', description: 'Make room for your next great idea.' },
-      models: { label: 'Model choice', title: 'The right AI for the task.', description: 'Choose a model for your task and connect to the capabilities available to your account.' },
-      tools: { label: 'Getting connected', title: 'Keep the tools you know.', description: 'Configure the endpoint, key and model for your tool to bring AI into your workflow.' },
+      models: { label: 'Model choice', title: 'Different tasks.\nThe right AI.', description: 'Choose a model for your task and connect to the capabilities available to your account.' },
+      tools: { label: 'Getting connected', title: 'Connection, simplified.', description: 'Configure the endpoint, key and model for your tool to bring AI into your workflow.' },
       usage: { label: 'Usage visibility', title: 'Every call. In clear view.', description: 'See usage and spending details in your dashboard, so you know where it goes.', caption: 'Illustrative usage trend' },
       start: {
         eyebrow: 'A clear path to your first call', title: 'From curious to connected.', description: 'Follow the setup guide to connect your tools and applications.',
@@ -29,7 +30,7 @@ export default {
       },
       pricing: {
         eyebrow: 'Understand the cost. Then create.', title: 'Choose with clarity.', description: 'Know the model, billing units and quota rules before you choose a service.',
-        models: 'View model pricing', plans: 'Explore available plans',
+        models: 'View model pricing', plans: 'Explore plans',
         model: { title: 'Understand each model’s price', description: 'Prices can vary by model and service group. Check the applicable rates before making calls.' },
         quota: { title: 'Find the access you need', description: 'Review model access, validity, quotas and usage limits in the actual plan details.' },
         records: { title: 'Keep track as you go', description: 'Sign in to view call records and spending details in your dashboard.' }
@@ -40,7 +41,7 @@ export default {
         tools: { question: 'How do I connect my tool or application?', answer: 'You generally need an endpoint, API key and model name. Protocols and setup steps vary between tools. Follow the site documentation or the key usage guide in your dashboard.' },
         billing: { question: 'How do billing and quotas work?', answer: 'Charges depend on the model, service group and billing rules. Review validity, quotas and limits before choosing a plan. Your dashboard shows usage details after you make calls.' }
       },
-      closing: { title: 'Your next idea starts here.', description: 'Find the AI capabilities for your tools and applications.' }
+      closing: { eyebrow: 'YOUR NEXT CHAPTER', title: 'Now, it is your idea’s turn.', description: 'Get your tools ready. Keep your ideas moving.' }
     },
     viewOnGithub: 'View on GitHub',
     viewDocs: 'View Documentation',

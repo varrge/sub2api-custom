@@ -232,6 +232,19 @@ export default {
 
   // Auth
   auth: {
+    otherSignInMethods: '其他登录方式',
+    showPassword: '显示密码',
+    hidePassword: '隐藏密码',
+    codeAccepted: '邀请码有效',
+    promoBonus: '赠送 ${amount}',
+    scene: {
+      headline: '一个入口，',
+      headlineEnd: '连接更多可能。',
+      description: '从一次对话，到下一个作品。通过 {siteName} 管理你的 AI 接入，把时间留给真正想创造的事。',
+      models: 'AI 模型接入',
+      keys: 'API 密钥管理',
+      usage: '使用记录查询',
+    },
     welcomeBack: '欢迎回来',
     signInToAccount: '登录您的账户以继续',
     signIn: '登录',

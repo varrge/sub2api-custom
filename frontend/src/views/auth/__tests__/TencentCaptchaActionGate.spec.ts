@@ -80,6 +80,7 @@ function mountLogin() {
     global: {
       stubs: {
         AuthLayout: { template: '<div><slot /><slot name="footer" /></div>' },
+        teleport: true,
         RouterLink: true,
         TurnstileWidget: CaptchaChallengeStub,
         Icon: true,
@@ -174,10 +175,13 @@ describe('Tencent captcha action gate', () => {
     const wrapper = mountLogin()
     await flushPromises()
 
+    expect(wrapper.find('[data-testid="oauth-start"]').exists()).toBe(false)
+    await wrapper.get('.auth-alternative-trigger').trigger('click')
     await wrapper.get('[data-testid="oauth-start"]').trigger('click')
     await flushPromises()
 
     expect(verifyActionMock).toHaveBeenCalledOnce()
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
     expect(startOAuthLoginMock).toHaveBeenCalledWith(
       { provider: 'github', params: { redirect: '/dashboard' } },
       {
@@ -194,6 +198,7 @@ describe('Tencent captcha action gate', () => {
     const wrapper = mountLogin()
     await flushPromises()
 
+    await wrapper.get('.auth-alternative-trigger').trigger('click')
     await wrapper.get('[data-testid="oauth-start"]').trigger('click')
     await flushPromises()
 
@@ -205,10 +210,12 @@ describe('Tencent captcha action gate', () => {
     const wrapper = mountLogin()
     await flushPromises()
 
-    await wrapper.get('button.btn-secondary.w-full').trigger('click')
+    await wrapper.get('.auth-alternative-trigger').trigger('click')
+    await wrapper.get('[role="dialog"] button.btn-secondary.w-full').trigger('click')
     await flushPromises()
 
     expect(verifyActionMock).toHaveBeenCalledOnce()
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
     expect(loginWithPasskeyMock).toHaveBeenCalledWith({
       tencent_captcha_ticket: 'ticket-1',
       tencent_captcha_randstr: '@rand-1'
@@ -221,7 +228,8 @@ describe('Tencent captcha action gate', () => {
     const wrapper = mountLogin()
     await flushPromises()
 
-    await wrapper.get('button.btn-secondary.w-full').trigger('click')
+    await wrapper.get('.auth-alternative-trigger').trigger('click')
+    await wrapper.get('[role="dialog"] button.btn-secondary.w-full').trigger('click')
     await flushPromises()
 
     expect(loginWithPasskeyMock).not.toHaveBeenCalled()

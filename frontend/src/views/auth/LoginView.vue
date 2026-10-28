@@ -1,8 +1,8 @@
 <template>
-  <AuthLayout>
-    <div class="space-y-6">
+  <AuthLayout showcase>
+    <div class="auth-view">
       <!-- Title -->
-      <div class="text-center">
+      <div class="auth-heading text-center">
         <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
           {{ t('auth.welcomeBack') }}
         </h2>
@@ -11,7 +11,7 @@
         </p>
       </div>
       <!-- Login Form -->
-      <form @submit.prevent="handleLogin" class="space-y-5">
+      <form @submit.prevent="handleLogin" class="auth-form">
         <!-- Email Input -->
         <div>
           <label for="email" class="input-label">
@@ -60,6 +60,8 @@
               type="button"
               @click="showPassword = !showPassword"
               :disabled="authActionDisabled"
+              :aria-label="t(showPassword ? 'auth.hidePassword' : 'auth.showPassword')"
+              :aria-pressed="showPassword"
               class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300"
             >
               <Icon v-if="showPassword" name="eyeOff" size="md" />
@@ -139,61 +141,11 @@
           @open="showAgreementModal = true"
         />
 
-        <div v-if="showPasskeyLogin || showOAuthLogin" class="space-y-3 pt-1">
-          <div class="flex items-center gap-3">
-            <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
-            <span class="text-xs text-gray-500 dark:text-dark-400">
-              {{ t('auth.oauthOrContinue') }}
-            </span>
-            <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
-          </div>
 
-          <button
-            v-if="showPasskeyLogin"
-            type="button"
-            class="btn btn-secondary w-full"
-            :disabled="authActionDisabled"
-            @click="handlePasskeyLogin"
-          >
-            <Icon name="key" size="md" class="mr-2" />
-            {{ passkeyLoading ? t('auth.passkeySigningIn') : t('auth.passkeySignIn') }}
-          </button>
-
-          <EmailOAuthButtons
-            :disabled="authActionDisabled"
-            :github-enabled="githubOAuthEnabled"
-            :google-enabled="googleOAuthEnabled"
-            :show-divider="false"
-            @start="handleOAuthStart"
-          />
-
-          <LinuxDoOAuthSection
-            v-if="linuxdoOAuthEnabled"
-            :disabled="authActionDisabled"
-            :show-divider="false"
-            @start="handleOAuthStart"
-          />
-          <DingTalkOAuthSection
-            v-if="dingtalkOAuthEnabled"
-            :disabled="authActionDisabled"
-            :show-divider="false"
-            @start="handleOAuthStart"
-          />
-          <WechatOAuthSection
-            v-if="wechatOAuthEnabled"
-            :disabled="authActionDisabled"
-            :show-divider="false"
-            @start="handleOAuthStart"
-          />
-          <OidcOAuthSection
-            v-if="oidcOAuthEnabled"
-            :disabled="authActionDisabled"
-            :provider-name="oidcOAuthProviderName"
-            :show-divider="false"
-            @start="handleOAuthStart"
-          />
-        </div>
       </form>
+      <button v-if="showPasskeyLogin || showOAuthLogin" type="button" :disabled="authActionDisabled" class="auth-alternative-trigger btn btn-secondary w-full" @click="showAlternativeLogin = true">
+        {{ t('auth.otherSignInMethods') }}
+      </button>
     </div>
 
     <!-- Footer -->
@@ -210,6 +162,55 @@
     </template>
   </AuthLayout>
 
+  <BaseDialog :show="showAlternativeLogin" :title="t('auth.otherSignInMethods')" width="narrow" @close="showAlternativeLogin = false">
+    <div class="space-y-3">
+      <button
+        v-if="showPasskeyLogin"
+        type="button"
+        class="btn btn-secondary w-full"
+        :disabled="authActionDisabled"
+        @click="handlePasskeyLogin"
+      >
+        <Icon name="key" size="md" class="mr-2" />
+        {{ passkeyLoading ? t('auth.passkeySigningIn') : t('auth.passkeySignIn') }}
+      </button>
+
+      <EmailOAuthButtons
+        :disabled="authActionDisabled"
+        :github-enabled="githubOAuthEnabled"
+        :google-enabled="googleOAuthEnabled"
+        :show-divider="false"
+        @start="handleOAuthStart"
+      />
+
+      <LinuxDoOAuthSection
+        v-if="linuxdoOAuthEnabled"
+        :disabled="authActionDisabled"
+        :show-divider="false"
+        @start="handleOAuthStart"
+      />
+      <DingTalkOAuthSection
+        v-if="dingtalkOAuthEnabled"
+        :disabled="authActionDisabled"
+        :show-divider="false"
+        @start="handleOAuthStart"
+      />
+      <WechatOAuthSection
+        v-if="wechatOAuthEnabled"
+        :disabled="authActionDisabled"
+        :show-divider="false"
+        @start="handleOAuthStart"
+      />
+      <OidcOAuthSection
+        v-if="oidcOAuthEnabled"
+        :disabled="authActionDisabled"
+        :provider-name="oidcOAuthProviderName"
+        :show-divider="false"
+        @start="handleOAuthStart"
+      />
+    </div>
+  </BaseDialog>
+
   <!-- 2FA Modal -->
   <TotpLoginModal
     v-if="show2FAModal"
@@ -222,7 +223,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, reactive, onMounted, watch } from 'vue'
+import { computed, ref, reactive, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { AuthLayout } from '@/components/layout'
@@ -234,6 +235,7 @@ import EmailOAuthButtons from '@/components/auth/EmailOAuthButtons.vue'
 import LoginAgreementPrompt from '@/components/auth/LoginAgreementPrompt.vue'
 import TotpLoginModal from '@/components/auth/TotpLoginModal.vue'
 import Icon from '@/components/icons/Icon.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
 import TurnstileWidget from '@/components/CaptchaChallenge.vue'
 import { useAuthStore, useAppStore } from '@/stores'
 import {
@@ -253,6 +255,7 @@ import { extractI18nErrorMessage } from '@/utils/apiError'
 import { clearAllAffiliateReferralCodes } from '@/utils/oauthAffiliate'
 
 const { t } = useI18n()
+const showAlternativeLogin = ref(false)
 const LOGIN_AGREEMENT_STORAGE_KEY = 'sub2api_login_agreement_consent'
 
 // ==================== Router & Stores ====================
@@ -629,6 +632,8 @@ async function handlePasskeyLogin(): Promise<void> {
 
   passkeyLoading.value = true
   try {
+    showAlternativeLogin.value = false
+    await nextTick()
     let proof: ActionCaptchaRequestProof | undefined
     if (actionCaptchaEnabled.value) {
       const result = await turnstileRef.value?.verifyAction()
@@ -662,6 +667,8 @@ async function handlePasskeyLogin(): Promise<void> {
 
 async function handleOAuthStart(request: OAuthLoginStart): Promise<void> {
   if (authActionDisabled.value) return
+  showAlternativeLogin.value = false
+  await nextTick()
 
   if (!actionCaptchaEnabled.value) {
     window.location.href = buildOAuthLoginStartURL(request)

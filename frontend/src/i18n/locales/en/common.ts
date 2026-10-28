@@ -232,6 +232,19 @@ export default {
 
   // Auth
   auth: {
+    otherSignInMethods: 'Other sign-in methods',
+    showPassword: 'Show password',
+    hidePassword: 'Hide password',
+    codeAccepted: 'Code accepted',
+    promoBonus: '+${amount} credit',
+    scene: {
+      headline: 'One gateway.',
+      headlineEnd: 'More possibilities.',
+      description: 'From your next conversation to your next creation. Manage your AI access with {siteName} and make time for what you want to build.',
+      models: 'AI model access',
+      keys: 'API key management',
+      usage: 'Usage insights',
+    },
     welcomeBack: 'Welcome Back',
     signInToAccount: 'Sign in to your account to continue',
     signIn: 'Sign In',

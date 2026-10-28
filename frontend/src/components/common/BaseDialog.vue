@@ -11,7 +11,7 @@
         @click.self="handleClose"
       >
         <!-- Modal panel -->
-        <div ref="dialogRef" :class="['modal-content', widthClasses]" @click.stop>
+        <div ref="dialogRef" :class="['modal-content', widthClasses]" tabindex="-1" @click.stop @keydown.tab="trapFocus">
           <!-- Header -->
           <div class="modal-header">
             <h3 :id="dialogId" class="modal-title">
@@ -115,6 +115,25 @@ const handleEscape = (event: KeyboardEvent) => {
     event.preventDefault()
     event.stopImmediatePropagation()
     emit('close')
+  }
+}
+
+function trapFocus(event: KeyboardEvent): void {
+  if (Array.from(openDialogs).slice(-1)[0] !== dialogId || !dialogRef.value) return
+  const controls = Array.from(dialogRef.value.querySelectorAll<HTMLElement>(
+    'button, [href], input, select, textarea, [tabindex]'
+  )).filter(element => element.tabIndex >= 0 && !element.matches(':disabled') && element.getClientRects().length > 0)
+  const first = controls[0]
+  const last = controls[controls.length - 1]
+  if (!first) {
+    event.preventDefault()
+    dialogRef.value.focus()
+  } else if (event.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.value)) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialogRef.value)) {
+    event.preventDefault()
+    first.focus()
   }
 }
 

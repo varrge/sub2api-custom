@@ -34,4 +34,31 @@ describe('BaseDialog', () => {
     expect(document.body.querySelector<HTMLElement>('.modal-body')?.scrollTop).toBe(0)
     wrapper.unmount()
   })
+
+  it('cycles keyboard focus inside the dialog and skips disabled controls', async () => {
+    const wrapper = mount(BaseDialog, {
+      attachTo: document.body,
+      props: { show: true, title: 'Sign in' },
+      slots: { default: '<button disabled>Unavailable</button><button id="provider">Provider</button>' }
+    })
+    await nextTick()
+    const close = document.querySelector<HTMLButtonElement>('[aria-label="Close modal"]')!
+    const provider = document.querySelector<HTMLButtonElement>('#provider')!
+    for (const button of [close, provider]) {
+      vi.spyOn(button, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList)
+    }
+    close.focus()
+    close.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }))
+    expect(document.activeElement).toBe(provider)
+    provider.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }))
+    expect(document.activeElement).toBe(close)
+    const panel = document.querySelector<HTMLElement>('.modal-content')!
+    panel.focus()
+    panel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }))
+    expect(document.activeElement).toBe(provider)
+    panel.focus()
+    panel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }))
+    expect(document.activeElement).toBe(close)
+    wrapper.unmount()
+  })
 })

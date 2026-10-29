@@ -41,24 +41,32 @@ func TestResolveOpenAIProfitControlGate(t *testing.T) {
 	svc := &OpenAIGatewayService{}
 	groupID := int64(7)
 
-	t.Run("nil group id yields no gate", func(t *testing.T) {
-		require.Nil(t, svc.resolveOpenAIProfitControlGate(context.Background(), nil))
+	t.Run("nil group id uses system default for account floors", func(t *testing.T) {
+		gate := svc.resolveOpenAIProfitControlGate(context.Background(), nil)
+		require.NotNil(t, gate)
+		require.True(t, gate.groupDisabled)
+		require.Equal(t, 1.0, gate.userRate)
 	})
 
 	t.Run("no ctx group and no snapshot yields no gate", func(t *testing.T) {
 		require.Nil(t, svc.resolveOpenAIProfitControlGate(context.Background(), &groupID))
 	})
 
-	t.Run("disabled group yields no gate", func(t *testing.T) {
+	t.Run("disabled group retains user rate for account floors", func(t *testing.T) {
 		group := profitControlTestGroup(groupID, 0.3, 0)
 		group.ProfitControlEnabled = false
-		require.Nil(t, svc.resolveOpenAIProfitControlGate(profitControlTestCtx(group), &groupID))
+		gate := svc.resolveOpenAIProfitControlGate(profitControlTestCtx(group), &groupID)
+		require.NotNil(t, gate)
+		require.True(t, gate.groupDisabled)
+		require.Equal(t, group.RateMultiplier, gate.userRate)
 	})
 
-	t.Run("non openai or grok platform yields no gate even if enabled", func(t *testing.T) {
+	t.Run("other platforms only apply account floors in the OpenAI gateway", func(t *testing.T) {
 		group := profitControlTestGroup(groupID, 0.3, 0)
 		group.Platform = PlatformAnthropic
-		require.Nil(t, svc.resolveOpenAIProfitControlGate(profitControlTestCtx(group), &groupID))
+		gate := svc.resolveOpenAIProfitControlGate(profitControlTestCtx(group), &groupID)
+		require.NotNil(t, gate)
+		require.True(t, gate.groupDisabled)
 	})
 
 	t.Run("grok group routed through openai handler installs gate", func(t *testing.T) {

@@ -1861,6 +1861,19 @@
           </div>
         </div>
       </div>
+      <div>
+        <label for="edit-account-min-user-rate" class="input-label">{{ t('admin.accounts.minUserRateMultiplier') }}</label>
+        <input
+          id="edit-account-min-user-rate"
+          v-model.number="minUserRateMultiplier"
+          type="number"
+          min="0"
+          step="any"
+          class="input"
+          data-testid="account-min-user-rate"
+        />
+        <p class="input-hint">{{ t('admin.accounts.minUserRateMultiplierHint') }}</p>
+      </div>
       <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
         <label class="input-label">{{ t('admin.accounts.expiresAt') }}</label>
         <input v-model="expiresAtInput" type="datetime-local" class="input" />
@@ -3834,6 +3847,7 @@ const upstreamBillingRateSyncEnabled = ref(false)
 const mixedScheduling = ref(false) // For antigravity accounts: enable mixed scheduling
 // 上游ID：直接上游声明请求标识的响应头名，留空不记录。
 const upstreamRequestIdHeader = ref('')
+const minUserRateMultiplier = ref<number | string>(0)
 const readUpstreamRequestIdHeader = (extra: unknown): string => {
   const value = (extra as Record<string, unknown> | undefined)?.upstream_request_id_header
   return typeof value === 'string' ? value : ''
@@ -4383,6 +4397,12 @@ const syncFormFromAccount = (newAccount: Account | null) => {
 	mixedScheduling.value = extra?.mixed_scheduling === true
 	allowOverages.value = extra?.allow_overages === true
 	upstreamRequestIdHeader.value = readUpstreamRequestIdHeader(extra)
+  minUserRateMultiplier.value =
+    extra?.min_user_rate_multiplier == null
+      ? 0
+      : typeof extra.min_user_rate_multiplier === 'number'
+        ? extra.min_user_rate_multiplier
+        : Number.NaN
 	openAIImagesUrlToB64JsonEnabled.value = extra?.images_url_to_b64_json === true
 	autoPause5hThreshold.value = typeof extra?.auto_pause_5h_threshold === 'number' ? extra.auto_pause_5h_threshold * 100 : null
 	autoPause7dThreshold.value = typeof extra?.auto_pause_7d_threshold === 'number' ? extra.auto_pause_7d_threshold * 100 : null
@@ -5381,6 +5401,11 @@ const submitUpdateAccount = async (accountID: number, updatePayload: Record<stri
 const handleSubmit = async () => {
   if (!props.account) return
   const accountID = props.account.id
+  const minimumUserRate = Number(minUserRateMultiplier.value)
+  if (!Number.isFinite(minimumUserRate) || minimumUserRate < 0) {
+    appStore.showError(t('admin.accounts.minUserRateMultiplierInvalid'))
+    return
+  }
 
   if (form.status !== 'active' && form.status !== 'inactive' && form.status !== 'error') {
     appStore.showError(t('admin.accounts.pleaseSelectStatus'))
@@ -6145,6 +6170,13 @@ const handleSubmit = async () => {
         delete newExtra.upstream_request_id_header
       }
       updatePayload.extra = newExtra
+    }
+
+    if (minimumUserRate !== (props.account.extra?.min_user_rate_multiplier ?? 0)) {
+      updatePayload.extra = {
+        ...((updatePayload.extra as Record<string, unknown>) || props.account.extra || {}),
+        min_user_rate_multiplier: minimumUserRate
+      }
     }
 
     const canContinue = await ensureAntigravityMixedChannelConfirmed(async () => {

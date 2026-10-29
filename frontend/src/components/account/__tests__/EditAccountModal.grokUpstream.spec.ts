@@ -323,4 +323,52 @@ describe('EditAccountModal Grok OAuth upstream config', () => {
       wrapper.get('[data-testid="grok-client-tool-cache-toggle"]').attributes('aria-checked')
     ).toBe('false')
   })
+
+  it('saves an account user-rate floor and preserves unrelated settings', async () => {
+    const account = buildGrokOAuthAccount({}, { custom_setting: 'keep-me' })
+    updateAccountMock.mockResolvedValue(account)
+    const wrapper = mountModal(account)
+    await wrapper.get('[data-testid="account-min-user-rate"]').setValue('0.12345')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await vi.waitFor(() => expect(updateAccountMock).toHaveBeenCalledTimes(1))
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra).toMatchObject({
+      min_user_rate_multiplier: 0.12345, custom_setting: 'keep-me'
+    })
+    wrapper.unmount()
+  })
+
+  it('loads a saved floor and sends zero explicitly to remove the restriction', async () => {
+    const account = buildGrokOAuthAccount({}, { min_user_rate_multiplier: 0.5 })
+    updateAccountMock.mockResolvedValue(account)
+    const wrapper = mountModal(account)
+    const input = wrapper.get<HTMLInputElement>('[data-testid="account-min-user-rate"]')
+    expect(input.element.value).toBe('0.5')
+    await input.setValue('')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await vi.waitFor(() => expect(updateAccountMock).toHaveBeenCalledTimes(1))
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.min_user_rate_multiplier).toBe(0)
+    wrapper.unmount()
+  })
+
+  it('rejects a negative account user-rate floor before saving', async () => {
+    const wrapper = mountModal(buildGrokOAuthAccount())
+    await wrapper.get('[data-testid="account-min-user-rate"]').setValue('-0.5')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    expect(updateAccountMock).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('requires an explicit correction before saving an account with a malformed stored floor', async () => {
+    const account = buildGrokOAuthAccount({}, { min_user_rate_multiplier: '0.5' })
+    const wrapper = mountModal(account)
+    await wrapper.get('form#edit-account-form input[type="text"]').setValue('new account name')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    expect(updateAccountMock).not.toHaveBeenCalled()
+    updateAccountMock.mockResolvedValue(account)
+    await wrapper.get('[data-testid="account-min-user-rate"]').setValue('0.5')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await vi.waitFor(() => expect(updateAccountMock).toHaveBeenCalledTimes(1))
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.min_user_rate_multiplier).toBe(0.5)
+    wrapper.unmount()
+  })
 })

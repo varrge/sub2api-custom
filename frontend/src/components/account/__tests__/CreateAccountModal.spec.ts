@@ -303,6 +303,31 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(createAccountMock.mock.calls[0]?.[0]?.extra).not.toHaveProperty('upstream_request_id_header')
   })
 
+  it('saves the minimum user multiplier for a new API key account', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'OpenAI')
+    await selectButtonByText(wrapper, 'API Key')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('restricted account')
+    await wrapper.get('form#create-account-form input[type="password"]').setValue('test-api-key')
+    await wrapper.get('[data-testid="account-min-user-rate"]').setValue('0.12345')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(createAccountMock.mock.calls[0]?.[0]?.extra?.min_user_rate_multiplier).toBe(0.12345)
+    wrapper.unmount()
+  })
+
+  it('preserves the minimum user multiplier through Codex session import', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'OpenAI')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('restricted import')
+    await wrapper.get('[data-testid="account-min-user-rate"]').setValue('0.5')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await wrapper.get('[data-testid="import-codex-session"]').trigger('click')
+    await flushPromises()
+    expect(importCodexSessionMock.mock.calls[0]?.[0]?.extra?.min_user_rate_multiplier).toBe(0.5)
+    wrapper.unmount()
+  })
+
   it('sends the trimmed upstream request id header in extra when filled', async () => {
     const wrapper = mountModal()
     await selectButtonByText(wrapper, 'OpenAI')

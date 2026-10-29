@@ -1,6 +1,9 @@
 package service
 
-// 分组利润控制（配套 migration 192/193 的 groups.profit_* 字段）。
+// Token scheduling admission: per-account user-rate floors and optional group
+// profit control (groups.profit_* from migrations 192/193).
+// Account floors use the user's dedicated billing-group rate before peak pricing,
+// falling back to the group rate or the system default for ungrouped requests.
 //
 // 定位：利润控制是"候选准入过滤"，只决定账号能否进入调度候选池；既有的排序、
 // 评分、粘性、熔断、负载均衡在合格账号之间照常工作，本文件不改变它们的行为。
@@ -113,8 +116,7 @@ func profitControlOverThreshold(upstream, threshold float64) bool {
 	return upstream-threshold > profitControlRateEpsilon*math.Max(1, math.Abs(threshold))
 }
 
-// openAIProfitControlGate 是一个请求的利润准入门。除 pricingAt 外全部为预计算
-// 标量：候选过滤热路径上每账号只做一次快照解码与一次浮点比较。
+// openAIProfitControlGate freezes request rates for group profit and account floors.
 type openAIProfitControlGate struct {
 	// groupID 是门配置来源的被调度分组；请求内按分组复用（failover 阈值稳定），
 	// composite 等跨分组调度切换分组时重新解析。
@@ -125,6 +127,9 @@ type openAIProfitControlGate struct {
 	threshold float64
 	// pricingAt 是本请求的统一定价时刻（D 侧）。
 	pricingAt time.Time
+	// User rate is resolved before peak pricing; an account floor compares this rate directly.
+	userRate      float64
+	groupDisabled bool
 }
 
 // WithOpenAIRequestPricingContext 在请求开始处装配请求级定价上下文：固定
@@ -161,7 +166,7 @@ func (s *OpenAIGatewayService) WithOpenAITurnPricingContext(ctx context.Context,
 	}
 	gate := s.resolveOpenAIProfitControlGate(ctx, groupID)
 	if gate == nil {
-		// 分组已关门（或配置读取失败 fail-open）：清除旧 turn 的门，后续 turn
+		// 分组不可用（或配置读取失败 fail-open）：清除旧 turn 的门，后续 turn
 		// 按无门放行，与 HTTP 路径的开关语义一致。
 		if existing, ok := ctx.Value(openAIProfitControlGateCtxKey{}).(*openAIProfitControlGate); ok && existing != nil {
 			return context.WithValue(ctx, openAIProfitControlGateCtxKey{}, (*openAIProfitControlGate)(nil)), pricingAt
@@ -187,22 +192,18 @@ func OpenAIPricingAtFromContext(ctx context.Context) time.Time {
 	return pricingAt
 }
 
-// withOpenAIProfitControlGate 解析分组利润控制配置；启用时把预计算好的准入门
-// 装进 ctx。抑制标记、未启用/非 openai 分组/无法取到分组配置时原样返回 ctx
-// （门不存在，全部否决点自动放行，既有行为零变化）。ctx 已有同分组门时直接
-// 复用：同一请求的全部 failover 重入共享同一阈值。
+// withOpenAIProfitControlGate freezes the user rate for account floors, even
+// when group profit control is disabled. Retries reuse the same group's gate.
 func (s *OpenAIGatewayService) withOpenAIProfitControlGate(ctx context.Context, groupID *int64) context.Context {
 	if _, suppressed := ctx.Value(openAIProfitControlSuppressCtxKey{}).(struct{}); suppressed {
 		return ctx
 	}
-	if groupID != nil {
-		if existing, ok := ctx.Value(openAIProfitControlGateCtxKey{}).(*openAIProfitControlGate); ok && existing != nil && existing.groupID == *groupID {
-			return ctx
-		}
+	if existing, ok := ctx.Value(openAIProfitControlGateCtxKey{}).(*openAIProfitControlGate); ok && existing != nil && existing.groupID == derefGroupID(groupID) {
+		return ctx
 	}
 	gate := s.resolveOpenAIProfitControlGate(ctx, groupID)
 	if gate == nil {
-		// 被调度分组无门（未启用/非 openai/配置读取失败）而 ctx 带着其他分组的
+		// 被调度分组无门（配置读取失败）而 ctx 带着其他分组的
 		// 请求门时清除之：门配置取被调度分组，父分组阈值不得泄漏到成员分组
 		//（composite/模型路由等跨分组调度）。typed-nil 覆盖值由否决点按无门放行。
 		if existing, ok := ctx.Value(openAIProfitControlGateCtxKey{}).(*openAIProfitControlGate); ok && existing != nil && groupID != nil && existing.groupID != *groupID {
@@ -215,8 +216,15 @@ func (s *OpenAIGatewayService) withOpenAIProfitControlGate(ctx context.Context, 
 }
 
 func (s *OpenAIGatewayService) resolveOpenAIProfitControlGate(ctx context.Context, groupID *int64) *openAIProfitControlGate {
-	if s == nil || groupID == nil || *groupID <= 0 {
+	if s == nil {
 		return nil
+	}
+	pricingAt, ok := openAIPricingAtFromContext(ctx)
+	if !ok {
+		pricingAt = timezone.Now()
+	}
+	if groupID == nil || *groupID <= 0 {
+		return ungroupedAccountProfitGate(s.cfg, pricingAt)
 	}
 	// 门配置取被调度分组。直连请求（ctx 认证分组即调度分组，生产绝大多数流量）
 	// 直接复用 auth cache 分组，热路径零额外查询；composite 父分组路由到成员
@@ -236,15 +244,10 @@ func (s *OpenAIGatewayService) resolveOpenAIProfitControlGate(ctx context.Contex
 		}
 		group = loaded
 	}
-	if group == nil || !group.ProfitControlEnabled ||
-		(group.Platform != PlatformOpenAI && group.Platform != PlatformGrok) {
+	if group == nil {
 		return nil
 	}
 
-	pricingAt, ok := openAIPricingAtFromContext(ctx)
-	if !ok {
-		pricingAt = timezone.Now()
-	}
 	// D 与计费完全同源（RecordUsage 组合）：计费永远按 apiKey 自身分组
 	//（composite 请求即父分组）的"用户覆盖 ?? 分组默认 × 高峰因子"计算，
 	// 因此优先取认证中间件放入 ctx 的分组；ctx 中无有效分组（内部调用）时
@@ -258,6 +261,7 @@ func (s *OpenAIGatewayService) resolveOpenAIProfitControlGate(ctx context.Contex
 	if userID, _ := ctx.Value(ctxkey.UserID).(int64); userID > 0 {
 		downstream = s.ResolveUserGroupRateMultiplier(ctx, userID, billingGroup.ID, groupDefault)
 	}
+	userRate := downstream
 	if !enterpriseContextHasRate(ctx, billingGroup.ID) {
 		downstream *= billingGroup.PeakMultiplierAt(pricingAt)
 	}
@@ -265,10 +269,12 @@ func (s *OpenAIGatewayService) resolveOpenAIProfitControlGate(ctx context.Contex
 	deduction := group.ProfitMinMargin + group.ProfitSafetyBuffer
 	threshold := clampProfitControlThreshold(downstream * (1 - deduction))
 	return &openAIProfitControlGate{
-		groupID:   *groupID,
-		platform:  group.Platform,
-		threshold: threshold,
-		pricingAt: pricingAt,
+		groupID:       *groupID,
+		platform:      group.Platform,
+		threshold:     threshold,
+		pricingAt:     pricingAt,
+		userRate:      userRate,
+		groupDisabled: !group.ProfitControlEnabled || (group.Platform != PlatformOpenAI && group.Platform != PlatformGrok),
 	}
 }
 
@@ -300,11 +306,20 @@ func ContextWithSelectionProfitGate(ctx context.Context, sel *AccountSelectionRe
 	return context.WithValue(ctx, openAIProfitControlGateCtxKey{}, sel.profitGate)
 }
 
-// openAIProfitControlVetoReason 报告利润门是否否决该账号。ctx 中没有门
-// （分组未启用利润控制或本请求跳门）或账号为 nil 时一律放行。
+// openAIProfitControlVetoReason checks the account floor before the optional
+// group profit rule. Requests without a gate and nil accounts are admitted.
 func openAIProfitControlVetoReason(ctx context.Context, account *Account) (bool, string) {
 	gate, _ := ctx.Value(openAIProfitControlGateCtxKey{}).(*openAIProfitControlGate)
 	if gate == nil || account == nil {
+		return false, ""
+	}
+	if minimum := account.minUserRateMultiplier(); minimum > 0 &&
+		(math.IsNaN(gate.userRate) || math.IsInf(gate.userRate, 0) || gate.userRate < 0 ||
+			math.IsInf(minimum, 0) || gate.userRate < minimum) {
+		openAIProfitControlObserverInstance.recordVeto(gate.groupID, gate.platform, gate.threshold, accountMinUserRateFilterReason)
+		return true, accountMinUserRateFilterReason
+	}
+	if gate.groupDisabled {
 		return false, ""
 	}
 	if account.RateMultiplier == nil ||
@@ -388,6 +403,7 @@ type openAIProfitControlGroupStats struct {
 	installs         atomic.Int64
 	vetoThreshold    atomic.Int64
 	vetoInvalidRate  atomic.Int64
+	vetoAccountFloor atomic.Int64
 	refreshFailures  atomic.Int64
 	lastLogUnixMilli atomic.Int64
 }
@@ -430,6 +446,8 @@ func (o *openAIProfitControlObserver) recordVeto(groupID int64, platform string,
 		s.vetoThreshold.Add(1)
 	case openAIProfitFilterReasonInvalidAccountRate:
 		s.vetoInvalidRate.Add(1)
+	case accountMinUserRateFilterReason:
+		s.vetoAccountFloor.Add(1)
 	}
 	o.maybeLog(groupID, platform, threshold, s)
 }
@@ -458,6 +476,7 @@ func (o *openAIProfitControlObserver) maybeLog(groupID int64, platform string, t
 		"installs_total", s.installs.Load(),
 		"veto_threshold_total", s.vetoThreshold.Load(),
 		"veto_invalid_account_rate_total", s.vetoInvalidRate.Load(),
+		"veto_account_min_user_rate_total", s.vetoAccountFloor.Load(),
 		"refresh_failure_total", s.refreshFailures.Load(),
 	)
 }

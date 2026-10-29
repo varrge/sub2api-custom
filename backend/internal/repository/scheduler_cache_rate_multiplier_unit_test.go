@@ -31,12 +31,14 @@ func TestSchedulerCachePreservesRateMultiplier(t *testing.T) {
 		Schedulable:    true,
 		Concurrency:    2,
 		RateMultiplier: &rate,
+		Extra:          map[string]any{service.AccountMinUserRateMultiplierExtraKey: 0.6},
 	}
 
 	t.Run("metadata payload keeps the field", func(t *testing.T) {
 		meta := buildSchedulerMetadataAccount(account)
 		require.NotNil(t, meta.RateMultiplier, "metadata 快照漏掉 rate_multiplier 会让利润门 fail-closed 全组拒绝")
 		require.Equal(t, rate, *meta.RateMultiplier)
+		require.Equal(t, 0.6, meta.Extra[service.AccountMinUserRateMultiplierExtraKey])
 	})
 
 	t.Run("both payloads survive a decode round-trip", func(t *testing.T) {
@@ -48,6 +50,7 @@ func TestSchedulerCachePreservesRateMultiplier(t *testing.T) {
 			require.NoError(t, decodeErr, name)
 			require.NotNil(t, decoded.RateMultiplier, "%s payload 反序列化后 rate_multiplier 不得为 nil", name)
 			require.Equal(t, rate, *decoded.RateMultiplier, name)
+			require.Equal(t, 0.6, decoded.Extra[service.AccountMinUserRateMultiplierExtraKey], name)
 		}
 	})
 
@@ -77,5 +80,6 @@ func TestSchedulerCachePreservesRateMultiplier(t *testing.T) {
 		require.NotNil(t, got)
 		require.NotNil(t, got.RateMultiplier, "端到端缓存读写后 rate_multiplier 不得丢失")
 		require.Equal(t, rate, *got.RateMultiplier)
+		require.Equal(t, 0.6, got.Extra[service.AccountMinUserRateMultiplierExtraKey])
 	})
 }

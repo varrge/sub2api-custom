@@ -11,11 +11,15 @@ import (
 // token requests. This keeps media, metadata, and models-list paths outside
 // the profit-control surface by construction.
 func (s *GatewayService) withGatewayProfitControlGate(ctx context.Context, groupID *int64) context.Context {
-	if _, ok := gatewayTokenRequestPricingAtFromContext(ctx); !ok || groupID == nil || *groupID <= 0 {
+	pricingAt, ok := gatewayTokenRequestPricingAtFromContext(ctx)
+	if !ok {
 		return ctx
 	}
-	if existing, ok := ctx.Value(openAIProfitControlGateCtxKey{}).(*openAIProfitControlGate); ok && existing != nil && existing.groupID == *groupID {
+	if existing, ok := ctx.Value(openAIProfitControlGateCtxKey{}).(*openAIProfitControlGate); ok && existing != nil && existing.groupID == derefGroupID(groupID) {
 		return ctx
+	}
+	if groupID == nil || *groupID <= 0 {
+		return context.WithValue(ctx, openAIProfitControlGateCtxKey{}, ungroupedAccountProfitGate(s.cfg, pricingAt))
 	}
 
 	group, err := s.resolveProfitControlGroup(ctx, *groupID)
@@ -23,11 +27,10 @@ func (s *GatewayService) withGatewayProfitControlGate(ctx context.Context, group
 		slog.Warn("profit_control_group_load_failed", "group_id", *groupID, "error", err)
 		return s.clearForeignProfitControlGate(ctx, groupID)
 	}
-	if group == nil || !group.ProfitControlEnabled || !profitControlPlatformSupported(group.Platform) {
+	if group == nil {
 		return s.clearForeignProfitControlGate(ctx, groupID)
 	}
 
-	pricingAt, _ := gatewayTokenRequestPricingAtFromContext(ctx)
 	billingGroup := gatewayTokenRequestBillingGroupFromContext(ctx)
 	if billingGroup == nil {
 		if ctxGroup, ok := ctx.Value(ctxkey.Group).(*Group); ok && IsGroupContextValid(ctxGroup) {
@@ -42,16 +45,19 @@ func (s *GatewayService) withGatewayProfitControlGate(ctx context.Context, group
 	if userID, _ := ctx.Value(ctxkey.UserID).(int64); userID > 0 {
 		downstream = s.ResolveUserGroupRateMultiplier(ctx, userID, billingGroup.ID, groupDefault)
 	}
+	userRate := downstream
 	if !enterpriseContextHasRate(ctx, billingGroup.ID) {
 		downstream *= billingGroup.PeakMultiplierAt(pricingAt)
 	}
 	threshold := clampProfitControlThreshold(downstream * (1 - group.ProfitMinMargin - group.ProfitSafetyBuffer))
 
 	gate := &openAIProfitControlGate{
-		groupID:   group.ID,
-		platform:  group.Platform,
-		threshold: threshold,
-		pricingAt: pricingAt,
+		groupID:       group.ID,
+		platform:      group.Platform,
+		threshold:     threshold,
+		pricingAt:     pricingAt,
+		userRate:      userRate,
+		groupDisabled: !group.ProfitControlEnabled || !profitControlPlatformSupported(group.Platform),
 	}
 	openAIProfitControlObserverInstance.recordInstall(gate.groupID, gate.platform, gate.threshold)
 	return context.WithValue(ctx, openAIProfitControlGateCtxKey{}, gate)

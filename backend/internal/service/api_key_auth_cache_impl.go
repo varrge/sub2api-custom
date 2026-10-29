@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 31 // v31: enterprise account identity
+const apiKeyAuthSnapshotVersion = 32 // v32: group image_count_billing switch
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -480,6 +480,7 @@ func snapshotFromGroup(group *Group) *APIKeyAuthGroupSnapshot {
 		MonthlyLimitUSD:                 group.MonthlyLimitUSD,
 		AllowImageGeneration:            group.AllowImageGeneration,
 		AllowBatchImageGeneration:       group.AllowBatchImageGeneration,
+		ImageCountBilling:               group.ImageCountBilling,
 		ImageRateIndependent:            group.ImageRateIndependent,
 		ImageRateMultiplier:             group.ImageRateMultiplier,
 		ImagePrice1K:                    group.ImagePrice1K,
@@ -552,6 +553,7 @@ func snapshotToGroup(group *APIKeyAuthGroupSnapshot) *Group {
 		MonthlyLimitUSD:                 group.MonthlyLimitUSD,
 		AllowImageGeneration:            group.AllowImageGeneration,
 		AllowBatchImageGeneration:       group.AllowBatchImageGeneration,
+		ImageCountBilling:               group.ImageCountBilling,
 		ImageRateIndependent:            group.ImageRateIndependent,
 		ImageRateMultiplier:             group.ImageRateMultiplier,
 		ImagePrice1K:                    group.ImagePrice1K,

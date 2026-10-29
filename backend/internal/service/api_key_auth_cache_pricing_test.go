@@ -74,3 +74,28 @@ func TestAPIKeyAuthSnapshotGroupPricingRoundtrip(t *testing.T) {
 	require.NoError(t, err)
 	require.InDelta(t, 1000*(inputPrice+outputPrice)*2, cost.TotalCost, 1e-12)
 }
+
+func TestAPIKeyAuthSnapshotImageCountBillingForEveryGroup(t *testing.T) {
+	groups := []*Group{
+		{ID: 51, Platform: PlatformOpenAI, ImageCountBilling: true},
+		{ID: 52, Platform: PlatformGemini, ImageCountBilling: false},
+	}
+	key := &APIKey{ID: 83, UserID: 40, User: &User{ID: 40}, GroupID: &groups[0].ID,
+		Group: groups[0], Groups: groups, MultiGroupEnabled: true}
+	svc := &APIKeyService{}
+	payload, err := json.Marshal(&APIKeyAuthCacheEntry{Snapshot: svc.snapshotFromAPIKey(context.Background(), key)})
+	require.NoError(t, err)
+	var cached APIKeyAuthCacheEntry
+	require.NoError(t, json.Unmarshal(payload, &cached))
+	materialized, used, err := svc.applyAuthCacheEntry("image-count-cache", &cached)
+	require.NoError(t, err)
+	require.True(t, used)
+	require.True(t, materialized.Group.ImageCountBilling)
+	require.Len(t, materialized.Groups, 2)
+	require.True(t, materialized.Groups[0].ImageCountBilling)
+	require.False(t, materialized.Groups[1].ImageCountBilling)
+	cached.Snapshot.Version = 31
+	_, used, err = svc.applyAuthCacheEntry("image-count-cache", &cached)
+	require.NoError(t, err)
+	require.False(t, used, "snapshots before image_count_billing must be rebuilt")
+}

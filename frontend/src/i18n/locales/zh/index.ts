@@ -2,6 +2,7 @@ import activityCampaigns from './activityCampaigns'
 import activityLeaderboard from './activityLeaderboard'
 import luckyBox from './luckyBox'
 import groupBuy from './groupBuy'
+import adminAccessKeys from './adminAccessKeys'
 import landing from './landing'
 import common from './common'
 import dashboard from './dashboard'
@@ -25,6 +26,7 @@ export default {
   activityCampaignsNav: '双十一活动',
   activityCampaignsDescription: '签到答题领摇摇卡',
   ...groupBuy,
+  adminAccessKeys,
   ...landing,
   ...common,
   ...dashboard,

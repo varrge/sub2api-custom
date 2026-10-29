@@ -253,7 +253,7 @@ func TestMultiGroupGoogleCatalogDefaultsRequireNativeGeminiAccount(t *testing.T)
 			repo := &multiGroupCatalogAccountRepo{gatewayModelsAccountRepoStub{byGroup: map[int64][]service.Account{1: accounts}}}
 			w := serveMultiGroupCatalog(t, newGatewayModelsHandlerForTest(repo), "/v1beta/models", &service.Group{ID: 1, Platform: service.PlatformGemini})
 			require.Contains(t, w.Body.String(), `"name":"models/gemini-synced-custom"`)
-			require.Equal(t, native, strings.Contains(w.Body.String(), `"name":"models/gemini-2.5-pro"`))
+			require.Equal(t, native, strings.Contains(w.Body.String(), `"name":"models/gemini-3.1-flash-lite"`))
 			require.NotContains(t, w.Body.String(), "claude-")
 		})
 	}

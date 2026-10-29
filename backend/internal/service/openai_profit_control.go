@@ -306,16 +306,14 @@ func ContextWithSelectionProfitGate(ctx context.Context, sel *AccountSelectionRe
 	return context.WithValue(ctx, openAIProfitControlGateCtxKey{}, sel.profitGate)
 }
 
-// openAIProfitControlVetoReason checks the account floor before the optional
+// openAIProfitControlVetoReason checks the account rate rule before the optional
 // group profit rule. Requests without a gate and nil accounts are admitted.
 func openAIProfitControlVetoReason(ctx context.Context, account *Account) (bool, string) {
 	gate, _ := ctx.Value(openAIProfitControlGateCtxKey{}).(*openAIProfitControlGate)
 	if gate == nil || account == nil {
 		return false, ""
 	}
-	if minimum := account.minUserRateMultiplier(); minimum > 0 &&
-		(math.IsNaN(gate.userRate) || math.IsInf(gate.userRate, 0) || gate.userRate < 0 ||
-			math.IsInf(minimum, 0) || gate.userRate < minimum) {
+	if account.rejectsUserRate(gate.userRate) {
 		openAIProfitControlObserverInstance.recordVeto(gate.groupID, gate.platform, gate.threshold, accountMinUserRateFilterReason)
 		return true, accountMinUserRateFilterReason
 	}

@@ -322,8 +322,8 @@ func TestAPIKeyModelOptionsExpandsWildcardMappingsToConcretePlatformDefaults(t *
 	}{
 		{"OpenAI without allowlist", service.PlatformOpenAI, "gpt-5.4*", "gpt-5.4", service.GroupModelAllowlist{}},
 		{"OpenAI wildcard allowlist", service.PlatformOpenAI, "gpt-*", "gpt-5.4", service.GroupModelAllowlist{Enabled: true, Models: []string{"gpt-5.4*"}}},
-		{"Gemini without allowlist", service.PlatformGemini, "gemini-2.5*", "gemini-2.5-pro", service.GroupModelAllowlist{}},
-		{"Gemini wildcard allowlist", service.PlatformGemini, "gemini-*", "gemini-2.5-pro", service.GroupModelAllowlist{Enabled: true, Models: []string{"gemini-2.5*"}}},
+		{"Gemini without allowlist", service.PlatformGemini, "gemini-3.1-flash-lite*", "gemini-3.1-flash-lite", service.GroupModelAllowlist{}},
+		{"Gemini wildcard allowlist", service.PlatformGemini, "gemini-*", "gemini-3.1-flash-lite", service.GroupModelAllowlist{Enabled: true, Models: []string{"gemini-3.1-flash-lite*"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &multiGroupCatalogAccountRepo{gatewayModelsAccountRepoStub{byGroup: map[int64][]service.Account{

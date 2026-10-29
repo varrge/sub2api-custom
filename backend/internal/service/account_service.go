@@ -347,9 +347,11 @@ func (s *AccountService) Update(ctx context.Context, id int64, req UpdateAccount
 		for key, value := range *req.Extra {
 			extra[key] = value
 		}
-		if _, supplied := extra[AccountMinUserRateMultiplierExtraKey]; !supplied {
-			if current, exists := account.Extra[AccountMinUserRateMultiplierExtraKey]; exists {
-				extra[AccountMinUserRateMultiplierExtraKey] = current
+		for _, key := range []string{AccountMinUserRateMultiplierExtraKey, AccountUserRateFilterModeExtraKey} {
+			if _, supplied := extra[key]; !supplied {
+				if current, exists := account.Extra[key]; exists {
+					extra[key] = current
+				}
 			}
 		}
 		delete(extra, OllamaCloudUsageSessionExtraKey)

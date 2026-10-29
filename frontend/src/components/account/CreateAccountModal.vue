@@ -3286,6 +3286,13 @@
       </div>
       <div>
         <label for="create-account-min-user-rate" class="input-label">{{ t('admin.accounts.minUserRateMultiplier') }}</label>
+        <Select
+          v-model="userRateFilterMode"
+          :options="userRateFilterModeOptions"
+          :aria-label="t('admin.accounts.userRateFilterMode')"
+          data-testid="account-user-rate-filter-mode"
+          class="mb-2"
+        />
         <input
           id="create-account-min-user-rate"
           v-model.number="minUserRateMultiplier"
@@ -4277,17 +4284,23 @@ const oauthStepTitle = computed(() => {
 // 上游ID：直接上游声明请求标识的响应头名，留空不记录。
 const upstreamRequestIdHeader = ref('')
 const minUserRateMultiplier = ref<number | string>(0)
+const userRateFilterMode = ref('below')
+const userRateFilterModeOptions = computed(() => [
+  { value: 'below', label: t('admin.accounts.userRateFilterBelow') },
+  { value: 'above', label: t('admin.accounts.userRateFilterAbove') }
+])
 const withAccountSchedulingExtra = <T extends Record<string, unknown> | undefined>(extra: T): T | Record<string, unknown> => {
   const minimum = Number(minUserRateMultiplier.value)
   if (!Number.isFinite(minimum) || minimum < 0) {
     throw new Error(t('admin.accounts.minUserRateMultiplierInvalid'))
   }
   const name = upstreamRequestIdHeader.value.trim()
-  if (!name && minimum === 0) return extra
+  if (!name && minimum === 0 && userRateFilterMode.value === 'below') return extra
   return {
     ...(extra || {}),
     ...(name ? { upstream_request_id_header: name } : {}),
-    ...(minimum > 0 ? { min_user_rate_multiplier: minimum } : {})
+    ...(minimum > 0 ? { min_user_rate_multiplier: minimum } : {}),
+    user_rate_filter_mode: userRateFilterMode.value
   }
 }
 
@@ -5673,6 +5686,7 @@ const resetForm = () => {
   geminiUpstreamProtocol.value = 'native'
   upstreamRequestIdHeader.value = ''
   minUserRateMultiplier.value = 0
+  userRateFilterMode.value = 'below'
   upstreamBillingAutoProbeEnabled.value = true
   editQuotaLimit.value = null
   editQuotaDailyLimit.value = null
@@ -5980,6 +5994,10 @@ const handleVertexServiceAccountDrop = async (event: DragEvent) => {
 }
 
 const handleSubmit = async () => {
+  if (!['below', 'above'].includes(userRateFilterMode.value)) {
+    appStore.showError(t('admin.accounts.userRateFilterModeInvalid'))
+    return
+  }
   const minimum = Number(minUserRateMultiplier.value)
   if (!Number.isFinite(minimum) || minimum < 0) {
     appStore.showError(t('admin.accounts.minUserRateMultiplierInvalid'))

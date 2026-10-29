@@ -46,10 +46,11 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 		return nil, err
 	}
 	activityLeaderboardRepository := repository.NewActivityLeaderboardRepository(db)
+	scopedAdminKeyRepository := repository.NewScopedAdminKeyRepository(db)
 	settingRepository := repository.NewSettingRepository(client)
 	groupRepository := repository.NewGroupRepository(client, db)
 	proxyRepository := repository.NewProxyRepository(client, db)
-	settingService := service.ProvideSettingService(settingRepository, groupRepository, proxyRepository, configConfig)
+	settingService := service.ProvideSettingService(scopedAdminKeyRepository, settingRepository, groupRepository, proxyRepository, configConfig)
 	activityLeaderboardService := service.ProvideActivityLeaderboardService(activityLeaderboardRepository, configConfig, settingService)
 	activityLeaderboardHandler := handler.NewActivityLeaderboardHandler(activityLeaderboardService)
 	activityCampaignHandler := handler.ProvideActivityCampaignHandler(db)

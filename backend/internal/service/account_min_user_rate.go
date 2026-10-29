@@ -10,6 +10,7 @@ import (
 )
 
 const AccountMinUserRateMultiplierExtraKey = "min_user_rate_multiplier"
+const AccountUserRateFilterModeExtraKey = "user_rate_filter_mode"
 const accountMinUserRateFilterReason = "account_min_user_rate"
 
 func ungroupedAccountProfitGate(cfg *config.Config, pricingAt time.Time) *openAIProfitControlGate {
@@ -37,6 +38,11 @@ func accountMinUserRateValue(raw any) (float64, bool) {
 }
 
 func ValidateAccountMinUserRateExtra(extra map[string]any) error {
+	switch extra[AccountUserRateFilterModeExtraKey] {
+	case nil, "below", "above":
+	default:
+		return infraerrors.BadRequest("INVALID_ACCOUNT_USER_RATE_FILTER_MODE", "user_rate_filter_mode must be below or above")
+	}
 	raw, exists := extra[AccountMinUserRateMultiplierExtraKey]
 	if !exists || raw == nil {
 		return nil
@@ -46,6 +52,25 @@ func ValidateAccountMinUserRateExtra(extra map[string]any) error {
 		return infraerrors.BadRequest("INVALID_ACCOUNT_MIN_USER_RATE", "min_user_rate_multiplier must be a finite nonnegative number")
 	}
 	return nil
+}
+
+// The legacy threshold key is shared by both modes; zero still disables the rule.
+func (a *Account) rejectsUserRate(userRate float64) bool {
+	threshold := a.minUserRateMultiplier()
+	if threshold == 0 {
+		return false
+	}
+	if math.IsInf(threshold, 0) || math.IsNaN(userRate) || math.IsInf(userRate, 0) || userRate < 0 {
+		return true
+	}
+	switch a.Extra[AccountUserRateFilterModeExtraKey] {
+	case nil, "below":
+		return userRate < threshold
+	case "above":
+		return userRate > threshold
+	default:
+		return true
+	}
 }
 
 // Missing/null/zero disables the floor. Malformed persisted settings fail closed.

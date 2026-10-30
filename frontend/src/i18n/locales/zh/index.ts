@@ -9,6 +9,7 @@ import dashboard from './dashboard'
 import channelMonitorV2 from './channelMonitorV2'
 import batchImage from './batchImage'
 import imageGeneration from './imageGeneration'
+import videoGeneration from './videoGeneration'
 import supportTickets from './supportTickets'
 import modelKeyAccess from './modelKeyAccess'
 import admin from './admin'
@@ -33,6 +34,7 @@ export default {
   ...channelMonitorV2,
   ...batchImage,
   ...imageGeneration,
+  ...videoGeneration,
   ...supportTickets,
   ...modelKeyAccess,
   admin,

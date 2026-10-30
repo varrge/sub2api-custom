@@ -11,11 +11,20 @@
             <p class="studio-eyebrow">{{ t('imageGeneration.badge') }}</p>
             <h1 class="studio-title">{{ t('imageGeneration.studioTitle') }}</h1>
           </div>
+          <div class="studio-tabs" role="tablist" :aria-label="t('imageGeneration.studioTitle')">
+            <button id="studio-image-tab" ref="imageTab" type="button" role="tab" :aria-selected="activeTab === 'image'" :tabindex="activeTab === 'image' ? 0 : -1" aria-controls="studio-image-panel" @click="activeTab = 'image'" @keydown.right.prevent="selectTab('video')" @keydown.left.prevent="selectTab('video')">
+              {{ t('imageGeneration.imageTab') }}
+            </button>
+            <button id="studio-video-tab" ref="videoTab" type="button" role="tab" :aria-selected="activeTab === 'video'" :tabindex="activeTab === 'video' ? 0 : -1" aria-controls="studio-video-panel" @click="activeTab = 'video'" @keydown.right.prevent="selectTab('image')" @keydown.left.prevent="selectTab('image')">
+              <Icon name="play" size="xs" />
+              {{ t('imageGeneration.videoTab') }}
+            </button>
+          </div>
         </div>
 
         <!-- Mobile History Toggle -->
         <button
-          v-if="studio.ready"
+          v-if="activeTab === 'image' && studio.ready"
           type="button"
           class="flex items-center gap-1.5 rounded-lg border border-gray-200/80 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 dark:border-dark-700 dark:bg-dark-800 dark:text-dark-200 dark:hover:bg-dark-700 lg:hidden"
           :aria-label="t('imageGeneration.sessionsTitle')"
@@ -31,6 +40,7 @@
         </button>
       </header>
 
+      <div v-if="activeTab === 'image'" id="studio-image-panel" role="tabpanel" aria-labelledby="studio-image-tab" class="flex min-h-0 flex-1 flex-col">
       <!-- Loading Keys State -->
       <div v-if="loadingKeys || !studio.ready" class="flex flex-1 items-center justify-center p-8">
         <div class="flex flex-col items-center justify-center text-center">
@@ -145,7 +155,7 @@
                 <img
                   :src="activeResult.src"
                   :alt="t('imageGeneration.resultAlt', { index: results.indexOf(activeResult) + 1 })"
-                  class="min-h-0 min-w-0 max-h-full max-w-full rounded-2xl object-contain shadow-2xl shadow-gray-900/10 dark:shadow-black/50"
+                  class="h-full min-h-0 w-full min-w-0 rounded-2xl object-contain"
                 />
                 <div class="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/0 opacity-0 transition-opacity duration-200 group-hover:bg-black/20 group-hover:opacity-100">
                   <span class="flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-900 shadow-md backdrop-blur dark:bg-dark-900/90 dark:text-white">
@@ -241,7 +251,7 @@
                   id="image-prompt"
                   v-model="form.prompt"
                   maxlength="4000"
-                  rows="3"
+                  rows="2"
                   class="w-full resize-none bg-transparent text-[15px] leading-6 text-gray-900 outline-none placeholder:text-gray-400 focus:outline-none dark:text-gray-100 dark:placeholder:text-dark-400"
                   :placeholder="t('imageGeneration.promptPlaceholder')"
                   :aria-label="t('imageGeneration.prompt')"
@@ -293,7 +303,7 @@
                   <details ref="ratioDetails" class="group relative">
                     <summary class="apple-pill-btn list-none">
                       <span class="ratio-indicator" :style="{ aspectRatio: selectedRatioCss }"></span>
-                      <span>{{ ratioLabel }}</span>
+                      <span>{{ ratioLabel }} · {{ form.resolution }}</span>
                       <Icon name="chevronDown" size="xs" class="transition-transform duration-200 group-open:rotate-180" />
                     </summary>
 
@@ -321,9 +331,29 @@
                           </div>
                         </div>
 
-                        <!-- Quality / Resolution Section -->
+                        <!-- Resolution Section -->
                         <div class="mb-4 border-t border-gray-100 pt-3 dark:border-dark-700">
                           <span class="text-xs font-semibold text-gray-900 dark:text-white">{{ t('imageGeneration.resolution') }}</span>
+                          <div class="mt-2 grid grid-cols-3 gap-2">
+                            <button
+                              v-for="resolution in resolutions"
+                              :key="resolution"
+                              type="button"
+                              class="quality-card resolution-card"
+                              :class="form.resolution === resolution && 'quality-card-active'"
+                              :aria-pressed="form.resolution === resolution"
+                              @click="form.resolution = resolution"
+                            >
+                              <span class="text-xs font-medium">{{ resolution }}</span>
+                            </button>
+                          </div>
+                          <p v-if="showQuality && form.resolution === '4K'" class="mt-2 text-[10px] text-gray-500 dark:text-dark-400">
+                            {{ t('imageGeneration.resolutionLimit') }}
+                          </p>
+                        </div>
+
+                        <div v-if="showQuality" class="mb-4 border-t border-gray-100 pt-3 dark:border-dark-700">
+                          <span class="text-xs font-semibold text-gray-900 dark:text-white">{{ t('imageGeneration.quality') }}</span>
                           <div class="mt-2 grid grid-cols-2 gap-2">
                             <button
                               v-for="quality in qualities"
@@ -335,9 +365,6 @@
                               @click="form.quality = quality.value"
                             >
                               <span class="font-medium text-xs">{{ quality.label }}</span>
-                              <span class="text-[10px] text-gray-400 dark:text-dark-400">
-                                {{ quality.value === 'high' ? t('imageGeneration.qualityHigh') : t('imageGeneration.qualityStandard') }}
-                              </span>
                             </button>
                           </div>
                         </div>
@@ -346,11 +373,8 @@
                         <div class="border-t border-gray-100 pt-3 dark:border-dark-700">
                           <div class="flex items-center justify-between text-xs">
                             <span class="font-medium text-gray-500 dark:text-dark-300">{{ t('imageGeneration.size') }}</span>
-                            <div class="flex items-center gap-1.5 font-mono text-[11px] text-gray-700 dark:text-dark-200">
-                              <span class="rounded bg-gray-100 px-1.5 py-0.5 dark:bg-dark-700">{{ displaySize.width }}</span>
-                              <span class="text-gray-400">×</span>
-                              <span class="rounded bg-gray-100 px-1.5 py-0.5 dark:bg-dark-700">{{ displaySize.height }}</span>
-                              <span class="text-[10px] text-gray-400">px</span>
+                            <div class="font-mono text-[11px] text-gray-700 dark:text-dark-200">
+                              {{ displaySize }}
                             </div>
                           </div>
                         </div>
@@ -510,13 +534,13 @@
       <BaseDialog
         :show="Boolean(preview)"
         :title="t('imageGeneration.previewTitle')"
-        width="extra-wide"
+        width="full"
         close-on-click-outside
         @close="preview = null"
       >
         <div v-if="preview" class="space-y-4">
-          <div class="flex max-h-[70vh] items-center justify-center overflow-hidden rounded-2xl bg-checker p-2">
-            <img :src="preview.src" :alt="t('imageGeneration.previewTitle')" class="max-h-[68vh] max-w-full rounded-xl object-contain shadow-sm" />
+          <div class="image-preview-frame flex items-center justify-center overflow-hidden rounded-2xl bg-checker">
+            <img :src="preview.src" :alt="t('imageGeneration.previewTitle')" class="h-full w-full rounded-xl object-contain" />
           </div>
           <div v-if="preview.revisedPrompt" class="rounded-xl bg-gray-50/80 p-3 text-xs leading-relaxed text-gray-600 dark:bg-dark-800/80 dark:text-dark-200">
             <p class="font-semibold text-gray-700 dark:text-dark-100 mb-1">{{ t('imageGeneration.prompt') }}:</p>
@@ -535,6 +559,8 @@
           </div>
         </template>
       </BaseDialog>
+      </div>
+      <VideoGenerationPanel v-else id="studio-video-panel" role="tabpanel" aria-labelledby="studio-video-tab" :api-keys="apiKeys" :loading-keys="loadingKeys" />
     </div>
   </AppLayout>
 </template>
@@ -542,12 +568,15 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { keysAPI } from '@/api/keys'
 import {
   listImageModels,
+  openAIImageSize,
   supportedImageAspectRatios,
+  supportedImageResolutions,
   supportsImageGeneration,
+  supportsImageQuality,
   type ImageAspectRatio,
   type ImageQuality,
 } from '@/api/imageGeneration'
@@ -555,6 +584,7 @@ import { BaseDialog, ConfirmDialog, LoadingSpinner } from '@/components/common'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import VideoGenerationPanel from '@/components/image-generation/VideoGenerationPanel.vue'
 import { useAppStore } from '@/stores/app'
 import { useImageStudioStore, type ImageStudioForm, type ImageStudioResult } from '@/stores/imageStudio'
 import type { ApiKey } from '@/types'
@@ -570,6 +600,20 @@ type HistoryFilter = 'all' | GenerationMode
 const { t } = useI18n()
 const appStore = useAppStore()
 const studio = useImageStudioStore()
+const route = useRoute()
+const router = useRouter()
+const activeTab = ref<'image' | 'video'>(route.query.tab === 'video' ? 'video' : 'image')
+const imageTab = ref<HTMLButtonElement | null>(null)
+const videoTab = ref<HTMLButtonElement | null>(null)
+function selectTab(tab: 'image' | 'video') {
+  activeTab.value = tab
+  const button = tab === 'image' ? imageTab.value : videoTab.value
+  button?.focus()
+}
+watch(activeTab, tab => {
+  void router.replace({ query: { ...route.query, tab: tab === 'video' ? 'video' : undefined } })
+})
+watch(() => route.query.tab, tab => { activeTab.value = tab === 'video' ? 'video' : 'image' })
 const apiKeys = ref<ApiKey[]>([])
 const loadingKeys = ref(true)
 const loadingModels = ref(false)
@@ -602,6 +646,7 @@ const emptyForm: ImageStudioForm = {
   prompt: '',
   aspectRatio: 'auto' as ImageAspectRatio,
   quality: 'standard' as ImageQuality,
+  resolution: '1K',
   count: 1,
 }
 const form = computed(() => studio.activeSession?.form ?? emptyForm)
@@ -619,8 +664,8 @@ const ratioShapes: Record<ImageAspectRatio, string> = {
 }
 
 const qualities = computed(() => [
-  { value: 'standard' as const, label: '1K' },
-  { value: 'high' as const, label: '2K' },
+  { value: 'standard' as const, label: t('imageGeneration.qualityStandard') },
+  { value: 'high' as const, label: t('imageGeneration.qualityHigh') },
 ])
 const countOptions = [1, 2, 4].map(value => ({ value, label: `×${value}` }))
 const historyFilters = computed<Array<{ value: HistoryFilter; label: string }>>(() => [
@@ -640,7 +685,9 @@ const keyOptions = computed(() => imageKeys.value.map(key => ({
   label: `${key.name} · ${key.group?.name || ''}`,
 })))
 const modelOptions = computed(() => availableModels.value.map(model => ({ value: model, label: model })))
-const ratioOptions = computed(() => supportedImageAspectRatios(selectedKey.value?.group?.platform, form.value.model)
+const resolutions = computed(() => supportedImageResolutions(selectedKey.value?.group?.platform, form.value.model))
+const showQuality = computed(() => supportsImageQuality(selectedKey.value?.group?.platform, form.value.model))
+const ratioOptions = computed(() => supportedImageAspectRatios(selectedKey.value?.group?.platform, form.value.model, form.value.resolution)
   .map(value => ({ value, cssRatio: ratioShapes[value] })))
 const ratioLabel = computed(() => form.value.aspectRatio === 'auto' ? t('imageGeneration.autoRatio') : form.value.aspectRatio)
 const selectedRatioCss = computed(() => form.value.aspectRatio === 'auto' ? '1 / 1' : ratioShapes[form.value.aspectRatio])
@@ -648,12 +695,9 @@ const filteredResults = computed(() => historyFilter.value === 'all'
   ? results.value
   : results.value.filter(result => result.mode === historyFilter.value))
 const displaySize = computed(() => {
-  const max = form.value.quality === 'high' ? 2048 : 1024
-  if (form.value.aspectRatio === 'auto') return { width: max, height: max }
-  const [widthRatio, heightRatio] = form.value.aspectRatio.split(':').map(Number)
-  return widthRatio >= heightRatio
-    ? { width: max, height: Math.round(max * heightRatio / widthRatio) }
-    : { width: Math.round(max * widthRatio / heightRatio), height: max }
+  if (!showQuality.value) return t('imageGeneration.sizeByModel')
+  const size = openAIImageSize(form.value.aspectRatio, form.value.resolution, form.value.model)
+  return size === 'auto' ? t('imageGeneration.auto') : `${size.replace('x', ' × ')} px`
 })
 
 async function loadKeys() {
@@ -663,7 +707,6 @@ async function loadKeys() {
     let page = 1
     while (true) {
       const response = await keysAPI.list(page, 100, {
-        status: 'active',
         sort_by: 'created_at',
         sort_order: 'desc',
       })
@@ -832,8 +875,15 @@ watch([() => studio.activeId, selectedKey], ([id, key], [previousId, previousKey
   if (ratioDetails.value) ratioDetails.value.open = false
   void loadModels()
 }, { immediate: true })
+watch([resolutions, selectedKey, loadingModels], ([options, key, loading]) => {
+  if (key && !loading && form.value.model && !options.includes(form.value.resolution)) {
+    form.value.resolution = options[options.length - 1]!
+  }
+})
 watch([ratioOptions, selectedKey], ([options, key]) => {
-  if (key && !options.some(option => option.value === form.value.aspectRatio)) form.value.aspectRatio = 'auto'
+  if (key && !options.some(option => option.value === form.value.aspectRatio)) {
+    form.value.aspectRatio = options.some(option => option.value === 'auto') ? 'auto' : '1:1'
+  }
 })
 watch(() => studio.activeSession?.referenceFiles, files => {
   clearReferences()
@@ -855,6 +905,23 @@ onBeforeUnmount(() => { modelRequestID++; clearReferences(); void studio.flush()
   @apply grid min-h-0 flex-1 grid-cols-1 grid-rows-1 lg:grid-cols-[minmax(0,1fr)_260px] lg:overflow-hidden;
 }
 
+.studio-tabs {
+  @apply ml-2 flex shrink-0 gap-1 rounded-xl bg-gray-100/80 p-1 dark:bg-dark-800;
+}
+
+.studio-tabs button {
+  @apply flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-500 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-dark-400;
+}
+
+.studio-tabs button[aria-selected='true'] {
+  @apply bg-white text-gray-900 shadow-sm dark:bg-dark-700 dark:text-white;
+}
+
+@media (max-width: 479px) {
+  .studio-heading > div > div:nth-child(2) { display: none; }
+  .studio-tabs { @apply ml-0; }
+}
+
 /* Canvas Viewport */
 .studio-canvas-section {
   @apply relative flex min-h-0 min-w-0 flex-col;
@@ -866,8 +933,8 @@ onBeforeUnmount(() => { modelRequestID++; clearReferences(); void studio.flush()
 }
 
 .canvas-viewport {
-  @apply relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-4 sm:p-6;
-  margin: 20px 24px 0;
+  @apply relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-2 sm:p-3;
+  margin: 12px 16px 0;
   border: 1px solid var(--surface-border);
   border-radius: 24px;
   background: var(--surface-card);
@@ -879,7 +946,7 @@ onBeforeUnmount(() => { modelRequestID++; clearReferences(); void studio.flush()
 
 /* Composer */
 .composer-container {
-  @apply pointer-events-none shrink-0 px-3 pb-3 pt-4 sm:px-6 sm:pb-5;
+  @apply pointer-events-none shrink-0 px-3 pb-3 pt-3 sm:px-4 sm:pb-3;
 }
 
 .composer-card {
@@ -1100,6 +1167,10 @@ details > summary::-webkit-details-marker {
 }
 
 /* Transparency Checkerboard */
+.image-preview-frame {
+  height: min(76dvh, calc(90dvh - 10rem));
+}
+
 .bg-checker {
   background-color: rgb(249 250 251);
   background-image: linear-gradient(45deg, rgb(229 231 235 / 45%) 25%, transparent 25%),

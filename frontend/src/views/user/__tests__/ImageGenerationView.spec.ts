@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { useImageStudioStore } from '@/stores/imageStudio'
+import { useVideoStudioStore } from '@/stores/videoStudio'
 import ImageGenerationView from '../ImageGenerationView.vue'
 
 const { generate, showError } = vi.hoisted(() => ({ generate: vi.fn(), showError: vi.fn() }))
@@ -15,12 +16,22 @@ vi.mock('@/api/keys', () => ({ keysAPI: { list: vi.fn().mockResolvedValue({
 }) } }))
 vi.mock('@/api/imageGeneration', async importOriginal => ({
   ...await importOriginal<typeof import('@/api/imageGeneration')>(),
-  listImageModels: vi.fn().mockImplementation(async (_key, platform) => platform === 'gemini' ? ['gemini-3-pro-image'] : ['gpt-image-1', 'gpt-image-1.5']),
+  listImageModels: vi.fn().mockImplementation(async (_key, platform) => platform === 'gemini' ? ['gemini-3-pro-image'] : ['gpt-image-1', 'gpt-image-1.5', 'gpt-image-2']),
   generateImages: generate,
 }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showError, showSuccess: vi.fn() }) }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isAuthenticated: true, user: { id: 42 } }) }))
 vi.mock('@/stores/imageStudioStorage', () => ({ loadImageStudio: vi.fn().mockResolvedValue(null), saveImageStudio: vi.fn().mockResolvedValue(undefined) }))
+vi.mock('@/stores/videoStudioStorage', () => ({ loadVideoStudio: vi.fn().mockResolvedValue(null), saveVideoStudio: vi.fn().mockResolvedValue(1) }))
+vi.mock('@/api/videoGeneration', async importOriginal => ({
+  ...await importOriginal<typeof import('@/api/videoGeneration')>(),
+  listVideoModels: vi.fn().mockResolvedValue(['doubao-seedance-1-5-pro']),
+}))
+vi.mock('vue-router', async importOriginal => ({
+  ...await importOriginal<typeof import('vue-router')>(),
+  useRoute: () => ({ query: {} }),
+  useRouter: () => ({ replace: vi.fn().mockResolvedValue(undefined) }),
+}))
 vi.mock('vue-i18n', async importOriginal => ({
   ...await importOriginal<typeof import('vue-i18n')>(),
   useI18n: () => ({ t: (key: string) => key }),
@@ -51,9 +62,65 @@ beforeEach(async () => {
   await flushPromises()
   await view.get('#image-prompt').setValue('A quiet forest')
 })
-afterEach(() => { view.unmount(); useImageStudioStore(pinia).$dispose() })
+afterEach(() => {
+  view.unmount()
+  useImageStudioStore(pinia).$dispose()
+  useVideoStudioStore(pinia).$dispose()
+})
 
 describe('image studio requests in progress', () => {
+  it('preserves the 4K draft and receives an image result while the video tab is open', async () => {
+    let complete!: (images: { src: string }[]) => void
+    generate.mockImplementation(() => new Promise(resolve => { complete = resolve }))
+    await view.get('#image-model').setValue('gpt-image-2')
+    await view.findAll('.resolution-card').find(button => button.text() === '4K')!.trigger('click')
+    await view.get('form').trigger('submit')
+    await view.get('#studio-video-tab').trigger('click')
+    await flushPromises()
+    expect(view.get('#studio-video-tab').attributes('aria-selected')).toBe('true')
+    expect(view.find('#video-prompt').exists()).toBe(true)
+    expect(view.find('#image-prompt').exists()).toBe(false)
+    complete([{ src: 'data:image/png;base64,QUJD' }])
+    await flushPromises()
+    await view.get('#studio-video-tab').trigger('keydown', { key: 'ArrowLeft' })
+    expect(view.get('#studio-image-tab').attributes('aria-selected')).toBe('true')
+    expect((view.get('#image-prompt').element as HTMLTextAreaElement).value).toBe('A quiet forest')
+    expect(view.get('.resolution-card[aria-pressed="true"]').text()).toBe('4K')
+    expect(view.get('.canvas-viewport img').attributes('src')).toBe('data:image/png;base64,QUJD')
+    expect(generate).toHaveBeenCalledTimes(1)
+  })
+  it('selects 4K separately from quality and normalizes it when switching to a legacy model', async () => {
+    await view.get('#image-model').setValue('gpt-image-2')
+    await view.findAll('.resolution-card').find(button => button.text() === '4K')!.trigger('click')
+    expect(useImageStudioStore(pinia).activeSession!.form.aspectRatio).toBe('1:1')
+    expect(useImageStudioStore(pinia).activeSession!.form.quality).toBe('standard')
+    generate.mockResolvedValue([{ src: 'data:image/png;base64,QUJD' }])
+    await view.get('form').trigger('submit')
+    await flushPromises()
+    expect(generate).toHaveBeenCalledWith(expect.objectContaining({ resolution: '4K', quality: 'standard' }))
+    await view.findAll('.ratio-card').find(button => button.text() === '16:9')!.trigger('click')
+    await view.findAll('.resolution-card').find(button => button.text() === '1K')!.trigger('click')
+    expect(useImageStudioStore(pinia).activeSession!.form.aspectRatio).toBe('1:1')
+    expect(view.findAll('.ratio-card').some(button => button.text() === '16:9')).toBe(false)
+    await view.get('#image-model').setValue('gpt-image-1.5')
+    expect(view.findAll('.resolution-card').map(button => button.text())).toEqual(['1K'])
+    expect(useImageStudioStore(pinia).activeSession!.form.resolution).toBe('1K')
+  })
+
+  it('keeps Gemini 4K through remounts and hides unsupported quality controls', async () => {
+    await view.get('#image-api-key').setValue('2')
+    await flushPromises()
+    await view.findAll('.resolution-card').find(button => button.text() === '4K')!.trigger('click')
+    expect(view.findAll('.quality-card:not(.resolution-card)')).toHaveLength(0)
+    view.unmount()
+    view = mountView()
+    await flushPromises()
+    expect(view.get('.resolution-card[aria-pressed="true"]').text()).toBe('4K')
+    await view.get('#image-api-key').setValue('1')
+    await flushPromises()
+    expect(useImageStudioStore(pinia).activeSession!.form.resolution).toBe('1K')
+  })
+
   it('changes model defaults only when the selected key changes', async () => {
     await view.get('#image-model').setValue('gpt-image-1.5')
     await view.get('#image-api-key').setValue('2')

@@ -864,15 +864,68 @@ func (r *groupRepository) GetAccountCount(ctx context.Context, groupID int64) (t
 }
 
 func (r *groupRepository) DeleteAccountGroupsByGroupID(ctx context.Context, groupID int64) (int64, error) {
-	res, err := r.sql.ExecContext(ctx, "DELETE FROM account_groups WHERE group_id = $1", groupID)
+	client := r.client
+	if contextTx := dbent.TxFromContext(ctx); contextTx != nil {
+		client = contextTx.Client()
+	}
+	tx, err := client.Tx(ctx)
+	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
+		return 0, err
+	}
+	if tx != nil {
+		defer func() { _ = tx.Rollback() }()
+		client = tx.Client()
+	}
+
+	rows, err := client.QueryContext(ctx, "DELETE FROM account_groups WHERE group_id = $1 RETURNING account_id", groupID)
 	if err != nil {
 		return 0, err
 	}
-	affected, _ := res.RowsAffected()
-	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventGroupChanged, nil, &groupID, nil); err != nil {
-		logger.LegacyPrintf("repository.group", "[SchedulerOutbox] enqueue group account clear failed: group=%d err=%v", groupID, err)
+	var accountIDs []int64
+	for rows.Next() {
+		var accountID int64
+		if err := rows.Scan(&accountID); err != nil {
+			_ = rows.Close()
+			return 0, err
+		}
+		accountIDs = append(accountIDs, accountID)
 	}
-	return affected, nil
+	if err := rows.Close(); err != nil {
+		return 0, err
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if len(accountIDs) > 0 {
+		// A later rebind must not revive the role of the removed membership.
+		_, err := client.ExecContext(ctx, `
+			UPDATE accounts
+			SET extra = jsonb_set(extra, '{fallback_group_ids}', (
+				SELECT COALESCE(jsonb_agg(id ORDER BY ord), '[]'::jsonb)
+				FROM jsonb_array_elements(extra->'fallback_group_ids') WITH ORDINALITY AS ids(id, ord)
+				WHERE id <> to_jsonb($1::bigint)
+			)), updated_at = NOW()
+			WHERE id = ANY($2)
+				AND jsonb_typeof(extra->'fallback_group_ids') = 'array'
+				AND extra->'fallback_group_ids' @> jsonb_build_array($1::bigint)
+		`, groupID, pq.Array(accountIDs))
+		if err != nil {
+			return 0, err
+		}
+		payload := map[string]any{"account_ids": accountIDs, "group_ids": []int64{groupID}}
+		if err := enqueueSchedulerOutbox(ctx, client, service.SchedulerOutboxEventAccountBulkChanged, nil, nil, payload); err != nil {
+			return 0, err
+		}
+	}
+	if err := enqueueSchedulerOutbox(ctx, client, service.SchedulerOutboxEventGroupChanged, nil, &groupID, nil); err != nil {
+		return 0, err
+	}
+	if tx != nil {
+		if err := tx.Commit(); err != nil {
+			return 0, err
+		}
+	}
+	return int64(len(accountIDs)), nil
 }
 
 func (r *groupRepository) DeleteCascade(ctx context.Context, id int64) ([]int64, error) {

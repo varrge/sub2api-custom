@@ -1252,6 +1252,78 @@ func (s *GroupRepoSuite) TestDeleteAccountGroupsByGroupID_MultipleAccounts() {
 	s.Require().Zero(count)
 }
 
+func (s *GroupRepoSuite) TestDeleteAccountGroupsByGroupID_ClearsFallbackRolesWithMemberships() {
+	removed := &service.Group{Name: "fallback-removed", Platform: service.PlatformAnthropic, RateMultiplier: 1, Status: service.StatusActive, SubscriptionType: service.SubscriptionTypeStandard}
+	kept := &service.Group{Name: "fallback-kept", Platform: service.PlatformAnthropic, RateMultiplier: 1, Status: service.StatusActive, SubscriptionType: service.SubscriptionTypeStandard}
+	s.Require().NoError(s.repo.Create(s.ctx, removed))
+	s.Require().NoError(s.repo.Create(s.ctx, kept))
+	var accountIDs []int64
+	for i, extra := range []map[string]any{
+		{service.AccountFallbackGroupIDsExtraKey: []int64{removed.ID, kept.ID}, "custom_setting": "kept"},
+		{service.AccountFallbackGroupIDsExtraKey: []int64{removed.ID}},
+		{"custom_setting": "normal"},
+	} {
+		encoded, err := json.Marshal(extra)
+		s.Require().NoError(err)
+		var id int64
+		s.Require().NoError(scanSingleRow(s.ctx, s.tx,
+			"INSERT INTO accounts (name, platform, type, extra) VALUES ($1, $2, $3, $4) RETURNING id",
+			[]any{fmt.Sprintf("fallback-clear-%d", i), service.PlatformAnthropic, service.AccountTypeOAuth, encoded}, &id))
+		accountIDs = append(accountIDs, id)
+	}
+	s.Require().NoError(s.repo.BindAccountsToGroup(s.ctx, removed.ID, accountIDs))
+	s.Require().NoError(s.repo.BindAccountsToGroup(s.ctx, kept.ID, accountIDs[:1]))
+	accountRepo := newAccountRepositoryWithSQL(s.tx.Client(), s.tx, nil)
+	_, err := s.tx.ExecContext(s.ctx, "SAVEPOINT fallback_membership_clear")
+	s.Require().NoError(err)
+
+	assertCleared := func() {
+		s.T().Helper()
+		affected, err := s.repo.DeleteAccountGroupsByGroupID(s.ctx, removed.ID)
+		s.Require().NoError(err)
+		s.Require().Equal(int64(3), affected)
+		for i, id := range accountIDs {
+			account, err := accountRepo.GetByID(s.ctx, id)
+			s.Require().NoError(err)
+			s.False(account.IsFallbackForGroup(&removed.ID))
+			s.NotContains(account.GroupIDs, removed.ID)
+			s.Equal(i == 0, account.IsFallbackForGroup(&kept.ID))
+			if i == 0 {
+				s.Equal("kept", account.Extra["custom_setting"])
+				s.Equal([]int64{kept.ID}, account.GroupIDs)
+			} else if i == 1 {
+				s.Empty(account.Extra[service.AccountFallbackGroupIDsExtraKey])
+			} else {
+				s.Equal(map[string]any{"custom_setting": "normal"}, account.Extra)
+			}
+		}
+		var outboxCount int
+		s.Require().NoError(scanSingleRow(s.ctx, s.tx,
+			"SELECT COUNT(*) FROM scheduler_outbox WHERE event_type = $1 AND payload->'account_ids' @> to_jsonb($2::bigint)",
+			[]any{service.SchedulerOutboxEventAccountBulkChanged, accountIDs[0]}, &outboxCount))
+		s.Equal(1, outboxCount)
+	}
+	assertCleared()
+
+	// Both the role cleanup and memberships participate in the caller's transaction.
+	_, err = s.tx.ExecContext(s.ctx, "ROLLBACK TO SAVEPOINT fallback_membership_clear")
+	s.Require().NoError(err)
+	for i, id := range accountIDs {
+		account, err := accountRepo.GetByID(s.ctx, id)
+		s.Require().NoError(err)
+		s.Contains(account.GroupIDs, removed.ID)
+		s.Equal(i < 2, account.IsFallbackForGroup(&removed.ID))
+	}
+	assertCleared()
+	s.Require().NoError(s.repo.BindAccountsToGroup(s.ctx, removed.ID, accountIDs))
+	for _, id := range accountIDs {
+		account, err := accountRepo.GetByID(s.ctx, id)
+		s.Require().NoError(err)
+		s.Contains(account.GroupIDs, removed.ID)
+		s.False(account.IsFallbackForGroup(&removed.ID), "rejoining defaults to a normal account")
+	}
+}
+
 // --- 软删除过滤测试 ---
 
 func (s *GroupRepoSuite) TestDelete_SoftDelete_NotVisibleInList() {

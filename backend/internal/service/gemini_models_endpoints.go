@@ -79,17 +79,27 @@ func DeclaredModelsCover(declared []string, model string) bool {
 // Vertex 账号排在所有 AI Studio 兼容账号之后，混合分组始终由 AI Studio 兼容账号应答。
 // 同级账号按 priority、最近使用时间挑选。DeclaredModelIDs 非空时模型接口按声明的模型应答，不经过选号。
 func (s *GeminiMessagesCompatService) SelectAccountForModelsEndpoints(ctx context.Context, groupID *int64) (*Account, error) {
+	if groupID != nil && !accountFallbackPoolSet(ctx) {
+		account, err := s.SelectAccountForModelsEndpoints(withAccountFallbackPool(ctx, groupID, false), groupID)
+		if !errors.Is(err, ErrNoAvailableAccounts) {
+			return account, err
+		}
+		return s.SelectAccountForModelsEndpoints(withAccountFallbackPool(ctx, groupID, true), groupID)
+	}
 	accounts, err := s.listSchedulableAccountsOnce(ctx, groupID, PlatformGemini, true)
 	if err != nil {
 		return nil, fmt.Errorf("query accounts failed: %w", err)
 	}
 	if len(accounts) == 0 {
-		return nil, errors.New("no available Gemini accounts")
+		return nil, fmt.Errorf("no available Gemini accounts: %w", ErrNoAvailableAccounts)
 	}
 
 	var selected *Account
 	for i := range accounts {
 		acc := &accounts[i]
+		if !accountMatchesFallbackPool(ctx, acc) {
+			continue
+		}
 		if selected == nil {
 			selected = acc
 			continue
@@ -125,7 +135,7 @@ func (s *GeminiMessagesCompatService) SelectAccountForModelsEndpoints(ctx contex
 	}
 
 	if selected == nil {
-		return nil, errors.New("no available Gemini accounts")
+		return nil, fmt.Errorf("no available Gemini accounts: %w", ErrNoAvailableAccounts)
 	}
 	return s.hydrateSelectedAccount(ctx, selected)
 }

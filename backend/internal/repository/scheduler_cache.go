@@ -1272,6 +1272,7 @@ func filterSchedulerExtra(extra map[string]any) map[string]any {
 		return nil
 	}
 	keys := []string{
+		service.AccountFallbackGroupIDsExtraKey,
 		service.AccountMinUserRateMultiplierExtraKey,
 		service.AccountUserRateFilterModeExtraKey,
 		// Anthropic shared-window and Fable-only threshold checks run on this

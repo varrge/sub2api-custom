@@ -339,3 +339,18 @@ func TestExportDataExcludesCodexTicketMaterial(t *testing.T) {
 	require.Contains(t, extra, "codex_turn_ticket:gpt-6-astra")
 	require.Contains(t, extra, "codex_harvest_proxy_url")
 }
+
+func TestImportDataClearsFallbackRolesWithoutSourceGroupBindings(t *testing.T) {
+	router, svc := setupAccountDataRouter()
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/admin/accounts/data", bytes.NewBufferString(
+		`{"data":{"proxies":[],"accounts":[{"name":"fallback","platform":"openai","type":"apikey","credentials":{"api_key":"test"},"extra":{"fallback_group_ids":[123],"custom_setting":"kept"},"concurrency":1,"priority":1}]},"skip_default_group_bind":true}`,
+	))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Len(t, svc.createdAccounts, 1)
+	require.Empty(t, svc.createdAccounts[0].GroupIDs)
+	require.NotContains(t, svc.createdAccounts[0].Extra, service.AccountFallbackGroupIDsExtraKey)
+	require.Equal(t, "kept", svc.createdAccounts[0].Extra["custom_setting"])
+}

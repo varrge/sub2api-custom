@@ -101,6 +101,12 @@ export default {
         failed: '更新优先级失败'
       },
       groupCountTotal: '共 {count} 个分组',
+      fallbackGroups: '分组调度角色',
+      fallbackGroupsHint: '勾选后，该账号仅在对应分组的普通账号都无法处理当前请求时兜底。各分组独立生效。',
+      fallbackForGroup: '{group} 的兜底账号',
+      fallbackAccount: '兜底',
+      normalAccount: '普通',
+      setFallbackGroups: '设置这些分组的调度角色',
       columns: {
         name: '名称',
         id: '账号ID',

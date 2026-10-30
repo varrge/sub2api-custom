@@ -1418,6 +1418,11 @@
             :groups="groups"
             aria-labelledby="bulk-edit-groups-label"
           />
+          <label v-if="enableGroups && groupIds.length" class="my-3 flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input v-model="enableFallbackGroups" type="checkbox" class="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
+            {{ t('admin.accounts.setFallbackGroups') }}
+          </label>
+          <AccountFallbackGroupsField v-if="enableGroups && enableFallbackGroups" v-model="fallbackGroupIds" :group-ids="groupIds" :groups="groups" />
         </div>
       </div>
     </form>
@@ -1492,6 +1497,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Select from '@/components/common/Select.vue'
 import ProxySelector from '@/components/common/ProxySelector.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
+import AccountFallbackGroupsField from '@/components/account/AccountFallbackGroupsField.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
 import Icon from '@/components/icons/Icon.vue'
 import {
@@ -1693,6 +1699,8 @@ const priority = ref(1)
 const rateMultiplier = ref(1)
 const status = ref<'active' | 'inactive'>('active')
 const groupIds = ref<number[]>([])
+const enableFallbackGroups = ref(false)
+const fallbackGroupIds = ref<number[]>([])
 const openaiPassthroughEnabled = ref(false)
 // Codex namespace 工具摊平兼容开关（仅 OAuth），缺省关闭即原样保留
 const openaiFlattenNamespacesEnabled = ref(false)
@@ -1967,6 +1975,9 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
 
   if (enableGroups.value) {
     updates.group_ids = groupIds.value
+    if (enableFallbackGroups.value) {
+      ensureExtra().fallback_group_ids = fallbackGroupIds.value.filter(id => groupIds.value.includes(id))
+    }
   }
 
   if (enableBaseUrl.value) {
@@ -2403,6 +2414,8 @@ watch(
       rateMultiplier.value = 1
       status.value = 'active'
       groupIds.value = []
+      enableFallbackGroups.value = false
+      fallbackGroupIds.value = []
       openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
       openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
       upstreamBillingAutoProbeMode.value = 'enabled'

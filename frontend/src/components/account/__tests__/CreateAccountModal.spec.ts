@@ -219,6 +219,20 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
 
   afterEach(() => vi.useRealTimers())
 
+  it('creates an account with fallback enabled only in the chosen group', async () => {
+    const wrapper = mountModal([1, 2].map(id => ({ id, name: `Group ${id}`, platform: 'openai' })))
+    await selectButtonByText(wrapper, 'OpenAI')
+    await selectButtonByText(wrapper, 'API Key')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('fallback account')
+    await wrapper.get('form#create-account-form input[type="password"]').setValue('test-api-key')
+    await wrapper.get('[data-testid="select-pricing-groups"]').trigger('click')
+    await wrapper.get('[data-testid="account-fallback-groups"] input[value="1"]').setValue(true)
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(createAccountMock.mock.calls[0]?.[0]).toMatchObject({ group_ids: [1, 2], extra: { fallback_group_ids: [1] } })
+    wrapper.unmount()
+  })
+
   it('sets month and year expiry presets without submitting the account form', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-01-31T12:34:00'))

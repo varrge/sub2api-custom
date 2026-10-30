@@ -3383,6 +3383,7 @@
         :mixed-scheduling="mixedScheduling"
         data-tour="account-form-groups"
       />
+      <AccountFallbackGroupsField v-model="fallbackGroupIds" :group-ids="form.group_ids" :groups="selectableGroups" />
 
     </form>
 
@@ -3471,6 +3472,7 @@ import Icon from '@/components/icons/Icon.vue'
 import ProxySelector from '@/components/common/ProxySelector.vue'
 import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
+import AccountFallbackGroupsField from '@/components/account/AccountFallbackGroupsField.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
 import GrokModelDiagnosticsPanel from '@/components/account/GrokModelDiagnosticsPanel.vue'
 import QuotaLimitCard from '@/components/account/QuotaLimitCard.vue'
@@ -4156,6 +4158,7 @@ const mixedScheduling = ref(false) // For antigravity accounts: enable mixed sch
 const upstreamRequestIdHeader = ref('')
 const minUserRateMultiplier = ref<number | string>(0)
 const userRateFilterMode = ref('below')
+const fallbackGroupIds = ref<number[]>([])
 const userRateFilterModeOptions = computed(() => [
   { value: 'below', label: t('admin.accounts.userRateFilterBelow') },
   { value: 'above', label: t('admin.accounts.userRateFilterAbove') }
@@ -4680,6 +4683,9 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     ? newAccount.status
     : 'active'
   form.group_ids = newAccount.group_ids || []
+  fallbackGroupIds.value = Array.isArray(newAccount.extra?.fallback_group_ids)
+    ? newAccount.extra.fallback_group_ids.filter(id => form.group_ids.includes(id))
+    : []
   form.expires_at = newAccount.expires_at ?? null
 
   // Load intercept warmup requests setting (applies to all account types)
@@ -6495,6 +6501,14 @@ const handleSubmit = async () => {
         ...((updatePayload.extra as Record<string, unknown>) || props.account.extra || {}),
         min_user_rate_multiplier: minimumUserRate,
         user_rate_filter_mode: userRateFilterMode.value
+      }
+    }
+
+    const selectedFallbackGroups = fallbackGroupIds.value.filter(id => form.group_ids.includes(id))
+    if (selectedFallbackGroups.length || props.account.extra?.fallback_group_ids !== undefined) {
+      updatePayload.extra = {
+        ...((updatePayload.extra as Record<string, unknown>) || props.account.extra || {}),
+        fallback_group_ids: selectedFallbackGroups
       }
     }
 

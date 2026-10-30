@@ -3792,6 +3792,7 @@
           :mixed-scheduling="mixedScheduling"
           data-tour="account-form-groups"
         />
+        <AccountFallbackGroupsField v-model="fallbackGroupIds" :group-ids="form.group_ids" :groups="groups" />
       </div>
 
     </form>
@@ -4195,6 +4196,7 @@ import Icon from '@/components/icons/Icon.vue'
 import ProxySelector from '@/components/common/ProxySelector.vue'
 import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
+import AccountFallbackGroupsField from '@/components/account/AccountFallbackGroupsField.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
 import QuotaLimitCard from '@/components/account/QuotaLimitCard.vue'
 import Toggle from '@/components/common/Toggle.vue'
@@ -4285,6 +4287,7 @@ const oauthStepTitle = computed(() => {
 const upstreamRequestIdHeader = ref('')
 const minUserRateMultiplier = ref<number | string>(0)
 const userRateFilterMode = ref('below')
+const fallbackGroupIds = ref<number[]>([])
 const userRateFilterModeOptions = computed(() => [
   { value: 'below', label: t('admin.accounts.userRateFilterBelow') },
   { value: 'above', label: t('admin.accounts.userRateFilterAbove') }
@@ -4295,11 +4298,13 @@ const withAccountSchedulingExtra = <T extends Record<string, unknown> | undefine
     throw new Error(t('admin.accounts.minUserRateMultiplierInvalid'))
   }
   const name = upstreamRequestIdHeader.value.trim()
-  if (!name && minimum === 0 && userRateFilterMode.value === 'below') return extra
+  const selectedFallbackGroups = fallbackGroupIds.value.filter(id => form.group_ids.includes(id))
+  if (!name && minimum === 0 && userRateFilterMode.value === 'below' && selectedFallbackGroups.length === 0) return extra
   return {
     ...(extra || {}),
     ...(name ? { upstream_request_id_header: name } : {}),
     ...(minimum > 0 ? { min_user_rate_multiplier: minimum } : {}),
+    ...(selectedFallbackGroups.length ? { fallback_group_ids: selectedFallbackGroups } : {}),
     user_rate_filter_mode: userRateFilterMode.value
   }
 }
@@ -5673,6 +5678,7 @@ const resetForm = () => {
   form.priority = 1
   form.rate_multiplier = 1
   form.group_ids = []
+  fallbackGroupIds.value = []
   form.expires_at = null
   accountCategory.value = 'oauth-based'
   addMethod.value = 'oauth'
@@ -6547,6 +6553,7 @@ const handleGrokImportSSO = async (ssoInput: string) => {
       proxy_id: form.proxy_id,
       group_ids: form.group_ids,
       credentials,
+      extra: withAccountSchedulingExtra(undefined),
       concurrency: form.concurrency,
       load_factor: form.load_factor ?? undefined,
       priority: form.priority,

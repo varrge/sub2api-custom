@@ -515,6 +515,9 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 		}
 	}
 
+	if err := ValidateAccountFallbackGroupsExtra(accountExtra, groupIDs); err != nil {
+		return nil, err
+	}
 	// 检查混合渠道风险（除非用户已确认）
 	if len(groupIDs) > 0 && !input.SkipMixedChannelCheck {
 		if err := s.checkMixedChannelRisk(ctx, 0, input.Platform, groupIDs); err != nil {
@@ -590,6 +593,11 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	}
 	if account.Platform == PlatformTypeSafe && input.Type != "" && input.Type != AccountTypeAPIKey {
 		return nil, errors.New("typesafe accounts only support apikey credentials")
+	}
+	previousFallbackGroups, hadPreviousFallbackGroups := account.Extra[AccountFallbackGroupIDsExtraKey]
+	input.Extra, err = normalizeAccountFallbackUpdate(account, input.Extra, input.GroupIDs)
+	if err != nil {
+		return nil, err
 	}
 	var normalizedExtra map[string]any
 	if input.Extra != nil {
@@ -892,6 +900,20 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		}
 	}
 
+	// Keep the current role until its replacement memberships have been saved.
+	var fallbackGroupUpdate map[string]any
+	if input.GroupIDs != nil {
+		if next, exists := account.Extra[AccountFallbackGroupIDsExtraKey]; exists {
+			fallbackGroupUpdate = map[string]any{AccountFallbackGroupIDsExtraKey: next}
+			account.Extra = maps.Clone(account.Extra)
+			if hadPreviousFallbackGroups {
+				account.Extra[AccountFallbackGroupIDsExtraKey] = previousFallbackGroups
+			} else {
+				delete(account.Extra, AccountFallbackGroupIDsExtraKey)
+			}
+		}
+	}
+
 	billingSettingsAppliedAtomically := false
 	updater := s.accountBillingRepo
 	if updater == nil {
@@ -944,6 +966,11 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		if err := s.accountRepo.BindGroups(ctx, account.ID, *input.GroupIDs); err != nil {
 			return nil, err
 		}
+		if fallbackGroupUpdate != nil {
+			if err := s.accountRepo.UpdateExtra(ctx, account.ID, fallbackGroupUpdate); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	// 重新查询以确保返回完整数据（包括正确的 Proxy 关联对象）
@@ -957,6 +984,15 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 // UpdateAccountExtra 仅对 Extra JSONB 做 key 级合并，避免覆盖其它运行态键
 // （如 model_rate_limits / passive_usage_* 等）。
 func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, updates map[string]any) error {
+	if _, provided := updates[AccountFallbackGroupIDsExtraKey]; provided {
+		account, err := s.accountRepo.GetByID(ctx, id)
+		if err != nil {
+			return err
+		}
+		if err := ValidateAccountFallbackGroupsExtra(updates, account.GroupIDs); err != nil {
+			return err
+		}
+	}
 	if err := ValidateAccountMinUserRateExtra(updates); err != nil {
 		return err
 	}
@@ -1036,10 +1072,11 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 	}
 
 	needMixedChannelCheck := input.GroupIDs != nil && !input.SkipMixedChannelCheck
+	_, updatesFallbackGroups := input.Extra[AccountFallbackGroupIDsExtraKey]
 
 	// 预取所有目标账号，供凭据守卫/代理守卫/混合渠道检查共用，避免多次 DB 查询。
 	var cachedTargets []*Account
-	if len(input.Credentials) > 0 || input.ProxyID != nil || needMixedChannelCheck || openAISettings.any() || input.ProbeEnabled != nil || input.RateMultiplier != nil {
+	if len(input.Credentials) > 0 || input.ProxyID != nil || input.GroupIDs != nil || updatesFallbackGroups || openAISettings.any() || input.ProbeEnabled != nil || input.RateMultiplier != nil {
 		loaded, err := s.accountRepo.GetByIDs(ctx, input.AccountIDs)
 		if err != nil {
 			return nil, err
@@ -1061,6 +1098,25 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 				if err := ValidateGeminiUpstreamProtocol(account.Platform, account.Type, credentials); err != nil {
 					return nil, err
 				}
+			}
+		}
+	}
+	fallbackGroupUpdates := make(map[int64]any)
+	if updatesFallbackGroups || input.GroupIDs != nil {
+		for _, accountID := range input.AccountIDs {
+			account := targetsByID[accountID]
+			if account == nil {
+				if updatesFallbackGroups {
+					return nil, ErrAccountNotFound
+				}
+				continue
+			}
+			extra, err := normalizeAccountFallbackUpdate(account, input.Extra, input.GroupIDs)
+			if err != nil {
+				return nil, err
+			}
+			if value, exists := extra[AccountFallbackGroupIDsExtraKey]; exists && input.GroupIDs != nil {
+				fallbackGroupUpdates[accountID] = value
 			}
 		}
 	}
@@ -1169,6 +1225,11 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 		ProbeEnabled:               input.ProbeEnabled,
 		EnsureCodexFingerprintSeed: ShouldEnsureCodexFingerprintSeedForExtraUpdates(input.Extra),
 	}
+	if input.GroupIDs != nil && updatesFallbackGroups {
+		// A failed group bind must not apply roles for groups the account did not join.
+		repoUpdates.Extra = maps.Clone(input.Extra)
+		delete(repoUpdates.Extra, AccountFallbackGroupIDsExtraKey)
+	}
 	if input.ProbeEnabled != nil {
 		if repoUpdates.Extra == nil {
 			repoUpdates.Extra = make(map[string]any)
@@ -1247,6 +1308,15 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 				result.FailedIDs = append(result.FailedIDs, accountID)
 				result.Results = append(result.Results, entry)
 				continue
+			}
+			if value, update := fallbackGroupUpdates[accountID]; update {
+				if err := s.accountRepo.UpdateExtra(ctx, accountID, map[string]any{AccountFallbackGroupIDsExtraKey: value}); err != nil {
+					entry.Error = err.Error()
+					result.Failed++
+					result.FailedIDs = append(result.FailedIDs, accountID)
+					result.Results = append(result.Results, entry)
+					continue
+				}
 			}
 		}
 

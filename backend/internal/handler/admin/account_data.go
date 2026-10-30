@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
 	"time"
@@ -432,6 +433,9 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 		}
 
 		enrichCredentialsFromIDToken(&item)
+		// Imported accounts have no source group bindings, so source group roles cannot carry over.
+		item.Extra = maps.Clone(item.Extra)
+		delete(item.Extra, service.AccountFallbackGroupIDsExtraKey)
 
 		accountInput := &service.CreateAccountInput{
 			Name:                 item.Name,

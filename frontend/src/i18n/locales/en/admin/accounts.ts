@@ -103,6 +103,12 @@ export default {
         failed: 'Failed to update priority'
       },
       groupCountTotal: '{count} groups total',
+      fallbackGroups: 'Scheduling role by group',
+      fallbackGroupsHint: 'Checked accounts are used only when no normal account in that group can serve the request. Each group is configured independently.',
+      fallbackForGroup: 'Fallback account for {group}',
+      fallbackAccount: 'Fallback',
+      normalAccount: 'Normal',
+      setFallbackGroups: 'Set scheduling roles for these groups',
       platforms: {
         anthropic: 'Anthropic',
         claude: 'Claude',

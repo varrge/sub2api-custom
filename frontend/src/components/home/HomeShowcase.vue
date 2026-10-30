@@ -84,7 +84,7 @@ onUnmounted(() => {
 
 <style scoped>
 .showcase { position: relative; padding: 100px 0 76px; perspective: 1200px; }
-.api-type { position: absolute; top: -30px; left: 0; right: 0; text-align: center; font-size: clamp(130px, 24vw, 290px); line-height: 1; font-weight: 800; letter-spacing: -.055em; background: linear-gradient(150deg,#e8dfd5 10%,#a5a3a1 42%,#f8f7f4 64%,#af9276 90%); background-clip: text; -webkit-text-fill-color: transparent; user-select: none; }
+.api-type { position: absolute; top: -30px; left: 0; right: 0; text-align: center; font-size: clamp(130px, 24vw, 290px); line-height: 1; font-weight: 800; letter-spacing: -.055em; background: linear-gradient(150deg,#e8dfd5 10%,#a5a3a1 42%,#f8f7f4 64%,#af9276 90%); background-clip: text; -webkit-text-fill-color: transparent; user-select: none; pointer-events: none; }
 .product-stage { position: relative; width: min(760px, 100%); margin: 0 auto; transform-style: preserve-3d; transform: rotateX(calc(22deg - var(--scroll-progress) * 18deg)) rotateY(calc(-12deg + var(--scroll-progress) * 12deg)) rotateZ(calc(-6deg + var(--scroll-progress) * 6deg)) scale(calc(1 + var(--scroll-progress) * .08)); transition: transform .12s ease-out; }
 .product-base { position: absolute; bottom: -9px; left: 5%; right: 5%; height: 24px; background: linear-gradient(#e5e5e7,#b2b2b4); border-radius: 12px; box-shadow: 0 15px 35px #00000014; transform: translateZ(-20px); }
 .connection-panel { position: relative; min-height: 300px; padding: 24px 28px 20px; border: 1px solid var(--glass-border); border-radius: 20px; background: var(--glass); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px); box-shadow: 0 35px 70px var(--glass-shadow), inset 0 0 0 1px #4c392014; }

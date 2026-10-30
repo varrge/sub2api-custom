@@ -408,6 +408,9 @@ func (s *defaultOpenAIAccountScheduler) Select(
 		if err != nil {
 			return nil, decision, err
 		}
+		if openAIAccountAcquireOnly(ctx) && selection != nil && !selection.Acquired {
+			selection = nil
+		}
 		if selection != nil && selection.Account != nil {
 			compatible, _ := s.isAccountRequestCompatibleReason(ctx, selection.Account, req)
 			hasGroupMetadata := len(selection.Account.GroupIDs) > 0 || len(selection.Account.AccountGroups) > 0
@@ -584,6 +587,9 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 			Acquired:    true,
 			ReleaseFunc: result.ReleaseFunc,
 		}), false, nil
+	}
+	if openAIAccountAcquireOnly(ctx) {
+		return nil, false, nil
 	}
 
 	cfg := s.service.schedulingConfig()
@@ -1334,7 +1340,7 @@ func (s *defaultOpenAIAccountScheduler) tryFallbackToWeightedSticky(
 				ReleaseFunc: result.ReleaseFunc,
 			}), nil
 		}
-		if s.service.concurrencyService != nil {
+		if s.service.concurrencyService != nil && !openAIAccountAcquireOnly(ctx) {
 			cfg := s.service.schedulingConfig()
 			return attachSelectionProfitGate(ctx, &AccountSelectionResult{
 				Account: account,
@@ -1564,8 +1570,13 @@ func (s *defaultOpenAIAccountScheduler) trySelectByLoadBalancePool(
 	budget *openAISelectionProbeBudget,
 ) openAIAccountLoadSelectionAttempt {
 	plan := s.buildOpenAIAccountLoadPlan(ctx, req, filtered, loadMap)
-	if openAICostOverflowExpanded(req, plan) {
+	if !openAIAccountAcquireOnly(ctx) && openAICostOverflowExpanded(req, plan) {
 		budget.enableLimit()
+	}
+	if openAIAccountAcquireOnly(ctx) {
+		// Probe beyond Top-K once before deciding that this pool has no capacity.
+		plan.includeOverflowFallback = true
+		plan.selectionOrder = s.buildOpenAISelectionOrder(req, plan)
 	}
 	attempt := openAIAccountLoadSelectionAttempt{
 		selectionOrder: plan.selectionOrder,
@@ -1603,8 +1614,12 @@ func (s *defaultOpenAIAccountScheduler) trySelectByLoadBalancePool(
 		loadReq := buildOpenAIAccountLoadRequest(filtered)
 		if freshLoadMap, loadErr := s.service.concurrencyService.GetAccountsLoadBatchFresh(ctx, loadReq); loadErr == nil {
 			freshPlan := s.buildOpenAIAccountLoadPlan(ctx, req, filtered, freshLoadMap)
-			if openAICostOverflowExpanded(req, freshPlan) {
+			if !openAIAccountAcquireOnly(ctx) && openAICostOverflowExpanded(req, freshPlan) {
 				budget.enableLimit()
+			}
+			if openAIAccountAcquireOnly(ctx) {
+				freshPlan.includeOverflowFallback = true
+				freshPlan.selectionOrder = s.buildOpenAISelectionOrder(req, freshPlan)
 			}
 			if len(freshPlan.selectionOrder) > 0 {
 				freshResult, freshCompactBlocked, freshAcquireErr := s.tryAcquireOpenAISelectionOrderWithBudget(ctx, req, freshPlan.selectionOrder, budget)
@@ -1684,6 +1699,9 @@ func (s *defaultOpenAIAccountScheduler) finishLoadBalanceSelectionFallback(
 		return nil, candidateCount, topK, loadSkew, stickyErr
 	} else if stickyFallback != nil {
 		return stickyFallback, candidateCount, topK, loadSkew, nil
+	}
+	if openAIAccountAcquireOnly(ctx) {
+		return nil, candidateCount, topK, loadSkew, noAvailableOpenAISelectionError(req.RequestedModel, attempt.compactBlocked, filterStats.summary("capacity_exhausted"))
 	}
 
 	cfg := s.service.schedulingConfig()
@@ -1775,6 +1793,9 @@ func (s *defaultOpenAIAccountScheduler) isAccountRequestCompatible(ctx context.C
 func (s *defaultOpenAIAccountScheduler) isAccountRequestCompatibleReason(ctx context.Context, account *Account, req OpenAIAccountScheduleRequest) (bool, string) {
 	if account == nil {
 		return false, "account_nil"
+	}
+	if !accountMatchesFallbackPool(ctx, account) {
+		return false, "fallback_pool"
 	}
 	if source, ok := CompositeRouteSourceFromContext(ctx); ok && source == CompositeRouteSourceAccount {
 		if publicModel, modelOK := RequestedPublicModelFromContext(ctx); modelOK && !explicitModelMappingClaims(*account, publicModel) {
@@ -2142,25 +2163,75 @@ func (s *OpenAIGatewayService) SelectAccountWithSchedulerForImages(
 	excludedIDs map[int64]struct{},
 	requiredCapability OpenAIImagesCapability,
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
+	return s.selectOpenAIAccountPools(ctx, groupID, PlatformOpenAI, excludedIDs, func(poolCtx context.Context, excluded map[int64]struct{}) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
+		return s.selectAccountWithSchedulerForImagesInPool(poolCtx, groupID, sessionHash, requestedModel, excluded, requiredCapability)
+	})
+}
+
+func (s *OpenAIGatewayService) selectAccountWithSchedulerForImagesInPool(ctx context.Context, groupID *int64, sessionHash, requestedModel string, excludedIDs map[int64]struct{}, requiredCapability OpenAIImagesCapability) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
 	selection, decision, err := s.selectAccountWithScheduler(ctx, groupID, "", sessionHash, requestedModel, excludedIDs, OpenAIUpstreamTransportHTTPSSE, "", requiredCapability, false, PlatformOpenAI, false, false)
 	if err == nil && selection != nil && selection.Account != nil {
 		return selection, decision, nil
 	}
 	// 如果要求 native 能力（如指定了模型）但没有可用的 APIKey 账号，回退到 basic（OAuth 账号）
-	if requiredCapability == OpenAIImagesCapabilityNative {
+	if requiredCapability == OpenAIImagesCapabilityNative && openAIAccountPoolExhausted(err) {
 		return s.selectAccountWithScheduler(ctx, groupID, "", sessionHash, requestedModel, excludedIDs, OpenAIUpstreamTransportHTTPSSE, "", OpenAIImagesCapabilityBasic, false, PlatformOpenAI, false, false)
 	}
 	return selection, decision, err
 }
 
-// selectAccountWithScheduler wraps selectAccountWithSchedulerOnce with a
+func (s *OpenAIGatewayService) selectAccountWithScheduler(
+	ctx context.Context,
+	groupID *int64,
+	previousResponseID string,
+	sessionHash string,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+	requiredTransport OpenAIUpstreamTransport,
+	requiredCapability OpenAIEndpointCapability,
+	requiredImageCapability OpenAIImagesCapability,
+	requireCompact bool,
+	platform string,
+	previousResponseCanMove bool,
+	useUpstreamTokenCost bool,
+) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
+	if strings.TrimSpace(previousResponseID) != "" && !previousResponseCanMove {
+		start := time.Now()
+		ctx = s.withOpenAIQuotaAutoPauseContext(ctx)
+		ctx = s.withOpenAIGroupPrivacyRequirement(ctx, groupID)
+		if requiredImageCapability == "" {
+			ctx = s.withOpenAIProfitControlGate(ctx, groupID)
+		}
+		platform = NormalizeOpenAICompatiblePlatform(platform)
+		selection, hit, err := s.selectLegacyAccountByPreviousResponse(ctx, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, requiredCapability, requiredImageCapability, requireCompact, platform)
+		if err != nil {
+			return nil, OpenAIAccountScheduleDecision{}, err
+		}
+		if hit {
+			decision := OpenAIAccountScheduleDecision{
+				Layer: openAIAccountScheduleLayerPreviousResponse, StickyPreviousHit: true,
+				SelectedAccountID: selection.Account.ID, SelectedAccountType: selection.Account.Type,
+				LatencyMs: time.Since(start).Milliseconds(),
+			}
+			if scheduler, ok := s.getOpenAIAccountScheduler(ctx).(*defaultOpenAIAccountScheduler); ok {
+				scheduler.metrics.recordSelect(decision)
+			}
+			return selection, decision, nil
+		}
+	}
+	return s.selectOpenAIAccountPools(ctx, groupID, platform, excludedIDs, func(poolCtx context.Context, excluded map[int64]struct{}) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
+		return s.selectAccountWithSchedulerInPool(poolCtx, groupID, previousResponseID, sessionHash, requestedModel, excluded, requiredTransport, requiredCapability, requiredImageCapability, requireCompact, platform, previousResponseCanMove, useUpstreamTokenCost)
+	})
+}
+
+// selectAccountWithSchedulerInPool wraps selectAccountWithSchedulerOnce with a
 // fail-open second pass for the proxy stream circuit (#5056): when the only
 // reason no account is available is that every candidate sits behind a
 // quarantined proxy, the quarantine must degrade to a preference instead of
 // zeroing out capacity. The retry re-runs the exact same selection with the
 // quarantine checks bypassed, so healthy proxies always win the first pass
 // and quarantined ones only serve when nothing else can.
-func (s *OpenAIGatewayService) selectAccountWithScheduler(
+func (s *OpenAIGatewayService) selectAccountWithSchedulerInPool(
 	ctx context.Context,
 	groupID *int64,
 	previousResponseID string,
@@ -2268,6 +2339,9 @@ func (s *OpenAIGatewayService) selectLegacyAccountByPreviousResponse(
 		return nil, false, err
 	}
 	if selection == nil || selection.Account == nil {
+		return nil, false, nil
+	}
+	if openAIAccountAcquireOnly(ctx) && !selection.Acquired {
 		return nil, false, nil
 	}
 	account := selection.Account

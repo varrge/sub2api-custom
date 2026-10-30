@@ -304,7 +304,7 @@
             />
           </template>
           <template #cell-groups="{ row }">
-            <AccountGroupsCell :groups="accountGroupsForRow(row)" :max-display="4" />
+            <AccountGroupsCell :groups="accountGroupsForRow(row)" :max-display="4" :fallback-group-ids="row.extra?.fallback_group_ids" />
           </template>
           <template #header-usage="{ column }">
             <div class="flex items-center">

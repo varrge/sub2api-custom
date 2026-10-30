@@ -5,7 +5,7 @@
       <GroupBadge
         v-for="group in displayGroups"
         :key="group.id"
-        :name="group.name"
+        :name="groupName(group)"
         :platform="group.platform"
         :subscription-type="group.subscription_type"
         :rate-multiplier="group.rate_multiplier"
@@ -57,7 +57,7 @@
             <GroupBadge
               v-for="group in groups"
               :key="group.id"
-              :name="group.name"
+              :name="groupName(group)"
               :platform="group.platform"
               :subscription-type="group.subscription_type"
               :rate-multiplier="group.rate_multiplier"
@@ -89,6 +89,7 @@ import type { Group } from '@/types'
 interface Props {
   groups: Group[] | null | undefined
   maxDisplay?: number
+  fallbackGroupIds?: number[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -96,6 +97,9 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const { t } = useI18n()
+const groupName = (group: Group) => props.fallbackGroupIds?.includes(group.id)
+  ? `${group.name} (${t('admin.accounts.fallbackAccount')})`
+  : group.name
 
 const moreButtonRef = ref<HTMLElement | null>(null)
 const popoverRef = ref<HTMLElement | null>(null)

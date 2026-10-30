@@ -116,6 +116,13 @@ func (s *GeminiMessagesCompatService) SelectAccountForModel(ctx context.Context,
 }
 
 func (s *GeminiMessagesCompatService) SelectAccountForModelWithExclusions(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*Account, error) {
+	if groupID != nil && !accountFallbackPoolSet(ctx) {
+		account, err := s.SelectAccountForModelWithExclusions(withAccountFallbackPool(ctx, groupID, false), groupID, sessionHash, requestedModel, excludedIDs)
+		if !errors.Is(err, ErrNoAvailableAccounts) {
+			return account, err
+		}
+		return s.SelectAccountForModelWithExclusions(withAccountFallbackPool(ctx, groupID, true), groupID, sessionHash, requestedModel, excludedIDs)
+	}
 	// 1. 确定目标平台和调度模式
 	// Determine target platform and scheduling mode
 	platform, useMixedScheduling, hasForcePlatform, err := s.resolvePlatformAndSchedulingMode(ctx, groupID)
@@ -151,9 +158,9 @@ func (s *GeminiMessagesCompatService) SelectAccountForModelWithExclusions(ctx co
 
 	if selected == nil {
 		if requestedModel != "" {
-			return nil, fmt.Errorf("no available Gemini accounts supporting model: %s", requestedModel)
+			return nil, fmt.Errorf("no available Gemini accounts supporting model: %s: %w", requestedModel, ErrNoAvailableAccounts)
 		}
-		return nil, errors.New("no available Gemini accounts")
+		return nil, fmt.Errorf("no available Gemini accounts: %w", ErrNoAvailableAccounts)
 	}
 
 	// 5. 设置粘性会话绑定
@@ -223,7 +230,7 @@ func (s *GeminiMessagesCompatService) tryStickySessionHit(
 	}
 
 	account, err := s.getSchedulableAccount(ctx, accountID)
-	if err != nil {
+	if err != nil || !accountMatchesFallbackPool(ctx, account) {
 		return nil
 	}
 

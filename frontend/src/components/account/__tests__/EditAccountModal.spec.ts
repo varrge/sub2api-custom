@@ -442,6 +442,28 @@ describe('EditAccountModal', () => {
     expect(account.group_ids).toEqual([1, 2])
   })
 
+  it('saves per-group fallback roles, preserving unrelated extra and clearing removed memberships', async () => {
+    const account = buildAccount()
+    const groups = [1, 2].map(id => ({ id, name: `Group ${id}`, platform: 'openai', status: 'active', subscription_type: 'standard', rate_multiplier: 1 }))
+    account.group_ids = [1, 2]
+    account.groups = groups
+    account.extra = { fallback_group_ids: [1], custom_setting: 'kept' }
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+    const wrapper = mountModal(account, true)
+    await wrapper.setProps({ groups: groups as any })
+    const roles = wrapper.get('[data-testid="account-fallback-groups"]')
+    expect(roles.get<HTMLInputElement>('input[value="1"]').element.checked).toBe(true)
+    expect(roles.get<HTMLInputElement>('input[value="2"]').element.checked).toBe(false)
+    await roles.get('input[value="2"]').setValue(true)
+    await wrapper.get('[data-tour="account-form-groups"] input[value="1"]').setValue(false)
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    expect(updateAccountMock.mock.calls[0]?.[1]?.group_ids).toEqual([2])
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra).toMatchObject({ fallback_group_ids: [2], custom_setting: 'kept' })
+    expect(account.extra.fallback_group_ids).toEqual([1])
+    wrapper.unmount()
+  })
+
   it('reopening the same account rehydrates the OpenAI whitelist from props', async () => {
     const account = buildAccount()
     updateAccountMock.mockReset()

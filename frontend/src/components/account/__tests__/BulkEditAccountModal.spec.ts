@@ -109,6 +109,20 @@ describe('BulkEditAccountModal', () => {
     )
   })
 
+  it('sends fallback roles only when explicitly enabled for the replacement groups', async () => {
+    const wrapper = mountModal({ groups: [{ id: 1, name: 'A' }, { id: 2, name: 'B' }] })
+    await wrapper.get('#bulk-edit-groups-enabled').setValue(true)
+    wrapper.findComponent({ name: 'GroupSelector' }).vm.$emit('update:modelValue', [1, 2])
+    await nextTick()
+    const rolesToggle = wrapper.findAll('label').find(label => label.text().includes('admin.accounts.setFallbackGroups'))!
+    await rolesToggle.get('input').setValue(true)
+    await wrapper.get('[data-testid="account-fallback-groups"] input[value="2"]').setValue(true)
+    await wrapper.get('#bulk-edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(vi.mocked(adminAPI.accounts.bulkUpdate).mock.calls[0]?.[1]).toMatchObject({ group_ids: [1, 2], extra: { fallback_group_ids: [2] } })
+    wrapper.unmount()
+  })
+
   it('后端拒绝修改同步账号倍率时展示专用错误', async () => {
     vi.mocked(adminAPI.accounts.bulkUpdate).mockRejectedValueOnce({
       status: 409,

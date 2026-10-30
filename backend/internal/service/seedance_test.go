@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"testing"
@@ -45,7 +46,7 @@ func TestSeedanceNativeForwarding(t *testing.T) {
 func TestSeedanceStatusAndDelete(t *testing.T) {
 	for _, status := range []string{"queued", "running", "failed", "cancelled", "expired", "succeeded"} {
 		t.Run(status, func(t *testing.T) {
-			body := `{"id":"task-1","status":"` + status + `","model":"ep-seedance","content":{"video_url":"https://cdn.example/video.mp4"},"usage":{"completion_tokens":12345}}`
+			body := `{"id":"task-1","status":"` + status + `","model":"ep-seedance","duration":30,"resolution":"1080p","content":{"video_url":"https://cdn.example/video.mp4"},"usage":{"completion_tokens":12345}}`
 			upstream := &grokMediaContentUpstreamStub{response: grokMediaContentStatusResponse(body)}
 			svc := &OpenAIGatewayService{httpUpstream: upstream}
 			c, w := grokMediaContentTestContext(http.MethodGet, "/api/v3/contents/generations/tasks/task-1", nil)
@@ -55,10 +56,13 @@ func TestSeedanceStatusAndDelete(t *testing.T) {
 			require.Equal(t, "/api/v3/contents/generations/tasks/task-1", upstream.request.URL.Path)
 			if status == "succeeded" {
 				require.Equal(t, 12345, result.Usage.OutputTokens)
+				require.Equal(t, 1, result.VideoCount)
+				require.Equal(t, 30, result.VideoDurationSeconds)
+				require.Equal(t, "1080p", result.VideoResolution)
 			} else {
 				require.Zero(t, result.Usage.OutputTokens)
+				require.Zero(t, result.VideoCount)
 			}
-			require.Zero(t, result.VideoCount, "must use token billing, not Grok seconds")
 		})
 	}
 	upstream := &grokMediaContentUpstreamStub{response: grokMediaContentStatusResponse("")}
@@ -81,6 +85,12 @@ func TestSeedanceValidationAndCapability(t *testing.T) {
 	require.Contains(t, string(info.ModerationBody()), "first")
 	require.Contains(t, string(info.ModerationBody()), "second")
 	require.Contains(t, string(info.ModerationBody()), "https://example.com/a.png")
+	for _, duration := range []int{5, 30, -1} {
+		info, err := ParseSeedanceRequest([]byte(fmt.Sprintf(`{"model":"seedance-2.5","content":[{"type":"text","text":"waves"}],"duration":%d,"resolution":"1080p"}`, duration)))
+		require.NoError(t, err)
+		require.Equal(t, duration, info.DurationSeconds)
+		require.Equal(t, "1080p", info.Resolution)
+	}
 	for _, id := range []string{"", "..", "a/b", "a?b", "a#b", "%2e%2e"} {
 		_, err := buildSeedanceURL("https://example.com", SeedanceEndpointStatus, id)
 		require.Error(t, err, id)

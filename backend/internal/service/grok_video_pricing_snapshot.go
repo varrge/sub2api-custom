@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -19,6 +20,9 @@ type GrokVideoPricingSnapshot struct {
 	TokenPricing              *ResolvedPricing     `json:"token_pricing,omitempty"`
 	TokenChannelPricing       *ChannelModelPricing `json:"token_channel_pricing,omitempty"`
 	LongContextPricingEnabled bool                 `json:"long_context_pricing_enabled,omitempty"`
+	// Seedance freezes each configured tier because completion reports the
+	// actual resolution and can exceed Grok's 15-second duration limit.
+	ResolutionPrices map[string]float64 `json:"resolution_prices,omitempty"`
 }
 
 func (s *OpenAIGatewayService) SnapshotGrokVideoPricing(ctx context.Context, key *APIKey, model, resolution string, at time.Time) (*GrokVideoPricingSnapshot, error) {
@@ -82,6 +86,21 @@ func (s *GrokVideoPricingSnapshot) calculate(ctx context.Context, billing *Billi
 		resolved.channelPricing = s.TokenChannelPricing
 		resolved.longContextPricingEnabled = s.LongContextPricingEnabled
 		return billing.CalculateCostUnified(CostInput{Ctx: ctx, Model: model, Tokens: tokens, ServiceTier: serviceTier, RateMultiplier: s.RateMultiplier, PricingAt: s.PricingAt, Resolved: &resolved, Resolver: NewModelPricingResolver(nil, billing)})
+	}
+	if len(s.ResolutionPrices) > 0 {
+		if !s.PerSecond || result == nil || result.VideoDurationSeconds <= 0 {
+			return nil, fmt.Errorf("seedance actual video duration is unavailable")
+		}
+		resolution, ok := LookupVideoBillingResolution(result.VideoResolution)
+		if !ok {
+			return nil, fmt.Errorf("seedance actual video resolution is unavailable")
+		}
+		price, ok := s.ResolutionPrices[resolution]
+		if !ok || price < 0 || math.IsNaN(price) || math.IsInf(price, 0) {
+			return nil, fmt.Errorf("seedance frozen price is unavailable for %s: %w", resolution, ErrModelPricingUnavailable)
+		}
+		total := price * float64(result.VideoDurationSeconds) * float64(max(1, result.VideoCount))
+		return &CostBreakdown{TotalCost: total, ActualCost: total * s.RateMultiplier, BillingMode: string(BillingModeVideo)}, nil
 	}
 	units := result.VideoCount
 	if units <= 0 {

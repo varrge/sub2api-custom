@@ -674,7 +674,7 @@ func (d inflightEstimateDeps) estimate(ctx context.Context, apiKey *APIKey, req 
 	if req.Kind == InflightEstimateVideo && req.VideoPricingSnapshot != nil {
 		input, output := tokenCounts(inflightReservationCfg(d.cfg), req.BodyBytes, req.MaxTokens)
 		cost, err := req.VideoPricingSnapshot.calculate(ctx, d.billing, req.Model,
-			&OpenAIForwardResult{VideoCount: req.Units, VideoDurationSeconds: req.VideoDurationSeconds},
+			&OpenAIForwardResult{VideoCount: req.Units, VideoDurationSeconds: req.VideoDurationSeconds, VideoResolution: req.VideoResolution},
 			UsageTokens{InputTokens: input, OutputTokens: output}, "")
 		if err != nil || cost == nil || cost.ActualCost < 0 || math.IsNaN(cost.ActualCost) || math.IsInf(cost.ActualCost, 0) {
 			return 0, false

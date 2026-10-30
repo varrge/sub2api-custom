@@ -490,11 +490,13 @@ func (s *OpenAIGatewayService) StoreGrokVideoPendingBilling(
 	pending.BillingModel = strings.TrimSpace(pending.BillingModel)
 	pending.UpstreamModel = strings.TrimSpace(pending.UpstreamModel)
 	pending.OriginalModel = strings.TrimSpace(pending.OriginalModel)
-	if pending.VideoResolution != "" {
-		pending.VideoResolution = NormalizeVideoBillingResolutionOrDefault(pending.VideoResolution)
-	}
-	if pending.VideoDurationSeconds > 0 {
-		pending.VideoDurationSeconds = NormalizeVideoBillingDurationSecondsOrDefault(pending.VideoDurationSeconds)
+	if !strings.HasPrefix(requestID, "seedance:") {
+		if pending.VideoResolution != "" {
+			pending.VideoResolution = NormalizeVideoBillingResolutionOrDefault(pending.VideoResolution)
+		}
+		if pending.VideoDurationSeconds > 0 {
+			pending.VideoDurationSeconds = NormalizeVideoBillingDurationSecondsOrDefault(pending.VideoDurationSeconds)
+		}
 	}
 	// Always stamp create-accept time when missing so deferred duration_ms is E2E.
 	if strings.TrimSpace(pending.CreatedAt) == "" {

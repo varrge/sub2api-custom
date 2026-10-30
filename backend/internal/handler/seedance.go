@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	middleware "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 // SeedanceTasks exposes Ark's native asynchronous video task protocol.
@@ -47,10 +49,10 @@ func (h *OpenAIGatewayHandler) SeedanceTasks(c *gin.Context) {
 	h.handleGrokMedia(c, endpoint, taskID)
 }
 
-// Ark reports actual completion tokens. Never infer tokens from duration or use
-// Grok's per-second video tariff. Repeated polls share the durable task dedup key.
+// Settle using the create-time pricing mode. Per-second jobs prefer completed
+// duration/resolution; repeated polls share the durable task dedup key.
 func prepareSeedanceCompletionBilling(ctx context.Context, h *OpenAIGatewayHandler, key *service.APIKey, subject middleware.AuthSubject, taskID string, result *service.OpenAIForwardResult) (*service.OpenAIForwardResult, time.Time, *service.UserSubscription) {
-	if h == nil || h.gatewayService == nil || key == nil || result == nil || result.Usage.OutputTokens <= 0 {
+	if h == nil || h.gatewayService == nil || key == nil || result == nil {
 		return nil, time.Time{}, nil
 	}
 	pending, err := h.gatewayService.LoadGrokVideoPendingBilling(ctx, taskID, subject.UserID, key.ID)
@@ -70,8 +72,32 @@ func prepareSeedanceCompletionBilling(ctx context.Context, h *OpenAIGatewayHandl
 		return nil, time.Time{}, nil
 	}
 	pricingAt := service.GrokVideoPendingPricingAt(pending.CreatedAt, time.Time{})
-	if pricingAt.IsZero() || pending.PricingSnapshot == nil || pending.PricingSnapshot.TokenPricing == nil {
+	if pricingAt.IsZero() || pending.PricingSnapshot == nil {
 		return nil, time.Time{}, nil
+	}
+	merged := *result
+	merged.VideoCount, merged.ImageCount = 0, 0
+	if pending.PricingSnapshot.TokenPricing != nil {
+		if result.Usage.OutputTokens <= 0 {
+			return nil, time.Time{}, nil
+		}
+	} else {
+		if !pending.PricingSnapshot.PerSecond || result.VideoCount <= 0 {
+			return nil, time.Time{}, nil
+		}
+		if merged.VideoDurationSeconds <= 0 {
+			merged.VideoDurationSeconds = pending.VideoDurationSeconds
+		}
+		resolution, known := service.LookupVideoBillingResolution(firstNonEmptyString(result.VideoResolution, pending.VideoResolution))
+		_, priced := pending.PricingSnapshot.ResolutionPrices[resolution]
+		if merged.VideoDurationSeconds <= 0 || !known || !priced {
+			logger.L().Warn("seedance.video_billing_metrics_unavailable",
+				zap.String("task_id", taskID), zap.Int("duration_seconds", merged.VideoDurationSeconds),
+				zap.String("resolution", resolution))
+			return nil, time.Time{}, nil
+		}
+		merged.VideoCount = 1
+		merged.VideoResolution = resolution
 	}
 	// Month cards use the durable transaction dedup key. A Redis claim would
 	// suppress recovery before a failed settlement is durably stored.
@@ -81,10 +107,8 @@ func prepareSeedanceCompletionBilling(ctx context.Context, h *OpenAIGatewayHandl
 			return nil, time.Time{}, nil
 		}
 	}
-	merged := *result
 	merged.Model = pending.Model
 	merged.VideoPricingSnapshot = pending.PricingSnapshot
-	merged.VideoCount, merged.ImageCount = 0, 0
 	merged.BillingModel = firstNonEmptyString(pending.BillingModel, pending.Model)
 	merged.UpstreamModel = firstNonEmptyString(pending.UpstreamModel, result.UpstreamModel)
 	merged.RequestID = service.StableGrokVideoBillingRequestID(taskID)

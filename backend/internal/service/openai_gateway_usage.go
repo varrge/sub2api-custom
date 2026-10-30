@@ -459,6 +459,9 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		usageLog.VideoCount = result.VideoCount
 		usageLog.VideoResolution = optionalTrimmedStringPtr(NormalizeVideoBillingResolutionOrDefault(result.VideoResolution))
 		videoDurationSeconds := NormalizeVideoBillingDurationSecondsOrDefault(result.VideoDurationSeconds)
+		if strings.HasPrefix(result.ResponseID, "seedance:") {
+			videoDurationSeconds = result.VideoDurationSeconds
+		}
 		usageLog.VideoDurationSeconds = &videoDurationSeconds
 	}
 	if cost != nil {
@@ -644,8 +647,9 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 		return s.billingService.CalculateWebSearchCost(result.WebSearchCalls, webSearchPricePerCallFromAPIKey(apiKey), webSearchMultiplier), nil
 	}
 	if result != nil && strings.HasPrefix(result.ResponseID, "seedance:") {
-		if result.VideoPricingSnapshot == nil || result.VideoPricingSnapshot.TokenPricing == nil {
-			return nil, fmt.Errorf("seedance create-time token pricing is unavailable")
+		if result.VideoPricingSnapshot == nil || result.VideoPricingSnapshot.TokenPricing == nil &&
+			(!result.VideoPricingSnapshot.PerSecond || len(result.VideoPricingSnapshot.ResolutionPrices) == 0) {
+			return nil, fmt.Errorf("seedance create-time pricing is unavailable")
 		}
 		return result.VideoPricingSnapshot.calculate(ctx, s.billingService, billingModel, result, tokens, serviceTier)
 	}

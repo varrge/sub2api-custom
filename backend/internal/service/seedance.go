@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -42,6 +43,10 @@ func ParseSeedanceRequest(body []byte) (GrokMediaRequestInfo, error) {
 		return info, fmt.Errorf("content must be a non-empty array")
 	}
 	info.Model = strings.TrimSpace(model.String())
+	info.Resolution = strings.ToLower(strings.TrimSpace(gjson.GetBytes(body, "resolution").String()))
+	if duration := gjson.GetBytes(body, "duration"); duration.Type == gjson.Number {
+		info.DurationSeconds = int(duration.Int())
+	}
 	var texts []string
 	for _, item := range content.Array() {
 		switch item.Get("type").String() {
@@ -86,6 +91,7 @@ func (s *OpenAIGatewayService) ForwardSeedance(ctx context.Context, c *gin.Conte
 		return nil, err
 	}
 	model, upstreamModel := "", ""
+	var requestInfo GrokMediaRequestInfo
 	method := http.MethodGet
 	switch endpoint {
 	case SeedanceEndpointCreate:
@@ -94,6 +100,7 @@ func (s *OpenAIGatewayService) ForwardSeedance(ctx context.Context, c *gin.Conte
 			return nil, parseErr
 		}
 		model = info.Model
+		requestInfo = info
 		upstreamModel = account.GetMappedModel(model)
 		body, err = sjson.SetBytes(body, "model", upstreamModel)
 		if err != nil {
@@ -136,7 +143,8 @@ func (s *OpenAIGatewayService) ForwardSeedance(ctx context.Context, c *gin.Conte
 		writeGrokMediaResponse(c, resp, responseBody, s.responseHeaderFilter)
 		return nil, fmt.Errorf("seedance upstream status %d", resp.StatusCode)
 	}
-	result := &OpenAIForwardResult{Model: model, BillingModel: model, UpstreamModel: upstreamModel, Duration: time.Since(started), ResponseHeaders: resp.Header.Clone()}
+	result := &OpenAIForwardResult{Model: model, BillingModel: model, UpstreamModel: upstreamModel, Duration: time.Since(started), ResponseHeaders: resp.Header.Clone(),
+		VideoResolution: requestInfo.Resolution, VideoDurationSeconds: requestInfo.DurationSeconds}
 	if endpoint == SeedanceEndpointCreate {
 		id := strings.TrimSpace(gjson.GetBytes(responseBody, "id").String())
 		if id == "" {
@@ -149,25 +157,69 @@ func (s *OpenAIGatewayService) ForwardSeedance(ctx context.Context, c *gin.Conte
 		result.UpstreamModel = gjson.GetBytes(responseBody, "model").String()
 		if gjson.GetBytes(responseBody, "status").String() == "succeeded" {
 			result.Usage.OutputTokens = max(0, int(gjson.GetBytes(responseBody, "usage.completion_tokens").Int()))
+			if strings.TrimSpace(gjson.GetBytes(responseBody, "content.video_url").String()) != "" {
+				result.VideoCount = 1
+				result.VideoDurationSeconds = max(0, int(gjson.GetBytes(responseBody, "duration").Int()))
+				result.VideoResolution = strings.TrimSpace(gjson.GetBytes(responseBody, "resolution").String())
+			}
 		}
 	}
 	writeGrokMediaResponse(c, resp, responseBody, s.responseHeaderFilter)
 	return result, nil
 }
 
-// SnapshotSeedanceTokenPricing freezes token rates and the create-time multiplier.
-// Seedance never falls back to Grok's duration tariff, even for video model names.
-func (s *OpenAIGatewayService) SnapshotSeedanceTokenPricing(ctx context.Context, key *APIKey, model string, at time.Time) (*GrokVideoPricingSnapshot, error) {
+// SnapshotSeedancePricing freezes explicit per-second prices or existing token
+// rates. Unpriced Seedance models never inherit Grok's default tariff.
+func (s *OpenAIGatewayService) SnapshotSeedancePricing(ctx context.Context, key *APIKey, model, resolution string, at time.Time) (*GrokVideoPricingSnapshot, error) {
 	if s == nil || s.billingService == nil || key == nil {
-		return nil, fmt.Errorf("seedance token pricing unavailable")
+		return nil, fmt.Errorf("seedance pricing unavailable")
 	}
+	key = s.apiKeyWithFreshGroupMediaPricing(ctx, key)
 	resolver := s.resolver
 	if resolver == nil {
 		resolver = NewModelPricingResolver(nil, s.billingService)
 	}
 	resolved := resolver.Resolve(ctx, PricingInput{Model: model, GroupID: key.GroupID, Group: key.Group})
-	if resolved == nil || resolved.Mode != BillingModeToken {
-		return nil, fmt.Errorf("seedance requires token pricing")
+	if resolved == nil || (resolved.Mode != BillingModeToken && resolved.Mode != BillingModeVideo) {
+		return nil, fmt.Errorf("seedance requires token or per-second video pricing")
+	}
+	configuredToken := resolved.Mode == BillingModeToken && (resolved.Source == PricingSourceGroup || resolved.Source == PricingSourceChannel)
+	if !configuredToken && (resolved.Mode == BillingModeVideo || seedanceGroupResolutionPrice(key.Group, model, resolution) != nil) {
+		tier, ok := LookupVideoBillingResolution(resolution)
+		if !ok {
+			return nil, fmt.Errorf("seedance per-second pricing requires an explicit supported resolution")
+		}
+		snapshot := &GrokVideoPricingSnapshot{
+			PerSecond: true, RateMultiplier: s.ResolveVideoRateMultiplierAt(ctx, key, key.UserID, at),
+			PricingAt: at, Source: resolved.Source, ResolutionPrices: make(map[string]float64),
+		}
+		for _, candidate := range []string{VideoBillingResolution480P, VideoBillingResolution720P, VideoBillingResolution1080P} {
+			var price *float64
+			if resolved.Source != PricingSourceGroup {
+				price = seedanceGroupResolutionPrice(key.Group, model, candidate)
+			}
+			if price == nil && resolved.Mode == BillingModeVideo {
+				price = seedanceResolutionPrice(resolved.channelPricing, candidate)
+			}
+			if price != nil {
+				if *price < 0 || math.IsNaN(*price) || math.IsInf(*price, 0) {
+					return nil, fmt.Errorf("seedance per-second price is invalid for %s", candidate)
+				}
+				snapshot.ResolutionPrices[candidate] = *price
+			}
+		}
+		price, ok := snapshot.ResolutionPrices[tier]
+		if !ok {
+			return nil, fmt.Errorf("seedance per-second price is missing for %s: %w", tier, ErrModelPricingUnavailable)
+		}
+		snapshot.UnitPrice = price
+		if seedanceGroupResolutionPrice(key.Group, model, tier) != nil && resolved.Source != PricingSourceGroup {
+			snapshot.Source = PricingSourceGroup
+		}
+		if snapshot.RateMultiplier < 0 || math.IsNaN(snapshot.RateMultiplier) || math.IsInf(snapshot.RateMultiplier, 0) {
+			return nil, fmt.Errorf("seedance video rate multiplier is invalid")
+		}
+		return snapshot, nil
 	}
 	multiplier, _ := computePeakAwareMultipliers(key, s.resolveRateMultiplierAt(ctx, key, key.UserID, at), at)
 	snapshot := &GrokVideoPricingSnapshot{TokenPricing: resolved, TokenChannelPricing: resolved.channelPricing,
@@ -187,4 +239,28 @@ func (s *OpenAIGatewayService) SnapshotSeedanceTokenPricing(ctx context.Context,
 		return nil, fmt.Errorf("seedance token pricing unavailable: %w", err)
 	}
 	return &frozen, nil
+}
+
+func seedanceResolutionPrice(pricing *ChannelModelPricing, resolution string) *float64 {
+	if pricing == nil {
+		return nil
+	}
+	for _, tier := range pricing.Intervals {
+		if label, ok := LookupVideoBillingResolution(tier.TierLabel); ok && label == resolution && tier.PerRequestPrice != nil {
+			return tier.PerRequestPrice
+		}
+	}
+	return pricing.PerRequestPrice
+}
+
+func seedanceGroupResolutionPrice(group *Group, model, resolution string) *float64 {
+	tier, ok := LookupVideoBillingResolution(resolution)
+	if group == nil || !ok {
+		return nil
+	}
+	// Seedance aliases must not be canonicalized into a Grok model family.
+	if price, ok := group.VideoModelPrices[strings.ToLower(strings.TrimSpace(model))][tier]; ok {
+		return &price
+	}
+	return group.GetVideoPrice(tier)
 }

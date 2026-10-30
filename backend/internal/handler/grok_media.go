@@ -14,6 +14,7 @@ import (
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
+	"github.com/tidwall/gjson"
 	"go.uber.org/zap"
 )
 
@@ -178,12 +179,21 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 	var videoPricingSnapshot *service.GrokVideoPricingSnapshot
 	if isGrokVideoCreateEndpoint(endpoint) {
 		if endpoint == service.SeedanceEndpointCreate {
-			videoPricingSnapshot, err = h.gatewayService.SnapshotSeedanceTokenPricing(c.Request.Context(), apiKey, requestModel, requestStart)
+			videoPricingSnapshot, err = h.gatewayService.SnapshotSeedancePricing(c.Request.Context(), apiKey, requestModel, requestInfo.Resolution, requestStart)
 		} else {
 			videoPricingSnapshot, err = h.gatewayService.SnapshotGrokVideoPricing(c.Request.Context(), apiKey, requestModel, requestInfo.Resolution, requestStart)
 		}
 		if err != nil {
-			h.errorResponse(c, http.StatusServiceUnavailable, "pricing_unavailable", "Video pricing is unavailable")
+			reqLog.Warn("grok_media.video_pricing_snapshot_failed", zap.Error(err))
+			message := "Video pricing is unavailable"
+			if endpoint == service.SeedanceEndpointCreate {
+				message = "Seedance pricing is unavailable; configure token pricing or a per-second video price for the requested model and resolution"
+			}
+			h.errorResponse(c, http.StatusServiceUnavailable, "pricing_unavailable", message)
+			return
+		}
+		if endpoint == service.SeedanceEndpointCreate && videoPricingSnapshot.PerSecond && gjson.GetBytes(body, "frames").Exists() {
+			h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Seedance per-second billing supports duration requests; frames are not supported")
 			return
 		}
 	}
@@ -194,8 +204,13 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 		inflightEstimate.Model = requestModel
 		inflightEstimate.VideoPricingSnapshot = videoPricingSnapshot
 		if endpoint == service.SeedanceEndpointCreate {
-			// Seedance settles completion tokens only, never Grok's duration tariff.
-			inflightEstimate.BodyBytes = 0
+			if videoPricingSnapshot.TokenPricing != nil {
+				inflightEstimate.BodyBytes = 0
+			} else if inflightEstimate.VideoDurationSeconds <= 0 {
+				// Auto duration has no exact estimate; reserve the current native
+				// maximum rather than Grok's unrelated 8-second default.
+				inflightEstimate.VideoDurationSeconds = 30
+			}
 		}
 	}
 	inflightDone, inflightErr := reserveInflightBalance(c, h.billingCacheService, h.gatewayService, apiKey, subscription, inflightEstimate)

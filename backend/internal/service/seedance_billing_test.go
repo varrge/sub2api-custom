@@ -49,8 +49,9 @@ func TestSeedanceTokenBillingSnapshotDurableRetryAndDedup(t *testing.T) {
 			at := time.Now().UTC().Add(-8 * 24 * time.Hour)
 			key := &APIKey{ID: 2, UserID: 3, User: &User{ID: 3}, GroupID: liveOptionalID(4), Group: &Group{ID: 4, RateMultiplier: 2}, Quota: 100}
 			svc.resolver = newOpenAITokenImageChannelPricingResolverForTest(t, 4, "doubao-seedance")
-			snapshot, err := svc.SnapshotSeedanceTokenPricing(t.Context(), key, "doubao-seedance", at)
+			snapshot, err := svc.SnapshotSeedancePricing(t.Context(), key, "doubao-seedance", "720p", at)
 			require.NoError(t, err)
+			require.Empty(t, snapshot.ResolutionPrices)
 			pending := GrokVideoPendingBilling{GroupID: key.GroupID, AccountID: 5, Model: "doubao-seedance", PricingSnapshot: snapshot, CreatedAt: at.Format(time.RFC3339Nano)}
 			var sub *UserSubscription
 			if kind != "balance" {
@@ -64,7 +65,10 @@ func TestSeedanceTokenBillingSnapshotDurableRetryAndDedup(t *testing.T) {
 			}
 			raw, err := json.Marshal(pending)
 			require.NoError(t, err)
-			require.NoError(t, json.Unmarshal(raw, &pending))
+			require.NotContains(t, string(raw), "resolution_prices")
+			var restored GrokVideoPendingBilling
+			require.NoError(t, json.Unmarshal(raw, &restored))
+			pending = restored
 			if kind == "monthcard" {
 				sub = &UserSubscription{UserID: 3, GroupID: 4, MonthCardSnapshot: pending.MonthCardSnapshot}
 			}
@@ -117,11 +121,25 @@ func TestSeedanceTokenBillingSnapshotDurableRetryAndDedup(t *testing.T) {
 	}
 }
 
-func TestSeedanceRejectsDurationPricingSnapshot(t *testing.T) {
-	svc := newOpenAIRecordUsageServiceForTest(&openAIRecordUsageLogRepoStub{}, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
-	svc.resolver = newOpenAIImageChannelPricingResolverForTest(t, 4, "doubao-seedance", 0.25)
-	_, err := svc.SnapshotSeedanceTokenPricing(t.Context(), &APIKey{UserID: 3, GroupID: liveOptionalID(4), Group: &Group{ID: 4}}, "doubao-seedance", time.Now())
-	require.ErrorContains(t, err, "requires token pricing")
+func TestSeedanceRejectsIncompatiblePricingModes(t *testing.T) {
+	for _, source := range []string{"group", "channel"} {
+		for _, mode := range []BillingMode{BillingModePerRequest, BillingModeImage} {
+			t.Run(source+"/"+string(mode), func(t *testing.T) {
+				svc := newOpenAIRecordUsageServiceForTest(&openAIRecordUsageLogRepoStub{}, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
+				key := &APIKey{UserID: 3, GroupID: liveOptionalID(4), Group: &Group{ID: 4}}
+				price := 0.25
+				if source == "group" {
+					key.Group.ModelPricing = []ChannelModelPricing{{Models: []string{"doubao-seedance"}, BillingMode: mode, PerRequestPrice: &price}}
+				} else {
+					svc.resolver = newOpenAIImageChannelPricingResolverForTest(t, 4, "doubao-seedance", price)
+					svc.resolver.channelService.cache.Load().(*channelCache).pricingByGroupModel[channelModelKey{groupID: 4, model: "doubao-seedance"}].BillingMode = mode
+				}
+				snapshot, err := svc.SnapshotSeedancePricing(t.Context(), key, "doubao-seedance", "720p", time.Now())
+				require.Error(t, err)
+				require.Nil(t, snapshot)
+			})
+		}
+	}
 }
 
 func TestSeedanceTokenPricingRejectsMissingRatesAndAcceptsExplicitZero(t *testing.T) {
@@ -133,7 +151,7 @@ func TestSeedanceTokenPricingRejectsMissingRatesAndAcceptsExplicitZero(t *testin
 			zero := 0.0
 			key.Group.ModelPricing = []ChannelModelPricing{{Models: []string{model}, BillingMode: BillingModeToken, OutputPrice: &zero}}
 		}
-		snapshot, err := svc.SnapshotSeedanceTokenPricing(t.Context(), key, model, time.Now())
+		snapshot, err := svc.SnapshotSeedancePricing(t.Context(), key, model, "720p", time.Now())
 		if !explicitZero {
 			require.ErrorIs(t, err, ErrModelPricingUnavailable)
 			require.Nil(t, snapshot)
@@ -145,6 +163,52 @@ func TestSeedanceTokenPricingRejectsMissingRatesAndAcceptsExplicitZero(t *testin
 		require.Zero(t, cost.TotalCost)
 		require.Zero(t, cost.ActualCost)
 	}
+}
+
+func TestSeedanceLegacyTokenSnapshotWithoutResolutionPricesStillSettles(t *testing.T) {
+	const persisted = `{
+		"group_id":4,"account_id":5,"model":"doubao-seedance","created_at":"2026-10-20T01:00:00Z",
+		"pricing_snapshot":{
+			"unit_price":0,"per_second":false,"rate_multiplier":2,"source":"channel","pricing_at":"2026-10-20T01:00:00Z",
+			"token_pricing":{
+				"Mode":"token","Source":"channel",
+				"BasePricing":{"InputPricePerToken":0.000003,"OutputPricePerToken":0.000015,"ImageOutputPricePerToken":0.000015,"ImageOutputPriceExplicit":true}
+			},
+			"token_channel_pricing":{"billing_mode":"token","input_price":0.000003,"output_price":0.000015,"image_output_price":0.000015}
+		}
+	}`
+	var pending GrokVideoPendingBilling
+	require.NoError(t, json.Unmarshal([]byte(persisted), &pending))
+	require.NotNil(t, pending.PricingSnapshot)
+	require.Nil(t, pending.PricingSnapshot.ResolutionPrices)
+	logs := &openAIRecordUsageLogRepoStub{inserted: true}
+	repo := &seedanceDurableBillingRepo{applied: map[string]string{}}
+	svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(logs, repo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
+	svc.resolver = newOpenAIImageChannelPricingResolverForTest(t, 4, pending.Model, 500)
+	key := &APIKey{ID: 2, UserID: 3, User: &User{ID: 3}, GroupID: pending.GroupID, Group: &Group{ID: 4, RateMultiplier: 200}, Quota: 100}
+	estimate, priced := svc.EstimateInflightReservation(t.Context(), key, InflightEstimateRequest{
+		Model: pending.Model, Kind: InflightEstimateVideo, MaxTokens: 1000, VideoPricingSnapshot: pending.PricingSnapshot,
+	})
+	require.True(t, priced)
+	require.InDelta(t, 0.03, estimate, 1e-12)
+
+	err := svc.RecordUsage(t.Context(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			Model: pending.Model, ResponseID: "seedance:legacy-token", RequestID: StableGrokVideoBillingRequestID("seedance:legacy-token"),
+			VideoPricingSnapshot: pending.PricingSnapshot, Usage: OpenAIUsage{OutputTokens: 1000},
+		},
+		APIKey: key, User: key.User, Account: &Account{ID: 5, Platform: PlatformOpenAI, Type: AccountTypeAPIKey},
+		APIKeyService: &openAIRecordUsageAPIKeyQuotaStub{},
+	})
+	require.NoError(t, err)
+	require.Len(t, repo.applied, 1)
+	require.InDelta(t, 0.015, logs.lastLog.TotalCost, 1e-12)
+	require.InDelta(t, estimate, logs.lastLog.ActualCost, 1e-12)
+	require.InDelta(t, estimate, repo.last.BalanceCost, 1e-12)
+	require.Equal(t, 2.0, logs.lastLog.RateMultiplier)
+	require.Zero(t, logs.lastLog.VideoCount)
+	require.NotNil(t, logs.lastLog.BillingMode)
+	require.Equal(t, string(BillingModeToken), *logs.lastLog.BillingMode)
 }
 
 func TestSeedanceUnusablePersistedPricingDoesNotConsumeDurableDedup(t *testing.T) {

@@ -2,6 +2,7 @@ import { buildGatewayUrl } from './client'
 import type { GroupPlatform } from '@/types'
 
 export type ImageQuality = 'standard' | 'high'
+export type ImageResolution = '1K' | '2K' | '4K'
 export type ImageAspectRatio = 'auto' | '21:9' | '16:9' | '3:2' | '4:3' | '1:1' | '3:4' | '2:3' | '9:16'
 
 export interface GeneratedImage {
@@ -16,6 +17,7 @@ export interface GenerateImageOptions {
   prompt: string
   aspectRatio: ImageAspectRatio
   quality: ImageQuality
+  resolution: ImageResolution
   count: number
   referenceImages: File[]
 }
@@ -48,9 +50,35 @@ export function supportsImageGeneration(platform: GroupPlatform | undefined): bo
 
 const fullAspectRatios: ImageAspectRatio[] = ['auto', '21:9', '16:9', '3:2', '4:3', '1:1', '3:4', '2:3', '9:16']
 
-export function supportedImageAspectRatios(platform: GroupPlatform | undefined, model: string): ImageAspectRatio[] {
-  if (platform === 'openai' || platform === 'composite' && !/gemini|imagen|^grok-/i.test(model)) {
+function supportsCustomImageSize(model: string): boolean {
+  return /^gpt-image-2(?:[.-]|$)/i.test(model)
+}
+
+export function supportsImageQuality(platform: GroupPlatform | undefined, model: string): boolean {
+  return platform === 'openai' || platform === 'composite' && !/gemini|imagen|^grok-/i.test(model)
+}
+
+export function supportedImageResolutions(platform: GroupPlatform | undefined, model: string): ImageResolution[] {
+  if (!platform) return ['1K']
+  if (usesGrokProtocol(platform, model)) return ['1K', '2K']
+  if (usesGeminiProtocol(platform, model)) {
+    return /gemini-2[.-]|flash-lite-image/i.test(model) ? ['1K'] : ['1K', '2K', '4K']
+  }
+  return supportsCustomImageSize(model) ? ['1K', '2K', '4K'] : ['1K']
+}
+
+export function supportedImageAspectRatios(
+  platform: GroupPlatform | undefined,
+  model: string,
+  resolution: ImageResolution = '1K',
+): ImageAspectRatio[] {
+  if (supportsImageQuality(platform, model) && !supportsCustomImageSize(model)) {
     return ['auto', '3:2', '1:1', '2:3']
+  }
+  if (supportsImageQuality(platform, model) && supportsCustomImageSize(model)) {
+    // Auto cannot preserve a chosen resolution; wide 1K ratios fall below the minimum pixel count.
+    return fullAspectRatios.filter(ratio => ratio !== 'auto' &&
+      (resolution !== '1K' || !['21:9', '16:9', '9:16'].includes(ratio)))
   }
   return fullAspectRatios
 }
@@ -185,7 +213,7 @@ async function generateGeminiImages(options: GenerateImageOptions): Promise<Gene
           responseModalities: ['TEXT', 'IMAGE'],
           imageConfig: {
             ...(options.aspectRatio === 'auto' ? {} : { aspectRatio: options.aspectRatio }),
-            imageSize: options.quality === 'high' ? '2K' : '1K',
+            ...(/gemini-2[.-]/i.test(model) ? {} : { imageSize: options.resolution }),
           },
         },
       }),
@@ -195,7 +223,16 @@ async function generateGeminiImages(options: GenerateImageOptions): Promise<Gene
   return images
 }
 
-function openAIImageSize(aspectRatio: ImageAspectRatio): string {
+export function openAIImageSize(aspectRatio: ImageAspectRatio, resolution: ImageResolution, model: string): string {
+  if (supportsCustomImageSize(model)) {
+    const [width, height] = (aspectRatio === 'auto' ? '1:1' : aspectRatio).split(':').map(Number)
+    const ratio = Math.max(width!, height!) / Math.min(width!, height!)
+    const edge = resolution === '4K' ? 3840 : resolution === '2K' ? 2048 : 1024
+    // GPT Image caps both edges at 3840 and total pixels at 8,294,400.
+    const longEdge = Math.floor(Math.min(edge, Math.sqrt(8_294_400 * ratio)) / 16) * 16
+    const shortEdge = Math.floor(longEdge / ratio / 16) * 16
+    return width! >= height! ? `${longEdge}x${shortEdge}` : `${shortEdge}x${longEdge}`
+  }
   if (aspectRatio === 'auto') return 'auto'
   if (aspectRatio === '3:2') return '1536x1024'
   if (aspectRatio === '2:3') return '1024x1536'
@@ -211,9 +248,9 @@ async function generateOpenAIImages(options: GenerateImageOptions): Promise<Gene
   }
   if (grok) {
     if (options.aspectRatio !== 'auto') values.aspect_ratio = options.aspectRatio
-    values.resolution = options.quality === 'high' ? '2k' : '1k'
+    values.resolution = options.resolution.toLowerCase()
   } else {
-    values.size = openAIImageSize(options.aspectRatio)
+    values.size = openAIImageSize(options.aspectRatio, options.resolution, options.model)
     values.quality = options.quality === 'high' ? 'high' : 'medium'
   }
 
@@ -235,7 +272,15 @@ async function generateOpenAIImages(options: GenerateImageOptions): Promise<Gene
 }
 
 export async function generateImages(options: GenerateImageOptions): Promise<GeneratedImage[]> {
-  return usesGeminiProtocol(options.platform, options.model)
-    ? generateGeminiImages(options)
-    : generateOpenAIImages(options)
+  const resolutions = supportedImageResolutions(options.platform, options.model)
+  const resolution = resolutions.includes(options.resolution) ? options.resolution : resolutions[resolutions.length - 1]!
+  const ratios = supportedImageAspectRatios(options.platform, options.model, resolution)
+  const request = {
+    ...options,
+    resolution,
+    aspectRatio: ratios.includes(options.aspectRatio) ? options.aspectRatio : '1:1' as const,
+  }
+  return usesGeminiProtocol(request.platform, request.model)
+    ? generateGeminiImages(request)
+    : generateOpenAIImages(request)
 }

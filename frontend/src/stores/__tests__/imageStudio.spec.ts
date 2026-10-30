@@ -69,6 +69,37 @@ describe('image studio sessions', () => {
     expect(generate).not.toHaveBeenCalled()
   })
 
+  it.each(['standard', 'high'] as const)('migrates legacy %s drafts without changing their quality', async quality => {
+    const session = structuredClone(toRaw(store.activeSession!))
+    session.form.quality = quality
+    Reflect.deleteProperty(session.form, 'resolution')
+    load.mockResolvedValue({ sessions: [session], activeId: session.id })
+    auth.user = { id: 2 }
+    await flushPromises()
+    expect(store.activeSession!.form.quality).toBe(quality)
+    expect(store.activeSession!.form.resolution).toBe(quality === 'high' ? '2K' : '1K')
+  })
+
+  it('persists 4K and snapshots it independently of the next draft and quality', async () => {
+    let complete!: (images: { src: string }[]) => void
+    generate.mockImplementation(() => new Promise(resolve => { complete = resolve }))
+    store.activeSession!.form.resolution = '4K'
+    const pending = store.generate('secret', 'openai')
+    store.activeSession!.form.resolution = '1K'
+    expect(generate).toHaveBeenCalledWith(expect.objectContaining({ resolution: '4K', quality: 'standard' }))
+    complete([{ src: 'data:image/png;base64,QUJD' }])
+    await pending
+    store.activeSession!.form.resolution = '4K'
+    await store.flush()
+    const snapshot = structuredClone(save.mock.calls.at(-1)![1])
+    load.mockResolvedValue(snapshot)
+    auth.user = { id: 2 }
+    await flushPromises()
+    expect(store.activeSession!.form.resolution).toBe('4K')
+    expect(store.activeSession!.form.quality).toBe('standard')
+    expect(store.activeSession!.results).toHaveLength(1)
+  })
+
   it('does not rewrite unmodified history just by opening another tab', async () => {
     const session = structuredClone(toRaw(store.activeSession!))
     await store.flush()

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, onScopeDispose, ref, toRaw, watch } from 'vue'
-import { generateImages, type GeneratedImage, type GenerateImageOptions, type ImageAspectRatio, type ImageQuality } from '@/api/imageGeneration'
+import { generateImages, type GeneratedImage, type GenerateImageOptions, type ImageAspectRatio, type ImageQuality, type ImageResolution } from '@/api/imageGeneration'
 import type { GroupPlatform } from '@/types'
 import { formatBeijingDateTime } from '@/utils/beijingDateTime'
 import { useAuthStore } from './auth'
@@ -12,6 +12,7 @@ export interface ImageStudioForm {
   prompt: string
   aspectRatio: ImageAspectRatio
   quality: ImageQuality
+  resolution: ImageResolution
   count: number
 }
 
@@ -55,7 +56,7 @@ export const useImageStudioStore = defineStore('imageStudio', () => {
     if (!ready.value) return null
     const session: ImageStudioSession = {
       id: crypto.randomUUID(), title: '',
-      form: { apiKeyId: null, model: '', prompt: '', aspectRatio: 'auto', quality: 'standard', count: 1 },
+      form: { apiKeyId: null, model: '', prompt: '', aspectRatio: 'auto', quality: 'standard', resolution: '1K', count: 1 },
       referenceFiles: [], results: [], activeResultId: null, pending: null, interrupted: false, error: '',
     }
     sessions.value.unshift(session)
@@ -133,6 +134,10 @@ export const useImageStudioStore = defineStore('imageStudio', () => {
         if (!Array.isArray(saved.sessions)) throw new Error('Invalid image studio history')
         sessions.value = saved.sessions.map(session => ({
           ...session,
+          form: {
+            ...session.form,
+            resolution: session.form.resolution ?? (session.form.quality === 'high' ? '2K' : '1K'),
+          },
           interrupted: Boolean(session.pending) || session.interrupted,
           pending: null,
         }))

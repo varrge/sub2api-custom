@@ -60,12 +60,12 @@ func (s *Store) AdjustQuotas(ctx context.Context, actorID int64, a QuotaAdjustme
 	// waited are visible. Use the same paused weekly clock as cardSelect.
 	now := s.now().UTC()
 	rows, err := tx.QueryContext(ctx, `SELECT c.id,c.code,c.total_quota_usd,c.total_used_usd,
-		COALESCE(c.weekly_quota_usd,ROUND(c.total_quota_usd/4,8)),COALESCE(w.used_usd,0),
-		c.status IN ('active','frozen') AND o.status<>'REFUNDED' AND c.starts_at<=$2
-		AND c.expires_at+pause.total_pause>$2
-		FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id
+		CASE WHEN c.order_id IS NULL THEN c.total_quota_usd ELSE COALESCE(c.weekly_quota_usd,ROUND(c.total_quota_usd/4,8)) END,COALESCE(w.used_usd,0),
+		c.status IN ('active','frozen') AND (c.order_id IS NULL OR o.status<>'REFUNDED') AND c.starts_at<=$2
+		AND c.expires_at+pause.total_pause>$2,c.order_id IS NULL
+		FROM month_card_cards c LEFT JOIN payment_orders o ON o.id=c.order_id
 		CROSS JOIN LATERAL (SELECT c.paused_us*INTERVAL '1 microsecond'+CASE WHEN c.frozen_at IS NULL THEN INTERVAL '0' ELSE GREATEST(INTERVAL '0',$2::timestamptz-c.frozen_at) END AS total_pause) pause
-		CROSS JOIN LATERAL (SELECT c.starts_at+LEAST(4,GREATEST(0,FLOOR(EXTRACT(EPOCH FROM (($2::timestamptz-pause.total_pause)-c.starts_at))/604800)))::int*INTERVAL '168 hours' AS window_start) v
+		CROSS JOIN LATERAL (SELECT CASE WHEN c.order_id IS NULL THEN c.starts_at ELSE c.starts_at+LEAST(4,GREATEST(0,FLOOR(EXTRACT(EPOCH FROM (($2::timestamptz-pause.total_pause)-c.starts_at))/604800)))::int*INTERVAL '168 hours' END AS window_start) v
 		LEFT JOIN month_card_period_usage w ON w.kind='card' AND w.entitlement_id=c.id AND w.period_kind='weekly' AND w.window_start=v.window_start AND w.generation=c.weekly_usage_generation
 		WHERE c.id=ANY($1) ORDER BY c.id`, pq.Array(a.CardIDs), now)
 	if err != nil {
@@ -80,8 +80,8 @@ func (s *Store) AdjustQuotas(ctx context.Context, actorID int64, a QuotaAdjustme
 		var c change
 		var code string
 		var used, weeklyUsed decimal.Decimal
-		var effective bool
-		if err := rows.Scan(&c.id, &code, &c.oldTotal, &used, &c.oldWeekly, &weeklyUsed, &effective); err != nil {
+		var effective, gift bool
+		if err := rows.Scan(&c.id, &code, &c.oldTotal, &used, &c.oldWeekly, &weeklyUsed, &effective, &gift); err != nil {
 			_ = rows.Close()
 			return err
 		}
@@ -91,6 +91,13 @@ func (s *Store) AdjustQuotas(ctx context.Context, actorID int64, a QuotaAdjustme
 		}
 		if a.WeeklyQuotaUSD != nil {
 			c.weekly = *a.WeeklyQuotaUSD
+		}
+		if gift {
+			if a.WeeklyQuotaUSD != nil && !a.WeeklyQuotaUSD.Equal(c.total) {
+				_ = rows.Close()
+				return fmt.Errorf("%w: 赠送额度卡只支持总额度，不能设置独立周额度", ErrInvalid)
+			}
+			c.weekly = c.total
 		}
 		var message string
 		switch {

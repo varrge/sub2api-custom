@@ -38,6 +38,19 @@ describe('separate entitlement pages', () => {
   })
   afterEach(() => wrapper?.unmount())
 
+  it('shows a gift in the wallet without weekly reset or freeze controls', async () => {
+    vi.mocked(groupBuyAPI.cards).mockResolvedValue([{ ...card, card_kind: 'gift', team_id: null, team_code: '', product_name: '狂蹬卡', order_id: 0, total_quota_usd: 15, weekly_quota_usd: 15, purchase_price_cny: 0, original_price_cny: 0 }])
+    vi.mocked(groupBuyAPI.orders).mockResolvedValue([{ group_id: 3, items: [{ kind: 'card', id: 1 }] }])
+    wrapper = mount(MyGroupBuyView, { global: global() })
+    await flushPromises()
+    expect(wrapper.text()).toContain('狂蹬卡')
+    expect(wrapper.text()).toContain('一次性总额度，用完不重置')
+    expect(wrapper.find('[data-testid="wallet-freeze"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('下次重置')
+    await wrapper.get('[data-testid="wallet-details"]').trigger('click')
+    expect(document.querySelector('[data-testid="wallet-details-panel"]')?.textContent).toContain('管理员赠送')
+  })
+
   it('shows group and solo month cards and freezes them while official subscriptions are disabled', async () => {
     wrapper = mount(MyGroupBuyView, { global: global() })
     await flushPromises()

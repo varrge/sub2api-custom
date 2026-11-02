@@ -101,9 +101,12 @@ func (s *Store) ResetUsage(ctx context.Context, actorID int64, r UsageReset) err
 		}
 	}
 	for _, card := range cards {
+		// Gifts have one lifetime allowance; both ledgers must advance together.
+		resetTotal := r.ResetTotal || card.CardKind == "gift"
+		resetWeekly := r.ResetWeekly || card.CardKind == "gift"
 		// Archive with exact DB decimals, not the display projection's float64.
 		// Increment even at zero: an admitted request may not have settled yet.
-		if r.ResetTotal {
+		if resetTotal {
 			if _, err := tx.ExecContext(ctx, `INSERT INTO month_card_total_usage_history(card_id,generation,quota_usd,used_usd)
 				SELECT id,total_usage_generation,total_quota_usd,total_used_usd FROM month_card_cards WHERE id=$1`, card.ID); err != nil {
 				return err
@@ -121,7 +124,7 @@ func (s *Store) ResetUsage(ctx context.Context, actorID int64, r UsageReset) err
 			c.total_usage_generation+CASE WHEN $3 THEN 1 ELSE 0 END,c.weekly_usage_generation+CASE WHEN $4 THEN 1 ELSE 0 END,$5
 			FROM month_card_cards c LEFT JOIN month_card_period_usage w ON w.kind='card' AND w.entitlement_id=c.id
 			AND w.period_kind='weekly' AND w.window_start=$5 AND w.generation=c.weekly_usage_generation WHERE c.id=$1`,
-			card.ID, actorID, r.ResetTotal, r.ResetWeekly, window); err != nil {
+			card.ID, actorID, resetTotal, resetWeekly, window); err != nil {
 			return err
 		}
 		// Read the settled weekly amount under the same locks and use DB decimals.
@@ -133,7 +136,7 @@ func (s *Store) ResetUsage(ctx context.Context, actorID int64, r UsageReset) err
 			),0)) ELSE c.total_used_usd END,
 			total_usage_generation=total_usage_generation+CASE WHEN $2 THEN 1 ELSE 0 END,
 			weekly_usage_generation=weekly_usage_generation+CASE WHEN $3 THEN 1 ELSE 0 END,updated_at=NOW() WHERE id=$1`,
-			card.ID, r.ResetTotal, r.ResetWeekly, window); err != nil {
+			card.ID, resetTotal, resetWeekly, window); err != nil {
 			return err
 		}
 	}

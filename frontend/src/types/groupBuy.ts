@@ -33,6 +33,7 @@ export interface GroupBuyTeam {
   cards?: MonthCard[]
 }
 export interface MonthCard {
+	card_kind?: 'purchase' | 'gift'
   id: number
   user_id: number
   group_id: number
@@ -71,6 +72,32 @@ export interface AdminTeamEntitlement extends GroupBuyTeam {
 export interface AdminMonthCard extends MonthCard {
   username: string
   email: string
+}
+
+export interface GiftCardConfig {
+  name: string
+  group_id: number
+  source_group_id: number
+  include_frozen: boolean
+  quota_usd: string
+  valid_days: number
+}
+export interface GiftCardPreview {
+  recipient_count: number
+  total_quota_usd: string
+  preview_token: string
+}
+export interface GiftCardIssue extends GiftCardConfig {
+  request_id: string
+  preview_token: string
+}
+export interface GiftCardBatch extends GiftCardConfig {
+  id: number
+  group_name: string
+  actor_user_id: number
+  recipient_count: number
+  created_at: string
+  expires_at: string
 }
 
 export type EntitlementValidity = 'active' | 'expired' | 'all'

@@ -30,12 +30,12 @@
               :aria-expanded="priceOpen === item.id || hoverPrice === item.id" :aria-controls="`wallet-price-tip-${item.id}`"
               @click="priceOpen = priceOpen === item.id ? null : item.id" @focus="hoverPrice = item.id"
               @blur="priceOpen = null; hoverPrice = null" @keydown.esc.stop="priceOpen = null; hoverPrice = null">
-              {{ item.card.purchase_price_cny != null ? cny(item.card.purchase_price_cny) : t('groupBuy.wallet.priceDetails') }} <span aria-hidden="true">ⓘ</span>
+              {{ item.card.card_kind === 'gift' ? t('groupBuy.giftSource') : item.card.purchase_price_cny != null ? cny(item.card.purchase_price_cny) : t('groupBuy.wallet.priceDetails') }} <span aria-hidden="true">ⓘ</span>
             </button>
             <div v-if="priceOpen === item.id || hoverPrice === item.id" :id="`wallet-price-tip-${item.id}`" class="wallet-price-tooltip" role="tooltip">
               <p>{{ t('groupBuy.wallet.originalPrice') }} <strong>{{ item.card.original_price_cny != null ? cny(item.card.original_price_cny) : t('groupBuy.wallet.noPrice') }}</strong></p>
               <p>{{ t('groupBuy.wallet.purchasePrice') }} <strong>{{ item.card.purchase_price_cny != null ? cny(item.card.purchase_price_cny) : t('groupBuy.wallet.noPrice') }}</strong></p>
-              <small>{{ t('groupBuy.wallet.feeHint') }}</small>
+              <small>{{ t(item.card.card_kind === 'gift' ? 'groupBuy.giftNoReset' : 'groupBuy.wallet.feeHint') }}</small>
             </div>
           </div>
         </article>

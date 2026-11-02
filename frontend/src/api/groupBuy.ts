@@ -16,6 +16,7 @@ import type {
   GroupBuyTeam,
   MonthCard
 } from '@/types/groupBuy'
+import type { GiftCardConfig, GiftCardPreview, GiftCardIssue, GiftCardBatch } from '@/types/groupBuy'
 
 export const groupBuyAPI = {
   async announcement() {
@@ -67,6 +68,15 @@ export const groupBuyAPI = {
   }
 }
 export const adminGroupBuyAPI = {
+  async previewGift(config: GiftCardConfig) {
+    return (await apiClient.post<GiftCardPreview>('/admin/group-buy/gifts/preview', config)).data
+  },
+  async issueGift(request: GiftCardIssue) {
+    return (await apiClient.post<GiftCardBatch>('/admin/group-buy/gifts', request, { timeout: 120000 })).data
+  },
+  async giftBatches(page = 1) {
+    return (await apiClient.get<PaginatedResponse<GiftCardBatch>>('/admin/group-buy/gifts', { params: { page } })).data
+  },
   async deleteCard(id: number) {
     return (await apiClient.delete<{ deleted_id: number }>(`/admin/group-buy/entitlements/cards/${id}`)).data
   },

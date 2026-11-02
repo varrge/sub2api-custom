@@ -49,5 +49,13 @@ func TestEntitlementCustomerRoutesRequireAdmin(t *testing.T) {
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("DELETE", "/api/v1/group-buy/entitlements/cards/1", nil))
 	require.Equal(t, http.StatusNotFound, w.Code)
-	require.Equal(t, 6, authCalls)
+	for _, route := range []struct{ method, path string }{{"POST", "/gifts/preview"}, {"POST", "/gifts"}, {"GET", "/gifts"}} {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(route.method, "/api/v1/admin/group-buy"+route.path, nil))
+		require.Equal(t, http.StatusForbidden, w.Code)
+		w = httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(route.method, "/api/v1/group-buy"+route.path, nil))
+		require.Equal(t, http.StatusNotFound, w.Code)
+	}
+	require.Equal(t, 9, authCalls)
 }

@@ -117,7 +117,7 @@ func billingCardShare(ctx context.Context, tx *sql.Tx, snap *Snapshot, c Candida
 	var start, expiry time.Time
 	var status, orderStatus string
 	var pausedUS, totalGeneration, weeklyGeneration int64
-	err := tx.QueryRowContext(ctx, `SELECT c.total_quota_usd,c.total_used_usd,c.starts_at,c.expires_at,c.status,o.status,c.paused_us,COALESCE(c.weekly_quota_usd,ROUND(c.total_quota_usd/4,8)),c.total_usage_generation,c.weekly_usage_generation FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id
+	err := tx.QueryRowContext(ctx, `SELECT c.total_quota_usd,c.total_used_usd,c.starts_at,c.expires_at,c.status,COALESCE(o.status,'GIFT'),c.paused_us,CASE WHEN c.order_id IS NULL THEN c.total_quota_usd ELSE COALESCE(c.weekly_quota_usd,ROUND(c.total_quota_usd/4,8)) END,c.total_usage_generation,c.weekly_usage_generation FROM month_card_cards c LEFT JOIN payment_orders o ON o.id=c.order_id
  WHERE c.id=$1 AND c.user_id=$2 AND c.group_id=$3 FOR UPDATE OF c`, c.ID, snap.UserID, snap.GroupID).Scan(&quota, &used, &start, &expiry, &status, &orderStatus, &pausedUS, &weeklyQuota, &totalGeneration, &weeklyGeneration)
 	if errors.Is(err, sql.ErrNoRows) {
 		return decimal.Zero, nil
@@ -136,6 +136,9 @@ func billingCardShare(ctx context.Context, tx *sql.Tx, snap *Snapshot, c Candida
 		effectiveAt = snap.StartedAt
 	}
 	expected := start.Add((effectiveAt.Sub(start) / (7 * 24 * time.Hour)) * (7 * 24 * time.Hour))
+	if orderStatus == "GIFT" {
+		expected = start
+	}
 	if c.CardPausedUS < 0 || c.CardPausedUS > pausedUS || !start.Equal(c.StartsAt) || effectiveAt.Before(start) || !effectiveAt.Before(expiry) || !expected.Equal(c.WeeklyWindowStart) {
 		return decimal.Zero, fmt.Errorf("month card snapshot period mismatch")
 	}

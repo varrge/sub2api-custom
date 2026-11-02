@@ -48,9 +48,9 @@ const isFrozen = computed(() => props.selected?.status === 'frozen')
     <section v-if="selected" class="mcw-hero" :aria-label="t('groupBuy.wallet.cardDetails')">
       <MonthCardFace :card="selected" :holder="holder" :brand="brand" :appearance="appearance" :now="now" />
       <div class="mcw-card-toolbar">
-        <p v-if="selected.freeze_allowed !== false" class="mcw-freeze-help">{{ t('groupBuy.freezeHelp') }}</p>
+        <p v-if="selected.card_kind !== 'gift' && selected.freeze_allowed !== false" class="mcw-freeze-help">{{ t('groupBuy.freezeHelp') }}</p>
         <div class="mcw-actions">
-          <button v-if="selected.freeze_allowed !== false" class="mcw-btn mcw-btn-outline" :disabled="saving || freezing || loading"
+          <button v-if="selected.card_kind !== 'gift' && selected.freeze_allowed !== false" class="mcw-btn mcw-btn-outline" :disabled="saving || freezing || loading"
             data-testid="wallet-freeze" @click="emit('freeze', selected)">{{ isFrozen ? t('groupBuy.thaw') : t('groupBuy.freeze') }}</button>
           <button class="mcw-btn mcw-btn-primary" data-testid="wallet-details" @click="detailsOpen = true">{{ t('groupBuy.wallet.cardDetails') }}</button>
         </div>
@@ -97,7 +97,7 @@ const isFrozen = computed(() => props.selected?.status === 'frozen')
         <div class="mcw-detail-item">
           <span class="mcw-detail-label">{{ t('groupBuy.teamCode') }}</span>
           <RouterLink v-if="selected.team_code" class="mcw-detail-value mcw-mono underline" :to="{ path: '/group-buy', query: { team_code: selected.team_code } }">{{ selected.team_code }}</RouterLink>
-          <span v-else class="mcw-detail-value">{{ t('groupBuy.solo') }}</span>
+          <span v-else class="mcw-detail-value">{{ t(selected.card_kind === 'gift' ? 'groupBuy.giftSource' : 'groupBuy.solo') }}</span>
         </div>
         <div class="mcw-detail-item">
           <span class="mcw-detail-label">{{ t('groupBuy.obtained') }}</span>
@@ -107,7 +107,7 @@ const isFrozen = computed(() => props.selected?.status === 'frozen')
           <span class="mcw-detail-label">{{ t('groupBuy.expires') }}</span>
           <span class="mcw-detail-value">{{ isFrozen ? t('groupBuy.frozenExpiry') : exactDate(selected.expires_at) }}</span>
         </div>
-        <div v-if="!isFrozen" class="mcw-detail-item">
+        <div v-if="!isFrozen && selected.card_kind !== 'gift'" class="mcw-detail-item">
           <span class="mcw-detail-label">{{ t('groupBuy.wallet.cycle') }}</span>
           <span class="mcw-detail-value">{{ exactDate(selected.weekly_window_start) }} — {{ exactDate(selected.weekly_window_end) }}</span>
         </div>
@@ -126,7 +126,7 @@ const isFrozen = computed(() => props.selected?.status === 'frozen')
             {{ selected.purchase_price_cny != null ? cny(selected.purchase_price_cny) : t('groupBuy.wallet.noPrice') }}
           </span>
         </div>
-        <div class="mcw-detail-hint">{{ t('groupBuy.wallet.feeHint') }}</div>
+        <div class="mcw-detail-hint">{{ t(selected.card_kind === 'gift' ? 'groupBuy.giftNoReset' : 'groupBuy.wallet.feeHint') }}</div>
       </div>
     </BaseDialog>
   </div>

@@ -45,6 +45,24 @@ beforeEach(() => {
 
 afterEach(() => vi.useRealTimers())
 
+it('allows reducing only the total allowance on a one-time gift', async () => {
+  const gift = { ...card, card_kind: 'gift' as const, team_id: null, team_code: '', order_id: 0, total_quota_usd: 15, weekly_quota_usd: 15, total_used_usd: 0, weekly_used_usd: 0 }
+  vi.mocked(adminGroupBuyAPI.soloEntitlements).mockResolvedValue(result([gift]))
+  const wrapper = mount()
+  await flushPromises()
+  await wrapper.findAll('[role="tab"]')[1].trigger('click')
+  await flushPromises()
+  wrapper.getComponent(AdminEntitlementMembersTable).vm.$emit('adjustQuota', gift)
+  await flushPromises()
+  const dialog = wrapper.getComponent(AdminQuotaAdjustmentDialog)
+  dialog.vm.$emit('update:draft', { setTotal: true, setWeekly: false, total: '10', weekly: '' })
+  dialog.vm.$emit('save')
+  await flushPromises()
+  expect(adminGroupBuyAPI.adjustQuotas).toHaveBeenCalledWith({ card_ids: [gift.id], total_quota_usd: '10' })
+  expect(dialog.props('show')).toBe(false)
+  wrapper.unmount()
+})
+
 describe('single team card deletion', () => {
   async function openDeletion() {
     const wrapper = mount()

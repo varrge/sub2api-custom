@@ -1,5 +1,15 @@
 export default {
   videoGeneration: {
+    referenceInputHint: "将参考图片拖到输入框，或粘贴图片、点击左下角上传（支持 PNG/JPG/WebP，单张最大 10MB，最多 1 张）",
+
+    unsupportedResolution: "此模型固定为 4K，当前视频计价尚不支持该分辨率，请选择其他模型。",
+    useImageUrl: "使用图片链接（可选）",
+    resolutionFixed: "分辨率由模型固定",
+    dropReference: "松开即可上传参考图片",
+    referenceImageUrlLabel: "参考图片 URL",
+    referenceImageUrlPlaceholder: "输入公网可访问的图片直链 (https://...)",
+    referenceImageUrlHint: "需为能直接公开访问的图片直链，不支持云盘或分享页",
+
     providers: '支持 Grok · Seedance',
     loading: '正在加载视频工作台...',
     noKeysTitle: '暂无可用的视频密钥',

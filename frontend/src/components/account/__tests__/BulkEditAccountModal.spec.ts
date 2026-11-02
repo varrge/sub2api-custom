@@ -583,6 +583,19 @@ describe('BulkEditAccountModal', () => {
     })
   })
 
+  it('changes the bulk video protocol only when explicitly selected', async () => {
+    const wrapper = mountModal({ selectedPlatforms: ['openai'], selectedTypes: ['apikey'] })
+    await wrapper.get('#bulk-edit-openai-endpoint-capabilities-enabled').setValue(true)
+    await wrapper.get('[data-testid="bulk-edit-openai-endpoint-capability-seedance"]').setValue(true)
+    expect(wrapper.get<HTMLSelectElement>('[data-testid="bulk-seedance-upstream-protocol"]').element.value).toBe('')
+    await wrapper.get('[data-testid="bulk-seedance-upstream-protocol"]').setValue('videos_json')
+    await wrapper.get('#bulk-edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledWith([1, 2], expect.objectContaining({
+      credentials: { openai_capabilities: ['chat_completions', 'embeddings', 'seedance'], seedance_upstream_protocol: 'videos_json' },
+    }))
+  })
+
   it('关闭端点能力修改后 Responses 路由恢复独立可编辑', async () => {
     const wrapper = mountModal({
       selectedPlatforms: ['openai'],

@@ -13,10 +13,14 @@ import (
 func TestSeedanceNativeRoutes(t *testing.T) {
 	router := newGatewayRoutesTestRouter()
 	for _, prefix := range []string{"/api/v3", "/v3", "/v1", ""} {
-		for _, method := range []string{http.MethodPost, http.MethodGet, http.MethodDelete} {
+		for _, method := range []string{http.MethodPost, http.MethodGet, http.MethodDelete, "content"} {
 			path := prefix + "/contents/generations/tasks"
 			if method != http.MethodPost {
 				path += "/task-1"
+			}
+			if method == "content" {
+				path += "/content"
+				method = http.MethodGet
 			}
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, httptest.NewRequest(method, path, strings.NewReader(`{"model":"seedance","content":[{"type":"text","text":"waves"}]}`)))

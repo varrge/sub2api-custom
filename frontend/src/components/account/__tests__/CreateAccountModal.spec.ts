@@ -219,6 +219,24 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
 
   afterEach(() => vi.useRealTimers())
 
+  it.each(['ark', 'videos_json'])('saves the selected Seedance %s upstream protocol', async protocol => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'OpenAI')
+    await selectButtonByText(wrapper, 'API Key')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('Seedance account')
+    await wrapper.get('form#create-account-form input[type="password"]').setValue('test-api-key')
+    await wrapper.get('[data-testid="openai-endpoint-capability-seedance"]').setValue(true)
+    expect(wrapper.get<HTMLSelectElement>('[data-testid="seedance-upstream-protocol"]').element.value).toBe('ark')
+    await wrapper.get('[data-testid="seedance-upstream-protocol"]').setValue(protocol)
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(createAccountMock.mock.calls[0]?.[0]?.credentials).toMatchObject({
+      seedance_upstream_protocol: protocol,
+      openai_capabilities: expect.arrayContaining(['seedance']),
+    })
+    wrapper.unmount()
+  })
+
   it('creates an account with fallback enabled only in the chosen group', async () => {
     const wrapper = mountModal([1, 2].map(id => ({ id, name: `Group ${id}`, platform: 'openai' })))
     await selectButtonByText(wrapper, 'OpenAI')

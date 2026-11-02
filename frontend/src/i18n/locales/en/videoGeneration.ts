@@ -1,5 +1,15 @@
 export default {
   videoGeneration: {
+    referenceInputHint: "Drag reference image here, paste, or click upload below (PNG/JPG/WebP, max 10MB, up to 1 image)",
+
+    unsupportedResolution: "This model is fixed to 4K, which video billing does not yet support. Choose another model.",
+    useImageUrl: "Use image URL (optional)",
+    resolutionFixed: "Resolution fixed by model",
+    dropReference: "Drop image to upload as reference",
+    referenceImageUrlLabel: "Reference Image URL",
+    referenceImageUrlPlaceholder: "Enter direct public image URL (https://...)",
+    referenceImageUrlHint: "Must be a direct, publicly accessible image link, not a sharing page",
+
     providers: 'Supports Grok · Seedance',
     loading: 'Loading the video studio...',
     noKeysTitle: 'No video-generation key available',

@@ -2245,6 +2245,14 @@
             </label>
           </div>
           <p class="input-hint">{{ t('admin.accounts.openai.endpointCapabilitiesDesc') }}</p>
+          <div v-if="openAIEndpointCapabilities.includes('seedance')" class="mt-3">
+            <label for="seedance-upstream-protocol" class="input-label">{{ t('admin.accounts.openai.seedanceProtocol') }}</label>
+            <select id="seedance-upstream-protocol" v-model="openAISeedanceProtocol" class="input" data-testid="seedance-upstream-protocol">
+              <option value="ark">{{ t('admin.accounts.openai.seedanceProtocolArk') }}</option>
+              <option value="videos_json">{{ t('admin.accounts.openai.seedanceProtocolVideos') }}</option>
+            </select>
+            <p class="input-hint">{{ t('admin.accounts.openai.seedanceProtocolHint') }}</p>
+          </div>
         </div>
       </div>
 
@@ -4232,6 +4240,7 @@ const openAICompactMode = ref<OpenAICompactMode>('auto')
 const openAIResponsesMode = ref<OpenAIResponsesMode>('auto')
 // Images 非流式响应缺 b64_json 时由网关下载 url 回填（仅 OpenAI API Key）。
 const openAIImagesUrlToB64JsonEnabled = ref(false)
+const openAISeedanceProtocol = ref('ark')
 const openAIEndpointCapabilities = ref<OpenAIEndpointCapability[]>(['chat_completions', 'embeddings'])
 const openaiOAuthResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
 const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
@@ -4394,7 +4403,7 @@ const openAITextEndpointCapabilityLabel = computed(() => {
 const openAIEndpointCapabilityOptions = computed<{ value: OpenAIEndpointCapability; label: string }[]>(() => [
   { value: 'chat_completions', label: openAITextEndpointCapabilityLabel.value },
   { value: 'embeddings', label: t('admin.accounts.openai.capabilityEmbeddings') },
-  { value: 'seedance', label: 'Seedance (Ark)' }
+  { value: 'seedance', label: 'Seedance' }
 ])
 const openAITextGenerationCapabilityEnabled = computed(() =>
   openAIEndpointCapabilities.value.includes('chat_completions')
@@ -4449,6 +4458,7 @@ const toggleOpenAIEndpointCapability = (capability: OpenAIEndpointCapability, ev
 
 const applyOpenAIEndpointCapabilities = (credentials: Record<string, unknown>) => {
   const capabilities = normalizeOpenAIEndpointCapabilities(openAIEndpointCapabilities.value)
+  if (capabilities.includes('seedance')) credentials.seedance_upstream_protocol = openAISeedanceProtocol.value
   if (capabilities.length === 2 && !capabilities.includes('seedance')) {
     delete credentials.openai_capabilities
     return
@@ -4744,6 +4754,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   openAICompactMode.value = 'auto'
   openAIResponsesMode.value = 'auto'
   openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
+  openAISeedanceProtocol.value = 'ark'
   openAICompactModelMappings.value = []
   openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
   openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
@@ -4767,6 +4778,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     openAICompactMode.value = (extra?.openai_compact_mode as OpenAICompactMode) || 'auto'
     if (newAccount.type === 'apikey') {
       openAIResponsesMode.value = normalizeOpenAIResponsesMode(extra?.openai_responses_mode)
+      openAISeedanceProtocol.value = newAccount.credentials?.seedance_upstream_protocol === 'videos_json' ? 'videos_json' : 'ark'
       openAIEndpointCapabilities.value = readOpenAIEndpointCapabilities(
         newAccount.credentials as Record<string, unknown> | undefined
       )

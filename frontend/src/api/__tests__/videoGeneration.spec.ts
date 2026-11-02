@@ -7,6 +7,7 @@ import {
   supportedVideoResolutions,
   supportsVideoGeneration,
   videoContentURL,
+  videoModelResolution,
   videoProtocolForModel,
   videoRequiresReference,
   type GenerateVideoOptions,
@@ -35,6 +36,19 @@ const grokOptions: GenerateVideoOptions = {
 }
 
 describe('video capabilities and discovery', () => {
+  it('locks resolution suffixes and rejects a conflicting or unsupported size before sending', async () => {
+    expect(videoModelResolution('seedance-2.0-720p')).toBe('720p')
+    expect(videoModelResolution('Seedance-2.0-1080P-preview')).toBe('1080p')
+    expect(videoModelResolution('seedance-video')).toBeNull()
+    expect(videoModelResolution('seedance-720preview')).toBeNull()
+    expect(supportedVideoResolutions('seedance-2.0-720p')).toEqual(['720p'])
+    expect(supportedVideoResolutions('seedance-2.0-4K')).toEqual([])
+    const fetcher = vi.fn()
+    vi.stubGlobal('fetch', fetcher)
+    await expect(createVideoTask({ ...grokOptions, platform: 'openai', model: 'seedance-2.0-720p', resolution: '1080p' })).rejects.toThrow('resolution is not supported')
+    await expect(createVideoTask({ ...grokOptions, platform: 'openai', model: 'seedance-2.0-4k', resolution: '4k' })).rejects.toThrow('resolution is not supported')
+    expect(fetcher).not.toHaveBeenCalled()
+  })
   it('recognizes supported providers and requires an image only for Grok 1.5', () => {
     expect(videoProtocolForModel('grok-imagine-video')).toBe('grok')
     expect(videoProtocolForModel('x-ai/grok-imagine-video-1.5-preview')).toBe('grok')
@@ -383,5 +397,39 @@ describe('video downloads', () => {
     await expect(fetchVideoBlob('key', { ...task, status: 'running' })).rejects.toThrow('not ready')
     expect(fetcher).not.toHaveBeenCalled()
     await expect(fetchVideoBlob('key', task)).rejects.toThrow('Video request not found')
+  })
+})
+
+describe('Videos JSON gateway interoperability', () => {
+  it('accepts a public first frame URL without encoding it as Base64', async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse({ id: 'vid-1', status: 'queued' }))
+    vi.stubGlobal('fetch', fetcher)
+    await createVideoTask({ ...grokOptions, platform: 'openai', model: 'seedance-2.0-720p', referenceImageUrl: 'https://images.example/first.png' })
+    expect(JSON.parse(fetcher.mock.calls[0]![1].body).content[1]).toEqual({
+      type: 'image_url', image_url: { url: 'https://images.example/first.png' }, role: 'first_frame',
+    })
+  })
+
+  it('rejects conflicting or unsafe references before creating a task', async () => {
+    const fetcher = vi.fn()
+    vi.stubGlobal('fetch', fetcher)
+    for (const referenceImageUrl of ['file:///tmp/a.png', 'javascript:alert(1)', 'https://user:password@example.com/a.png']) {
+      await expect(createVideoTask({ ...grokOptions, referenceImageUrl })).rejects.toThrow('public HTTP(S)')
+    }
+    await expect(createVideoTask({ ...grokOptions, referenceImageUrl: 'https://images.example/first.png', referenceImage: new File(['x'], 'x.png', { type: 'image/png' }) })).rejects.toThrow('not both')
+    expect(fetcher).not.toHaveBeenCalled()
+  })
+
+  it('authenticates only the exact gateway content endpoint for the current task', async () => {
+    const fetcher = vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(['mp4'], { type: 'video/mp4' }) })
+    vi.stubGlobal('fetch', fetcher)
+    const task: VideoTask = { id: 'vid-1', protocol: 'seedance', status: 'succeeded', videoUrl: '/api/v3/contents/generations/tasks/vid-1/content' }
+    await fetchVideoBlob('user-secret', task)
+    expect(fetcher.mock.calls[0]![1].headers.Authorization).toBe('Bearer user-secret')
+    expect(fetcher.mock.calls[0]![0]).toBe(task.videoUrl)
+    for (const videoUrl of ['https://evil.example/api/v3/contents/generations/tasks/vid-1/content', '/api/v3/contents/generations/tasks/other/content']) {
+      await fetchVideoBlob('user-secret', { ...task, videoUrl })
+      expect(fetcher.mock.lastCall![1].headers.Authorization).toBeUndefined()
+    }
   })
 })

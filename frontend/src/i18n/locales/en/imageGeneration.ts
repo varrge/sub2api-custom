@@ -1,5 +1,7 @@
 export default {
   imageGeneration: {
+    referenceInputHint: "Drag reference images here, paste, or click upload below (PNG/JPG/WebP, max 10MB, up to 4 images)",
+
     badge: 'AI Creative Studio',
     studioTitle: 'Visual Creation',
     imageTab: 'Images',
@@ -7,7 +9,7 @@ export default {
     canvasTitle: 'Canvas',
     imageNumber: 'Image {index}',
     resultPlaceholder: 'Generated images will appear here',
-    dropReference: 'Drop to add reference images',
+    dropReference: "Drop image to add as reference",
     textToImage: 'Text to Image',
     imageToImage: 'Image to Image',
     auto: 'Auto',

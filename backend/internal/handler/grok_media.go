@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"maps"
 	"net/http"
 	"strconv"
 	"strings"
@@ -432,6 +433,24 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 		result, err := func() (*service.OpenAIForwardResult, error) {
 			defer releaseAccount()
 			if endpoint.IsSeedance() {
+				if endpoint.IsVideoLookupRequest() {
+					pending, loadErr := h.gatewayService.LoadGrokVideoPendingBilling(requestCtx, requestID, subject.UserID, apiKey.ID)
+					if loadErr != nil {
+						return nil, loadErr
+					}
+					// Pre-adapter tasks used Ark. Keep each task on its create-time protocol.
+					protocol := service.SeedanceProtocolArk
+					if pending != nil && pending.SeedanceProtocol != "" {
+						protocol = pending.SeedanceProtocol
+					}
+					copy := *account
+					copy.Credentials = maps.Clone(account.Credentials)
+					copy.Credentials[service.SeedanceUpstreamProtocolCredentialKey] = protocol
+					account = &copy
+				} else if account.SeedanceUpstreamProtocol() == service.SeedanceProtocolVideosJSON && !videoPricingSnapshot.PerSecond {
+					h.errorResponse(c, http.StatusServiceUnavailable, "pricing_unavailable", "Videos JSON requires per-second video pricing for this model and resolution")
+					return nil, errors.New("Videos JSON requires per-second pricing")
+				}
 				return h.gatewayService.ForwardSeedance(requestCtx, c, account, endpoint, requestID, body)
 			}
 			return h.gatewayService.ForwardGrokMedia(requestCtx, c, account, endpoint, requestID, body, contentType)
@@ -444,6 +463,25 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 			responseLatencyMs = forwardDurationMs - upstreamLatencyMs
 		}
 		service.SetOpsLatencyMs(c, service.OpsResponseLatencyMsKey, responseLatencyMs)
+
+		// An observed completion is billable even when the following download fails.
+		// Preserve settlement after client cancellation; status/content share one claim.
+		if endpoint == service.SeedanceEndpointStatus || endpoint == service.SeedanceEndpointContent {
+			billingCtx, cancelBilling := context.WithTimeout(context.WithoutCancel(requestCtx), 10*time.Second)
+			billResult, billingPricingAt, billingSubscription := prepareSeedanceCompletionBilling(billingCtx, h, apiKey, subject, requestID, result)
+			cancelBilling()
+			if billResult != nil {
+				// Billing mode belongs to the creation entitlement, even if an admin
+				// later changes the original group's current subscription type.
+				billingKey, billingGroup := *apiKey, *apiKey.Group
+				billingGroup.SubscriptionType = service.SubscriptionTypeStandard
+				if billingSubscription != nil {
+					billingGroup.SubscriptionType = service.SubscriptionTypeSubscription
+				}
+				billingKey.Group = &billingGroup
+				recordGrokMediaUsage(c, h, reqLog, &billingKey, subject, billingSubscription, account, billResult, billResult.Model, body, requestID, billingPricingAt, nil)
+			}
+		}
 
 		if err != nil {
 			var failoverErr *service.UpstreamFailoverError
@@ -551,6 +589,9 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 				CreatedAt: videoCreateStartedAt,
 			}
 			pending.SubscriptionType = service.SubscriptionTypeStandard
+			if endpoint.IsSeedance() {
+				pending.SeedanceProtocol = account.SeedanceUpstreamProtocol()
+			}
 			if apiKey.Group != nil && apiKey.Group.SubscriptionType != "" {
 				pending.SubscriptionType = apiKey.Group.SubscriptionType
 			}
@@ -578,22 +619,7 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 				}
 			}
 		}
-		// Status poll OR content download can observe official done+video.url.
-		// Both paths share the same claim key so the customer is charged once.
-		if endpoint == service.SeedanceEndpointStatus {
-			billResult, billingPricingAt, billingSubscription := prepareSeedanceCompletionBilling(requestCtx, h, apiKey, subject, requestID, result)
-			if billResult != nil {
-				// Billing mode belongs to the creation entitlement, even if an admin
-				// later changes the original group's current subscription type.
-				billingKey, billingGroup := *apiKey, *apiKey.Group
-				billingGroup.SubscriptionType = service.SubscriptionTypeStandard
-				if billingSubscription != nil {
-					billingGroup.SubscriptionType = service.SubscriptionTypeSubscription
-				}
-				billingKey.Group = &billingGroup
-				recordGrokMediaUsage(c, h, reqLog, &billingKey, subject, billingSubscription, account, billResult, billResult.Model, body, requestID, billingPricingAt, nil)
-			}
-		} else if endpoint == service.GrokMediaEndpointVideoStatus || endpoint == service.GrokMediaEndpointVideoContent {
+		if endpoint == service.GrokMediaEndpointVideoStatus || endpoint == service.GrokMediaEndpointVideoContent {
 			taskID := strings.TrimSpace(requestID)
 			billResult, billingPricingAt, videoRateMultiplierOverride, billingSubscription := prepareGrokVideoCompletionBilling(requestCtx, h, reqLog, apiKey, subject, taskID, result, requestStart)
 			if billResult != nil {

@@ -1468,6 +1468,22 @@ describe('EditAccountModal', () => {
     expect(updateAccountMock.mock.calls[0]?.[1]?.credentials?.openai_capabilities).toEqual(['chat_completions', 'seedance'])
   })
 
+  it('loads and changes the Seedance upstream protocol independently of capability selection', async () => {
+    const account = buildAccount()
+    account.credentials.openai_capabilities = ['seedance']
+    account.credentials.seedance_upstream_protocol = 'videos_json'
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+    const wrapper = mountModal(account)
+    expect(wrapper.get<HTMLSelectElement>('[data-testid="seedance-upstream-protocol"]').element.value).toBe('videos_json')
+    await wrapper.get('[data-testid="seedance-upstream-protocol"]').setValue('ark')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    expect(updateAccountMock.mock.calls[0]?.[1]?.credentials?.seedance_upstream_protocol).toBe('ark')
+    expect(updateAccountMock.mock.calls[0]?.[1]?.credentials?.openai_capabilities).toEqual(['seedance'])
+  })
+
   it('keeps at least one OpenAI APIKey endpoint capability selected', async () => {
     const account = buildAccount()
     updateAccountMock.mockReset()

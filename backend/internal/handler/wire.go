@@ -139,8 +139,10 @@ func ProvideOpenAIGatewayHandler(
 	cfg *config.Config,
 	coordinator *securityaudit.Coordinator,
 	compositeResolver *service.CompositeRouteResolver,
+	imageStorage *service.ImageStorageSettingService,
 ) *OpenAIGatewayHandler {
 	gatewayService.SetPluginManager(pluginManager)
+	gatewayService.SetSeedanceImageStorage(imageStorage.Resolver())
 	h := NewOpenAIGatewayHandler(gatewayService, concurrencyService, billingCacheService, apiKeyService,
 		usageRecordWorkerPool, errorPassthroughService, contentModerationService, opsService, cfg)
 	h.compositeResolver = compositeResolver

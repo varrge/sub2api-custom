@@ -806,6 +806,11 @@ export default {
         imagesUrlToB64JsonDesc:
           '仅对 OpenAI API Key 的 Images 非流式响应生效。上游返回的图片缺少 b64_json 但带 url 时，网关下载该 url 并以 base64 回填 b64_json（url 保留），兼容按官方接口实现的客户端；下载失败则原样返回。',
         endpointCapabilities: '端点能力',
+        seedanceProtocol: '视频上游协议',
+        seedanceProtocolArk: 'Ark 原生（/api/v3）',
+        seedanceProtocolVideos: 'Videos JSON（/v1/videos）',
+        seedanceProtocolUnchanged: '保持原协议',
+        seedanceProtocolHint: '按上游文档选择。Videos JSON 使用按秒定价及公网素材链接；已有任务沿用创建时的协议。',
         endpointCapabilitiesDesc:
           '用于调度筛选。文本端点会跟随上方 Responses API 支持显示为 Responses、Chat Completions 或自动模式；Embeddings 独立控制 /v1/embeddings。',
         capabilityResponses: 'Responses',

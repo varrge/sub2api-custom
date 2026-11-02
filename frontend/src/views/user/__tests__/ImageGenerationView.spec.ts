@@ -55,6 +55,11 @@ function mountView() {
 }
 
 beforeEach(async () => {
+  const NativeURL = URL
+  vi.stubGlobal('URL', class extends NativeURL {
+    static createObjectURL = vi.fn(() => 'blob:reference-image')
+    static revokeObjectURL = vi.fn()
+  })
   generate.mockReset()
   showError.mockReset()
   pinia = createPinia()
@@ -66,9 +71,38 @@ afterEach(() => {
   view.unmount()
   useImageStudioStore(pinia).$dispose()
   useVideoStudioStore(pinia).$dispose()
+  vi.unstubAllGlobals()
 })
 
 describe('image studio requests in progress', () => {
+  it('accepts prompt drops, clipboard images, and the lower-left upload button', async () => {
+    const file = new File(['image'], 'first.png', { type: 'image/png' })
+    const prompt = view.get('#image-prompt')
+    const dataTransfer = { files: [file], types: ['Files'], dropEffect: 'none' }
+    await prompt.trigger('dragenter', { dataTransfer })
+    expect(view.get('.composer-card').text()).toContain('imageGeneration.dropReference')
+    await prompt.trigger('dragover', { dataTransfer })
+    expect(dataTransfer.dropEffect).toBe('copy')
+    await prompt.trigger('drop', { dataTransfer })
+    expect(useImageStudioStore(pinia).activeSession!.referenceFiles).toEqual([file])
+    expect(view.get('.composer-card').text()).not.toContain('imageGeneration.dropReference')
+    expect(view.get('.composer-card').text()).toContain('imageGeneration.referenceInputHint')
+    const pasted = new File(['image'], 'pasted.webp', { type: 'image/webp' })
+    await prompt.trigger('paste', { clipboardData: { files: [pasted] } })
+    expect(useImageStudioStore(pinia).activeSession!.referenceFiles).toEqual([file, pasted])
+    const input = view.get<HTMLInputElement>('input[type="file"]')
+    const click = vi.spyOn(input.element, 'click')
+    await view.get('.composer-icon-button').trigger('click')
+    expect(click).toHaveBeenCalledOnce()
+    const uploaded = new File(['image'], 'uploaded.jpg', { type: 'image/jpeg' })
+    Object.defineProperty(input.element, 'files', { value: [uploaded] })
+    await input.trigger('change')
+    generate.mockResolvedValue([{ src: 'data:image/png;base64,QUJD' }])
+    await view.get('form').trigger('submit')
+    await flushPromises()
+    expect(generate).toHaveBeenCalledWith(expect.objectContaining({ referenceImages: [file, pasted, uploaded] }))
+  })
+
   it('preserves the 4K draft and receives an image result while the video tab is open', async () => {
     let complete!: (images: { src: string }[]) => void
     generate.mockImplementation(() => new Promise(resolve => { complete = resolve }))

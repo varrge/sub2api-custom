@@ -1078,6 +1078,16 @@
               <span class="text-gray-700 dark:text-gray-200">{{ option.label }}</span>
             </label>
           </div>
+
+          <div v-if="openAIEndpointCapabilities.includes('seedance')" class="mt-3">
+            <label for="bulk-seedance-upstream-protocol" class="input-label">{{ t('admin.accounts.openai.seedanceProtocol') }}</label>
+            <select id="bulk-seedance-upstream-protocol" v-model="openAISeedanceProtocol" :disabled="!enableOpenAIEndpointCapabilities" class="input" data-testid="bulk-seedance-upstream-protocol">
+              <option value="">{{ t('admin.accounts.openai.seedanceProtocolUnchanged') }}</option>
+              <option value="ark">{{ t('admin.accounts.openai.seedanceProtocolArk') }}</option>
+              <option value="videos_json">{{ t('admin.accounts.openai.seedanceProtocolVideos') }}</option>
+            </select>
+            <p class="input-hint">{{ t('admin.accounts.openai.seedanceProtocolHint') }}</p>
+          </div>
         </div>
       </div>
 
@@ -1705,6 +1715,7 @@ const openaiPassthroughEnabled = ref(false)
 // Codex namespace 工具摊平兼容开关（仅 OAuth），缺省关闭即原样保留
 const openaiFlattenNamespacesEnabled = ref(false)
 const openAILongContextBillingEnabled = ref(false)
+const openAISeedanceProtocol = ref('')
 const openAIEndpointCapabilities = ref<OpenAIEndpointCapability[]>([
   'chat_completions',
   'embeddings'
@@ -1796,7 +1807,7 @@ const openAIEndpointCapabilityOptions = computed<
 >(() => [
   { value: 'chat_completions', label: openAITextEndpointCapabilityLabel.value },
   { value: 'embeddings', label: t('admin.accounts.openai.capabilityEmbeddings') },
-  { value: 'seedance', label: 'Seedance (Ark)' }
+  { value: 'seedance', label: 'Seedance' }
 ])
 const openAITextGenerationCapabilityEnabled = computed(() =>
   openAIEndpointCapabilities.value.includes('chat_completions')
@@ -2008,6 +2019,9 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
   }
 
   if (applyOpenAIEndpointCapabilities) {
+    if (openAIEndpointCapabilities.value.includes('seedance') && openAISeedanceProtocol.value) {
+      credentials.seedance_upstream_protocol = openAISeedanceProtocol.value
+    }
     credentials.openai_capabilities =
       openAIEndpointCapabilities.value.length === 2 && !openAIEndpointCapabilities.value.includes('seedance')
         ? null
@@ -2398,6 +2412,7 @@ watch(
       openaiFlattenNamespacesEnabled.value = false
       openAILongContextBillingEnabled.value = false
       openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
+      openAISeedanceProtocol.value = ''
       openAIResponsesMode.value = 'auto'
       modelRestrictionMode.value = 'whitelist'
       allowedModels.value = []

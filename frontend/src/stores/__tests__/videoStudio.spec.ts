@@ -55,6 +55,21 @@ afterEach(async () => {
 })
 
 describe('video studio sessions', () => {
+  it('polls Seedance every 30 seconds and snapshots a public reference URL', async () => {
+    createTask.mockResolvedValue({ ...queued, protocol: 'seedance' })
+    getTask.mockResolvedValue({ ...completed, protocol: 'seedance' })
+    Object.assign(store.activeSession!.form, { model: 'seedance-video', referenceImageUrl: 'https://images.example/first.png' })
+    const pending = store.generate(apiKeys[0]!.key, 'openai')
+    await flushPromises()
+    store.activeSession!.form.referenceImageUrl = 'https://images.example/next.png'
+    await vi.advanceTimersByTimeAsync(29_999)
+    expect(getTask).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(await pending).toBe(1)
+    expect(createTask).toHaveBeenCalledWith(expect.objectContaining({ referenceImageUrl: 'https://images.example/first.png' }))
+    expect(store.activeSession!.results[0]).toMatchObject({ mode: 'image', referenceImageUrl: 'https://images.example/first.png' })
+  })
+
   it('uses video defaults and snapshots the submitted settings independently of the next draft', async () => {
     expect(store.activeSession!.form).toMatchObject({ duration: 5, aspectRatio: '16:9', resolution: '720p' })
     const { pending } = await startPending()

@@ -40,7 +40,7 @@
         <header class="pass-header">
           <div class="brand-name">{{ brand }}</div>
           <div class="card-badges">
-            <span class="pass-badge exclusive">{{ t('groupBuy.wallet.exclusive') }}</span>
+            <span class="pass-badge exclusive">{{ t(card.card_kind === 'gift' ? 'groupBuy.giftLabel' : 'groupBuy.wallet.exclusive') }}</span>
             <span class="pass-badge status" :class="{ 'status-frozen': isFrozen }">
               {{ isFrozen ? t('groupBuy.frozen') : t('groupBuy.active') }}
             </span>
@@ -56,7 +56,7 @@
           <div class="card-available">
             <div class="available-label">
               {{ t('groupBuy.wallet.availableLabel') }}
-              <span class="available-hint" v-if="!isFrozen">{{ t('groupBuy.wallet.availableHint') }}</span>
+              <span class="available-hint" v-if="!isFrozen">{{ t(card.card_kind === 'gift' ? 'groupBuy.giftNoReset' : 'groupBuy.wallet.availableHint') }}</span>
             </div>
             <div class="available-amount" data-testid="card-available" :class="{ 'amount-frozen': isFrozen }">
               {{ usd(currentAvailable) }}
@@ -66,7 +66,7 @@
 
         <!-- Progress Bars -->
         <div class="card-progress-section" data-testid="card-quotas">
-          <div class="progress-row">
+          <div v-if="card.card_kind !== 'gift'" class="progress-row">
             <div class="progress-info">
               <span class="progress-title">{{ t('groupBuy.weeklyUsage') }}</span>
               <span class="progress-values">{{ usd(card.weekly_used_usd) }} / {{ usd(card.weekly_quota_usd) }}</span>
@@ -101,7 +101,7 @@
           <template v-if="!isFrozen">
             <span class="info-highlight">{{ t('groupBuy.wallet.daysLeft', { days: daysLeft }) }}</span>
             <span class="info-dot">•</span>
-            <span>{{ isFinalWindow ? t('groupBuy.finalWindow') : `${t('groupBuy.nextReset')}: ${exactDate(card.weekly_window_end)}` }}</span>
+            <span>{{ card.card_kind === 'gift' ? t('groupBuy.giftNoReset') : isFinalWindow ? t('groupBuy.finalWindow') : `${t('groupBuy.nextReset')}: ${exactDate(card.weekly_window_end)}` }}</span>
           </template>
           <template v-else>
             <span class="info-highlight">{{ t('groupBuy.frozenRemaining', { days: daysLeft }) }}</span>

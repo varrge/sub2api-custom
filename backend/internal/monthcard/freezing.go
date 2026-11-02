@@ -30,12 +30,15 @@ func (s *Store) SetFrozen(ctx context.Context, userID, cardID int64, frozen bool
 	var starts, expires time.Time
 	var frozenAt sql.NullTime
 	var pausedUS int64
-	err = tx.QueryRowContext(ctx, `SELECT c.status,o.status,c.starts_at,c.expires_at,c.frozen_at,c.paused_us
-		FROM month_card_cards c JOIN payment_orders o ON o.id=c.order_id
+	err = tx.QueryRowContext(ctx, `SELECT c.status,COALESCE(o.status,'GIFT'),c.starts_at,c.expires_at,c.frozen_at,c.paused_us
+		FROM month_card_cards c LEFT JOIN payment_orders o ON o.id=c.order_id
 		WHERE c.id=$1 AND c.user_id=$2 FOR UPDATE OF c`, cardID, userID).
 		Scan(&status, &orderStatus, &starts, &expires, &frozenAt, &pausedUS)
 	if err != nil {
 		return nil, notFound(err)
+	}
+	if orderStatus == "GIFT" {
+		return nil, fmt.Errorf("%w: 赠送额度卡不支持冻结", ErrInvalid)
 	}
 
 	policy, err := s.readFreezePolicy(ctx, tx)

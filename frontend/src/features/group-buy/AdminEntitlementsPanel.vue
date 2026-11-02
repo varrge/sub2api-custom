@@ -292,7 +292,7 @@ async function saveQuota() {
   }
   for (const card of quotaCards.value) {
     const total = request.total_quota_usd === undefined ? card.total_quota_usd : Number(request.total_quota_usd)
-    const weekly = request.weekly_quota_usd === undefined ? card.weekly_quota_usd : Number(request.weekly_quota_usd)
+    const weekly = card.card_kind === 'gift' ? total : request.weekly_quota_usd === undefined ? card.weekly_quota_usd : Number(request.weekly_quota_usd)
     if (total < card.total_used_usd || weekly < card.weekly_used_usd || weekly > total) {
       quotaError.value = t('groupBuy.quotaInvalidLimits', { code: card.code }); return
     }

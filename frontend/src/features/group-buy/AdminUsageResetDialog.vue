@@ -36,7 +36,7 @@
             </span>
             / {{ usd(single.total_quota_usd) }}
           </p>
-          <p class="text-xs">
+          <p v-if="single.card_kind !== 'gift'" class="text-xs">
             <span class="gb-label">{{ t('groupBuy.weeklyUsage') }}:</span>
             {{ usd(single.weekly_used_usd) }}
             <span v-if="draft.resetWeekly" class="gb-accent-sky font-medium">
@@ -59,7 +59,7 @@
               <span v-if="draft.resetTotal || draft.resetWeekly" class="gb-accent-sky font-medium">→ {{ usd(totalAfterReset(card)) }}</span>
               / {{ usd(card.total_quota_usd) }}
             </span>
-            <span>
+            <span v-if="card.card_kind !== 'gift'">
               {{ t('groupBuy.weeklyUsage') }}: {{ usd(card.weekly_used_usd) }}
               <span v-if="draft.resetWeekly" class="gb-accent-sky font-medium">→ {{ usd(0) }}</span>
               / {{ usd(card.weekly_quota_usd) }}
@@ -69,7 +69,7 @@
       </div>
 
       <div class="space-y-3">
-        <label class="flex items-start gap-2 text-sm leading-6 text-gray-700 dark:text-gray-300">
+        <label v-if="!hasGift" class="flex items-start gap-2 text-sm leading-6 text-gray-700 dark:text-gray-300">
           <input
             type="checkbox"
             class="mt-1"
@@ -93,7 +93,7 @@
 
       <div class="gb-notice gb-notice-warn space-y-1 p-4 text-xs leading-5">
         <p>{{ t('groupBuy.usageResetScopeHint') }}</p>
-        <p>{{ t('groupBuy.usageResetPartialHint') }}</p>
+        <p>{{ t(hasGift ? 'groupBuy.giftResetHint' : 'groupBuy.usageResetPartialHint') }}</p>
       </div>
 
       <p v-if="error" class="gb-notice gb-notice-error p-3" role="alert">{{ error }}</p>
@@ -138,6 +138,7 @@ const { t } = useI18n()
 
 const isBulk = computed(() => props.cards.length > 1)
 const single = computed(() => (props.cards.length === 1 ? props.cards[0] : null))
+const hasGift = computed(() => props.cards.some(card => card.card_kind === 'gift'))
 
 function totalAfterReset(card: AdminMonthCard) {
   return props.draft.resetTotal ? 0 : Math.max(0, card.total_used_usd - card.weekly_used_usd)

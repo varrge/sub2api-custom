@@ -59,6 +59,7 @@ type Team struct {
 }
 
 type Card struct {
+	CardKind          string     `json:"card_kind"`
 	ID                int64      `json:"id"`
 	UserID            int64      `json:"user_id"`
 	GroupID           int64      `json:"group_id"`

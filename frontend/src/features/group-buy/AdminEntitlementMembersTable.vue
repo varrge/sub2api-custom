@@ -83,7 +83,7 @@
               v-for="(quota, quotaIndex) in quotas(card)"
               :key="quotaIndex"
             >
-              <div class="min-w-32">
+              <div v-if="card.card_kind !== 'gift' || quotaIndex === 0" class="min-w-32">
                 <p class="text-xs text-gray-500 dark:text-gray-400">
                   {{ usd(quota.used) }} / {{ usd(quota.total) }}
                 </p>
@@ -104,6 +104,7 @@
                   }}
                 </p>
               </div>
+              <span v-else>—</span>
             </td>
             <td>
               <span class="gb-accent-sky font-semibold">{{
@@ -122,6 +123,7 @@
             </td>
             <td>
               <RouterLink
+                v-if="card.order_id > 0"
                 :to="{
                   path: '/admin/orders',
                   query: { order_id: card.order_id, order_type: 'month_card' }
@@ -130,6 +132,7 @@
               >
                 {{ t('groupBuy.order') }} #{{ card.order_id }}
               </RouterLink>
+              <span v-else>{{ t('groupBuy.giftSource') }}</span>
             </td>
             <td>
               <div class="flex flex-wrap items-center gap-2">

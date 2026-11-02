@@ -16,7 +16,7 @@ type GroupOrder struct {
 // Legacy subscriptions created later appear after explicitly ordered entries.
 const orderedRefsQuery = `SELECT e.group_id,e.kind,e.id FROM (
 	SELECT c.group_id,'card'::text kind,c.id,c.expires_at+c.paused_us*INTERVAL '1 microsecond' AS expires_at,c.starts_at FROM month_card_cards c
-	JOIN payment_orders o ON o.id=c.order_id WHERE c.user_id=$1 AND c.status IN ('active','frozen') AND o.status<>'REFUNDED' AND c.starts_at<=$3 AND c.expires_at+c.paused_us*INTERVAL '1 microsecond'>COALESCE(c.frozen_at,$3)
+	LEFT JOIN payment_orders o ON o.id=c.order_id WHERE c.user_id=$1 AND c.status IN ('active','frozen') AND (c.order_id IS NULL OR o.status<>'REFUNDED') AND c.starts_at<=$3 AND c.expires_at+c.paused_us*INTERVAL '1 microsecond'>COALESCE(c.frozen_at,$3)
 	UNION ALL
 	SELECT l.group_id,'legacy'::text kind,l.id,l.expires_at,l.starts_at FROM user_subscriptions l
 	WHERE l.user_id=$1 AND l.deleted_at IS NULL AND l.status='active' AND l.starts_at<=$3 AND l.expires_at>$3

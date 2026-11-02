@@ -80,6 +80,9 @@ func RegisterPaymentRoutes(
 		adminGroupBuy.POST("/entitlements/cards/reset-usage", h.ResetEntitlementUsage)
 		adminGroupBuy.DELETE("/entitlements/cards/:id", h.DeleteEntitlementCard)
 		adminGroupBuy.GET("/allocations", h.AdminAllocations)
+		adminGroupBuy.POST("/gifts/preview", h.PreviewGift)
+		adminGroupBuy.POST("/gifts", h.IssueGift)
+		adminGroupBuy.GET("/gifts", h.GiftBatches)
 	}
 	// --- User-facing payment endpoints (authenticated) ---
 	authenticated := v1.Group("/payment")

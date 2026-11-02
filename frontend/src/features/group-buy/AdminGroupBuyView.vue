@@ -17,7 +17,7 @@
       </div>
       <div class="gb-tabs" role="tablist">
         <button
-          v-for="key in ['products', 'teams', 'cards', 'coupons', 'ruleManagement', 'announcement'] as const"
+          v-for="key in ['products', 'teams', 'cards', 'giftCards', 'coupons', 'ruleManagement', 'announcement'] as const"
           :key="key"
           class="gb-tab"
           :class="{ 'gb-tab-active': tab === key }"
@@ -31,7 +31,7 @@
       <p v-if="error" class="gb-notice gb-notice-error p-3" role="alert">
         {{ error }}
       </p>
-      <section v-if="tab !== 'ruleManagement' && tab !== 'announcement'" class="card space-y-3 p-4">
+      <section v-if="tab !== 'ruleManagement' && tab !== 'announcement' && tab !== 'giftCards'" class="card space-y-3 p-4">
         <h2 class="font-semibold">{{ t('groupBuy.freezePolicy') }}</h2>
         <p class="text-sm text-gray-500">{{ t('groupBuy.freezePolicyHint') }}</p>
         <label class="flex items-center gap-2 text-sm">
@@ -103,6 +103,7 @@
         </div>
       </template>
       <AdminCoupons v-else-if="tab === 'coupons'" :products="products" />
+      <AdminGiftCards v-else-if="tab === 'giftCards'" ref="giftCardsPanel" :groups="groups" />
       <AdminRulesManager v-else-if="tab === 'ruleManagement'" />
       <template v-else-if="tab === 'teams'">
         <form class="flex gap-2" @submit.prevent="inspectTeam(teamCode)">
@@ -381,6 +382,7 @@ import AdminEntitlementsPanel from './AdminEntitlementsPanel.vue'
 import AdminCoupons from './AdminCoupons.vue'
 import AdminRulesManager from './AdminRulesManager.vue'
 import AdminAnnouncementPanel from './AdminAnnouncementPanel.vue'
+import AdminGiftCards from './AdminGiftCards.vue'
 import QuotaLadder from './QuotaLadder.vue'
 import { adminGroupBuyAPI } from '@/api/groupBuy'
 import adminAPI from '@/api/admin'
@@ -396,7 +398,8 @@ import { beijingDateTimeLocalToRfc3339, toBeijingDateTimeLocal } from '@/utils/b
 import './glass.css'
 const { t } = useI18n()
 const app = useAppStore()
-const tab = ref<'products' | 'teams' | 'cards' | 'coupons' | 'ruleManagement' | 'announcement'>('products')
+const tab = ref<'products' | 'teams' | 'cards' | 'giftCards' | 'coupons' | 'ruleManagement' | 'announcement'>('products')
+const giftCardsPanel = ref<InstanceType<typeof AdminGiftCards> | null>(null)
 const announcementPanel = ref<InstanceType<typeof AdminAnnouncementPanel> | null>(null)
 const loading = ref(true)
 const error = ref('')
@@ -430,6 +433,7 @@ const productFields = [
 ] as const
 function refresh() {
   if (tab.value === 'announcement' && announcementPanel.value) void announcementPanel.value.refresh()
+  else if (tab.value === 'giftCards' && giftCardsPanel.value) void giftCardsPanel.value.refresh()
   else if (tab.value === 'cards' && entitlementsPanel.value) void entitlementsPanel.value.refresh()
   else void load()
 }

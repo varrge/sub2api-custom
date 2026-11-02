@@ -26,7 +26,7 @@
     >
       {{ t('groupBuy.teamCode') }} {{ card.team_code }}
     </RouterLink>
-    <p v-else class="mt-2 text-sm text-gray-500 dark:text-gray-400">{{ t('groupBuy.solo') }}</p>
+    <p v-else class="mt-2 text-sm text-gray-500 dark:text-gray-400">{{ t(gift ? 'groupBuy.giftSource' : 'groupBuy.solo') }}</p>
     <p v-if="card.status === 'active'" class="gb-accent-sky mt-3 text-sm font-medium">{{ t('userSubscriptions.daysRemaining', { days: Math.max(0, Math.ceil((Date.parse(card.expires_at) - Date.now()) / 86400000)) }) }}</p>
     <p v-if="frozen" class="mt-3 text-sm font-medium text-blue-700 dark:text-blue-200">{{ t('groupBuy.frozenRemaining', { days: Math.ceil((card.remaining_seconds ?? 0) / 86400) }) }}</p>
     <dl class="my-4 grid grid-cols-2 gap-3 text-xs">
@@ -72,19 +72,20 @@
       <p>{{ t('groupBuy.frozenQuota', { amount: usd(availableQuota(card)) }) }}</p>
       <p v-if="card.frozen_at" class="text-xs text-blue-500 dark:text-blue-300">{{ t('groupBuy.frozenAt', { time: exactDate(card.frozen_at) }) }}</p>
     </div>
-    <p v-if="!frozen" class="mt-3 text-xs leading-5 text-gray-500 dark:text-gray-400">
+    <p v-if="!frozen && !gift" class="mt-3 text-xs leading-5 text-gray-500 dark:text-gray-400">
       {{ t('groupBuy.weeklyWindow') }}:
       {{ exactDate(card.weekly_window_start) }} —
       {{ exactDate(card.weekly_window_end) }}
     </p>
-    <p v-if="!frozen" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+    <p v-if="!frozen && !gift" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
       {{
         Date.parse(card.weekly_window_end) >= Date.parse(card.expires_at)
           ? t('groupBuy.finalWindow')
           : `${t('groupBuy.nextReset')}: ${exactDate(card.weekly_window_end)}`
       }}
     </p>
-    <template v-if="manageable && card.freeze_allowed !== false && (card.status === 'active' || frozen)">
+    <p v-if="gift" class="mt-3 text-xs text-gray-500 dark:text-gray-400">{{ t('groupBuy.giftNoReset') }}</p>
+    <template v-if="manageable && !gift && card.freeze_allowed !== false && (card.status === 'active' || frozen)">
       <button type="button" class="mt-4 w-full rounded-xl border border-blue-200 bg-white py-3 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-50 disabled:opacity-50 dark:border-blue-800 dark:bg-dark-800 dark:text-blue-200 dark:hover:bg-blue-950" :disabled="busy" @click="toggleFreeze">
         {{ busy ? t('common.loading') : frozen ? t('groupBuy.thaw') : t('groupBuy.freeze') }}
       </button>
@@ -106,6 +107,7 @@ const props = withDefaults(defineProps<{ card: MonthCard; manageable?: boolean }
 const emit = defineEmits<{ changed: [card: MonthCard] }>()
 const { t } = useI18n()
 const frozen = computed(() => props.card.status === 'frozen')
+const gift = computed(() => props.card.card_kind === 'gift')
 const busy = ref(false)
 const error = ref('')
 async function toggleFreeze() {
@@ -122,11 +124,11 @@ async function toggleFreeze() {
   } finally { busy.value = false }
 }
 const quotas = computed(() => [
-  {
+  ...gift.value ? [] : [{
     label: 'groupBuy.weeklyUsage',
     used: props.card.weekly_used_usd,
     total: props.card.weekly_quota_usd
-  },
+  }],
   {
     label: 'groupBuy.totalUsage',
     used: props.card.total_used_usd,

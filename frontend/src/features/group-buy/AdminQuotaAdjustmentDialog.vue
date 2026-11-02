@@ -32,7 +32,7 @@
             <span class="gb-label">{{ t('groupBuy.totalUsage') }}:</span>
             {{ usd(single.total_used_usd) }} / {{ usd(single.total_quota_usd) }}
           </p>
-          <p class="text-xs">
+          <p v-if="single.card_kind !== 'gift'" class="text-xs">
             <span class="gb-label">{{ t('groupBuy.weeklyUsage') }}:</span>
             {{ usd(single.weekly_used_usd) }} / {{ usd(single.weekly_quota_usd) }}
           </p>
@@ -73,7 +73,7 @@
           :disabled="saving"
           @input="patch({ total: ($event.target as HTMLInputElement).value })"
         />
-        <label class="flex items-start gap-2 text-sm leading-6 text-gray-700 dark:text-gray-300">
+        <label v-if="!hasGift" class="flex items-start gap-2 text-sm leading-6 text-gray-700 dark:text-gray-300">
           <input
             type="checkbox"
             class="mt-1"
@@ -84,7 +84,7 @@
           {{ t('groupBuy.quotaSetWeekly') }}
         </label>
         <input
-          v-if="draft.setWeekly"
+          v-if="!hasGift && draft.setWeekly"
           type="text"
           inputmode="decimal"
           class="input w-full"
@@ -98,7 +98,7 @@
 
       <div class="gb-notice gb-notice-warn space-y-1 p-4 text-xs leading-5">
         <p>{{ t('groupBuy.quotaAdjustReplaceHint') }}</p>
-        <p>{{ t('groupBuy.quotaAdjustAmountHint') }}</p>
+        <p>{{ t(hasGift ? 'groupBuy.giftTotalOnly' : 'groupBuy.quotaAdjustAmountHint') }}</p>
         <p>{{ t('groupBuy.quotaAdjustManualHint') }}</p>
       </div>
 
@@ -144,6 +144,7 @@ const { t } = useI18n()
 
 const isBulk = computed(() => props.cards.length > 1)
 const single = computed(() => (props.cards.length === 1 ? props.cards[0] : null))
+const hasGift = computed(() => props.cards.some(card => card.card_kind === 'gift'))
 
 function patch(partial: Partial<QuotaAdjustmentDraft>) {
   emit('update:draft', { ...props.draft, ...partial })

@@ -13,6 +13,15 @@ const card = {
 } as MonthCard
 const props = {card,holder:'User',brand:'Private',now:Date.parse('2026-11-02T00:00:00Z')}
 describe('shared month card appearance',()=>{
+  it('shows only the one-time total allowance for gift cards', () => {
+    const w = mount(MonthCardFace, { props: { ...props, card: { ...card, card_kind: 'gift', product_name: '狂蹬卡', total_quota_usd: 15, weekly_quota_usd: 15, total_used_usd: 2, weekly_used_usd: 2 } } })
+    expect(w.get('[data-testid="card-available"]').text()).toBe('$13.00')
+    expect(w.get('[data-testid="card-quotas"]').text()).toContain('$2.00 / $15.00')
+    expect(w.text()).toContain('groupBuy.giftNoReset')
+    expect(w.text()).not.toContain('groupBuy.weeklyUsage')
+    expect(w.text()).not.toContain('groupBuy.nextReset')
+    expect(w.text()).not.toContain('groupBuy.finalWindow')
+  })
   it('uses the identical default face across all product tiers, with per-card identity overlays',()=>{
     for(const name of ['轻享月卡','尊享月卡','顶级月卡']){
       const w=mount(MonthCardFace,{props:{...props,card:{...card,product_name:name}}})

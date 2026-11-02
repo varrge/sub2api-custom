@@ -42,7 +42,7 @@ func (e GrokMediaEndpoint) RequiresRequestBody() bool {
 }
 
 func (e GrokMediaEndpoint) IsVideoLookupRequest() bool {
-	return e == GrokMediaEndpointVideoStatus || e == GrokMediaEndpointVideoContent || e == SeedanceEndpointStatus || e == SeedanceEndpointDelete
+	return e == GrokMediaEndpointVideoStatus || e == GrokMediaEndpointVideoContent || e == SeedanceEndpointStatus || e == SeedanceEndpointDelete || e == SeedanceEndpointContent
 }
 
 func (e GrokMediaEndpoint) IsGenerationRequest() bool {
@@ -397,6 +397,7 @@ func (s *OpenAIGatewayService) SelectMediaVideoRequestAccount(
 // first observes a completed video URL. Status may omit model/duration; we fall
 // back to this snapshot, then defaults.
 type GrokVideoPendingBilling struct {
+	SeedanceProtocol            string                    `json:"seedance_protocol,omitempty"`
 	SubscriptionType            string                    `json:"subscription_type,omitempty"`
 	PricingSnapshot             *GrokVideoPricingSnapshot `json:"pricing_snapshot,omitempty"`
 	MonthCardSnapshot           *monthcard.Snapshot       `json:"month_card_snapshot,omitempty"`

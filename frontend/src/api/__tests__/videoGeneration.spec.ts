@@ -385,3 +385,37 @@ describe('video downloads', () => {
     await expect(fetchVideoBlob('key', task)).rejects.toThrow('Video request not found')
   })
 })
+
+describe('Videos JSON gateway interoperability', () => {
+  it('accepts a public first frame URL without encoding it as Base64', async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse({ id: 'vid-1', status: 'queued' }))
+    vi.stubGlobal('fetch', fetcher)
+    await createVideoTask({ ...grokOptions, platform: 'openai', model: 'seedance-2.0-720p', referenceImageUrl: 'https://images.example/first.png' })
+    expect(JSON.parse(fetcher.mock.calls[0]![1].body).content[1]).toEqual({
+      type: 'image_url', image_url: { url: 'https://images.example/first.png' }, role: 'first_frame',
+    })
+  })
+
+  it('rejects conflicting or unsafe references before creating a task', async () => {
+    const fetcher = vi.fn()
+    vi.stubGlobal('fetch', fetcher)
+    for (const referenceImageUrl of ['file:///tmp/a.png', 'javascript:alert(1)', 'https://user:password@example.com/a.png']) {
+      await expect(createVideoTask({ ...grokOptions, referenceImageUrl })).rejects.toThrow('public HTTP(S)')
+    }
+    await expect(createVideoTask({ ...grokOptions, referenceImageUrl: 'https://images.example/first.png', referenceImage: new File(['x'], 'x.png', { type: 'image/png' }) })).rejects.toThrow('not both')
+    expect(fetcher).not.toHaveBeenCalled()
+  })
+
+  it('authenticates only the exact gateway content endpoint for the current task', async () => {
+    const fetcher = vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(['mp4'], { type: 'video/mp4' }) })
+    vi.stubGlobal('fetch', fetcher)
+    const task: VideoTask = { id: 'vid-1', protocol: 'seedance', status: 'succeeded', videoUrl: '/api/v3/contents/generations/tasks/vid-1/content' }
+    await fetchVideoBlob('user-secret', task)
+    expect(fetcher.mock.calls[0]![1].headers.Authorization).toBe('Bearer user-secret')
+    expect(fetcher.mock.calls[0]![0]).toBe(task.videoUrl)
+    for (const videoUrl of ['https://evil.example/api/v3/contents/generations/tasks/vid-1/content', '/api/v3/contents/generations/tasks/other/content']) {
+      await fetchVideoBlob('user-secret', { ...task, videoUrl })
+      expect(fetcher.mock.lastCall![1].headers.Authorization).toBeUndefined()
+    }
+  })
+})

@@ -1,5 +1,9 @@
 export default {
   videoGeneration: {
+    referenceImageUrlLabel: "参考图片 URL",
+    referenceImageUrlPlaceholder: "输入公网可访问的图片直链 (https://...)",
+    referenceImageUrlHint: "需为能直接公开访问的图片直链，不支持云盘或分享页",
+
     providers: '支持 Grok · Seedance',
     loading: '正在加载视频工作台...',
     noKeysTitle: '暂无可用的视频密钥',

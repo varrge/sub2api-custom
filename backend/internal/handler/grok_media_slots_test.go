@@ -134,7 +134,10 @@ func (s *grokMediaSlotBindings) SetGrokVideoPendingBilling(_ context.Context, ke
 	s.pending[key] = append([]byte(nil), body...)
 	return nil
 }
-func (s *grokMediaSlotBindings) GetGrokVideoPendingBilling(_ context.Context, key string) ([]byte, error) {
+func (s *grokMediaSlotBindings) GetGrokVideoPendingBilling(ctx context.Context, key string) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return s.pending[key], nil
 }
 
@@ -161,7 +164,10 @@ func (s *grokMediaSlotBindings) DeleteSessionAccountID(context.Context, int64, s
 	return nil
 }
 
-func (s *grokMediaSlotBindings) ClaimGrokVideoBilled(_ context.Context, key string, _ time.Duration) (bool, error) {
+func (s *grokMediaSlotBindings) ClaimGrokVideoBilled(ctx context.Context, key string, _ time.Duration) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	if s.billed == nil {
 		s.billed = make(map[string]bool)
 	}
@@ -213,6 +219,10 @@ func newGrokMediaSlotHandler(t *testing.T, oauth, mismatch bool, platforms ...st
 			accounts[i].Platform = platforms[0]
 			accounts[i].Credentials["base_url"] = "https://ark.cn-beijing.volces.com/api/v3"
 			accounts[i].Credentials["openai_capabilities"] = []string{"seedance"}
+		}
+		if len(platforms) > 1 {
+			accounts[i].Credentials[service.SeedanceUpstreamProtocolCredentialKey] = platforms[1]
+			accounts[i].Credentials["base_url"] = "https://video.example/v1"
 		}
 		if oauth {
 			accounts[i].Type = service.AccountTypeOAuth

@@ -110,6 +110,29 @@ afterEach(async () => {
 })
 
 describe('video generation panel', () => {
+  it('accepts a public first-frame URL and keeps it mutually exclusive with uploads', async () => {
+    const panel = mountPanel()
+    await flushPromises()
+    await panel.get('#video-model').setValue('grok-imagine-video-1.5')
+    await panel.get('#video-prompt').setValue('A fox at sunrise')
+    await panel.get('#video-reference-url').setValue('https://images.example/first.png')
+    expect(panel.get('button[type="submit"]').attributes('disabled')).toBeUndefined()
+
+    const reference = new File(['first frame'], 'first.webp', { type: 'image/webp' })
+    Object.defineProperty(panel.get('input[type="file"]').element, 'files', { value: [reference] })
+    await panel.get('input[type="file"]').trigger('change')
+    expect(studio!.activeSession!.form.referenceImageUrl).toBe('')
+    expect(studio!.activeSession!.referenceFile).toBe(reference)
+
+    await panel.get('#video-reference-url').setValue('https://images.example/second.png')
+    expect(studio!.activeSession!.referenceFile).toBeNull()
+    await panel.get('form').trigger('submit')
+    await flushPromises()
+    expect(createTask).toHaveBeenCalledWith(expect.objectContaining({
+      referenceImage: null, referenceImageUrl: 'https://images.example/second.png',
+    }))
+  })
+
   it('uses a later Grok group and requires the first frame without changing Grok 1.5 settings', async () => {
     const nonMedia = { id: 3, name: 'Text only', platform: 'anthropic', allow_image_generation: false } as Group
     const key = { ...keys[0]!, group: nonMedia, groups: [nonMedia, grokGroup] }
@@ -136,7 +159,7 @@ describe('video generation panel', () => {
     expect(createTask).toHaveBeenCalledTimes(1)
     expect(createTask).toHaveBeenCalledWith({
       apiKey: key.key, platform: 'grok', model: 'grok-imagine-video-1.5', prompt: 'A fox at sunrise',
-      duration: 10, aspectRatio: '9:16', resolution: '1080p', referenceImage: reference,
+      duration: 10, aspectRatio: '9:16', resolution: '1080p', referenceImageUrl: '', referenceImage: reference,
       signal: expect.any(AbortSignal),
     })
   })
@@ -228,6 +251,19 @@ describe('video generation panel', () => {
     expect(link.href).toBe('blob:video-1')
     expect(link.download).toBe('sub2api-video-seedance-task.mp4')
     expect(panel.get('video').attributes('src')).toBe('https://cdn.example/fresh.mp4?signature=safe')
+  })
+
+  it('plays protected Seedance content with the original key through a blob URL', async () => {
+    const panel = mountPanel()
+    await flushPromises()
+    const saved = result({ id: 'json-task', protocol: 'seedance', status: 'succeeded', videoUrl: '/api/v3/contents/generations/tasks/json-task/content' })
+    getTask.mockResolvedValueOnce(saved.task)
+    studio!.activeSession!.results.push(saved)
+    studio!.activeSession!.activeResultId = saved.id
+    await flushPromises()
+    expect(fetchBlob).toHaveBeenCalledWith(keys[0]!.key, saved.task, expect.any(AbortSignal))
+    expect(panel.get('video').attributes('src')).toBe('blob:video-1')
+    expect(panel.get('video').attributes('src')).not.toContain(keys[0]!.key)
   })
 
   it('rejects an unsafe Seedance playback URL before creating a video element', async () => {

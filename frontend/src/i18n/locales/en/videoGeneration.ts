@@ -1,5 +1,9 @@
 export default {
   videoGeneration: {
+    referenceImageUrlLabel: "Reference Image URL",
+    referenceImageUrlPlaceholder: "Enter direct public image URL (https://...)",
+    referenceImageUrlHint: "Must be a direct, publicly accessible image link, not a sharing page",
+
     providers: 'Supports Grok · Seedance',
     loading: 'Loading the video studio...',
     noKeysTitle: 'No video-generation key available',

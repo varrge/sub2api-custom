@@ -10,6 +10,7 @@ export interface VideoStudioForm {
   apiKeyId: number | null
   model: string
   prompt: string
+  referenceImageUrl?: string
   duration: number
   aspectRatio: VideoAspectRatio
   resolution: VideoResolution
@@ -67,7 +68,7 @@ export const useVideoStudioStore = defineStore('videoStudio', () => {
     if (!ready.value) return null
     const session: VideoStudioSession = {
       id: crypto.randomUUID(), title: '',
-      form: { apiKeyId: null, model: '', prompt: '', duration: 5, aspectRatio: '16:9', resolution: '720p' },
+      form: { apiKeyId: null, model: '', prompt: '', referenceImageUrl: '', duration: 5, aspectRatio: '16:9', resolution: '720p' },
       referenceFile: null, results: [], activeResultId: null, pending: null, interrupted: false, error: '',
     }
     sessions.value.unshift(session)
@@ -150,6 +151,7 @@ export const useVideoStudioStore = defineStore('videoStudio', () => {
         if (!Array.isArray(saved.sessions)) throw new Error('Invalid video studio history')
         sessions.value = saved.sessions.map(session => ({
           ...session,
+          form: { ...session.form, referenceImageUrl: session.form.referenceImageUrl || '' },
           // A returned task can resume GET polling; an unknown creation must never be retried automatically.
           pending: session.pending?.task ? { ...session.pending, phase: 'paused' } : null,
           interrupted: Boolean(session.pending && !session.pending.task) || session.interrupted,
@@ -167,13 +169,13 @@ export const useVideoStudioStore = defineStore('videoStudio', () => {
     if (!activeSession.value) activeId.value = sessions.value[0]!.id
   }, { immediate: true, flush: 'sync' })
 
-  function waitForPoll(signal: AbortSignal): Promise<boolean> {
+  function waitForPoll(signal: AbortSignal, interval: number): Promise<boolean> {
     return new Promise(resolve => {
       if (signal.aborted) { resolve(false); return }
       const timeout = setTimeout(() => {
         signal.removeEventListener('abort', abort)
         resolve(true)
-      }, pollInterval)
+      }, interval)
       const abort = () => {
         clearTimeout(timeout)
         signal.removeEventListener('abort', abort)
@@ -191,7 +193,7 @@ export const useVideoStudioStore = defineStore('videoStudio', () => {
         id: crypto.randomUUID(), task: { ...task },
         apiKeyId: job.apiKeyId, platform: job.platform, model: job.model, prompt: job.prompt,
         duration: job.duration, aspectRatio: job.aspectRatio, resolution: job.resolution,
-        mode: job.mode, createdAt: job.createdAt,
+        mode: job.mode, createdAt: job.createdAt, referenceImageUrl: job.referenceImageUrl,
       }
       session.results.unshift(result)
       session.activeResultId = result.id
@@ -227,7 +229,7 @@ export const useVideoStudioStore = defineStore('videoStudio', () => {
           const request: GenerateVideoOptions = {
             apiKey, platform: job.platform, model: job.model, prompt: job.prompt,
             duration: job.duration, aspectRatio: job.aspectRatio, resolution: job.resolution,
-            referenceImage, signal: controller.signal,
+            referenceImage, referenceImageUrl: job.referenceImageUrl, signal: controller.signal,
           }
           const task = await createVideoTask(request)
           if (!isCurrent()) return 0
@@ -239,8 +241,10 @@ export const useVideoStudioStore = defineStore('videoStudio', () => {
         }
         const completed = finishTask(session, job)
         if (completed !== null) return completed
-        for (let count = 0; count < maxPolls; count += 1) {
-          if (waitBeforePoll && !await waitForPoll(controller.signal)) return 0
+        const interval = job.task?.protocol === 'seedance' ? 30_000 : pollInterval
+        const polls = Math.floor(maxPolls * pollInterval / interval)
+        for (let count = 0; count < polls; count += 1) {
+          if (waitBeforePoll && !await waitForPoll(controller.signal, interval)) return 0
           if (!isCurrent() || !job.task) return 0
           const task = await getVideoTask(apiKey, job.task.protocol, job.task.id, controller.signal)
           if (!isCurrent()) return 0
@@ -277,7 +281,7 @@ export const useVideoStudioStore = defineStore('videoStudio', () => {
     session.interrupted = false
     session.pending = {
       ...form, platform, model: form.model.trim(), prompt: form.prompt.trim(),
-      mode: session.referenceFile ? 'image' : 'text',
+      mode: session.referenceFile || form.referenceImageUrl?.trim() ? 'image' : 'text',
       createdAt: formatBeijingDateTime(new Date(), undefined, 'zh-CN'),
       phase: 'submitting', task: null,
     }

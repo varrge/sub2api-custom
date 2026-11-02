@@ -14,7 +14,7 @@
     </div>
     <template v-else>
       <div class="flex shrink-0 items-center justify-between border-b border-gray-200/60 px-4 py-2 dark:border-dark-700/60">
-        <p class="text-[11px] text-gray-500 dark:text-dark-400">{{ t('videoGeneration.providers') }}</p>
+        <p class="text-[11px] font-medium text-gray-500 dark:text-dark-400">{{ t('videoGeneration.providers') }}</p>
         <button ref="historyToggle" type="button" class="btn btn-ghost btn-sm lg:hidden" :aria-expanded="showMobileHistory" aria-controls="video-studio-history" @click="showMobileHistory = !showMobileHistory">
           <Icon name="clock" size="sm" />{{ t('videoGeneration.historyTitle') }}
         </button>
@@ -23,7 +23,7 @@
         <section class="video-workspace">
           <p v-if="studio.storageError" role="alert" class="video-notice">{{ storageErrorText }}</p>
           <p v-if="studio.activeSession?.interrupted" role="status" class="video-notice">{{ t('videoGeneration.sessionInterrupted') }}</p>
-          <p v-if="sessionError" role="alert" class="shrink-0 bg-red-50 px-4 py-2 text-xs text-red-700 dark:bg-red-950 dark:text-red-200">{{ sessionError }}</p>
+          <p v-if="sessionError" role="alert" class="shrink-0 rounded-lg bg-red-50 px-4 py-2 text-xs text-red-700 dark:bg-red-950/60 dark:text-red-200">{{ sessionError }}</p>
           <div class="video-canvas">
             <div v-if="pending" class="flex max-w-md flex-col items-center gap-3 p-6 text-center" role="status" aria-live="polite">
               <LoadingSpinner v-if="generating" size="lg" />
@@ -76,7 +76,7 @@
             <label for="video-prompt" class="sr-only">{{ t('videoGeneration.prompt') }}</label>
             <textarea id="video-prompt" v-model="form.prompt" rows="2" :placeholder="t('videoGeneration.promptPlaceholder')" class="video-prompt"></textarea>
             <div class="video-controls">
-              <div class="grid min-w-0 grid-cols-2 gap-2">
+              <div class="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
                 <div class="min-w-0">
                   <label for="video-api-key" class="sr-only">{{ t('imageGeneration.apiKey') }}</label>
                   <Select id="video-api-key" v-model="form.apiKeyId" :options="keyOptions" :aria-label="t('imageGeneration.apiKey')" />
@@ -87,6 +87,17 @@
                 </div>
               </div>
               <p v-if="modelError" role="status" class="text-xs text-amber-700 dark:text-amber-300">{{ modelError }}</p>
+              <div class="min-w-0 space-y-1">
+                <label for="video-reference-url" class="video-label">{{ t('videoGeneration.referenceImageUrlLabel') }}</label>
+                <input
+                  id="video-reference-url"
+                  v-model="form.referenceImageUrl"
+                  type="url"
+                  :placeholder="t('videoGeneration.referenceImageUrlPlaceholder')"
+                  class="video-url-input"
+                />
+                <p class="text-[10px] text-gray-400 dark:text-dark-400">{{ t('videoGeneration.referenceImageUrlHint') }}</p>
+              </div>
               <div class="grid grid-cols-3 gap-2">
                 <div class="min-w-0">
                   <label for="video-ratio" class="video-label">{{ t('imageGeneration.aspectRatio') }}</label>
@@ -101,7 +112,7 @@
                   <Select id="video-resolution" v-model="form.resolution" :options="resolutionOptions" :aria-label="t('imageGeneration.resolution')" />
                 </div>
               </div>
-              <div class="flex min-w-0 items-center justify-between gap-2">
+              <div class="flex min-w-0 items-center justify-between gap-2 pt-0.5">
                 <button type="button" class="btn btn-ghost btn-sm min-w-0" :title="t('videoGeneration.uploadHint')" @click="fileInput?.click()">
                   <Icon name="upload" size="sm" /><span class="truncate">{{ t('videoGeneration.uploadReference') }}</span>
                 </button>
@@ -110,7 +121,7 @@
                   {{ t(generating ? 'videoGeneration.generating' : 'videoGeneration.generate') }}
                 </button>
               </div>
-              <p v-if="requiresReference && !referenceUrl" role="status" class="text-xs text-amber-700 dark:text-amber-300">{{ t('videoGeneration.requiresReference') }}</p>
+              <p v-if="requiresReference && !referenceUrl && !form.referenceImageUrl" role="status" class="text-xs text-amber-700 dark:text-amber-300">{{ t('videoGeneration.requiresReference') }}</p>
             </div>
           </form>
           <p class="video-footnote">{{ t('videoGeneration.requestHint') }}</p>
@@ -156,7 +167,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
-import { fetchVideoBlob, getVideoTask, listVideoModels, supportedVideoResolutions, supportsVideoGeneration, videoContentURL, videoProtocolForModel, videoRequiresReference, type VideoAspectRatio } from '@/api/videoGeneration'
+import { fetchVideoBlob, getVideoTask, listVideoModels, supportedVideoResolutions, supportsVideoGeneration, videoContentURL, videoNeedsAuthenticatedDownload, videoProtocolForModel, videoRequiresReference, type VideoAspectRatio } from '@/api/videoGeneration'
 import { ConfirmDialog, LoadingSpinner } from '@/components/common'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -187,7 +198,7 @@ let downloadController: AbortController | null = null
 let playbackExtension = 'mp4'
 let disposed = false
 
-const emptyForm: VideoStudioForm = { apiKeyId: null, model: '', prompt: '', duration: 5, aspectRatio: '16:9', resolution: '720p' }
+const emptyForm: VideoStudioForm = { apiKeyId: null, model: '', prompt: '', referenceImageUrl: '', duration: 5, aspectRatio: '16:9', resolution: '720p' }
 const form = computed(() => studio.activeSession?.form ?? emptyForm)
 const pending = computed(() => studio.activeSession?.pending ?? null)
 const generating = computed(() => Boolean(pending.value && pending.value.phase !== 'paused'))
@@ -224,7 +235,7 @@ const ratioOptions = (['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'] satisfies Vi
 const durationOptions = [5, 10].map(value => ({ value, label: `${value}s` }))
 const canGenerate = computed(() => studio.ready && !pending.value && Boolean(
   selectedKey.value && platform.value && protocol.value && form.value.prompt.trim() &&
-  (!requiresReference.value || studio.activeSession?.referenceFile),
+  (!requiresReference.value || studio.activeSession?.referenceFile || form.value.referenceImageUrl?.trim()),
 ))
 
 async function loadModels() {
@@ -270,7 +281,10 @@ function deleteSession() {
   deletingSessionId.value = null
 }
 function removeReference() {
-  if (studio.activeSession) studio.activeSession.referenceFile = null
+  if (studio.activeSession) {
+    studio.activeSession.referenceFile = null
+    studio.activeSession.form.referenceImageUrl = ''
+  }
 }
 function addReference(file?: File) {
   if (!file || !studio.activeSession) return
@@ -282,6 +296,7 @@ function addReference(file?: File) {
     app.showError(t('imageGeneration.fileTooLarge', { name: file.name }))
     return
   }
+  studio.activeSession.form.referenceImageUrl = ''
   studio.activeSession.referenceFile = file
 }
 function onReferenceChange(event: Event) {
@@ -336,7 +351,7 @@ async function loadPlayback() {
     // Refresh signed URLs before reopening a result from browser history.
     const task = await getVideoTask(key.key, result.task.protocol, result.task.id, controller.signal)
     if (!isCurrent()) return
-    if (task.protocol === 'seedance') {
+    if (!videoNeedsAuthenticatedDownload(task)) {
       // Native video playback also works when the CDN does not enable CORS downloads.
       playbackUrl.value = videoContentURL(task)
     } else {
@@ -371,7 +386,7 @@ async function downloadResult() {
     downloading.value = true
     let url = playbackUrl.value
     let openInTab = false
-    if (result.task.protocol === 'seedance') {
+    if (!videoNeedsAuthenticatedDownload(result.task)) {
       try {
         const key = props.apiKeys.find(key => key.id === result.apiKeyId && key.status !== 'inactive')
         if (!key) throw new Error(t('videoGeneration.missingKey'))
@@ -426,6 +441,9 @@ watch([protocol, platform], ([modelProtocol, modelPlatform]) => {
   if (form.value.model && (!modelProtocol || !modelPlatform)) modelError.value = t('videoGeneration.unsupportedModel')
   else if (modelError.value === t('videoGeneration.unsupportedModel')) modelError.value = ''
 }, { immediate: true })
+watch(() => form.value.referenceImageUrl, value => {
+  if (value?.trim() && studio.activeSession) studio.activeSession.referenceFile = null
+})
 watch(() => studio.activeSession?.referenceFile, file => {
   if (referenceUrl.value) URL.revokeObjectURL(referenceUrl.value)
   referenceUrl.value = file ? URL.createObjectURL(file) : ''
@@ -448,24 +466,27 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .video-panel { @apply flex min-h-0 flex-1 flex-col overflow-hidden; }
-.video-grid { @apply grid min-h-0 flex-1 grid-cols-1 grid-rows-1 lg:grid-cols-[minmax(0,1fr)_260px]; }
-.video-workspace { @apply flex min-h-0 min-w-0 flex-col overflow-y-auto px-3 pb-2 pt-3 sm:px-4; }
+.video-grid { @apply grid min-h-0 flex-1 grid-cols-1 grid-rows-1 lg:grid-cols-[minmax(0,1fr)_280px]; }
+.video-workspace { @apply flex min-h-0 min-w-0 flex-col overflow-y-auto px-3 pb-3 pt-2 sm:px-4; }
 .video-canvas {
-  @apply flex min-h-40 flex-1 items-center justify-center overflow-hidden rounded-2xl border p-3 sm:p-4;
+  @apply flex min-h-[200px] flex-1 items-center justify-center overflow-hidden rounded-2xl border p-3 sm:p-4;
   background: var(--surface-card);
   border-color: var(--surface-border);
 }
 .video-composer {
-  @apply mx-auto mt-3 w-full max-w-4xl shrink-0 rounded-2xl border;
+  @apply mx-auto mt-3 w-full max-w-4xl shrink-0 rounded-2xl border transition-shadow;
   background: var(--surface-card);
   border-color: var(--surface-border);
   box-shadow: var(--surface-shadow);
 }
 .video-composer:focus-within { @apply ring-2 ring-primary-500/30; }
 .video-prompt { @apply block w-full resize-none rounded-t-2xl border-0 bg-transparent px-4 py-3 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:ring-0 dark:text-dark-100; }
-.video-controls { @apply space-y-2 border-t border-gray-100 p-2.5 dark:border-dark-700 sm:p-3; }
+.video-controls { @apply space-y-2.5 border-t border-gray-100 p-2.5 dark:border-dark-700 sm:p-3; }
 .video-controls :deep(.select-trigger) { @apply h-8 min-w-0 rounded-lg bg-gray-50 px-2 py-1 text-xs dark:bg-dark-800; }
-.video-label { @apply mb-1 block text-[10px] text-gray-500 dark:text-dark-400; }
+.video-label { @apply mb-1 block text-[10px] font-medium text-gray-500 dark:text-dark-400; }
+.video-url-input {
+  @apply block h-8 w-full min-w-0 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs text-gray-800 placeholder:text-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-dark-700 dark:bg-dark-800 dark:text-dark-100 dark:placeholder:text-dark-400;
+}
 .video-footnote { @apply mx-auto mt-1.5 max-w-3xl shrink-0 text-center text-[10px] leading-relaxed text-gray-400; }
 .video-notice { @apply mb-2 shrink-0 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200; }
 .video-history {
@@ -479,7 +500,7 @@ onBeforeUnmount(() => {
   .video-history-visible { @apply flex border-l-0; }
   .video-history-open .video-workspace { @apply hidden; }
 }
-@media (max-height: 600px) {
-  .video-canvas { min-height: 12rem; }
+@media (max-height: 640px) {
+  .video-canvas { min-height: 10rem; }
 }
 </style>

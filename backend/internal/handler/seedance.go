@@ -4,6 +4,7 @@ import (
 	"context"
 	"mime"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -42,6 +43,9 @@ func (h *OpenAIGatewayHandler) SeedanceTasks(c *gin.Context) {
 	if c.Request.Method != http.MethodPost {
 		taskID = service.SeedanceTaskKey(c.Param("task_id"))
 		endpoint = service.SeedanceEndpointStatus
+		if strings.HasSuffix(c.Request.URL.Path, "/content") {
+			endpoint = service.SeedanceEndpointContent
+		}
 		if c.Request.Method == http.MethodDelete {
 			endpoint = service.SeedanceEndpointDelete
 		}

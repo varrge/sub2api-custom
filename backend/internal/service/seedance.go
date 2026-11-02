@@ -19,11 +19,12 @@ const (
 	SeedanceEndpointCreate           GrokMediaEndpoint        = "seedance_create"
 	SeedanceEndpointStatus           GrokMediaEndpoint        = "seedance_status"
 	SeedanceEndpointDelete           GrokMediaEndpoint        = "seedance_delete"
+	SeedanceEndpointContent          GrokMediaEndpoint        = "seedance_content"
 	OpenAIEndpointCapabilitySeedance OpenAIEndpointCapability = "seedance"
 )
 
 func (e GrokMediaEndpoint) IsSeedance() bool {
-	return e == SeedanceEndpointCreate || e == SeedanceEndpointStatus || e == SeedanceEndpointDelete
+	return e == SeedanceEndpointCreate || e == SeedanceEndpointStatus || e == SeedanceEndpointDelete || e == SeedanceEndpointContent
 }
 
 // SeedanceTaskKey isolates ownership and billing keys from other video providers.
@@ -76,11 +77,22 @@ func buildSeedanceURL(base string, endpoint GrokMediaEndpoint, taskID string) (s
 	return base, nil
 }
 
-// ForwardSeedance preserves the Ark protocol, including multimodal content and
-// future fields. Only model is rewritten using the account's configured mapping.
+// ForwardSeedance keeps the public Ark contract and selects the account's
+// upstream protocol. Native Ark requests preserve content and extension fields.
 func (s *OpenAIGatewayService) ForwardSeedance(ctx context.Context, c *gin.Context, account *Account, endpoint GrokMediaEndpoint, taskID string, body []byte) (*OpenAIForwardResult, error) {
 	if !account.SupportsOpenAIEndpointCapability(OpenAIEndpointCapabilitySeedance) || !endpoint.IsSeedance() {
 		return nil, fmt.Errorf("seedance requires an OpenAI API key account with a custom base URL")
+	}
+	switch account.SeedanceUpstreamProtocol() {
+	case SeedanceProtocolVideosJSON:
+		return s.forwardSeedanceVideosJSON(ctx, c, account, endpoint, taskID, body)
+	case SeedanceProtocolArk:
+		if endpoint == SeedanceEndpointContent {
+			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": "Native Ark tasks use the video URL returned by the status endpoint"}})
+			return nil, fmt.Errorf("native Ark content proxy is unavailable")
+		}
+	default:
+		return nil, fmt.Errorf("unsupported Seedance upstream protocol")
 	}
 	base, err := s.validateUpstreamBaseURL(account.GetCredential("base_url"))
 	if err != nil {
@@ -115,7 +127,7 @@ func (s *OpenAIGatewayService) ForwardSeedance(ctx context.Context, c *gin.Conte
 		return nil, fmt.Errorf("seedance account missing api_key")
 	}
 	started := time.Now()
-	req, err := http.NewRequestWithContext(ctx, method, target, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(WithHTTPUpstreamRedirectsDisabled(ctx), method, target, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}

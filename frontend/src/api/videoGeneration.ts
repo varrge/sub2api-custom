@@ -14,6 +14,7 @@ export interface GenerateVideoOptions {
   aspectRatio: VideoAspectRatio
   resolution: VideoResolution
   referenceImage?: File | null
+  referenceImageUrl?: string
   signal?: AbortSignal
 }
 
@@ -187,10 +188,19 @@ export async function createVideoTask(options: GenerateVideoOptions): Promise<Vi
   if (image && (!imageTypes.has(image.type) || image.size > 10 * 1024 * 1024)) {
     throw new Error('Use a PNG, JPG, or WebP reference image no larger than 10 MB')
   }
-  if (videoRequiresReference(options.model) && !image) {
+  const publicImageURL = options.referenceImageUrl?.trim() || ''
+  if (image && publicImageURL) throw new Error('Choose an uploaded image or an image URL, not both')
+  if (publicImageURL) {
+    let parsed: URL
+    try { parsed = new URL(publicImageURL) } catch { throw new Error('Enter a public HTTP(S) image URL') }
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) {
+      throw new Error('Enter a public HTTP(S) image URL')
+    }
+  }
+  if (videoRequiresReference(options.model) && !image && !publicImageURL) {
     throw new Error('Grok video 1.5 requires a reference image')
   }
-  const imageURL = image ? await fileDataURL(image) : undefined
+  const imageURL = publicImageURL || (image ? await fileDataURL(image) : undefined)
   options.signal?.throwIfAborted()
   const body = protocol === 'grok'
     ? {
@@ -247,11 +257,18 @@ export async function getVideoTask(apiKey: string, protocol: VideoProtocol, id: 
   }
 }
 
+export function videoNeedsAuthenticatedDownload(task: VideoTask): boolean {
+  return task.protocol === 'grok' || task.videoUrl === `/api/v3/contents/generations/tasks/${encodeURIComponent(task.id)}/content`
+}
+
 export function videoContentURL(task: VideoTask): string {
   if (task.status !== 'succeeded' || !task.id.trim()) throw new Error('The video is not ready for download')
   if (task.protocol === 'grok') {
     // Only our fixed task endpoint receives the key; returned URLs are untrusted.
     return buildGatewayUrl(`/v1/videos/${encodeURIComponent(task.id)}/content`)
+  }
+  if (videoNeedsAuthenticatedDownload(task)) {
+    return buildGatewayUrl(`/api/v3/contents/generations/tasks/${encodeURIComponent(task.id)}/content`)
   }
   const videoURL = task.videoUrl?.trim()
   if (!videoURL) throw new Error('The video response is missing a download URL')
@@ -271,7 +288,7 @@ export function videoContentURL(task: VideoTask): string {
 export async function fetchVideoBlob(apiKey: string, task: VideoTask, signal?: AbortSignal): Promise<Blob> {
   const url = videoContentURL(task)
   const headers: Record<string, string> = { Accept: 'video/*, application/octet-stream' }
-  if (task.protocol === 'grok') headers.Authorization = `Bearer ${apiKey}`
+  if (videoNeedsAuthenticatedDownload(task)) headers.Authorization = `Bearer ${apiKey}`
   const response = await fetch(url, {
     headers,
     credentials: 'omit',

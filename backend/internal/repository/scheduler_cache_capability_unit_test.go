@@ -34,6 +34,7 @@ func TestSchedulerCacheSeedanceAccountSelection(t *testing.T) {
 					"api_key": "test-key", "base_url": "https://example.com",
 					"model_mapping":       map[string]string{"seedance-2.0": "seedance-2.0"},
 					"openai_capabilities": tc.capabilities,
+					service.SeedanceUpstreamProtocolCredentialKey: service.SeedanceProtocolVideosJSON,
 				},
 			}
 			bucket := service.SchedulerBucket{GroupID: groupID, Platform: service.PlatformOpenAI, Mode: service.SchedulerModeSingle}
@@ -62,6 +63,7 @@ func TestSchedulerCacheSeedanceAccountSelection(t *testing.T) {
 			require.NoError(t, err, "Seedance opt-in must survive the scheduler metadata cache")
 			require.NotNil(t, selection)
 			require.Equal(t, account.ID, selection.Account.ID)
+			require.Equal(t, service.SeedanceProtocolVideosJSON, selection.Account.SeedanceUpstreamProtocol())
 			require.True(t, selection.Acquired)
 			selection.ReleaseFunc()
 		})

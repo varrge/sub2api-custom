@@ -522,3 +522,124 @@ func TestSeedanceSecondsCompletionUsesActualMetricsAndKeepsUnpricedPollsRetryabl
 		})
 	}
 }
+
+func TestSeedanceVideosJSONHandlerPinsProtocolAndOwnsDownloads(t *testing.T) {
+	for _, scenario := range []string{"success", "interrupted download", "canceled response"} {
+		t.Run(scenario, func(t *testing.T) {
+			testSeedanceVideosJSONHandlerCompletion(t, scenario)
+		})
+	}
+}
+
+type seedanceInterruptedDownload struct{ cancel context.CancelFunc }
+
+func (r seedanceInterruptedDownload) Read([]byte) (int, error) {
+	r.cancel()
+	return 0, io.ErrUnexpectedEOF
+}
+
+type seedanceCancelResponseWriter struct {
+	gin.ResponseWriter
+	cancel context.CancelFunc
+}
+
+func (w seedanceCancelResponseWriter) Write(body []byte) (int, error) {
+	n, err := w.ResponseWriter.Write(body)
+	w.cancel()
+	return n, err
+}
+
+func (w seedanceCancelResponseWriter) WriteString(body string) (int, error) {
+	return w.Write([]byte(body))
+}
+
+func testSeedanceVideosJSONHandlerCompletion(t *testing.T, scenario string) {
+	h, slots, bindings, upstream := newGrokMediaSlotHandler(t, false, false, service.PlatformOpenAI, service.SeedanceProtocolVideosJSON)
+	upstream.call = func(req *http.Request, id int64) (*http.Response, error) {
+		require.Contains(t, req.URL.Path, "/v1/videos")
+		body := `{"id":"vid-json","status":"queued"}`
+		header := http.Header{"Content-Type": []string{"application/json"}}
+		if strings.HasSuffix(req.URL.Path, "/content") {
+			body = "video"
+			header.Set("Content-Type", "video/mp4")
+		}
+		return &http.Response{StatusCode: 200, Header: header, Body: io.NopCloser(strings.NewReader(body))}, nil
+	}
+	contextFor := func(method, path string) (*gin.Context, *httptest.ResponseRecorder) {
+		c, w := grokMediaSlotContext(t.Context(), method == http.MethodPost)
+		key, _ := middleware.GetAPIKeyFromContext(c)
+		key.Group.Platform = service.PlatformOpenAI
+		price := 0.25
+		key.Group.ModelPricing = []service.ChannelModelPricing{{Models: []string{"seedance-video"}, BillingMode: service.BillingModeVideo, Intervals: []service.PricingInterval{{TierLabel: "720p", PerRequestPrice: &price}}}}
+		body := ""
+		if method == http.MethodPost {
+			body = `{"model":"seedance-video","content":[{"type":"text","text":"waves"}],"duration":5,"resolution":"720p"}`
+		}
+		c.Request = httptest.NewRequest(method, path, strings.NewReader(body))
+		c.Params = gin.Params{{Key: "task_id", Value: "vid-json"}}
+		return c, w
+	}
+	c, w := contextFor(http.MethodPost, "/api/v3/contents/generations/tasks")
+	h.SeedanceTasks(c)
+	require.Equal(t, 200, w.Code, w.Body.String())
+	require.Len(t, bindings.pending, 1)
+	key, _ := middleware.GetAPIKeyFromContext(c)
+	pending, err := h.gatewayService.LoadGrokVideoPendingBilling(t.Context(), "seedance:vid-json", key.UserID, key.ID)
+	require.NoError(t, err)
+	require.Equal(t, service.SeedanceProtocolVideosJSON, pending.SeedanceProtocol)
+	// Exercise a current account now set to native Ark with an already-pinned JSON task.
+	native, nativeSlots, nativeBindings, nativeUpstream := newGrokMediaSlotHandler(t, false, false, service.PlatformOpenAI)
+	require.NoError(t, native.gatewayService.BindGrokMediaVideoRequestAccount(t.Context(), key.GroupID, "seedance:vid-json", key.UserID, key.ID, pending.AccountID))
+	require.NoError(t, native.gatewayService.StoreGrokVideoPendingBilling(t.Context(), "seedance:vid-json", key.UserID, key.ID, *pending))
+	downloadCtx, cancelDownload := context.WithCancel(t.Context())
+	defer cancelDownload()
+	nativeUpstream.call = func(req *http.Request, id int64) (*http.Response, error) {
+		require.True(t, strings.HasSuffix(req.URL.Path, "/videos/vid-json") || strings.HasSuffix(req.URL.Path, "/videos/vid-json/content"), req.URL.Path)
+		require.Equal(t, pending.AccountID, id)
+		body := `{"id":"vid-json","status":"completed","duration":5,"resolution":"720p"}`
+		header := http.Header{"Content-Type": []string{"application/json"}}
+		if strings.HasSuffix(req.URL.Path, "/content") {
+			body = "video"
+			header.Set("Content-Type", "video/mp4")
+			if scenario == "interrupted download" {
+				return &http.Response{StatusCode: 200, Header: header, Body: io.NopCloser(io.MultiReader(strings.NewReader(body), seedanceInterruptedDownload{cancelDownload}))}, nil
+			}
+		}
+		return &http.Response{StatusCode: 200, Header: header, Body: io.NopCloser(strings.NewReader(body))}, nil
+	}
+	// Download can be the first completion observation and must claim the same billing key as polling.
+	c, w = contextFor(http.MethodGet, "/api/v3/contents/generations/tasks/vid-json/content")
+	c.Request = c.Request.WithContext(downloadCtx)
+	if scenario == "canceled response" {
+		c.Writer = seedanceCancelResponseWriter{c.Writer, cancelDownload}
+	}
+	native.SeedanceTasks(c)
+	require.Equal(t, 200, w.Code, w.Body.String())
+	require.Equal(t, "video", w.Body.String())
+	if scenario != "success" {
+		require.ErrorIs(t, downloadCtx.Err(), context.Canceled)
+	}
+	require.Len(t, nativeBindings.billed, 1)
+	c, w = contextFor(http.MethodGet, "/api/v3/contents/generations/tasks/vid-json")
+	native.SeedanceTasks(c)
+	require.Equal(t, 200, w.Code, w.Body.String())
+	require.Len(t, nativeBindings.billed, 1)
+	for _, other := range []string{"user", "key", "task"} {
+		c, w = contextFor(http.MethodGet, "/api/v3/contents/generations/tasks/vid-json/content")
+		key, _ = middleware.GetAPIKeyFromContext(c)
+		switch other {
+		case "user":
+			c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 11, Concurrency: 5})
+		case "key":
+			key.ID = 21
+		case "task":
+			c.Params = gin.Params{{Key: "task_id", Value: "other"}}
+		}
+		before := nativeUpstream.calls
+		native.SeedanceTasks(c)
+		require.Equal(t, 404, w.Code, other+": "+w.Body.String())
+		require.Equal(t, before, nativeUpstream.calls)
+	}
+	slots.assertReleased(t)
+	nativeSlots.assertReleased(t)
+}

@@ -18,7 +18,7 @@ import (
 	"github.com/tidwall/sjson"
 )
 
-var errSeedanceImageStorageUnavailable = errors.New("Reference image upload is unavailable; ask an administrator to configure image storage or use a public image URL")
+var errSeedanceImageStorageUnavailable = errors.New("reference image upload is unavailable; ask an administrator to configure image storage or use a public image URL")
 
 func (s *OpenAIGatewayService) SetSeedanceImageStorage(resolve ImageStorageResolver) {
 	s.seedanceImageStorage = resolve
@@ -47,7 +47,7 @@ func seedanceVideosJSONBody(body []byte, model string) ([]byte, error) {
 		case "duration", "ratio", "resolution":
 			out[key] = json.RawMessage(value.Raw)
 		default:
-			return nil, fmt.Errorf("Videos JSON does not support the Ark field %q", key)
+			return nil, fmt.Errorf("videos JSON does not support the Ark field %q", key)
 		}
 	}
 	texts := []string{}
@@ -386,7 +386,7 @@ func (s *OpenAIGatewayService) streamSeedanceVideosJSONContent(ctx context.Conte
 			withCredentials = withCredentials && strings.EqualFold(location.Host, origin.Host) && location.Scheme == origin.Scheme
 			continue
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode >= 400 && resp.StatusCode != http.StatusRequestedRangeNotSatisfiable {
 			body, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, openAITooLargeError)
 			if err != nil {

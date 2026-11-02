@@ -449,7 +449,7 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 					account = &copy
 				} else if account.SeedanceUpstreamProtocol() == service.SeedanceProtocolVideosJSON && !videoPricingSnapshot.PerSecond {
 					h.errorResponse(c, http.StatusServiceUnavailable, "pricing_unavailable", "Videos JSON requires per-second video pricing for this model and resolution")
-					return nil, errors.New("Videos JSON requires per-second pricing")
+					return nil, errors.New("videos JSON requires per-second pricing")
 				}
 				return h.gatewayService.ForwardSeedance(requestCtx, c, account, endpoint, requestID, body)
 			}

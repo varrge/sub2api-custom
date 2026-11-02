@@ -70,7 +70,7 @@ func seedanceVideosJSONBody(body []byte, model string) ([]byte, error) {
 		case "audio_url":
 			field = "reference_audios"
 		default:
-			return nil, fmt.Errorf("Videos JSON does not support content type %q", kind)
+			return nil, fmt.Errorf("videos JSON does not support content type %q", kind)
 		}
 		raw := strings.TrimSpace(item.Get(kind + ".url").String())
 		if kind != "image_url" || !strings.HasPrefix(raw, "data:") {
@@ -120,7 +120,7 @@ func seedanceVideosJSONBody(body []byte, model string) ([]byte, error) {
 func validateSeedanceMediaURL(raw string) error {
 	parsed, err := url.Parse(raw)
 	if err != nil || parsed.Host == "" || parsed.User != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || rejectPrivateImageHost(raw) != nil {
-		return fmt.Errorf("Videos JSON requires public HTTP(S) media URLs")
+		return fmt.Errorf("videos JSON requires public HTTP(S) media URLs")
 	}
 	return nil
 }
@@ -200,7 +200,7 @@ func (s *OpenAIGatewayService) forwardSeedanceVideosJSON(ctx context.Context, c 
 	if endpoint == SeedanceEndpointDelete {
 		c.Header("Allow", "GET")
 		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": gin.H{"type": "unsupported_operation", "message": "Videos JSON does not support deleting tasks"}})
-		return nil, fmt.Errorf("Videos JSON task deletion is unsupported")
+		return nil, fmt.Errorf("videos JSON task deletion is unsupported")
 	}
 	base, err := s.validateUpstreamBaseURL(account.GetCredential("base_url"))
 	if err != nil {
@@ -238,7 +238,7 @@ func (s *OpenAIGatewayService) forwardSeedanceVideosJSON(ctx context.Context, c 
 	}
 	token := strings.TrimSpace(account.GetCredential("api_key"))
 	if token == "" {
-		return nil, fmt.Errorf("Seedance account missing API key")
+		return nil, fmt.Errorf("seedance account missing API key")
 	}
 	started := time.Now()
 	req, err := http.NewRequestWithContext(WithHTTPUpstreamRedirectsDisabled(ctx), method, target, bytes.NewReader(body))
@@ -268,7 +268,7 @@ func (s *OpenAIGatewayService) forwardSeedanceVideosJSON(ctx context.Context, c 
 		if resp.StatusCode >= 400 {
 			writeGrokMediaResponse(c, resp, responseBody, s.responseHeaderFilter)
 		}
-		return nil, fmt.Errorf("Videos JSON upstream status %d", resp.StatusCode)
+		return nil, fmt.Errorf("videos JSON upstream status %d", resp.StatusCode)
 	}
 	invalid := func(message string) (*OpenAIForwardResult, error) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": gin.H{"type": "invalid_upstream_response", "message": message}})

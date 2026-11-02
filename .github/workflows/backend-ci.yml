@@ -18,7 +18,8 @@ permissions:
 
 jobs:
   shell:
-    runs-on: macos-15
+    # Fixtures need macOS utilities, but not ARM; avoid the saturated ARM runner pool.
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v6
         with:

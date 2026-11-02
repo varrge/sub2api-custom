@@ -66,15 +66,40 @@
             </div>
           </div>
 
-          <form class="video-composer" @submit.prevent="submitGeneration" @dragover.prevent @drop.prevent="onDrop">
+          <form class="video-composer" @submit.prevent="submitGeneration">
             <input ref="fileInput" type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" @change="onReferenceChange" />
             <div v-if="referenceUrl" class="flex items-center gap-3 border-b border-gray-100 px-3 py-2 dark:border-dark-700">
               <img :src="referenceUrl" :alt="t('videoGeneration.referenceAlt')" class="h-10 w-14 rounded-lg object-cover" />
               <span class="flex-1 text-xs text-gray-500 dark:text-dark-400">{{ t('videoGeneration.imageToVideo') }}</span>
               <button type="button" class="btn btn-ghost btn-sm" :aria-label="t('videoGeneration.removeReference')" @click="removeReference"><Icon name="x" size="sm" /></button>
             </div>
-            <label for="video-prompt" class="sr-only">{{ t('videoGeneration.prompt') }}</label>
-            <textarea id="video-prompt" v-model="form.prompt" rows="2" :placeholder="t('videoGeneration.promptPlaceholder')" class="video-prompt"></textarea>
+            <div
+              class="relative"
+              @dragenter.prevent="onDragEnter"
+              @dragover.prevent="onDragOver"
+              @dragleave.prevent="onDragLeave"
+              @drop.prevent="onDrop"
+            >
+              <label for="video-prompt" class="sr-only">{{ t('videoGeneration.prompt') }}</label>
+              <textarea
+                id="video-prompt"
+                v-model="form.prompt"
+                rows="6"
+                :placeholder="t('videoGeneration.promptPlaceholder')"
+                class="video-prompt"
+                @paste="onPaste"
+              ></textarea>
+              <p class="px-4 pb-2 text-xs text-slate-400 dark:text-slate-500 mt-1.5 leading-normal">
+                {{ t('videoGeneration.referenceInputHint') }}
+              </p>
+              <div
+                v-if="dragging"
+                class="pointer-events-none absolute inset-2 z-20 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary-500 bg-primary-50/95 p-4 text-center backdrop-blur-sm dark:bg-dark-900/95"
+              >
+                <Icon name="upload" size="lg" class="text-primary-600 dark:text-primary-400" />
+                <p class="text-xs font-medium text-primary-700 dark:text-primary-300">{{ t('videoGeneration.dropReference') }}</p>
+              </div>
+            </div>
             <div class="video-controls">
               <div class="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
                 <div class="min-w-0">
@@ -87,17 +112,6 @@
                 </div>
               </div>
               <p v-if="modelError" role="status" class="text-xs text-amber-700 dark:text-amber-300">{{ modelError }}</p>
-              <div class="min-w-0 space-y-1">
-                <label for="video-reference-url" class="video-label">{{ t('videoGeneration.referenceImageUrlLabel') }}</label>
-                <input
-                  id="video-reference-url"
-                  v-model="form.referenceImageUrl"
-                  type="url"
-                  :placeholder="t('videoGeneration.referenceImageUrlPlaceholder')"
-                  class="video-url-input"
-                />
-                <p class="text-[10px] text-gray-400 dark:text-dark-400">{{ t('videoGeneration.referenceImageUrlHint') }}</p>
-              </div>
               <div class="grid grid-cols-3 gap-2">
                 <div class="min-w-0">
                   <label for="video-ratio" class="video-label">{{ t('imageGeneration.aspectRatio') }}</label>
@@ -108,10 +122,35 @@
                   <Select id="video-duration" v-model="form.duration" :options="durationOptions" :aria-label="t('videoGeneration.duration')" />
                 </div>
                 <div class="min-w-0">
-                  <label for="video-resolution" class="video-label">{{ t('imageGeneration.resolution') }}</label>
-                  <Select id="video-resolution" v-model="form.resolution" :options="resolutionOptions" :aria-label="t('imageGeneration.resolution')" />
+                  <label for="video-resolution" class="video-label">
+                    {{ t('imageGeneration.resolution') }}
+                    <span v-if="Boolean(fixedResolution)" class="font-normal text-gray-400 dark:text-dark-400">({{ t('videoGeneration.resolutionFixed') }})</span>
+                  </label>
+                  <Select
+                    id="video-resolution"
+                    v-model="form.resolution"
+                    :options="resolutionOptions"
+                    :disabled="Boolean(fixedResolution)"
+                    :aria-label="Boolean(fixedResolution) ? t('videoGeneration.resolutionFixed') : t('imageGeneration.resolution')"
+                  />
                 </div>
               </div>
+              <details class="group min-w-0">
+                <summary class="cursor-pointer text-[11px] font-medium text-gray-500 hover:text-gray-700 dark:text-dark-400 dark:hover:text-dark-200">
+                  {{ t('videoGeneration.useImageUrl') }}
+                </summary>
+                <div class="mt-1.5 space-y-1">
+                  <label for="video-reference-url" class="video-label">{{ t('videoGeneration.referenceImageUrlLabel') }}</label>
+                  <input
+                    id="video-reference-url"
+                    v-model="form.referenceImageUrl"
+                    type="url"
+                    :placeholder="t('videoGeneration.referenceImageUrlPlaceholder')"
+                    class="video-url-input"
+                  />
+                  <p class="text-[10px] text-gray-400 dark:text-dark-400">{{ t('videoGeneration.referenceImageUrlHint') }}</p>
+                </div>
+              </details>
               <div class="flex min-w-0 items-center justify-between gap-2 pt-0.5">
                 <button type="button" class="btn btn-ghost btn-sm min-w-0" :title="t('videoGeneration.uploadHint')" @click="fileInput?.click()">
                   <Icon name="upload" size="sm" /><span class="truncate">{{ t('videoGeneration.uploadReference') }}</span>
@@ -167,7 +206,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
-import { fetchVideoBlob, getVideoTask, listVideoModels, supportedVideoResolutions, supportsVideoGeneration, videoContentURL, videoNeedsAuthenticatedDownload, videoProtocolForModel, videoRequiresReference, type VideoAspectRatio } from '@/api/videoGeneration'
+import { fetchVideoBlob, getVideoTask, listVideoModels, supportedVideoResolutions, supportsVideoGeneration, videoContentURL, videoNeedsAuthenticatedDownload, videoModelResolution, videoProtocolForModel, videoRequiresReference, type VideoAspectRatio } from '@/api/videoGeneration'
 import { ConfirmDialog, LoadingSpinner } from '@/components/common'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -184,9 +223,10 @@ const historyToggle = ref<HTMLButtonElement | null>(null)
 const deletingSessionId = ref<string | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const referenceUrl = ref('')
+const dragging = ref(false)
 const availableModels = ref<string[]>([])
 const loadingModels = ref(false)
-const modelError = ref('')
+const modelLoadError = ref('')
 const playbackUrl = ref('')
 const playbackError = ref('')
 const loadingPlayback = ref(false)
@@ -230,11 +270,18 @@ const platform = computed<GroupPlatform | undefined>(() => {
   )?.platform
 })
 const requiresReference = computed(() => videoRequiresReference(form.value.model))
-const resolutionOptions = computed(() => supportedVideoResolutions(form.value.model).map(value => ({ value, label: value })))
+const fixedResolution = computed(() => videoModelResolution(form.value.model))
+const modelError = computed(() => {
+  if (form.value.model && (!protocol.value || !platform.value)) return t('videoGeneration.unsupportedModel')
+  if (fixedResolution.value === '4k') return t('videoGeneration.unsupportedResolution')
+  return modelLoadError.value
+})
+const resolutionOptions = computed(() => (fixedResolution.value ? [fixedResolution.value] : supportedVideoResolutions(form.value.model)).map(value => ({ value, label: value === '4k' ? '4K' : value })))
 const ratioOptions = (['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'] satisfies VideoAspectRatio[]).map(value => ({ value, label: value }))
 const durationOptions = [5, 10].map(value => ({ value, label: `${value}s` }))
 const canGenerate = computed(() => studio.ready && !pending.value && Boolean(
   selectedKey.value && platform.value && protocol.value && form.value.prompt.trim() &&
+  supportedVideoResolutions(form.value.model).includes(form.value.resolution) &&
   (!requiresReference.value || studio.activeSession?.referenceFile || form.value.referenceImageUrl?.trim()),
 ))
 
@@ -242,7 +289,7 @@ async function loadModels() {
   const requestId = ++modelRequestId
   const key = selectedKey.value
   availableModels.value = []
-  modelError.value = ''
+  modelLoadError.value = ''
   loadingModels.value = false
   if (!key) return
   loadingModels.value = true
@@ -252,9 +299,9 @@ async function loadModels() {
     if (requestId !== modelRequestId || disposed) return
     availableModels.value = models
     if (!form.value.model) form.value.model = models[0] || ''
-    if (!models.length) modelError.value = t('videoGeneration.noModels')
+    if (!models.length) modelLoadError.value = t('videoGeneration.noModels')
   } catch (error) {
-    if (requestId === modelRequestId && !disposed) modelError.value = message(error, 'videoGeneration.loadModelsFailed')
+    if (requestId === modelRequestId && !disposed) modelLoadError.value = message(error, 'videoGeneration.loadModelsFailed')
   } finally {
     if (requestId === modelRequestId) loadingModels.value = false
   }
@@ -305,7 +352,27 @@ function onReferenceChange(event: Event) {
   input.value = ''
 }
 function onDrop(event: DragEvent) {
+  dragging.value = false
   addReference(event.dataTransfer?.files[0])
+}
+function onDragEnter(event: DragEvent) {
+  if (event.dataTransfer?.types.includes('Files')) dragging.value = true
+}
+function onDragOver(event: DragEvent) {
+  if (event.dataTransfer?.types.includes('Files')) {
+    event.dataTransfer.dropEffect = 'copy'
+    dragging.value = true
+  }
+}
+function onDragLeave(event: DragEvent) {
+  if (event.relatedTarget instanceof Node && (event.currentTarget as HTMLElement)?.contains(event.relatedTarget)) return
+  dragging.value = false
+}
+function onPaste(event: ClipboardEvent) {
+  const file = event.clipboardData?.files[0]
+  if (!file) return
+  event.preventDefault()
+  addReference(file)
 }
 async function submitGeneration() {
   if (!canGenerate.value || !selectedKey.value || !platform.value) return
@@ -431,15 +498,12 @@ watch([() => studio.activeId, videoKeys, () => props.loadingKeys], () => {
   }
 }, { immediate: true })
 watch([() => studio.activeId, selectedKey], ([id, key], [previousId, previousKey]) => {
+  dragging.value = false
   if (id === previousId && previousKey && previousKey.id !== key?.id) form.value.model = ''
   void loadModels()
 }, { immediate: true })
-watch(resolutionOptions, options => {
+watch([resolutionOptions, () => form.value.resolution], ([options]) => {
   if (options.length && !options.some(option => option.value === form.value.resolution)) form.value.resolution = options[options.length - 1]!.value
-})
-watch([protocol, platform], ([modelProtocol, modelPlatform]) => {
-  if (form.value.model && (!modelProtocol || !modelPlatform)) modelError.value = t('videoGeneration.unsupportedModel')
-  else if (modelError.value === t('videoGeneration.unsupportedModel')) modelError.value = ''
 }, { immediate: true })
 watch(() => form.value.referenceImageUrl, value => {
   if (value?.trim() && studio.activeSession) studio.activeSession.referenceFile = null
@@ -480,7 +544,7 @@ onBeforeUnmount(() => {
   box-shadow: var(--surface-shadow);
 }
 .video-composer:focus-within { @apply ring-2 ring-primary-500/30; }
-.video-prompt { @apply block w-full resize-none rounded-t-2xl border-0 bg-transparent px-4 py-3 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:ring-0 dark:text-dark-100; }
+.video-prompt { @apply block w-full min-h-[160px] resize-y rounded-t-2xl border-0 bg-transparent px-4 py-3 text-sm leading-6 text-gray-800 outline-none placeholder:text-gray-400 focus:ring-0 dark:text-dark-100; }
 .video-controls { @apply space-y-2.5 border-t border-gray-100 p-2.5 dark:border-dark-700 sm:p-3; }
 .video-controls :deep(.select-trigger) { @apply h-8 min-w-0 rounded-lg bg-gray-50 px-2 py-1 text-xs dark:bg-dark-800; }
 .video-label { @apply mb-1 block text-[10px] font-medium text-gray-500 dark:text-dark-400; }

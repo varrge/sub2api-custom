@@ -4,15 +4,25 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"image"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
+
+var errSeedanceImageStorageUnavailable = errors.New("Reference image upload is unavailable; ask an administrator to configure image storage or use a public image URL")
+
+func (s *OpenAIGatewayService) SetSeedanceImageStorage(resolve ImageStorageResolver) {
+	s.seedanceImageStorage = resolve
+}
 
 const (
 	SeedanceUpstreamProtocolCredentialKey = "seedance_upstream_protocol"
@@ -63,12 +73,10 @@ func seedanceVideosJSONBody(body []byte, model string) ([]byte, error) {
 			return nil, fmt.Errorf("Videos JSON does not support content type %q", kind)
 		}
 		raw := strings.TrimSpace(item.Get(kind + ".url").String())
-		parsed, err := url.Parse(raw)
-		if err != nil || parsed.Host == "" || parsed.User != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") {
-			return nil, fmt.Errorf("Videos JSON requires a public HTTP(S) media URL; use a direct image link instead of an uploaded Base64 image")
-		}
-		if err := rejectPrivateImageHost(raw); err != nil {
-			return nil, fmt.Errorf("Videos JSON requires public media URLs")
+		if kind != "image_url" || !strings.HasPrefix(raw, "data:") {
+			if err := validateSeedanceMediaURL(raw); err != nil {
+				return nil, err
+			}
 		}
 		value := map[string]string{kind: raw}
 		if kind == "image_url" && (role == "first_frame" || role == "last_frame") {
@@ -107,6 +115,71 @@ func seedanceVideosJSONBody(body []byte, model string) ([]byte, error) {
 		out["prompt"] = prompt
 	}
 	return json.Marshal(out)
+}
+
+func validateSeedanceMediaURL(raw string) error {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" || parsed.User != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || rejectPrivateImageHost(raw) != nil {
+		return fmt.Errorf("Videos JSON requires public HTTP(S) media URLs")
+	}
+	return nil
+}
+
+// Convert uploaded first/reference frames only after validating the full request.
+// Public URLs and native Ark uploads do not need object storage.
+func (s *OpenAIGatewayService) storeSeedanceReferenceImages(ctx context.Context, body []byte) ([]byte, error) {
+	paths := []string{"first_frame.image_url", "last_frame.image_url"}
+	for i := range gjson.GetBytes(body, "reference_images").Array() {
+		paths = append(paths, fmt.Sprintf("reference_images.%d.image_url", i))
+	}
+	type uploadedImage struct {
+		path, contentType string
+		data              []byte
+	}
+	var images []uploadedImage
+	decoder := ImageResultUploader{maxDownloadBytes: 10 << 20}
+	for _, path := range paths {
+		raw := gjson.GetBytes(body, path).String()
+		if !strings.HasPrefix(raw, "data:") {
+			continue
+		}
+		data, _, err := decoder.decodeImageDataURL(raw)
+		if err != nil {
+			return nil, fmt.Errorf("invalid reference image (PNG, JPG or WebP, up to 10 MB)")
+		}
+		info, format, err := image.DecodeConfig(bytes.NewReader(data))
+		if err != nil || (format != "png" && format != "jpeg" && format != "webp") || info.Width <= 0 || info.Height <= 0 || int64(info.Width) > 25_000_000/int64(info.Height) {
+			return nil, fmt.Errorf("invalid reference image (PNG, JPG or WebP, up to 25 megapixels)")
+		}
+		images = append(images, uploadedImage{path: path, contentType: "image/" + format, data: data})
+	}
+	if len(images) == 0 {
+		return body, nil
+	}
+	if s.seedanceImageStorage == nil {
+		return nil, errSeedanceImageStorageUnavailable
+	}
+	uploader, enabled := s.seedanceImageStorage()
+	if !enabled || uploader == nil || uploader.storage == nil {
+		return nil, errSeedanceImageStorageUnavailable
+	}
+	for _, item := range images {
+		if int64(len(item.data)) > uploader.maxDownloadBytes {
+			return nil, fmt.Errorf("reference image exceeds the configured image storage size limit")
+		}
+	}
+	id := "references/seedance-" + uuid.NewString()
+	for i, item := range images {
+		imageURL, err := uploader.storage.Save(ctx, uploader.buildKey(id, i, item.contentType), item.contentType, item.data)
+		if err != nil || validateSeedanceMediaURL(imageURL) != nil {
+			return nil, errSeedanceImageStorageUnavailable
+		}
+		body, err = sjson.SetBytes(body, item.path, imageURL)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return body, nil
 }
 
 func seedanceVideosJSONURL(base string, endpoint GrokMediaEndpoint, id string) (string, error) {
@@ -150,8 +223,15 @@ func (s *OpenAIGatewayService) forwardSeedanceVideosJSON(ctx context.Context, c 
 			upstreamModel = account.GetMappedModel(info.Model)
 			body, err = seedanceVideosJSONBody(body, upstreamModel)
 		}
+		if err == nil {
+			body, err = s.storeSeedanceReferenceImages(ctx, body)
+		}
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": err.Error()}})
+			status, code := http.StatusBadRequest, "invalid_request_error"
+			if errors.Is(err, errSeedanceImageStorageUnavailable) {
+				status, code = http.StatusServiceUnavailable, "media_storage_unavailable"
+			}
+			c.JSON(status, gin.H{"error": gin.H{"type": code, "message": err.Error()}})
 			return nil, err
 		}
 		method = http.MethodPost

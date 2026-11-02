@@ -114,9 +114,9 @@
           <!-- Interactive Canvas Viewport -->
           <div
             class="canvas-viewport"
-            @dragenter.prevent="dragging = true"
-            @dragover.prevent
-            @dragleave.prevent="dragging = false"
+            @dragenter.prevent="onDragEnter"
+            @dragover.prevent="onDragOver"
+            @dragleave.prevent="onDragLeave"
             @drop.prevent="onDrop"
           >
             <!-- Rendering / Generating State -->
@@ -180,18 +180,7 @@
               </p>
             </div>
 
-            <!-- Drag & Drop Overlay -->
-            <Transition name="fade-fast">
-              <div
-                v-if="dragging"
-                class="pointer-events-none absolute inset-4 z-30 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary-500/80 bg-primary-50/90 backdrop-blur-sm dark:bg-primary-950/90"
-              >
-                <div class="flex items-center gap-2 rounded-xl bg-white/90 px-4 py-2.5 text-sm font-medium text-primary-700 shadow-sm dark:bg-dark-900/90 dark:text-primary-300">
-                  <Icon name="plus" size="sm" />
-                  {{ t('imageGeneration.dropReference') }}
-                </div>
-              </div>
-            </Transition>
+
           </div>
 
           <!-- Bottom Floating Composer -->
@@ -199,9 +188,9 @@
             <form
               class="composer-card"
               @submit.prevent="submitGeneration"
-              @dragenter.prevent="dragging = true"
-              @dragover.prevent
-              @dragleave.prevent="dragging = false"
+              @dragenter.prevent="onDragEnter"
+              @dragover.prevent="onDragOver"
+              @dragleave.prevent="onDragLeave"
               @drop.prevent="onDrop"
             >
               <input
@@ -251,12 +240,22 @@
                   id="image-prompt"
                   v-model="form.prompt"
                   maxlength="4000"
-                  rows="2"
-                  class="w-full resize-none bg-transparent text-[15px] leading-6 text-gray-900 outline-none placeholder:text-gray-400 focus:outline-none dark:text-gray-100 dark:placeholder:text-dark-400"
+                  rows="4"
+                  class="image-prompt-input"
                   :placeholder="t('imageGeneration.promptPlaceholder')"
                   :aria-label="t('imageGeneration.prompt')"
                   @paste="onPaste"
                 ></textarea>
+                <p class="text-xs text-slate-400 dark:text-slate-500 mt-1.5 leading-normal">
+                  {{ t('imageGeneration.referenceInputHint') }}
+                </p>
+                <div
+                  v-if="dragging"
+                  class="pointer-events-none absolute inset-2 z-20 flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-primary-500 bg-primary-50/95 p-3 text-center backdrop-blur-sm dark:bg-dark-900/95"
+                >
+                  <Icon name="upload" size="md" class="text-primary-600 dark:text-primary-400" />
+                  <p class="text-xs font-medium text-primary-700 dark:text-primary-300">{{ t('imageGeneration.dropReference') }}</p>
+                </div>
               </div>
 
               <!-- Bottom Controls Toolbar -->
@@ -782,6 +781,22 @@ function onDrop(event: DragEvent) {
   addReferenceImages(Array.from(event.dataTransfer?.files || []))
 }
 
+function onDragEnter(event: DragEvent) {
+  if (event.dataTransfer?.types.includes('Files')) dragging.value = true
+}
+
+function onDragOver(event: DragEvent) {
+  if (event.dataTransfer?.types.includes('Files')) {
+    event.dataTransfer.dropEffect = 'copy'
+    dragging.value = true
+  }
+}
+
+function onDragLeave(event: DragEvent) {
+  if (event.relatedTarget instanceof Node && (event.currentTarget as HTMLElement)?.contains(event.relatedTarget)) return
+  dragging.value = false
+}
+
 function onPaste(event: ClipboardEvent) {
   const files = Array.from(event.clipboardData?.files || [])
   if (!files.length) return
@@ -924,7 +939,7 @@ onBeforeUnmount(() => { modelRequestID++; clearReferences(); void studio.flush()
 
 /* Canvas Viewport */
 .studio-canvas-section {
-  @apply relative flex min-h-0 min-w-0 flex-col;
+  @apply relative flex min-h-0 min-w-0 flex-col overflow-y-auto;
   background: radial-gradient(ellipse at 48% 30%, rgb(229 185 154 / 0.07), transparent 65%);
 }
 
@@ -933,7 +948,7 @@ onBeforeUnmount(() => { modelRequestID++; clearReferences(); void studio.flush()
 }
 
 .canvas-viewport {
-  @apply relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-2 sm:p-3;
+  @apply relative flex min-h-[200px] flex-1 items-center justify-center overflow-hidden p-2 sm:p-3;
   margin: 12px 16px 0;
   border: 1px solid var(--surface-border);
   border-radius: 24px;
@@ -1133,8 +1148,8 @@ details > summary::-webkit-details-marker {
     @apply p-2;
   }
 
-  #image-prompt {
-    height: 1.5rem;
+  .image-prompt-input {
+    min-height: 4.5rem;
   }
 
   .composer-container {
@@ -1216,6 +1231,9 @@ details > summary::-webkit-details-marker {
 .studio-empty-description { @apply mt-3 text-sm leading-relaxed text-gray-500 dark:text-dark-400; }
 .studio-prompt-label { @apply mb-2 block text-xs font-medium text-primary-600 dark:text-primary-400; }
 .composer-card:focus-within { border-color: rgb(201 151 111 / 0.7); box-shadow: 0 0 0 3px rgb(201 151 111 / 0.07), var(--surface-shadow); }
+.image-prompt-input {
+  @apply w-full min-h-[110px] max-h-56 resize-y bg-transparent text-[15px] leading-6 text-gray-900 outline-none placeholder:text-gray-400 focus:outline-none dark:text-gray-100 dark:placeholder:text-dark-400;
+}
 @media (max-width: 639px) {
   .canvas-viewport { margin: 12px 12px 0; border-radius: 18px; }
   .studio-art { transform: scale(0.8); margin-bottom: 8px; }

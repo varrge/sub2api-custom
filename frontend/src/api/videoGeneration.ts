@@ -3,7 +3,7 @@ import type { GroupPlatform } from '@/types'
 
 export type VideoProtocol = 'grok' | 'seedance'
 export type VideoAspectRatio = '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9'
-export type VideoResolution = '480p' | '720p' | '1080p'
+export type VideoResolution = '480p' | '720p' | '1080p' | '4k'
 
 export interface GenerateVideoOptions {
   apiKey: string
@@ -60,11 +60,21 @@ function supportsProtocol(platform: GroupPlatform, protocol: VideoProtocol): boo
 
 export function supportedVideoResolutions(model: string): VideoResolution[] {
   const protocol = videoProtocolForModel(model)
+  const fixed = videoModelResolution(model)
+  if (fixed) return fixed === '4k' ? [] : [fixed]
   if (protocol === 'grok') {
     return videoRequiresReference(model) ? ['480p', '720p', '1080p'] : ['480p', '720p']
   }
   // Ark validates the native options against the selected Seedance model.
   return protocol === 'seedance' ? ['480p', '720p', '1080p'] : []
+}
+
+export function videoModelResolution(model: string): VideoResolution | null {
+  if (!videoProtocolForModel(model)) return null
+  const match = normalizedModel(model).match(/(?:^|[-_./])(480p|720p|1080p|2160p|4k)(?=$|[-_./])/)
+  const value = match?.[1]
+  if (!value) return null
+  return value === '2160p' ? '4k' : value as VideoResolution
 }
 
 export function videoRequiresReference(model: string): boolean {

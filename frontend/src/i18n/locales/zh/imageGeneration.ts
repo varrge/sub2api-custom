@@ -1,5 +1,7 @@
 export default {
   imageGeneration: {
+    referenceInputHint: "将参考图片拖到输入框，或粘贴图片、点击左下角上传（支持 PNG/JPG/WebP，单张最大 10MB，最多 4 张）",
+
     badge: 'AI 创作工作台',
     studioTitle: '视觉创作',
     imageTab: '图片',
@@ -7,7 +9,7 @@ export default {
     canvasTitle: '创作画布',
     imageNumber: '图片 {index}',
     resultPlaceholder: '生成的图片会显示在这里',
-    dropReference: '松开即可添加参考图片',
+    dropReference: "松开即可添加参考图片",
     textToImage: '文生图',
     imageToImage: '图生图',
     auto: '自动',

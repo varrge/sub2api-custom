@@ -110,6 +110,81 @@ afterEach(async () => {
 })
 
 describe('video generation panel', () => {
+  it('locks model resolutions on selection and restores choices for generic models', async () => {
+    listModels.mockResolvedValue(['seedance-video', 'seedance-2.0-720p', 'seedance-2.0-1080p', 'seedance-2.0-4K'])
+    const panel = mountPanel({ apiKeys: [{ ...keys[0]!, group: { ...grokGroup, platform: 'openai' } }], loadingKeys: false })
+    await flushPromises()
+    await panel.get('#video-prompt').setValue('Waves')
+    await panel.get('#video-resolution').setValue('1080p')
+    await panel.get('#video-model').setValue('seedance-2.0-720p')
+    expect(studio!.activeSession!.form.resolution).toBe('720p')
+    expect(panel.get('#video-resolution').attributes('disabled')).toBeDefined()
+    await panel.get('#video-model').setValue('seedance-2.0-1080p')
+    expect(studio!.activeSession!.form.resolution).toBe('1080p')
+    await panel.get('#video-model').setValue('seedance-2.0-4K')
+    expect(studio!.activeSession!.form.resolution).toBe('4k')
+    expect(panel.get('button[type="submit"]').attributes('disabled')).toBeDefined()
+    expect(panel.text()).toContain('videoGeneration.unsupportedResolution')
+    await panel.get('#video-model').setValue('seedance-video')
+    expect(panel.get('#video-resolution').attributes('disabled')).toBeUndefined()
+    await panel.get('#video-model').setValue('seedance-2.0-720p')
+    const first = studio!.activeSession!
+    const restored = studio!.createSession()!
+    Object.assign(restored.form, { ...first.form })
+    studio!.activeId = first.id
+    await flushPromises()
+    restored.form.resolution = '1080p'
+    studio!.activeId = restored.id
+    await flushPromises()
+    expect(studio!.activeSession!.form.resolution).toBe('720p')
+    await panel.get('form').trigger('submit')
+    await flushPromises()
+    expect(createTask).toHaveBeenCalledWith(expect.objectContaining({ model: 'seedance-2.0-720p', resolution: '720p' }))
+  })
+
+  it('keeps the unsupported resolution explanation across same-model sessions', async () => {
+    listModels.mockResolvedValue(['seedance-2.0-4K'])
+    const panel = mountPanel({ apiKeys: [{ ...keys[0]!, group: { ...grokGroup, platform: 'openai' } }], loadingKeys: false })
+    await flushPromises()
+    const first = studio!.activeSession!
+    const second = studio!.createSession()!
+    Object.assign(second.form, { ...first.form })
+    await flushPromises()
+    studio!.activeId = first.id
+    await flushPromises()
+    expect(panel.text()).toContain('videoGeneration.unsupportedResolution')
+    studio!.activeId = second.id
+    await flushPromises()
+    expect(panel.text()).toContain('videoGeneration.unsupportedResolution')
+    expect(panel.get('button[type="submit"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('accepts a dropped or pasted image in the prompt and keeps text paste unchanged', async () => {
+    const panel = mountPanel()
+    await flushPromises()
+    const prompt = panel.get('#video-prompt')
+    const file = new File(['frame'], 'first.png', { type: 'image/png' })
+    const dataTransfer = { files: [file], types: ['Files'], dropEffect: 'none' }
+    await prompt.trigger('dragenter', { dataTransfer })
+    expect(panel.text()).toContain('videoGeneration.dropReference')
+    await prompt.trigger('dragover', { dataTransfer })
+    expect(dataTransfer.dropEffect).toBe('copy')
+    await prompt.trigger('drop', { dataTransfer })
+    expect(studio!.activeSession!.referenceFile).toBe(file)
+    expect(panel.text()).not.toContain('videoGeneration.dropReference')
+    expect(panel.text()).toContain('videoGeneration.referenceInputHint')
+    await panel.get('button[aria-label="videoGeneration.removeReference"]').trigger('click')
+    await prompt.trigger('paste', { clipboardData: { files: [file] } })
+    expect(studio!.activeSession!.referenceFile).toBe(file)
+    const event = new Event('paste', { bubbles: true, cancelable: true })
+    Object.defineProperty(event, 'clipboardData', { value: { files: [] } })
+    prompt.element.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+    await prompt.trigger('drop', { dataTransfer: { files: [new File(['bad'], 'bad.txt', { type: 'text/plain' })] } })
+    expect(studio!.activeSession!.referenceFile).toBe(file)
+    expect(showError).toHaveBeenCalledWith('imageGeneration.invalidFileType')
+  })
+
   it('accepts a public first-frame URL and keeps it mutually exclusive with uploads', async () => {
     const panel = mountPanel()
     await flushPromises()

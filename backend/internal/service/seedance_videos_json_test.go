@@ -3,7 +3,13 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"image"
+	"image/png"
 	"io"
 	"net/http"
 	"strings"
@@ -13,6 +19,81 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
+
+func TestSeedanceVideosJSONUploadedReferenceImages(t *testing.T) {
+	var encoded bytes.Buffer
+	require.NoError(t, png.Encode(&encoded, image.NewRGBA(image.Rect(0, 0, 2, 2))))
+	valid := "data:image/png;base64," + base64.StdEncoding.EncodeToString(encoded.Bytes())
+	for _, scenario := range []string{"success", "no storage", "disabled", "upload error", "private URL", "invalid image", "oversized", "mixed modes", "configured size limit", "later image exceeds storage limit"} {
+		t.Run(scenario, func(t *testing.T) {
+			storage := &fakeImageStorage{}
+			upstream := &grokMediaContentUpstreamStub{response: grokMediaContentStatusResponse(`{"id":"uploaded","status":"queued"}`)}
+			svc := &OpenAIGatewayService{httpUpstream: upstream}
+			limit := int64(32 << 20)
+			if scenario == "configured size limit" {
+				limit = int64(encoded.Len() - 1)
+			} else if scenario == "later image exceeds storage limit" {
+				limit = int64(encoded.Len() + 1)
+			}
+			if scenario != "no storage" {
+				svc.SetSeedanceImageStorage(func() (*ImageResultUploader, bool) {
+					return NewImageResultUploader(storage, "images/", limit, nil), scenario != "disabled"
+				})
+			}
+			url := valid
+			switch scenario {
+			case "upload error":
+				storage.err = errors.New("storage failed")
+			case "private URL":
+				storage.url = "http://127.0.0.1/reference.png"
+			case "invalid image":
+				url = "data:image/png;base64," + base64.StdEncoding.EncodeToString([]byte("<html>not an image</html>"))
+			case "oversized":
+				url = "data:image/png;base64," + base64.StdEncoding.EncodeToString(make([]byte, (10<<20)+1))
+			}
+			content := []map[string]any{{"type": "text", "text": "waves"}, {"type": "image_url", "role": "first_frame", "image_url": map[string]string{"url": url}}}
+			if scenario == "success" {
+				content = append(content, map[string]any{"type": "image_url", "role": "last_frame", "image_url": map[string]string{"url": valid}})
+			}
+			if scenario == "later image exceeds storage limit" {
+				larger := append(append([]byte(nil), encoded.Bytes()...), make([]byte, 20)...)
+				content = append(content, map[string]any{"type": "image_url", "role": "last_frame", "image_url": map[string]string{"url": "data:image/png;base64," + base64.StdEncoding.EncodeToString(larger)}})
+			}
+			if scenario == "mixed modes" {
+				content = append(content, map[string]any{"type": "image_url", "role": "reference_image", "image_url": map[string]string{"url": valid}})
+			}
+			body, err := json.Marshal(map[string]any{"model": "video", "content": content, "resolution": "720p", "duration": 5})
+			require.NoError(t, err)
+			c, w := grokMediaContentTestContext(http.MethodPost, "/api/v3/contents/generations/tasks", nil)
+			_, err = svc.ForwardSeedance(t.Context(), c, videosJSONTestAccount(), SeedanceEndpointCreate, "", body)
+			if scenario == "success" {
+				require.NoError(t, err)
+				require.Len(t, storage.saved, 2)
+				for _, saved := range storage.saved {
+					require.Equal(t, encoded.Bytes(), saved.data)
+					require.Equal(t, "image/png", saved.contentType)
+					require.True(t, strings.HasPrefix(saved.key, "images/references/seedance-"))
+				}
+				forwarded, err := io.ReadAll(upstream.request.Body)
+				require.NoError(t, err)
+				require.Equal(t, "https://cdn.test/"+storage.saved[0].key, gjson.GetBytes(forwarded, "first_frame.image_url").String())
+				require.Equal(t, "https://cdn.test/"+storage.saved[1].key, gjson.GetBytes(forwarded, "last_frame.image_url").String())
+				require.NotContains(t, string(forwarded), "data:")
+				require.Len(t, upstream.requests, 1)
+				return
+			}
+			require.Error(t, err)
+			require.Empty(t, upstream.requests, "failed uploads must never create a paid video")
+			if scenario == "no storage" || scenario == "disabled" || scenario == "upload error" || scenario == "private URL" {
+				require.Equal(t, http.StatusServiceUnavailable, w.Code)
+				require.Contains(t, w.Body.String(), "media_storage_unavailable")
+			} else {
+				require.Equal(t, http.StatusBadRequest, w.Code)
+				require.Empty(t, storage.saved)
+			}
+		})
+	}
+}
 
 func videosJSONTestAccount() *Account {
 	a := seedanceTestAccount()

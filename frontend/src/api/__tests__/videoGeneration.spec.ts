@@ -7,6 +7,7 @@ import {
   supportedVideoResolutions,
   supportsVideoGeneration,
   videoContentURL,
+  videoModelResolution,
   videoProtocolForModel,
   videoRequiresReference,
   type GenerateVideoOptions,
@@ -35,6 +36,19 @@ const grokOptions: GenerateVideoOptions = {
 }
 
 describe('video capabilities and discovery', () => {
+  it('locks resolution suffixes and rejects a conflicting or unsupported size before sending', async () => {
+    expect(videoModelResolution('seedance-2.0-720p')).toBe('720p')
+    expect(videoModelResolution('Seedance-2.0-1080P-preview')).toBe('1080p')
+    expect(videoModelResolution('seedance-video')).toBeNull()
+    expect(videoModelResolution('seedance-720preview')).toBeNull()
+    expect(supportedVideoResolutions('seedance-2.0-720p')).toEqual(['720p'])
+    expect(supportedVideoResolutions('seedance-2.0-4K')).toEqual([])
+    const fetcher = vi.fn()
+    vi.stubGlobal('fetch', fetcher)
+    await expect(createVideoTask({ ...grokOptions, platform: 'openai', model: 'seedance-2.0-720p', resolution: '1080p' })).rejects.toThrow('resolution is not supported')
+    await expect(createVideoTask({ ...grokOptions, platform: 'openai', model: 'seedance-2.0-4k', resolution: '4k' })).rejects.toThrow('resolution is not supported')
+    expect(fetcher).not.toHaveBeenCalled()
+  })
   it('recognizes supported providers and requires an image only for Grok 1.5', () => {
     expect(videoProtocolForModel('grok-imagine-video')).toBe('grok')
     expect(videoProtocolForModel('x-ai/grok-imagine-video-1.5-preview')).toBe('grok')

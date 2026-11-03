@@ -9,6 +9,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 )
 
 // Saving settings is a whole-document PUT. A client that sends only the field it
@@ -202,4 +203,31 @@ func TestUpdateSettingsSubscriptionEnabledIsWritableAndKeptWhenOmitted(t *testin
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Equal(t, "false", repo.values[service.SettingKeySubscriptionEnabled],
 		"a payload without subscription_enabled must not flip the stored value back to true")
+}
+
+func TestUpdateSettingsVideoGenerationEntryRoundTrip(t *testing.T) {
+	h, repo := newStepUpSwitchTestHandler(t, map[string]string{
+		service.SettingKeyImageGenerationEnabled: "true",
+	})
+	for _, enabled := range []bool{false, true} {
+		rec := doUpdateSettings(t, h, map[string]any{"video_generation_enabled": enabled}, nil)
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+		require.Equal(t, enabled, gjson.Get(rec.Body.String(), "data.video_generation_enabled").Bool())
+		want := "false"
+		if enabled {
+			want = "true"
+		}
+		require.Equal(t, want, repo.values[service.SettingKeyVideoGenerationEnabled])
+		require.Equal(t, "true", repo.values[service.SettingKeyImageGenerationEnabled])
+
+		rec = doUpdateSettings(t, h, map[string]any{"site_name": "Example Gateway"}, nil)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, want, repo.values[service.SettingKeyVideoGenerationEnabled])
+		require.Equal(t, enabled, gjson.Get(rec.Body.String(), "data.video_generation_enabled").Bool())
+	}
+	require.Contains(t, diffSettings(
+		&service.SystemSettings{VideoGenerationEnabled: true},
+		&service.SystemSettings{VideoGenerationEnabled: false},
+		nil, nil, UpdateSettingsRequest{},
+	), service.SettingKeyVideoGenerationEnabled)
 }

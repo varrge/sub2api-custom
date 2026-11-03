@@ -7380,6 +7380,32 @@
           </div>
         </div>
 
+        <div class="card" data-testid="video-generation-feature">
+          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('videoGeneration.settingsFeature.title') }}
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('videoGeneration.settingsFeature.description') }}
+            </p>
+          </div>
+          <div class="flex items-center justify-between gap-4 p-6">
+            <div>
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {{ t('videoGeneration.settingsFeature.enabled') }}
+              </label>
+              <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('videoGeneration.settingsFeature.enabledHint') }}
+              </p>
+            </div>
+            <Toggle
+              v-model="form.video_generation_enabled"
+              :aria-label="t('videoGeneration.settingsFeature.enabled')"
+              data-testid="video-generation-enabled"
+            />
+          </div>
+        </div>
+
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
@@ -10526,6 +10552,7 @@ const form = reactive<SettingsForm>({
   subscription_enabled: true,
   // Hosted image-generation page visibility
   image_generation_enabled: true,
+  video_generation_enabled: true,
   // Support Tickets feature switch
   support_ticket_enabled: false,
   // Model Plaza feature switches + description
@@ -12330,6 +12357,7 @@ async function saveSettings() {
       subscription_enabled: form.subscription_enabled,
       // Hosted image-generation page visibility
       image_generation_enabled: form.image_generation_enabled,
+      video_generation_enabled: form.video_generation_enabled,
       // Support Tickets feature switch
       support_ticket_enabled: form.support_ticket_enabled,
       // Model Plaza feature switches + description

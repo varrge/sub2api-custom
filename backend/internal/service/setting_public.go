@@ -240,6 +240,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyChannelMonitorHideUserRanking,
 		SettingKeyAvailableChannelsEnabled,
 		SettingKeyImageGenerationEnabled,
+		SettingKeyVideoGenerationEnabled,
 		SettingKeySupportTicketEnabled,
 		SettingKeySubscriptionEnabled,
 		SettingKeyModelPlazaEnabled,
@@ -378,6 +379,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 
 		AvailableChannelsEnabled: settings[SettingKeyAvailableChannelsEnabled] == "true",
 		ImageGenerationEnabled:   !isFalseSettingValue(settings[SettingKeyImageGenerationEnabled]),
+		VideoGenerationEnabled:   !isFalseSettingValue(settings[SettingKeyVideoGenerationEnabled]),
 		SupportTicketEnabled:     settings[SettingKeySupportTicketEnabled] == "true",
 		SubscriptionEnabled:      !isFalseSettingValue(settings[SettingKeySubscriptionEnabled]),
 
@@ -656,6 +658,7 @@ type PublicSettingsInjectionPayload struct {
 	ChannelMonitorHideUserRanking bool `json:"channel_monitor_hide_user_ranking"`
 	AvailableChannelsEnabled      bool `json:"available_channels_enabled"`
 	ImageGenerationEnabled        bool `json:"image_generation_enabled"`
+	VideoGenerationEnabled        bool `json:"video_generation_enabled"`
 	SupportTicketEnabled          bool `json:"support_ticket_enabled"`
 	SubscriptionEnabled           bool `json:"subscription_enabled"`
 	ModelPlazaEnabled             bool `json:"model_plaza_enabled"`
@@ -748,6 +751,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		ChannelMonitorHideUserRanking:        settings.ChannelMonitorHideUserRanking,
 		AvailableChannelsEnabled:             settings.AvailableChannelsEnabled,
 		ImageGenerationEnabled:               settings.ImageGenerationEnabled,
+		VideoGenerationEnabled:               settings.VideoGenerationEnabled,
 		SupportTicketEnabled:                 settings.SupportTicketEnabled,
 		SubscriptionEnabled:                  settings.SubscriptionEnabled,
 		ModelPlazaEnabled:                    settings.ModelPlazaEnabled,

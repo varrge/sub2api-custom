@@ -1,5 +1,11 @@
 export default {
   videoGeneration: {
+    settingsFeature: {
+      title: '生视频入口',
+      description: '控制生图工作台内的“生视频”页签是否显示。',
+      enabled: '启用生视频入口',
+      enabledHint: '需同时开启生图功能。关闭后隐藏生视频页签，直接访问视频页签链接将返回生图页；不影响 API 调用。',
+    },
     referenceInputHint: "将参考图片拖到输入框，或粘贴图片、点击左下角上传（支持 PNG/JPG/WebP，单张最大 10MB，最多 1 张）",
 
     unsupportedResolution: "此模型固定为 4K，当前视频计价尚不支持该分辨率，请选择其他模型。",

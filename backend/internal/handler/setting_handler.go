@@ -117,6 +117,7 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 
 		AvailableChannelsEnabled: settings.AvailableChannelsEnabled,
 		ImageGenerationEnabled:   settings.ImageGenerationEnabled,
+		VideoGenerationEnabled:   settings.VideoGenerationEnabled,
 		SupportTicketEnabled:     settings.SupportTicketEnabled,
 		SubscriptionEnabled:      settings.SubscriptionEnabled,
 

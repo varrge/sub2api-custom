@@ -758,6 +758,7 @@ export interface SystemSettings {
 
   // Hosted image-generation page visibility
   image_generation_enabled: boolean;
+  video_generation_enabled: boolean;
 
   // Support Tickets feature switch
   support_ticket_enabled: boolean;
@@ -1084,6 +1085,7 @@ export interface UpdateSettingsRequest {
 
   // Hosted image-generation page visibility
   image_generation_enabled?: boolean;
+  video_generation_enabled?: boolean;
 
   // Support Tickets feature switch
   support_ticket_enabled?: boolean;

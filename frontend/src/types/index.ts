@@ -308,6 +308,7 @@ export interface PublicSettings {
   /** When true, balance recharge is disabled and the site is subscription-only. */
   payment_balance_disabled: boolean
   image_generation_enabled: boolean
+  video_generation_enabled: boolean
   support_ticket_enabled: boolean
   model_plaza_enabled: boolean
   model_plaza_require_auth: boolean

@@ -430,6 +430,7 @@ const baseSettingsResponse = {
   home_content: "",
   compact_home_enabled: false,
   image_generation_enabled: true,
+  video_generation_enabled: true,
   support_ticket_enabled: false,
   hide_ccs_import_button: false,
   table_default_page_size: 20,
@@ -985,6 +986,23 @@ describe("admin SettingsView payment visible method controls", () => {
       expect.objectContaining({ image_generation_enabled: false }),
     );
     expect(fetchPublicSettings).toHaveBeenCalledWith(true);
+  });
+
+  it("loads and saves the video entry switch independently of image generation", async () => {
+    getSettings.mockResolvedValueOnce({ ...baseSettingsResponse, video_generation_enabled: false });
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+    const toggle = wrapper.get('[data-testid="video-generation-enabled"]');
+    expect((toggle.element as HTMLInputElement).checked).toBe(false);
+    await toggle.setValue(true);
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ video_generation_enabled: true, image_generation_enabled: true }),
+    );
+    expect(fetchPublicSettings).toHaveBeenCalledWith(true);
+    wrapper.unmount();
   });
 
   it("saves the activity switch and keeps the activity tab independent of general settings submit", async () => {

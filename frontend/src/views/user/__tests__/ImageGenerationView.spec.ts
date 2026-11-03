@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia } from 'pinia'
+import { reactive } from 'vue'
 import { useImageStudioStore } from '@/stores/imageStudio'
 import { useVideoStudioStore } from '@/stores/videoStudio'
 import ImageGenerationView from '../ImageGenerationView.vue'
 
 const { generate, showError } = vi.hoisted(() => ({ generate: vi.fn(), showError: vi.fn() }))
+const publicSettings = reactive({ video_generation_enabled: undefined as boolean | undefined })
+const route = reactive({ query: {} as Record<string, string | undefined> })
 
 vi.mock('@/api/keys', () => ({ keysAPI: { list: vi.fn().mockResolvedValue({
   items: [{ id: 1, name: 'Studio', key: 'test-key', status: 'active', group: {
@@ -19,7 +22,7 @@ vi.mock('@/api/imageGeneration', async importOriginal => ({
   listImageModels: vi.fn().mockImplementation(async (_key, platform) => platform === 'gemini' ? ['gemini-3-pro-image'] : ['gpt-image-1', 'gpt-image-1.5', 'gpt-image-2']),
   generateImages: generate,
 }))
-vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showError, showSuccess: vi.fn() }) }))
+vi.mock('@/stores/app', () => ({ useAppStore: () => ({ cachedPublicSettings: publicSettings, showError, showSuccess: vi.fn() }) }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isAuthenticated: true, user: { id: 42 } }) }))
 vi.mock('@/stores/imageStudioStorage', () => ({ loadImageStudio: vi.fn().mockResolvedValue(null), saveImageStudio: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('@/stores/videoStudioStorage', () => ({ loadVideoStudio: vi.fn().mockResolvedValue(null), saveVideoStudio: vi.fn().mockResolvedValue(1) }))
@@ -29,8 +32,8 @@ vi.mock('@/api/videoGeneration', async importOriginal => ({
 }))
 vi.mock('vue-router', async importOriginal => ({
   ...await importOriginal<typeof import('vue-router')>(),
-  useRoute: () => ({ query: {} }),
-  useRouter: () => ({ replace: vi.fn().mockResolvedValue(undefined) }),
+  useRoute: () => route,
+  useRouter: () => ({ replace: vi.fn(async ({ query }) => { route.query = query }) }),
 }))
 vi.mock('vue-i18n', async importOriginal => ({
   ...await importOriginal<typeof import('vue-i18n')>(),
@@ -55,6 +58,8 @@ function mountView() {
 }
 
 beforeEach(async () => {
+  publicSettings.video_generation_enabled = undefined
+  route.query = {}
   const NativeURL = URL
   vi.stubGlobal('URL', class extends NativeURL {
     static createObjectURL = vi.fn(() => 'blob:reference-image')
@@ -75,6 +80,49 @@ afterEach(() => {
 })
 
 describe('image studio requests in progress', () => {
+  it('shows video by default and blocks tab clicks and keyboard navigation when disabled', async () => {
+    expect(view.find('#studio-video-tab').exists()).toBe(true)
+    publicSettings.video_generation_enabled = false
+    await flushPromises()
+    expect(view.find('#studio-video-tab').exists()).toBe(false)
+    await view.get('#studio-image-tab').trigger('keydown', { key: 'ArrowRight' })
+    expect(view.find('#video-prompt').exists()).toBe(false)
+    expect(view.get('#studio-image-tab').attributes('aria-selected')).toBe('true')
+  })
+
+  it('normalizes a disabled video deep link on initial load and later navigation', async () => {
+    view.unmount()
+    publicSettings.video_generation_enabled = false
+    route.query = { tab: 'video', source: 'saved-link' }
+    view = mountView()
+    await flushPromises()
+    expect(view.find('#studio-video-tab').exists()).toBe(false)
+    expect(view.find('#video-prompt').exists()).toBe(false)
+    expect(view.find('#image-prompt').exists()).toBe(true)
+    expect(route.query).toEqual({ tab: undefined, source: 'saved-link' })
+    route.query = { tab: 'video' }
+    await flushPromises()
+    expect(route.query.tab).toBeUndefined()
+    expect(view.find('#video-prompt').exists()).toBe(false)
+  })
+
+  it('returns an open video tab to images when disabled and preserves its draft when re-enabled', async () => {
+    await view.get('#studio-video-tab').trigger('click')
+    await flushPromises()
+    await view.get('#video-prompt').setValue('A slow camera pan')
+    expect(route.query.tab).toBe('video')
+    publicSettings.video_generation_enabled = false
+    await flushPromises()
+    expect(route.query.tab).toBeUndefined()
+    expect(view.find('#video-prompt').exists()).toBe(false)
+    expect(view.find('#image-prompt').exists()).toBe(true)
+    publicSettings.video_generation_enabled = true
+    await flushPromises()
+    await view.get('#studio-video-tab').trigger('click')
+    await flushPromises()
+    expect((view.get('#video-prompt').element as HTMLTextAreaElement).value).toBe('A slow camera pan')
+  })
+
   it('accepts prompt drops, clipboard images, and the lower-left upload button', async () => {
     const file = new File(['image'], 'first.png', { type: 'image/png' })
     const prompt = view.get('#image-prompt')

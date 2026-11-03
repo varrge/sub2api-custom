@@ -213,6 +213,33 @@ func TestSettingService_GetPublicSettingsAndInjectionExposeImageGenerationFlag(t
 	require.True(t, defaultSettings.ImageGenerationEnabled)
 }
 
+func TestSettingService_VideoGenerationFlagDefaultsAndPublicInjection(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		value string
+		want  bool
+	}{
+		{"missing", "", true},
+		{"enabled", "true", true},
+		{"disabled", "false", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			values := map[string]string{}
+			if tc.value != "" {
+				values[SettingKeyVideoGenerationEnabled] = tc.value
+			}
+			svc := NewSettingService(&settingPublicRepoStub{values: values}, &config.Config{})
+			require.Equal(t, tc.want, svc.parseSettings(values).VideoGenerationEnabled)
+			settings, err := svc.GetPublicSettings(context.Background())
+			require.NoError(t, err)
+			require.Equal(t, tc.want, settings.VideoGenerationEnabled)
+			payload, err := svc.GetPublicSettingsForInjection(context.Background())
+			require.NoError(t, err)
+			require.Equal(t, tc.want, payload.(*PublicSettingsInjectionPayload).VideoGenerationEnabled)
+		})
+	}
+}
+
 func TestSettingService_GetPublicSettingsAndInjectionExposeTopQuickMenuItems(t *testing.T) {
 	svc := NewSettingService(&settingPublicRepoStub{values: map[string]string{
 		SettingKeyTopQuickMenuItems: `["usage","support_tickets"]`,

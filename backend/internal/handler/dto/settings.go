@@ -334,6 +334,7 @@ type SystemSettings struct {
 	// Available Channels feature switch (user-facing aggregate view)
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
 	ImageGenerationEnabled   bool `json:"image_generation_enabled"`
+	VideoGenerationEnabled   bool `json:"video_generation_enabled"`
 	SupportTicketEnabled     bool `json:"support_ticket_enabled"`
 
 	// Subscription feature switch: gates the whole user-facing subscription surface
@@ -457,6 +458,7 @@ type PublicSettings struct {
 
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
 	ImageGenerationEnabled   bool `json:"image_generation_enabled"`
+	VideoGenerationEnabled   bool `json:"video_generation_enabled"`
 	SupportTicketEnabled     bool `json:"support_ticket_enabled"`
 
 	SubscriptionEnabled bool `json:"subscription_enabled"`

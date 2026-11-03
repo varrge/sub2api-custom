@@ -203,6 +203,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		// Available channels feature (default disabled; opt-in)
 		SettingKeyAvailableChannelsEnabled: "false",
 		SettingKeyImageGenerationEnabled:   "true",
+		SettingKeyVideoGenerationEnabled:   "true",
 		SettingKeySupportTicketEnabled:     "false",
 
 		// Subscription feature (default enabled; opt-out)
@@ -837,6 +838,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	// Available channels feature (default: disabled; strict true)
 	result.AvailableChannelsEnabled = settings[SettingKeyAvailableChannelsEnabled] == "true"
 	result.ImageGenerationEnabled = !isFalseSettingValue(settings[SettingKeyImageGenerationEnabled])
+	result.VideoGenerationEnabled = !isFalseSettingValue(settings[SettingKeyVideoGenerationEnabled])
 	result.SupportTicketEnabled = settings[SettingKeySupportTicketEnabled] == "true"
 
 	// Subscription feature (default: enabled; only an explicit false disables)

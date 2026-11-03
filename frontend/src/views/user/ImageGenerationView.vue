@@ -15,7 +15,7 @@
             <button id="studio-image-tab" ref="imageTab" type="button" role="tab" :aria-selected="activeTab === 'image'" :tabindex="activeTab === 'image' ? 0 : -1" aria-controls="studio-image-panel" @click="activeTab = 'image'" @keydown.right.prevent="selectTab('video')" @keydown.left.prevent="selectTab('video')">
               {{ t('imageGeneration.imageTab') }}
             </button>
-            <button id="studio-video-tab" ref="videoTab" type="button" role="tab" :aria-selected="activeTab === 'video'" :tabindex="activeTab === 'video' ? 0 : -1" aria-controls="studio-video-panel" @click="activeTab = 'video'" @keydown.right.prevent="selectTab('image')" @keydown.left.prevent="selectTab('image')">
+            <button v-if="videoEnabled" id="studio-video-tab" ref="videoTab" type="button" role="tab" :aria-selected="activeTab === 'video'" :tabindex="activeTab === 'video' ? 0 : -1" aria-controls="studio-video-panel" @click="activeTab = 'video'" @keydown.right.prevent="selectTab('image')" @keydown.left.prevent="selectTab('image')">
               <Icon name="play" size="xs" />
               {{ t('imageGeneration.videoTab') }}
             </button>
@@ -559,7 +559,7 @@
         </template>
       </BaseDialog>
       </div>
-      <VideoGenerationPanel v-else id="studio-video-panel" role="tabpanel" aria-labelledby="studio-video-tab" :api-keys="apiKeys" :loading-keys="loadingKeys" />
+      <VideoGenerationPanel v-else-if="videoEnabled" id="studio-video-panel" role="tabpanel" aria-labelledby="studio-video-tab" :api-keys="apiKeys" :loading-keys="loadingKeys" />
     </div>
   </AppLayout>
 </template>
@@ -585,6 +585,7 @@ import Icon from '@/components/icons/Icon.vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import VideoGenerationPanel from '@/components/image-generation/VideoGenerationPanel.vue'
 import { useAppStore } from '@/stores/app'
+import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 import { useImageStudioStore, type ImageStudioForm, type ImageStudioResult } from '@/stores/imageStudio'
 import type { ApiKey } from '@/types'
 
@@ -601,10 +602,12 @@ const appStore = useAppStore()
 const studio = useImageStudioStore()
 const route = useRoute()
 const router = useRouter()
-const activeTab = ref<'image' | 'video'>(route.query.tab === 'video' ? 'video' : 'image')
+const videoEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.videoGeneration))
+const activeTab = ref<'image' | 'video'>(route.query.tab === 'video' && videoEnabled.value ? 'video' : 'image')
 const imageTab = ref<HTMLButtonElement | null>(null)
 const videoTab = ref<HTMLButtonElement | null>(null)
 function selectTab(tab: 'image' | 'video') {
+  if (tab === 'video' && !videoEnabled.value) tab = 'image'
   activeTab.value = tab
   const button = tab === 'image' ? imageTab.value : videoTab.value
   button?.focus()
@@ -612,7 +615,15 @@ function selectTab(tab: 'image' | 'video') {
 watch(activeTab, tab => {
   void router.replace({ query: { ...route.query, tab: tab === 'video' ? 'video' : undefined } })
 })
-watch(() => route.query.tab, tab => { activeTab.value = tab === 'video' ? 'video' : 'image' })
+watch([() => route.query.tab, videoEnabled], ([tab, enabled]) => {
+  const nextTab = tab === 'video' && enabled ? 'video' : 'image'
+  if (activeTab.value !== nextTab) {
+    activeTab.value = nextTab
+  } else if (tab === 'video' && !enabled) {
+    // Also normalize a disabled video link on the initial page load.
+    void router.replace({ query: { ...route.query, tab: undefined } })
+  }
+}, { immediate: true })
 const apiKeys = ref<ApiKey[]>([])
 const loadingKeys = ref(true)
 const loadingModels = ref(false)

@@ -539,6 +539,8 @@ const (
 	// SettingKeyImageGenerationEnabled controls the hosted image-generation page
 	// and its navigation entries. Missing values remain enabled for compatibility.
 	SettingKeyImageGenerationEnabled = "image_generation_enabled"
+	// Controls the hosted studio's video tab; gateway API access is unchanged.
+	SettingKeyVideoGenerationEnabled = "video_generation_enabled"
 
 	// SettingKeySupportTicketEnabled gates every user-facing support-ticket API.
 	// It is fail-closed: only the literal "true" enables the feature.

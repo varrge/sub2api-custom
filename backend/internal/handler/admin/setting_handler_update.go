@@ -357,6 +357,7 @@ type UpdateSettingsRequest struct {
 	// Available Channels feature switch (user-facing)
 	AvailableChannelsEnabled *bool `json:"available_channels_enabled"`
 	ImageGenerationEnabled   *bool `json:"image_generation_enabled"`
+	VideoGenerationEnabled   *bool `json:"video_generation_enabled"`
 	SupportTicketEnabled     *bool `json:"support_ticket_enabled"`
 	SubscriptionEnabled      *bool `json:"subscription_enabled"`
 
@@ -2050,6 +2051,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.SupportTicketEnabled
 		}(),
+		VideoGenerationEnabled: func() bool {
+			if req.VideoGenerationEnabled != nil {
+				return *req.VideoGenerationEnabled
+			}
+			return previousSettings.VideoGenerationEnabled
+		}(),
 		SubscriptionEnabled: func() bool {
 			if req.SubscriptionEnabled != nil {
 				return *req.SubscriptionEnabled
@@ -2536,6 +2543,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 
 		AvailableChannelsEnabled: updatedSettings.AvailableChannelsEnabled,
 		ImageGenerationEnabled:   updatedSettings.ImageGenerationEnabled,
+		VideoGenerationEnabled:   updatedSettings.VideoGenerationEnabled,
 		SupportTicketEnabled:     updatedSettings.SupportTicketEnabled,
 		SubscriptionEnabled:      updatedSettings.SubscriptionEnabled,
 

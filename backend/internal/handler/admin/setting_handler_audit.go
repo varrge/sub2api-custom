@@ -603,6 +603,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.ImageGenerationEnabled != after.ImageGenerationEnabled {
 		changed = append(changed, service.SettingKeyImageGenerationEnabled)
 	}
+	if before.VideoGenerationEnabled != after.VideoGenerationEnabled {
+		changed = append(changed, service.SettingKeyVideoGenerationEnabled)
+	}
 	if before.SupportTicketEnabled != after.SupportTicketEnabled {
 		changed = append(changed, "support_ticket_enabled")
 	}

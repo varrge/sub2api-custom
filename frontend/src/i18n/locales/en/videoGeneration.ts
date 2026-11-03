@@ -1,5 +1,11 @@
 export default {
   videoGeneration: {
+    settingsFeature: {
+      title: 'Video Generation Entry',
+      description: 'Control whether the video tab appears in the image-generation studio.',
+      enabled: 'Enable video generation entry',
+      enabledHint: 'Image generation must also be enabled. Turning this off hides the video tab and redirects video-tab links to images. API access is unaffected.',
+    },
     referenceInputHint: "Drag reference image here, paste, or click upload below (PNG/JPG/WebP, max 10MB, up to 1 image)",
 
     unsupportedResolution: "This model is fixed to 4K, which video billing does not yet support. Choose another model.",

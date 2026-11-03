@@ -104,6 +104,11 @@ export const FeatureFlags = {
     mode: 'opt-out',
     label: 'Channel Monitor',
   }),
+  videoGeneration: defineFlag({
+    key: 'video_generation_enabled',
+    mode: 'opt-out',
+    label: 'Video Generation',
+  }),
   availableChannels: defineFlag({
     key: 'available_channels_enabled',
     mode: 'opt-in',

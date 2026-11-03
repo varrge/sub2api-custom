@@ -336,6 +336,11 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 	// user-specific) rate multiplier consumes subscription quota at the expected
 	// speed. TotalCost remains the raw (pre-multiplier) value; downstream guards
 	// on "> 0" still correctly skip free subscriptions (RateMultiplier == 0).
+	if p.APIKey.GroupID != nil {
+		cmd.GroupID = *p.APIKey.GroupID
+		cmd.RawCost = p.Cost.TotalCost
+	}
+	cmd.FixedChargeReservationID = p.FixedChargeReservationID
 	if p.Subscription != nil && p.Subscription.MonthCardSnapshot != nil {
 		cmd.MonthCardSnapshot = p.Subscription.MonthCardSnapshot
 		cmd.MonthCardCost = p.Cost.ActualCost
@@ -349,6 +354,7 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 		cmd.SubscriptionCost = p.Cost.ActualCost
 	} else if p.Cost.ActualCost > 0 {
 		cmd.BalanceCost = p.Cost.ActualCost
+		cmd.QuotaPlatform = p.Platform
 	}
 
 	if p.shouldDeductAPIKeyQuota() {
@@ -435,8 +441,8 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 			}
 		}
 	} else if p.IsSubscriptionBill {
-		if p.Cost.ActualCost > 0 && p.User != nil && p.APIKey != nil && p.APIKey.GroupID != nil {
-			deps.billingCacheService.QueueUpdateSubscriptionUsage(p.User.ID, *p.APIKey.GroupID, p.Cost.ActualCost)
+		if cost := personalUsageCost(p, result); cost > 0 && p.User != nil && p.APIKey != nil && p.APIKey.GroupID != nil {
+			deps.billingCacheService.QueueUpdateSubscriptionUsage(p.User.ID, *p.APIKey.GroupID, cost)
 		}
 	} else if p.Cost.ActualCost > 0 && p.User != nil {
 		syncBalanceCacheAfterDeduction(ctx, p, deps, result)
@@ -448,6 +454,14 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 
 	deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
 
+	finalizeUserPlatformQuota(ctx, p, deps)
+
+	// Notification checks run async with the captured billing snapshot.
+	go notifyBalanceLow(p, deps, result)
+	go notifyAccountQuota(p, deps, result)
+}
+
+func finalizeUserPlatformQuota(ctx context.Context, p *postUsageBillingParams, deps *billingDeps) {
 	// Platform quota 累加：仅在 standard（余额）模式生效；订阅模式豁免；仅对有 limit 的用户写
 	// Redis 同步写 + DB 异步持久化（flag=false 降级）或 flusher 异步刷（flag=true）:
 	//   - HasUserPlatformQuotaLimit 守卫:无 limit 的公司跳过,避免无效写入 + 浪费 Redis 容量
@@ -481,15 +495,14 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 			// flusher_enabled=true:不直写 DB,flusher 异步批量刷
 		}
 	}
-
-	// Notification checks run async — all parameters are already captured,
-	// no dependency on the request context or upstream connection.
-	go notifyBalanceLow(p, deps, result)
-	go notifyAccountQuota(p, deps, result)
 }
 
 func syncBalanceCacheAfterDeduction(ctx context.Context, p *postUsageBillingParams, deps *billingDeps, result *UsageBillingApplyResult) {
 	if p == nil || p.Cost == nil || p.User == nil || deps == nil || deps.billingCacheService == nil {
+		return
+	}
+	cost := personalUsageCost(p, result)
+	if cost <= 0 {
 		return
 	}
 	if result != nil && result.NewBalance != nil && deps.billingCacheService.balanceBelowEligibilityThreshold(*result.NewBalance) {
@@ -507,13 +520,24 @@ func syncBalanceCacheAfterDeduction(ctx context.Context, p *postUsageBillingPara
 		// 在途预留开启时同步扣减余额缓存：计费任务结束后才会释放预留，
 		// 必须保证此时准入读取的缓存余额已反映本次扣费，否则释放与扣减之间
 		// 仍存在「在途=0 且余额未扣」的窗口。本函数运行在计费 worker 中，不在请求热路径。
-		err := deps.billingCacheService.DeductBalanceCache(ctx, p.User.ID, p.Cost.ActualCost)
+		err := deps.billingCacheService.DeductBalanceCache(ctx, p.User.ID, cost)
 		if err == nil {
 			return
 		}
 		logger.LegacyPrintf("service.gateway", "Warning: sync deduct balance cache failed for user %d, falling back to queue: %v", p.User.ID, err)
 	}
-	deps.billingCacheService.QueueDeductBalance(p.User.ID, p.Cost.ActualCost)
+	deps.billingCacheService.QueueDeductBalance(p.User.ID, cost)
+}
+
+func personalUsageCost(p *postUsageBillingParams, result *UsageBillingApplyResult) float64 {
+	if result == nil {
+		return p.Cost.ActualCost
+	}
+	cost := QuantizeUsageBillingAmount(p.Cost.ActualCost - result.SharedCreditCost)
+	if cost < 0 {
+		return 0
+	}
+	return cost
 }
 
 // notifyBalanceLow sends balance low notification after deduction.
@@ -544,14 +568,16 @@ func notifyBalanceLow(p *postUsageBillingParams, deps *billingDeps, result *Usag
 		"threshold", p.User.BalanceNotifyThreshold,
 		"result_has_new_balance", result != nil && result.NewBalance != nil,
 	)
-	deps.balanceNotifyService.CheckBalanceAfterDeduction(context.Background(), p.User, oldBalance, p.Cost.ActualCost)
+	if cost := personalUsageCost(p, result); cost > 0 {
+		deps.balanceNotifyService.CheckBalanceAfterDeduction(context.Background(), p.User, oldBalance, cost)
+	}
 }
 
 // resolveOldBalance returns the pre-deduction balance.
 // Prefers the DB transaction result (newBalance + cost) over snapshot.
 func resolveOldBalance(p *postUsageBillingParams, result *UsageBillingApplyResult) float64 {
 	if result != nil && result.NewBalance != nil {
-		return *result.NewBalance + p.Cost.ActualCost
+		return *result.NewBalance + personalUsageCost(p, result)
 	}
 	// Legacy fallback: snapshot balance from request context
 	return p.User.Balance
@@ -921,7 +947,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	}, s.billingDeps(), s.usageBillingRepo)
 
 	if billingErr != nil {
-		if subscription == nil || subscription.MonthCardSnapshot == nil {
+		if (subscription == nil || subscription.MonthCardSnapshot == nil) && input.FixedChargeReservationID == "" {
 			usageLog.ActualCost = 0
 		}
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
@@ -1015,6 +1041,11 @@ func (s *GatewayService) CacheStoragePriced(ctx context.Context, input *RecordUs
 
 // QuoteUsageCost 按与 RecordUsage 相同的倍率、计费模型与定价计算 input.Result 的应付金额（倍率后 USD），不记录也不扣费。
 func (s *GatewayService) QuoteUsageCost(ctx context.Context, input *RecordUsageInput) float64 {
+	_, actual := s.QuoteUsageCosts(ctx, input)
+	return actual
+}
+
+func (s *GatewayService) QuoteUsageCosts(ctx context.Context, input *RecordUsageInput) (base, actual float64) {
 	user := input.User
 	if user == nil {
 		user = input.APIKey.User
@@ -1023,9 +1054,9 @@ func (s *GatewayService) QuoteUsageCost(ctx context.Context, input *RecordUsageI
 	billingModel := s.recordUsageBillingModel(ctx, input.APIKey, input.Result, input.ChannelUsageFields)
 	cost := s.calculateRecordUsageCost(ctx, input.Result, input.APIKey, billingModel, multiplier, imageMultiplier, pricingAt)
 	if cost == nil {
-		return 0
+		return 0, 0
 	}
-	return cost.ActualCost
+	return cost.TotalCost, cost.ActualCost
 }
 
 // addCacheStorageToAccountStatsCost 把显式缓存存储费按官方价叠加到账号统计成本。

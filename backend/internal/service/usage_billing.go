@@ -18,7 +18,12 @@ var ErrUsageBillingRequestConflict = errors.New("usage billing request fingerpri
 
 // UsageBillingCommand describes one billable request that must be applied at most once.
 type UsageBillingCommand struct {
+	// Zero values preserve commands persisted before shared credit was introduced.
+	GroupID                  int64
+	RawCost                  float64
 	FixedChargeReservationID string
+	// Resolved while the request context is available; recovery must use the same platform.
+	QuotaPlatform string
 	// BatchImageID binds accepted asynchronous work to its persisted owner. It
 	// permits accounting against the original soft-deleted key/account only
 	// after the repository verifies that immutable job identity.
@@ -94,6 +99,7 @@ const UsageBillingMonetaryScale = 8
 // 在参数进入 SQL 之前量化一次，两条语句就都拿到已经落在 8 位刻度上的同一个金额，
 // 存储阶段不再发生任何舍入，delta 精确相等。
 func (c *UsageBillingCommand) quantizeMonetaryFields() {
+	c.RawCost = QuantizeUsageBillingAmount(c.RawCost)
 	c.MonthCardCost = QuantizeUsageBillingAmount(c.MonthCardCost)
 	c.BalanceCost = QuantizeUsageBillingAmount(c.BalanceCost)
 	c.SubscriptionCost = QuantizeUsageBillingAmount(c.SubscriptionCost)
@@ -155,6 +161,9 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 	if c.BatchImageID != "" {
 		raw += "|batch_image:" + c.BatchImageID
 	}
+	if c.GroupID > 0 && c.RawCost > 0 {
+		raw += fmt.Sprintf("|shared_base:%d|%0.10f", c.GroupID, c.RawCost)
+	}
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:])
 }
@@ -186,6 +195,8 @@ type AccountQuotaState struct {
 }
 
 type UsageBillingApplyResult struct {
+	SharedCreditRawCost  float64
+	SharedCreditCost     float64 // site-sponsored portion; key/upstream quota still counts full usage
 	MonthCardSettlement  *monthcard.Settlement
 	Applied              bool
 	APIKeyQuotaExhausted bool
@@ -196,6 +207,10 @@ type UsageBillingApplyResult struct {
 
 // BatchImageBalanceHoldCommand describes an idempotent balance hold operation.
 type BatchImageBalanceHoldCommand struct {
+	SubscriptionBilling bool
+	GroupID             int64
+	RawHoldAmount       float64
+	RawActualAmount     float64
 	// Usage is applied atomically with capture; balance has already been held.
 	Usage              *UsageBillingCommand
 	RequestID          string
@@ -219,6 +234,8 @@ func (c *BatchImageBalanceHoldCommand) Normalize() {
 	}
 	c.HoldAmount = QuantizeUsageBillingAmount(c.HoldAmount)
 	c.ActualAmount = QuantizeUsageBillingAmount(c.ActualAmount)
+	c.RawHoldAmount = QuantizeUsageBillingAmount(c.RawHoldAmount)
+	c.RawActualAmount = QuantizeUsageBillingAmount(c.RawActualAmount)
 	if c.Usage != nil {
 		c.Usage.Normalize()
 	}
@@ -241,6 +258,12 @@ func buildBatchImageBalanceHoldFingerprint(c *BatchImageBalanceHoldCommand) stri
 	}
 	if c.Usage != nil {
 		raw += "|usage:" + buildUsageBillingFingerprint(c.Usage)
+	}
+	if c.GroupID > 0 && c.RawHoldAmount > 0 {
+		raw += fmt.Sprintf("|shared_base:%d|%0.10f|%0.10f", c.GroupID, c.RawHoldAmount, c.RawActualAmount)
+	}
+	if c.SubscriptionBilling {
+		raw += "|shared_subscription"
 	}
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:])

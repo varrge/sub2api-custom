@@ -1,0 +1,112 @@
+export default {
+  "header": {
+    "title": "Shared Credit",
+    "remainingQuota": "Site-wide remaining",
+    "startAt": "Start Time",
+    "endAt": "End Time",
+    "availableGroups": "Participating Groups (authorized only)",
+    "emptyGroups": "No eligible groups available for this account",
+    "poolDisclaimer": "Shared across the site; normal card, subscription or balance billing resumes when exhausted.",
+    "currencyNotice": "Charged at model base USD prices before multipliers",
+    "loadFailed": "Failed to load shared credit",
+    "retry": "Retry",
+    "refresh": "Refresh",
+    "scheduled": "Upcoming",
+    "exhausted": "Exhausted",
+    "immediate": "When enabled",
+    "accessNotice": "Group access, card status and API key limits still apply.",
+    "refreshNotice": "Refreshes every minute. Manual refresh is available.",
+    "close": "Close"
+  },
+  "activity": {
+    "title": "Promotional Activity Settings",
+    "savedStatus": "Saved Status",
+    "name": "Activity Name",
+    "namePlaceholder": "e.g. Limited-Time Credit Boost (optional)",
+    "startsAt": "Start Time (leave blank for immediate effect)",
+    "endsAt": "End Time (required to enable)",
+    "balanceNotice": "Shared credit cannot be used when account balance is below 0; please recharge to 0 or above.",
+    "expiryNotice": "Subsidy automatically stops upon activity expiration; tasks with reserved credits continue settlement. End time is required; start time left blank means effective immediately upon enabling.",
+    "status": {
+      "disabled": "Disabled",
+      "scheduled": "Scheduled",
+      "active": "Active",
+      "ended": "Ended",
+      "exhausted": "Exhausted",
+      "no_groups": "No Groups",
+      "incomplete": "Incomplete"
+    }
+  },
+  "title": "Shared Credit Activity",
+  "description": "Configure the site-wide shared credit pool. Only authorized calls qualify; when depleted or disabled, requests seamlessly fall back to user balances.",
+  "save": "Save Settings",
+  "reload": "Reload",
+  "loading": "Loading settings...",
+  "loadFailed": "Failed to load shared credit settings",
+  "saveFailed": "Failed to save shared credit settings",
+  "retry": "Retry",
+  "confirmDiscardChanges": "You have unsaved changes. Reloading will discard them. Continue?",
+  "conflictDetected": "Settings were modified elsewhere (Version Conflict 409). Please reload before saving.",
+  "overwriteAndReload": "Reload Latest",
+  "loadingGroups": "Loading groups...",
+  "noGroups": "No groups available",
+  "inactive": "Inactive",
+  "stats": {
+    "total": "Cumulative Total (USD)",
+    "totalHint": "Cumulative budget; not reset upon usage",
+    "used": "Used (USD)",
+    "usedHint": "Settled deductions at model base rate",
+    "reserved": "Reserved (USD)",
+    "reservedHint": "Holds for fixed charges and batch jobs",
+    "remaining": "Available (USD)",
+    "remainingHint": "Remaining balance available for qualified calls"
+  },
+  "rules": {
+    "title": "Pool Billing and Operational Rules:",
+    "rule1": "The pool pays model base USD before the user/group multiplier. A $10 base cost at 0.3x consumes $10 shared credit and saves the user $3.",
+    "rule2": "Partial coverage supported: if remaining pool is $4, $4 is covered by pool and the remaining $6 * 0.3 = $1.80 is paid by user subscription, balance, or quota.",
+    "rule3": "Total budget is cumulative. To add funds, increase total. Setting a new total does not reset used funds. Total must be >= used + reserved.",
+    "rule4": "Unselected groups receive no pool subsidies. Shared membership does not grant group access. When disabled, already accepted holds remain honored."
+  },
+  "fields": {
+    "enable": "Enable Shared Credit",
+    "enableHint": "When enabled, qualified calls from selected groups will consume the pool first",
+    "totalUsd": "Total Budget (USD)",
+    "totalUsdHint": "Cumulative budget (max 8 decimals, max 1,000,000,000). Increase this value to add funds.",
+    "participatingGroups": "Participating Groups",
+    "participatingGroupsHint": "Only calls from checked groups qualify. Empty selection covers no groups.",
+    "selectedCount": "{count} groups selected"
+  },
+  "ledger": {
+    "title": "Usage Ledger",
+    "refresh": "Refresh",
+    "empty": "No shared credit consumption records found",
+    "time": "Time",
+    "user": "User",
+    "group": "Group",
+    "model": "Model",
+    "amountBase": "Pool Base USD",
+    "coveredCost": "Covered Cost (USD)",
+    "paginationInfo": "Page {page} of {total}",
+    "prev": "Previous",
+    "next": "Next"
+  },
+  "errors": {
+    "endRequired": "An end time is required to enable this temporary activity",
+    "invalidDates": "Enter valid dates with an end time after the start time",
+    "totalRequired": "Total budget is required",
+    "invalidTotalFormat": "Please enter a valid non-negative number (max 8 decimal places)",
+    "totalRange": "Total budget must be between 0 and 1,000,000,000",
+    "totalLessThanUsed": "Total is cumulative and cannot be less than used + reserved (min: {min} USD)"
+  },
+  "groupSetting": {
+    "title": "Shared Credit Participation",
+    "globalEnabled": "Pool Enabled",
+    "globalDisabled": "Pool Disabled",
+    "participateLabel": "Participate in Shared Credit Pool",
+    "participateHint": "When enabled, authorized requests in this group consume the site shared credit pool. Saving only updates this group's membership."
+  },
+  "groupsFailed": "Failed to load groups. Retry.",
+  "ledgerFailed": "Failed to load usage. Retry.",
+  "saved": "Saved"
+}

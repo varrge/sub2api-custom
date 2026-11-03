@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"github.com/Wei-Shaw/sub2api/internal/sharedcredit"
 	"math"
 	"strconv"
 	"strings"
@@ -68,8 +69,11 @@ const (
 // commands retain them beyond their lease until settlement commits.
 // 所有方法对 nil 接收者安全。
 type InflightReservation struct {
-	monthCardStore  *monthcard.Store
-	billingRetained atomic.Bool
+	sharedCreditStore *sharedcredit.Store
+	sharedHoldID      string
+	sharedAPIKeyID    int64
+	monthCardStore    *monthcard.Store
+	billingRetained   atomic.Bool
 	// cache 为 nil 表示未登记余额维度的预留。
 	cache     InflightBalanceReservationCache
 	userID    int64
@@ -88,8 +92,21 @@ type InflightReservation struct {
 	renewDone   chan struct{}
 }
 
+type sharedCreditRenewer struct {
+	store *sharedcredit.Store
+	id    string
+	keyID int64
+}
+
+func (r sharedCreditRenewer) RenewInflightBalance(ctx context.Context, userID int64, _ string, ttl time.Duration) (bool, error) {
+	return r.store.Renew(ctx, r.id, userID, r.keyID, ttl)
+}
+
 // FixedChargeID identifies a durable month card hold; ordinary estimates have no ID.
 func (r *InflightReservation) FixedChargeID() string {
+	if r != nil && r.sharedHoldID != "" {
+		return r.sharedHoldID
+	}
 	if r == nil || r.monthCardStore == nil {
 		return ""
 	}
@@ -98,7 +115,7 @@ func (r *InflightReservation) FixedChargeID() string {
 
 // RetainForBilling transfers a durable hold to the usage transaction/recovery.
 func (r *InflightReservation) RetainForBilling() {
-	if r != nil && r.monthCardStore != nil {
+	if r != nil && (r.monthCardStore != nil || r.sharedCreditStore != nil) {
 		r.billingRetained.Store(true)
 	}
 }
@@ -151,6 +168,11 @@ func (r *InflightReservation) Release() {
 		r.refs.Store(0)
 		relCtx, relCancel := context.WithTimeout(context.Background(), inflightReservationReleaseTimeout)
 		defer relCancel()
+		if r.sharedCreditStore != nil && !r.billingRetained.Load() {
+			if err := r.sharedCreditStore.Release(relCtx, r.sharedHoldID, r.userID, r.sharedAPIKeyID); err != nil {
+				logger.LegacyPrintf("service.billing_cache", "shared credit hold release failed: %v", err)
+			}
+		}
 		if r.monthCardStore != nil && !r.billingRetained.Load() {
 			if err := r.monthCardStore.AbortFixedCharge(relCtx, r.requestID, r.userID); err != nil {
 				logger.LegacyPrintf("service.billing_cache", "Warning: durable fixed charge abort failed for user %d reservation %s: %v", r.userID, r.requestID, err)
@@ -323,6 +345,17 @@ func (s *BillingCacheService) reserveInflightScope(ctx context.Context, res *Inf
 }
 
 func (s *BillingCacheService) reserveInflight(ctx context.Context, user *User, group *Group, subscription *UserSubscription, estimate float64, renew, capped bool) (*InflightReservation, error) {
+	// Estimates are not a promise of sponsorship: final usage is split under
+	// the pool row lock. Fixed-price operations reserve a durable amount below.
+	if capped {
+		available, err := s.SharedCreditAvailable(ctx, group)
+		if err != nil {
+			return nil, err
+		}
+		if available {
+			return nil, nil
+		}
+	}
 	cfg, ok := s.inflightReservationConfig()
 	if !ok || user == nil {
 		return nil, nil

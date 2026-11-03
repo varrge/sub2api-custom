@@ -275,7 +275,7 @@ func (h *GatewayHandler) GeminiCachedContentsCreate(c *gin.Context) {
 		// 只收取已发生的缓存 token 输入费。
 		tokens := upstream.TotalTokenCount
 		storageTokenHours := service.GeminiCachedContentStorageTokenHours(tokens, ttl)
-		amount := h.gatewayService.QuoteUsageCost(c.Request.Context(), &service.RecordUsageInput{
+		base, amount := h.gatewayService.QuoteUsageCosts(c.Request.Context(), &service.RecordUsageInput{
 			Result: &service.ForwardResult{
 				Model: modelName, UpstreamModel: mappedModel,
 				Usage: service.ClaudeUsage{InputTokens: int(tokens)}, CacheStorageTokenHours: storageTokenHours,
@@ -283,7 +283,7 @@ func (h *GatewayHandler) GeminiCachedContentsCreate(c *gin.Context) {
 			APIKey: apiKey, User: apiKey.User, Subscription: subscription, PricingAt: pricingAt, ChannelUsageFields: usageFields,
 		})
 		inflightRelease()
-		chargeDone, err := h.reserveGeminiCachedContentCharge(c, apiKey, subscription, amount)
+		chargeDone, err := h.reserveGeminiCachedContentCharge(c, apiKey, subscription, amount, base)
 		if err != nil {
 			reqLog.Info("gemini.cached_content.storage_charge_rejected", zap.Float64("amount", amount), zap.Error(err))
 			h.cleanupGeminiCachedContentUpstream(reqLog, account, upstream.Name)
@@ -469,7 +469,8 @@ func (h *GatewayHandler) GeminiCachedContentsPatch(c *gin.Context) {
 		if !h.checkGeminiCachedContentBilling(c, reqLog, apiKey, subscription) {
 			return
 		}
-		chargeDone, err := h.reserveGeminiCachedContentCharge(c, apiKey, subscription, h.gatewayService.QuoteUsageCost(c.Request.Context(), usage))
+		base, amount := h.gatewayService.QuoteUsageCosts(c.Request.Context(), usage)
+		chargeDone, err := h.reserveGeminiCachedContentCharge(c, apiKey, subscription, amount, base)
 		if err != nil {
 			reqLog.Info("gemini.cached_content.storage_charge_rejected", zap.Error(err))
 			writeGeminiCachedContentBillingError(c, err)
@@ -742,7 +743,7 @@ func (h *GatewayHandler) submitGeminiCachedContentUsage(
 			).Error("gemini.cached_content.record_usage_failed", zap.Error(err))
 		}
 	}
-	if subscription != nil && subscription.MonthCardSnapshot != nil {
+	if (subscription != nil && subscription.MonthCardSnapshot != nil) || reservation.FixedChargeID() != "" {
 		// Persist the admitted snapshot's settlement command before returning.
 		ctx, cancel := geminiCachedContentPersistContext(c)
 		defer cancel()
@@ -769,9 +770,9 @@ func (h *GatewayHandler) cleanupGeminiCachedContentUpstream(reqLog *zap.Logger, 
 // reserveGeminiCachedContentCharge 校验余额 / 订阅额度 / API Key 额度足以支付确定金额 amount（倍率后），
 // 并按该金额在用户、订阅、API Key 维度登记在途预留（不受预留上限封顶，见 ReserveFixedCharge）。
 // 返回的 done 须在 handler 结束时调用；预留随计费任务交接，落库后释放。
-func (h *GatewayHandler) reserveGeminiCachedContentCharge(c *gin.Context, apiKey *service.APIKey, subscription *service.UserSubscription, amount float64) (func(), error) {
+func (h *GatewayHandler) reserveGeminiCachedContentCharge(c *gin.Context, apiKey *service.APIKey, subscription *service.UserSubscription, amount float64, base ...float64) (func(), error) {
 	ctx := c.Request.Context()
-	res, err := h.billingCacheService.ReserveFixedCharge(ctx, apiKey.User, apiKey, apiKey.Group, subscription, amount)
+	res, err := h.billingCacheService.ReserveFixedCharge(ctx, apiKey.User, apiKey, apiKey.Group, subscription, amount, base...)
 	if err != nil {
 		return inflightNoop, err
 	}

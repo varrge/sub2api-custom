@@ -3213,6 +3213,7 @@
         </div>
 
         <!-- 固定账号获取 Codex Model Manifest（仅 openai 平台，仅编辑对话框） -->
+        <SharedCreditGroupSetting v-if="editingGroup && showEditModal" :key="editingGroup.id" :group-id="editingGroup.id" />
         <CodexManifestAccountsField
           v-if="editForm.platform === 'openai' && editingGroup"
           ref="editCodexManifestRef"
@@ -4378,6 +4379,7 @@
 </template>
 
 <script setup lang="ts">
+import SharedCreditGroupSetting from "@/components/admin/group/SharedCreditGroupSetting.vue";
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useAppStore } from "@/stores/app";

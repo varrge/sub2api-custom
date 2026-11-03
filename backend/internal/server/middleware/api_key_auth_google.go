@@ -218,7 +218,7 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 					return
 				}
 
-				needsMaintenance, err := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
+				needsMaintenance, err := subscriptionService.ValidateAndCheckLimitsWithShared(c.Request.Context(), subscription, apiKey.Group)
 				if needsMaintenance {
 					refreshed, maintenanceErr := subscriptionService.EnsureWindowMaintenance(c.Request.Context(), subscription)
 					if maintenanceErr != nil {
@@ -226,7 +226,7 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 						return
 					}
 					subscription = refreshed
-					_, err = subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
+					_, err = subscriptionService.ValidateAndCheckLimitsWithShared(c.Request.Context(), subscription, apiKey.Group)
 				}
 				if err != nil {
 					if service.IsSubscriptionAccessDenied(err) {
@@ -250,8 +250,19 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 				return
 			}
 			if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
-				abortWithGoogleError(c, 403, "Insufficient account balance")
-				return
+				if apiKey.User.Balance < 0 {
+					abortWithGoogleError(c, 403, service.ErrAccountUsageDebt.Error())
+					return
+				}
+				shared, err := subscriptionService.SharedCreditAvailable(c.Request.Context(), apiKey.Group)
+				if err != nil {
+					abortWithGoogleError(c, 503, "Shared credit admission is unavailable")
+					return
+				}
+				if !shared {
+					abortWithGoogleError(c, 403, "Insufficient account balance")
+					return
+				}
 			}
 		}
 

@@ -12,6 +12,7 @@ import (
 // BatchImageBillingSnapshot is immutable job-owned admission state. Settlement
 // must not resolve a key's current group or purchase a new entitlement window.
 type BatchImageBillingSnapshot struct {
+	SharedCredit      bool                `json:"shared_credit,omitempty"`
 	Version           int                 `json:"version"`
 	BillingType       int8                `json:"billing_type"`
 	MonthCardSnapshot *monthcard.Snapshot `json:"month_card_snapshot,omitempty"`
@@ -24,7 +25,7 @@ type batchImageEntitlementSnapshotter interface {
 }
 
 func (s *BatchImagePublicService) resolveBillingSnapshot(ctx context.Context, owner BatchImageOwner, account *Account, at time.Time) (*BatchImageBillingSnapshot, error) {
-	snapshot := &BatchImageBillingSnapshot{Version: 1, BillingType: BillingTypeBalance}
+	snapshot := &BatchImageBillingSnapshot{Version: 1, BillingType: BillingTypeBalance, SharedCredit: true}
 	if account != nil {
 		snapshot.AccountType = account.Type
 		snapshot.AccountQuota = account.IsAPIKeyOrBedrock() && account.HasAnyQuotaLimit()
@@ -86,6 +87,13 @@ func buildBatchImageUsageCommand(job *BatchImageJob, actualCost float64, payload
 		APIKeyQuotaCost: actualCost, APIKeyRateLimitCost: actualCost,
 	}
 	if snapshot := job.BillingSnapshot; snapshot != nil {
+		if snapshot.SharedCredit && job.GroupID != nil {
+			cmd.GroupID = *job.GroupID
+			cmd.RawCost = float64(job.SuccessCount) * job.BaseUnitPrice * job.BatchDiscountMultiplier
+			if snapshot.BillingType == BillingTypeSubscription {
+				cmd.FixedChargeReservationID = BatchImageHoldRequestID(job.BatchID)
+			}
+		}
 		if snapshot.Version != 1 {
 			return nil, ErrBatchImageSettlementBillingFailed.WithCause(errors.New("unsupported batch billing snapshot version"))
 		}

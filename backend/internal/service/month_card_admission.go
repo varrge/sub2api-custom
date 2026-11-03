@@ -10,7 +10,7 @@ import (
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
-var ErrAccountUsageDebt = infraerrors.Forbidden("ACCOUNT_USAGE_DEBT", "Account has unpaid usage debt; recharge before starting another request")
+var ErrAccountUsageDebt = infraerrors.Forbidden("ACCOUNT_USAGE_DEBT", "Account balance is below 0; recharge to 0 or above before calling, including shared credit")
 
 func (s *SubscriptionService) SetMonthCardStore(store *monthcard.Store) { s.monthCardStore = store }
 func (s *BillingCacheService) SetMonthCardStore(store *monthcard.Store) { s.monthCardStore = store }

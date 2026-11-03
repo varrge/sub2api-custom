@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"github.com/Wei-Shaw/sub2api/internal/sharedcredit"
 	"os"
 	"time"
 
@@ -826,6 +827,7 @@ func ProvideSettingService(scopedKeys ScopedAdminKeyRepository, settingRepo Sett
 
 // ProvideBillingCacheService wires BillingCacheService with its RPM dependencies.
 func ProvideBillingCacheService(
+	db *sql.DB,
 	cache BillingCache,
 	userRepo UserRepository,
 	subRepo UserSubscriptionRepository,
@@ -835,7 +837,9 @@ func ProvideBillingCacheService(
 	cfg *config.Config,
 	userPlatformQuotaRepo UserPlatformQuotaRepository,
 ) *BillingCacheService {
-	return NewBillingCacheService(cache, userRepo, subRepo, apiKeyRepo, rpmCache, rateRepo, cfg, userPlatformQuotaRepo)
+	svc := NewBillingCacheService(cache, userRepo, subRepo, apiKeyRepo, rpmCache, rateRepo, cfg, userPlatformQuotaRepo)
+	svc.SetSharedCreditStore(sharedcredit.NewStore(db))
+	return svc
 }
 
 // ProvideAPIKeyService wires APIKeyService and connects rate-limit cache invalidation.
@@ -1025,6 +1029,7 @@ func ProvidePaymentService(entClient *dbent.Client, registry *payment.Registry, 
 	svc := NewPaymentService(entClient, registry, loadBalancer, redeemService, subscriptionSvc, configService, userRepo, groupRepo, affiliateService)
 	svc.SetNotificationEmailService(notificationEmailService)
 	store := monthcard.NewStore(db)
+	store.SetSharedCreditAvailability(sharedcredit.NewStore(db).Available)
 	svc.SetMonthCardStore(store)
 	subscriptionSvc.SetMonthCardStore(store)
 	if subscriptionSvc.billingCacheService != nil {

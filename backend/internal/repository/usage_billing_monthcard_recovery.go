@@ -11,7 +11,7 @@ import (
 )
 
 func (r *usageBillingRepository) persistMonthCardBilling(ctx context.Context, cmd *service.UsageBillingCommand) (*service.UsageBillingCommand, error) {
-	if cmd.MonthCardSnapshot.UserID != cmd.UserID || cmd.SubscriptionID != nil || cmd.SubscriptionCost != 0 || cmd.BalanceCost != 0 {
+	if cmd.MonthCardSnapshot != nil && (cmd.MonthCardSnapshot.UserID != cmd.UserID || cmd.SubscriptionID != nil || cmd.SubscriptionCost != 0 || cmd.BalanceCost != 0) {
 		return nil, errors.New("inconsistent month card billing command")
 	}
 	var prior string
@@ -49,6 +49,11 @@ func (r *usageBillingRepository) persistMonthCardBilling(ctx context.Context, cm
 	return &restored, nil
 }
 
+// SetRecoveryFinalizer is configured once before the recovery worker starts.
+func (r *usageBillingRepository) SetRecoveryFinalizer(fn func(context.Context, *service.UsageBillingCommand, *service.UsageBillingApplyResult)) {
+	r.recoveryFinalizer = fn
+}
+
 // RecoverPendingMonthCardUsage is safe to run on every application instance:
 // duplicate workers compete on the same transactional usage dedup key.
 func (r *usageBillingRepository) RecoverPendingMonthCardUsage(ctx context.Context, limit int) error {
@@ -81,12 +86,15 @@ func (r *usageBillingRepository) RecoverPendingMonthCardUsage(ctx context.Contex
 	var failures []error
 	for i := range commands {
 		c := &commands[i]
-		if _, err := r.Apply(ctx, c); err != nil {
+		result, err := r.Apply(ctx, c)
+		if err != nil {
 			failures = append(failures, fmt.Errorf("recover month card request %s: %w", c.RequestID, err))
 			_, updateErr := r.db.ExecContext(ctx, `UPDATE month_card_billing_pending SET attempts=attempts+1,next_retry_at=NOW()+LEAST(300,(attempts+1)*10)*INTERVAL '1 second' WHERE request_id=$1 AND api_key_id=$2`, c.RequestID, c.APIKeyID)
 			if updateErr != nil {
 				failures = append(failures, updateErr)
 			}
+		} else if result != nil && result.Applied && r.recoveryFinalizer != nil {
+			r.recoveryFinalizer(ctx, c, result)
 		}
 	}
 	return errors.Join(failures...)

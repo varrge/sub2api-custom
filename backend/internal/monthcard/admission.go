@@ -134,6 +134,14 @@ func (s *Store) AdmitIncludingLegacy(ctx context.Context, userID, groupID int64,
 		return nil, err
 	}
 
+	shared := false
+	if s.sharedCreditAvailable != nil {
+		var err error
+		shared, err = s.sharedCreditAvailable(ctx, groupID)
+		if err != nil {
+			return nil, err
+		}
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -191,11 +199,11 @@ func (s *Store) AdmitIncludingLegacy(ctx context.Context, userID, groupID int64,
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return nil, err
 		}
-		if r.quota.Sub(r.used).IsPositive() && r.weeklyQuota.Sub(used).IsPositive() {
+		if shared || (r.quota.Sub(r.used).IsPositive() && r.weeklyQuota.Sub(used).IsPositive()) {
 			snap.Candidates = append(snap.Candidates, r.c)
 		}
 	}
-	legacy, err := billingAdmitLegacy(ctx, tx, userID, groupID, at)
+	legacy, err := billingAdmitLegacy(ctx, tx, userID, groupID, at, shared)
 	if err != nil {
 		return nil, err
 	}
@@ -283,7 +291,7 @@ func billingLegacyWindow(previous sql.NullTime, starts, expires, at time.Time, p
 	return anchor.Add(periods * period)
 }
 
-func billingAdmitLegacy(ctx context.Context, tx *sql.Tx, userID, groupID int64, at time.Time) (*Candidate, error) {
+func billingAdmitLegacy(ctx context.Context, tx *sql.Tx, userID, groupID int64, at time.Time, shared ...bool) (*Candidate, error) {
 	c := Candidate{Ref: Ref{Kind: "legacy"}}
 	var ds, ws, ms sql.NullTime
 	var du, wu, mu decimal.Decimal
@@ -346,7 +354,7 @@ func billingAdmitLegacy(ctx context.Context, tx *sql.Tx, userID, groupID int64, 
 			return nil, err
 		}
 	}
-	if !available {
+	if !available && (len(shared) == 0 || !shared[0]) {
 		return nil, nil
 	}
 	return &c, nil

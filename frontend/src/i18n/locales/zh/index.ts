@@ -21,6 +21,7 @@ import enterpriseExport from './enterpriseExport'
 import enterprisePayment from './enterprisePayment'
 
 export default {
+  sharedCredit,
   ...activityLeaderboard,
   ...luckyBox,
   ...activityCampaigns,
@@ -45,3 +46,4 @@ export default {
   ...enterpriseExport,
   ...enterprisePayment,
 }
+import sharedCredit from './sharedCredit'

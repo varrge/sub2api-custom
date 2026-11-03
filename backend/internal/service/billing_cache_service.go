@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/sharedcredit"
+	"github.com/shopspring/decimal"
 	"math"
 	"strconv"
 	"sync"
@@ -108,6 +110,7 @@ type subscriptionCacheInvalidationPubSub interface {
 // BillingCacheService 计费缓存服务
 // 负责余额和订阅数据的缓存管理，提供高性能的计费资格检查
 type BillingCacheService struct {
+	sharedCreditStore     *sharedcredit.Store
 	monthCardStore        *monthcard.Store
 	cache                 BillingCache
 	userRepo              UserRepository
@@ -771,7 +774,11 @@ func (s *BillingCacheService) CheckBillingEligibilityReadOnly(ctx context.Contex
 	if s.circuitBreaker != nil && !s.circuitBreaker.Allow() {
 		return ErrBillingServiceUnavailable
 	}
-	if s.monthCardStore != nil {
+	if s.sharedCreditStore != nil {
+		if err := s.checkSharedCreditDebt(ctx, user.ID); err != nil {
+			return err
+		}
+	} else if s.monthCardStore != nil {
 		if err := s.monthCardStore.CheckDebt(ctx, user.ID); err != nil {
 			return mapMonthCardAdmissionError(err)
 		}
@@ -789,7 +796,16 @@ func (s *BillingCacheService) CheckBillingEligibilityReadOnly(ctx context.Contex
 		}
 	} else {
 		if err := s.checkBalanceEligibility(ctx, user.ID); err != nil {
-			return err
+			if !errors.Is(err, ErrInsufficientBalance) {
+				return err
+			}
+			available, sharedErr := s.SharedCreditAvailable(ctx, group)
+			if sharedErr != nil {
+				return sharedErr
+			}
+			if !available {
+				return err
+			}
 		}
 	}
 
@@ -818,7 +834,7 @@ func (s *BillingCacheService) CheckBillingEligibilityReadOnly(ctx context.Contex
 // 返回的句柄可能为 nil（未登记任何预留）；调用方须在 handler 结束时调用 HandlerDone，预留在计费任务落库后释放。
 // 月卡快照按原候选权益跨卡分摊并余额补差，使用持久租约与结算事务释放，不访问旧订阅缓存。
 // 须在 CheckBillingEligibility 通过后调用；简易模式不校验。
-func (s *BillingCacheService) ReserveFixedCharge(ctx context.Context, user *User, apiKey *APIKey, group *Group, subscription *UserSubscription, amount float64) (*InflightReservation, error) {
+func (s *BillingCacheService) ReserveFixedCharge(ctx context.Context, user *User, apiKey *APIKey, group *Group, subscription *UserSubscription, amount float64, base ...float64) (result *InflightReservation, retErr error) {
 	if user == nil || amount <= 0 || math.IsNaN(amount) || math.IsInf(amount, 0) {
 		return nil, nil
 	}
@@ -829,6 +845,44 @@ func (s *BillingCacheService) ReserveFixedCharge(ctx context.Context, user *User
 	if amount == 0 {
 		return nil, nil
 	}
+	personalAmount := amount
+	sharedID := ""
+	sharedTTL := defaultInflightReservationTTL
+	if cfg, enabled := s.inflightReservationConfig(); enabled && cfg.TTLSeconds > 0 {
+		sharedTTL = time.Duration(cfg.TTLSeconds) * time.Second
+	}
+	if s.sharedCreditStore != nil && apiKey != nil && group != nil && len(base) > 0 && base[0] > 0 && !math.IsNaN(base[0]) && !math.IsInf(base[0], 0) {
+		id := uuid.NewString()
+		expires := time.Now().Add(sharedTTL)
+		covered, err := s.sharedCreditStore.Reserve(ctx, sharedcredit.Hold{ID: id, UserID: user.ID, APIKeyID: apiKey.ID, GroupID: group.ID, ExpiresAt: &expires}, decimal.NewFromFloat(base[0]), decimal.NewFromFloat(amount))
+		if err != nil {
+			if errors.Is(err, sharedcredit.ErrDebt) {
+				return nil, ErrAccountUsageDebt
+			}
+			return nil, ErrBillingServiceUnavailable.WithCause(err)
+		}
+		if covered.IsPositive() {
+			sharedID = id
+			personalAmount = decimal.NewFromFloat(amount).Sub(covered).InexactFloat64()
+			defer func() {
+				if retErr != nil {
+					releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), inflightReservationReleaseTimeout)
+					defer cancel()
+					_ = s.sharedCreditStore.Release(releaseCtx, id, user.ID, apiKey.ID)
+					return
+				}
+				if result == nil {
+					result = &InflightReservation{userID: user.ID, requestID: id, amount: amount}
+					result.refs.Store(1)
+				}
+				result.sharedCreditStore = s.sharedCreditStore
+				result.sharedHoldID = id
+				result.sharedAPIKeyID = apiKey.ID
+				result.ttl = sharedTTL
+				result.startRenewal(sharedCreditRenewer{store: s.sharedCreditStore, id: id, keyID: apiKey.ID})
+			}()
+		}
+	}
 	if subscription != nil && subscription.MonthCardSnapshot != nil {
 		if group == nil || !group.IsSubscriptionType() || apiKey == nil || apiKey.UserID != user.ID || s.monthCardStore == nil {
 			return nil, ErrSubscriptionInvalid
@@ -837,6 +891,9 @@ func (s *BillingCacheService) ReserveFixedCharge(ctx context.Context, user *User
 			return nil, err
 		}
 		id := uuid.NewString()
+		if sharedID != "" {
+			id = sharedID
+		}
 		ttl := defaultInflightReservationTTL
 		if cfg, enabled := s.inflightReservationConfig(); enabled && cfg.TTLSeconds > 0 {
 			ttl = time.Duration(cfg.TTLSeconds) * time.Second
@@ -878,23 +935,23 @@ func (s *BillingCacheService) ReserveFixedCharge(ctx context.Context, user *User
 		if err != nil {
 			return nil, ErrBillingServiceUnavailable.WithCause(err)
 		}
-		if balance < amount {
+		if balance < personalAmount {
 			return nil, ErrInsufficientBalance
 		}
 	}
-	res, err := s.reserveInflight(ctx, user, group, subscription, amount, false, false)
+	res, err := s.reserveInflight(ctx, user, group, subscription, personalAmount, false, false)
 	if err != nil {
 		return nil, err
 	}
 	var subscriptionPending, apiKeyPending float64
 	if subscriptionBill && (group.HasDailyLimit() || group.HasWeeklyLimit() || group.HasMonthlyLimit()) {
-		res, subscriptionPending = s.reserveInflightScope(ctx, res, user.ID, inflightSubscriptionScope(subscription.ID), amount)
+		res, subscriptionPending = s.reserveInflightScope(ctx, res, user.ID, inflightSubscriptionScope(subscription.ID), personalAmount)
 	}
 	if apiKey != nil && (apiKey.Quota > 0 || apiKey.HasRateLimits()) {
 		res, apiKeyPending = s.reserveInflightScope(ctx, res, user.ID, inflightAPIKeyScope(apiKey.ID), amount)
 	}
-	if subscriptionBill {
-		err = s.checkFixedChargeSubscription(ctx, user.ID, group, amount+subscriptionPending)
+	if subscriptionBill && personalAmount+subscriptionPending > 0 {
+		err = s.checkFixedChargeSubscription(ctx, user.ID, group, personalAmount+subscriptionPending)
 	}
 	if err == nil && apiKey != nil {
 		err = s.checkFixedChargeAPIKey(ctx, apiKey, amount+apiKeyPending)
@@ -1142,6 +1199,11 @@ func (s *BillingCacheService) checkSubscriptionEligibility(ctx context.Context, 
 	}
 
 	// 检查限额（使用传入的Group限额配置）
+	if available, err := s.SharedCreditAvailable(ctx, group); err != nil {
+		return err
+	} else if available {
+		return nil
+	}
 	if group.HasDailyLimit() && subData.DailyUsage >= *group.DailyLimitUSD {
 		return ErrDailyLimitExceeded
 	}

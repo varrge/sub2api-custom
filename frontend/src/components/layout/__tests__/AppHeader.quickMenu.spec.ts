@@ -75,6 +75,7 @@ vi.mock('@/stores', () => ({
   }),
   useAuthStore: () => ({
     user: {
+      id: 1,
       email: 'user@example.com',
       account_type: state.accountType,
       role: state.isAdmin ? 'admin' : 'user',
@@ -131,6 +132,7 @@ function mountHeader() {
         AnnouncementBell: true,
         LocaleSwitcher: true,
         SubscriptionProgressMini: true,
+        SharedCreditMini: true,
         Icon: { template: '<i />' },
       },
     },

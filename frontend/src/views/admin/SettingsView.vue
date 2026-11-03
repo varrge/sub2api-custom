@@ -9235,6 +9235,7 @@
 
         <!-- Tab: Leaderboard -->
         <div v-if="activeTab === 'activities'"><ActivityCampaignSettings /></div>
+        <div v-if="activeTab === 'sharedCredit'"><SharedCreditSettings /></div>
         <div v-show="activeTab === 'leaderboard'">
           <ActivityLeaderboardSettings />
         </div>
@@ -9255,7 +9256,7 @@
 
         <!-- Save Button -->
         <div
-          v-show="activeTab !== 'activities' && activeTab !== 'backup' && activeTab !== 'leaderboard' && activeTab !== 'sidebar' && activeTab !== 'privileges'"
+          v-show="activeTab !== 'sharedCredit' && activeTab !== 'activities' && activeTab !== 'backup' && activeTab !== 'leaderboard' && activeTab !== 'sidebar' && activeTab !== 'privileges'"
           class="flex justify-end"
         >
           <button
@@ -9393,6 +9394,7 @@ import BackupSettings from "@/views/admin/BackupView.vue";
 import PrivilegeSettingsPanel from "@/views/admin/settings/PrivilegeSettingsPanel.vue";
 import SidebarGroupsSettings from "@/components/admin/SidebarGroupsSettings.vue";
 import ActivityCampaignSettings from "@/views/admin/settings/ActivityCampaignSettings.vue";
+import SharedCreditSettings from "@/views/admin/settings/SharedCreditSettings.vue";
 import ActivityLeaderboardSettings from "@/views/admin/settings/ActivityLeaderboardSettings.vue";
 import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue";
 import RechargeBonusTierEditor from "@/components/admin/settings/RechargeBonusTierEditor.vue";
@@ -9476,6 +9478,7 @@ const paymentMethodsHref = computed(() =>
 );
 
 type SettingsTab =
+  | "sharedCredit"
   | "general"
   | "agreement"
   | "features"
@@ -9500,6 +9503,7 @@ const settingsTabs = [
   { key: "users" as SettingsTab, icon: "user" as const },
   { key: "gateway" as SettingsTab, icon: "server" as const },
   { key: "payment" as SettingsTab, icon: "creditCard" as const },
+  { key: "sharedCredit" as SettingsTab, icon: "users" as const },
   { key: "email" as SettingsTab, icon: "mail" as const },
   { key: "activities" as SettingsTab, icon: "gift" as const },
   { key: "leaderboard" as SettingsTab, icon: "trophy" as const },
@@ -11864,7 +11868,7 @@ async function saveSettings() {
     return;
   }
   // These tabs have their own save endpoint; implicit Enter must not submit other settings.
-  if (activeTab.value === "activities" || activeTab.value === "leaderboard" || activeTab.value === "sidebar") return;
+  if (activeTab.value === "sharedCredit" || activeTab.value === "activities" || activeTab.value === "leaderboard" || activeTab.value === "sidebar") return;
   saving.value = true;
   try {
     const enterpriseRechargeMultiplier = Number(form.payment_enterprise_balance_recharge_multiplier);

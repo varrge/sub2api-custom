@@ -4,16 +4,20 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"math"
 	"strings"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/monthcard"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/internal/sharedcredit"
+	"github.com/shopspring/decimal"
 )
 
 type usageBillingRepository struct {
-	db *sql.DB
+	db                *sql.DB
+	recoveryFinalizer func(context.Context, *service.UsageBillingCommand, *service.UsageBillingApplyResult)
 }
 
 func NewUsageBillingRepository(_ *dbent.Client, sqlDB *sql.DB) service.UsageBillingRepository {
@@ -32,7 +36,8 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 	if cmd.RequestID == "" {
 		return nil, service.ErrUsageBillingRequestIDRequired
 	}
-	if cmd.MonthCardSnapshot != nil {
+	durable := cmd.MonthCardSnapshot != nil || (cmd.FixedChargeReservationID != "" && cmd.GroupID > 0 && cmd.RawCost > 0)
+	if durable {
 		canonical, persistErr := r.persistMonthCardBilling(ctx, cmd)
 		if persistErr != nil {
 			return nil, persistErr
@@ -55,7 +60,7 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 		return nil, err
 	}
 	if !applied {
-		if cmd.MonthCardSnapshot != nil {
+		if durable {
 			if _, err := tx.ExecContext(ctx, `DELETE FROM month_card_billing_pending WHERE request_id=$1 AND api_key_id=$2`, cmd.RequestID, cmd.APIKeyID); err != nil {
 				return nil, err
 			}
@@ -71,7 +76,7 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 	if err := r.applyUsageBillingEffects(ctx, tx, cmd, result, false); err != nil {
 		return nil, err
 	}
-	if cmd.MonthCardSnapshot != nil {
+	if durable {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM month_card_billing_pending WHERE request_id=$1 AND api_key_id=$2`, cmd.RequestID, cmd.APIKeyID); err != nil {
 			return nil, err
 		}
@@ -180,6 +185,11 @@ func (r *usageBillingRepository) applyBatchImageBalanceHold(
 	if r == nil || r.db == nil {
 		return nil, errors.New("usage billing repository db is nil")
 	}
+	for _, v := range []float64{cmd.HoldAmount, cmd.ActualAmount, cmd.RawHoldAmount, cmd.RawActualAmount} {
+		if v < 0 || math.IsNaN(v) || math.IsInf(v, 0) {
+			return nil, errors.New("invalid batch billing amount")
+		}
+	}
 	cmd.Normalize()
 	if cmd.RequestID == "" {
 		return nil, service.ErrUsageBillingRequestIDRequired
@@ -231,6 +241,42 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 			return errors.New("batch billing command does not match its accepted job")
 		}
 	}
+	// Copy before splitting: the persisted command and its idempotency fingerprint
+	// always describe the full request, including after a transaction retry.
+	personal := *cmd
+	for _, v := range []float64{cmd.RawCost, cmd.MonthCardCost, cmd.SubscriptionCost, cmd.BalanceCost} {
+		if v < 0 || math.IsNaN(v) || math.IsInf(v, 0) {
+			return errors.New("invalid billing amount")
+		}
+	}
+	if cmd.MonthCardSnapshot != nil && (cmd.MonthCardSnapshot.UserID != cmd.UserID || cmd.SubscriptionCost != 0 || cmd.BalanceCost != 0 || cmd.SubscriptionID != nil || (cmd.GroupID > 0 && cmd.GroupID != cmd.MonthCardSnapshot.GroupID)) {
+		return errors.New("inconsistent month card billing command")
+	}
+	if cmd.SubscriptionCost > 0 && (cmd.SubscriptionID == nil || cmd.BalanceCost > 0) {
+		return errors.New("inconsistent subscription billing command")
+	}
+	cost := decimal.NewFromFloat(cmd.MonthCardCost).Add(decimal.NewFromFloat(cmd.SubscriptionCost)).Add(decimal.NewFromFloat(cmd.BalanceCost))
+	if !batchCapture && cmd.GroupID > 0 && (cmd.RawCost > 0 || cmd.FixedChargeReservationID != "") {
+		var userID int64
+		if err := tx.QueryRowContext(ctx, `SELECT id FROM users WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, cmd.UserID).Scan(&userID); err != nil {
+			return err
+		}
+		raw, share, err := sharedcredit.ConsumeTx(ctx, tx, cmd.RequestID, cmd.FixedChargeReservationID, cmd.APIKeyID, cmd.UserID, cmd.GroupID, cmd.Model, decimal.NewFromFloat(cmd.RawCost), cost)
+		if err != nil {
+			return err
+		}
+		result.SharedCreditRawCost = raw.InexactFloat64()
+		result.SharedCreditCost = share.InexactFloat64()
+		switch {
+		case cmd.MonthCardSnapshot != nil:
+			personal.MonthCardCost = decimal.NewFromFloat(cmd.MonthCardCost).Sub(share).InexactFloat64()
+		case cmd.SubscriptionID != nil:
+			personal.SubscriptionCost = decimal.NewFromFloat(cmd.SubscriptionCost).Sub(share).InexactFloat64()
+		default:
+			personal.BalanceCost = decimal.NewFromFloat(cmd.BalanceCost).Sub(share).InexactFloat64()
+		}
+	}
+	cmd = &personal
 	if cmd.MonthCardSnapshot != nil {
 		if cmd.MonthCardSnapshot.UserID != cmd.UserID || cmd.SubscriptionCost != 0 || cmd.BalanceCost != 0 || cmd.SubscriptionID != nil {
 			return errors.New("inconsistent month card billing command")
@@ -239,7 +285,11 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		if err != nil {
 			return err
 		}
-		if err := monthcard.CompleteFixedChargeTx(ctx, tx, cmd.FixedChargeReservationID, cmd.MonthCardSnapshot, cmd.APIKeyID); err != nil {
+		fixedID := cmd.FixedChargeReservationID
+		if acceptedBatch {
+			fixedID = ""
+		}
+		if err := monthcard.CompleteFixedChargeTx(ctx, tx, fixedID, cmd.MonthCardSnapshot, cmd.APIKeyID); err != nil {
 			return err
 		}
 		result.MonthCardSettlement = settlement
@@ -349,8 +399,28 @@ func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, am
 	return newBalance, false, nil
 }
 
+func lockSharedCreditUser(ctx context.Context, tx *sql.Tx, userID int64) error {
+	var id int64
+	return tx.QueryRowContext(ctx, `SELECT id FROM users WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, userID).Scan(&id)
+}
+
 func reserveUsageBillingBatchImageBalance(ctx context.Context, tx *sql.Tx, cmd *service.BatchImageBalanceHoldCommand) (*service.BatchImageBalanceHoldResult, error) {
-	if cmd.HoldAmount <= 0 {
+	if cmd.GroupID > 0 && cmd.RawHoldAmount > 0 {
+		if err := lockSharedCreditUser(ctx, tx, cmd.UserID); err != nil {
+			return nil, err
+		}
+		covered, err := sharedcredit.ReserveTx(ctx, tx, sharedcredit.Hold{ID: service.BatchImageHoldRequestID(cmd.BatchID), UserID: cmd.UserID, APIKeyID: cmd.APIKeyID, GroupID: cmd.GroupID}, decimal.NewFromFloat(cmd.RawHoldAmount), decimal.NewFromFloat(cmd.HoldAmount))
+		if err != nil {
+			if errors.Is(err, sharedcredit.ErrDebt) {
+				return nil, service.ErrAccountUsageDebt
+			}
+			return nil, err
+		}
+		personal := *cmd
+		personal.HoldAmount = decimal.NewFromFloat(cmd.HoldAmount).Sub(covered).InexactFloat64()
+		cmd = &personal
+	}
+	if cmd.SubscriptionBilling || cmd.HoldAmount <= 0 {
 		return &service.BatchImageBalanceHoldResult{}, nil
 	}
 	var balance, frozen float64
@@ -377,6 +447,33 @@ func reserveUsageBillingBatchImageBalance(ctx context.Context, tx *sql.Tx, cmd *
 }
 
 func captureUsageBillingBatchImageBalance(ctx context.Context, tx *sql.Tx, cmd *service.BatchImageBalanceHoldCommand) (*service.BatchImageBalanceHoldResult, error) {
+	if cmd.GroupID > 0 && cmd.RawHoldAmount > 0 {
+		if cmd.ActualAmount-cmd.HoldAmount > 0.00000001 {
+			return nil, service.ErrBatchImageSettlementCostExceedsHold
+		}
+		if err := lockSharedCreditUser(ctx, tx, cmd.UserID); err != nil {
+			return nil, err
+		}
+		holdID := service.BatchImageHoldRequestID(cmd.BatchID)
+		held, err := sharedcredit.GetHoldTx(ctx, tx, holdID, cmd.UserID, cmd.APIKeyID)
+		if err != nil {
+			return nil, err
+		}
+		model := ""
+		if cmd.Usage != nil {
+			model = cmd.Usage.Model
+		}
+		_, covered, err := sharedcredit.ConsumeTx(ctx, tx, cmd.RequestID, holdID, cmd.APIKeyID, cmd.UserID, cmd.GroupID, model, decimal.NewFromFloat(cmd.RawActualAmount), decimal.NewFromFloat(cmd.ActualAmount))
+		if err != nil {
+			return nil, err
+		}
+		personal := *cmd
+		if held != nil {
+			personal.HoldAmount = decimal.NewFromFloat(cmd.HoldAmount).Sub(held.CoveredCostUSD).InexactFloat64()
+		}
+		personal.ActualAmount = decimal.NewFromFloat(cmd.ActualAmount).Sub(covered).InexactFloat64()
+		cmd = &personal
+	}
 	if cmd.HoldAmount <= 0 && cmd.ActualAmount <= 0 {
 		return &service.BatchImageBalanceHoldResult{}, nil
 	}
@@ -409,7 +506,7 @@ func captureUsageBillingBatchImageBalance(ctx context.Context, tx *sql.Tx, cmd *
 }
 
 func releaseUsageBillingBatchImageBalance(ctx context.Context, tx *sql.Tx, cmd *service.BatchImageBalanceHoldCommand) (*service.BatchImageBalanceHoldResult, error) {
-	if cmd.HoldAmount <= 0 {
+	if cmd.HoldAmount <= 0 && cmd.RawHoldAmount <= 0 {
 		return &service.BatchImageBalanceHoldResult{}, nil
 	}
 	// 释放前校验该 job 确实预留过 hold（hold request id 已被 claim），
@@ -420,6 +517,23 @@ func releaseUsageBillingBatchImageBalance(ctx context.Context, tx *sql.Tx, cmd *
 	}
 	if !held {
 		logger.LegacyPrintf("repository.usage_billing", "[BatchImage] release skipped, hold was never reserved: batch=%s", cmd.BatchID)
+		return &service.BatchImageBalanceHoldResult{}, nil
+	}
+	if cmd.GroupID > 0 && cmd.RawHoldAmount > 0 {
+		if err := lockSharedCreditUser(ctx, tx, cmd.UserID); err != nil {
+			return nil, err
+		}
+		hold, err := sharedcredit.ReleaseTx(ctx, tx, service.BatchImageHoldRequestID(cmd.BatchID), cmd.UserID, cmd.APIKeyID)
+		if err != nil {
+			return nil, err
+		}
+		if hold != nil {
+			personal := *cmd
+			personal.HoldAmount = decimal.NewFromFloat(cmd.HoldAmount).Sub(hold.CoveredCostUSD).InexactFloat64()
+			cmd = &personal
+		}
+	}
+	if cmd.SubscriptionBilling {
 		return &service.BatchImageBalanceHoldResult{}, nil
 	}
 	var balance, frozen float64

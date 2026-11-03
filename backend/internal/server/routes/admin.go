@@ -599,6 +599,10 @@ func registerPromoCodeRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 
 func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth middleware.StepUpAuthMiddleware) {
 	adminSettings := admin.Group("/settings")
+	adminSettings.GET("/shared-credit", h.Admin.Setting.GetSharedCredit)
+	adminSettings.PUT("/shared-credit", h.Admin.Setting.UpdateSharedCredit)
+	adminSettings.GET("/shared-credit/usage", h.Admin.Setting.GetSharedCreditUsage)
+	adminSettings.PUT("/shared-credit/groups/:id", h.Admin.Setting.UpdateSharedCreditGroup)
 	registerScopedAdminKeyRoutes(adminSettings, h, stepUpAuth)
 	{
 		adminSettings.GET("/sidebar-groups", h.Admin.Setting.GetSidebarGroupsConfig)

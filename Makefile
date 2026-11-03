@@ -7,6 +7,9 @@ FRONTEND_CRITICAL_VITEST := \
 	src/api/__tests__/keys.bulkUpdate.spec.ts \
 	src/api/__tests__/activityLeaderboard.admin.spec.ts \
 	src/api/__tests__/admin.entitlements.spec.ts \
+	src/api/__tests__/sharedCredit.spec.ts \
+	src/components/common/__tests__/SharedCreditMini.spec.ts \
+	src/views/admin/settings/__tests__/SharedCreditSettings.spec.ts \
 	src/features/group-buy/__tests__ \
 	src/components/common/__tests__/ActivityLeaderboard.spec.ts \
 	src/components/common/__tests__/ActivityLeaderboard.admin.spec.ts \

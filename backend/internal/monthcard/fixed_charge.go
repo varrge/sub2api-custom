@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/sharedcredit"
 	"math"
 	"time"
 
@@ -135,7 +136,17 @@ func (s *Store) ReserveFixedCharge(ctx context.Context, id string, snap *Snapsho
 		return err
 	}
 	for _, c := range charges {
-		if _, err := SettleTx(ctx, tx, &c.snap, "fixed-charge-projection:"+c.id, c.key, c.amount); err != nil {
+		personal := decimal.NewFromFloat(c.amount)
+		if s.sharedCreditAvailable != nil {
+			hold, err := sharedcredit.GetHoldTx(ctx, tx, c.id, snap.UserID, c.key)
+			if err != nil {
+				return err
+			}
+			if hold != nil {
+				personal = decimal.Max(decimal.Zero, personal.Sub(hold.CoveredCostUSD))
+			}
+		}
+		if _, err := SettleTx(ctx, tx, &c.snap, "fixed-charge-projection:"+c.id, c.key, personal.InexactFloat64()); err != nil {
 			return err
 		}
 	}

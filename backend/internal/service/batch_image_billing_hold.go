@@ -44,7 +44,7 @@ func buildBatchImageHoldCommand(job *BatchImageJob, requestID string, actualAmou
 	if actualAmount < 0 {
 		actualAmount = 0
 	}
-	return &BatchImageBalanceHoldCommand{
+	cmd := &BatchImageBalanceHoldCommand{
 		RequestID:          requestID,
 		APIKeyID:           *job.APIKeyID,
 		UserID:             job.UserID,
@@ -52,11 +52,18 @@ func buildBatchImageHoldCommand(job *BatchImageJob, requestID string, actualAmou
 		HoldAmount:         holdAmount,
 		ActualAmount:       actualAmount,
 		RequestPayloadHash: strings.TrimSpace(payloadHash),
-	}, nil
+	}
+	if job.BillingSnapshot != nil && job.BillingSnapshot.SharedCredit && job.GroupID != nil {
+		cmd.SubscriptionBilling = batchImageSubscriptionBilling(job)
+		cmd.GroupID = *job.GroupID
+		cmd.RawHoldAmount = float64(job.ItemCount) * job.BaseUnitPrice * job.BatchDiscountMultiplier
+		cmd.RawActualAmount = float64(job.SuccessCount) * job.BaseUnitPrice * job.BatchDiscountMultiplier
+	}
+	return cmd, nil
 }
 
 func reserveBatchImageBalanceHold(ctx context.Context, repo UsageBillingRepository, job *BatchImageJob, payloadHash string) error {
-	if batchImageSubscriptionBilling(job) {
+	if batchImageSubscriptionBilling(job) && !job.BillingSnapshot.SharedCredit {
 		return nil
 	}
 	if repo == nil {
@@ -66,7 +73,7 @@ func reserveBatchImageBalanceHold(ctx context.Context, repo UsageBillingReposito
 	if err != nil {
 		return err
 	}
-	if cmd.HoldAmount <= 0 {
+	if cmd.HoldAmount <= 0 && cmd.RawHoldAmount <= 0 {
 		return nil
 	}
 	if _, err := repo.ReserveBatchImageBalance(ctx, cmd); err != nil {
@@ -108,7 +115,7 @@ func captureBatchImageBalanceHold(ctx context.Context, repo UsageBillingReposito
 }
 
 func releaseBatchImageBalanceHold(ctx context.Context, repo UsageBillingRepository, job *BatchImageJob, payloadHash string) error {
-	if batchImageSubscriptionBilling(job) {
+	if batchImageSubscriptionBilling(job) && !job.BillingSnapshot.SharedCredit {
 		return nil
 	}
 	if repo == nil || job == nil {
@@ -118,7 +125,7 @@ func releaseBatchImageBalanceHold(ctx context.Context, repo UsageBillingReposito
 	if err != nil {
 		return err
 	}
-	if cmd.HoldAmount <= 0 {
+	if cmd.HoldAmount <= 0 && cmd.RawHoldAmount <= 0 {
 		return nil
 	}
 	if _, err := repo.ReleaseBatchImageBalance(ctx, cmd); err != nil {

@@ -274,7 +274,7 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 			// 订阅模式：验证订阅限额
 			if subscription != nil && !admittedSubscription {
-				needsMaintenance, validateErr := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
+				needsMaintenance, validateErr := subscriptionService.ValidateAndCheckLimitsWithShared(c.Request.Context(), subscription, apiKey.Group)
 				if needsMaintenance {
 					refreshed, maintenanceErr := subscriptionService.EnsureWindowMaintenance(c.Request.Context(), subscription)
 					if maintenanceErr != nil {
@@ -282,7 +282,7 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 						return
 					}
 					subscription = refreshed
-					_, validateErr = subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
+					_, validateErr = subscriptionService.ValidateAndCheckLimitsWithShared(c.Request.Context(), subscription, apiKey.Group)
 				}
 				if validateErr != nil {
 					if service.IsSubscriptionAccessDenied(validateErr) {
@@ -306,8 +306,19 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 					return
 				}
 				if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
-					AbortWithError(c, 403, "INSUFFICIENT_BALANCE", "Insufficient account balance")
-					return
+					if apiKey.User.Balance < 0 {
+						AbortWithError(c, 403, "ACCOUNT_USAGE_DEBT", service.ErrAccountUsageDebt.Error())
+						return
+					}
+					shared, err := subscriptionService.SharedCreditAvailable(c.Request.Context(), apiKey.Group)
+					if err != nil {
+						AbortWithError(c, 503, "BILLING_SERVICE_ERROR", "Shared credit admission is unavailable")
+						return
+					}
+					if !shared {
+						AbortWithError(c, 403, "INSUFFICIENT_BALANCE", "Insufficient account balance")
+						return
+					}
 				}
 			}
 		}

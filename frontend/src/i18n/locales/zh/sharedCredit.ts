@@ -1,0 +1,112 @@
+export default {
+  "header": {
+    "title": "共享额度",
+    "remainingQuota": "全站剩余额度",
+    "startAt": "起始时间",
+    "endAt": "截止时间",
+    "availableGroups": "参与分组（仅限已授权范围）",
+    "emptyGroups": "当前账号暂无可参与分组",
+    "poolDisclaimer": "全站共同使用；耗尽后按原月卡、订阅或余额规则扣费。",
+    "currencyNotice": "按模型原价 USD 扣减，不乘用户倍率",
+    "loadFailed": "额度信息加载失败",
+    "retry": "重试",
+    "refresh": "刷新",
+    "scheduled": "未开始",
+    "exhausted": "已用完",
+    "immediate": "开启后立即生效",
+    "accessNotice": "实际调用仍需满足分组权限、月卡状态及 Key 限额。",
+    "refreshNotice": "每分钟自动刷新，也可手动刷新。",
+    "close": "关闭"
+  },
+  "activity": {
+    "title": "临时活动设置",
+    "savedStatus": "已保存状态",
+    "name": "活动名称",
+    "namePlaceholder": "例如：限时共享额度体验（选填）",
+    "startsAt": "开始时间（留空表示开启后立即生效）",
+    "endsAt": "结束时间（开启活动必填）",
+    "balanceNotice": "账户余额低于 0 元时无法使用共享额度，请先充值至 0 元或以上。",
+    "expiryNotice": "活动到期自动停止补贴；已预留额度的任务继续结算。结束时间必填，开始时间留空表示开启后立即生效。",
+    "status": {
+      "disabled": "已停用",
+      "scheduled": "未开始",
+      "active": "进行中",
+      "ended": "已结束",
+      "exhausted": "额度耗尽",
+      "no_groups": "无可用分组",
+      "incomplete": "配置不完整"
+    }
+  },
+  "title": "共享额度活动",
+  "description": "选定分组的授权请求优先使用共享额度；额度耗尽后，继续使用用户原有月卡、订阅或余额。",
+  "save": "保存设置",
+  "reload": "刷新",
+  "loading": "正在加载配置...",
+  "loadFailed": "加载共享额度配置失败",
+  "saveFailed": "保存共享额度失败",
+  "retry": "重试",
+  "confirmDiscardChanges": "您有未保存的草稿，重新加载将丢失这些更改，是否继续？",
+  "conflictDetected": "配置已被其他操作修改（版本冲突 409），请重新载入最新配置后再保存。",
+  "overwriteAndReload": "载入最新配置",
+  "loadingGroups": "正在加载分组列表...",
+  "noGroups": "暂无分组",
+  "inactive": "已停用",
+  "stats": {
+    "total": "总累计额度 (USD)",
+    "totalHint": "累计充值资金池，不随消费重置",
+    "used": "已消耗额度 (USD)",
+    "usedHint": "历史已结算扣减的基准额度",
+    "reserved": "处理中占用 (USD)",
+    "reservedHint": "固定费用和批量任务的预留额度",
+    "remaining": "当前剩余可用 (USD)",
+    "remainingHint": "所选分组当前可使用的额度"
+  },
+  "rules": {
+    "title": "资金池扣费与生效规则说明：",
+    "rule1": "按模型原价额度（倍率前 USD）扣减。例如原价消耗 $10、用户倍率 0.3x，共享额度扣 $10，用户免付 $3。",
+    "rule2": "支持部分覆盖：若共享额度仅剩 $4，则扣减共享池 $4，剩余未覆盖的 $6 * 0.3 = $1.80 将由用户的月卡、订阅或账户余额继续支付。",
+    "rule3": "总额度为累计值。追加时提高总额度，已用额度不会清零；总额度不能低于已用与预留之和。",
+    "rule4": "未选中的分组不能使用共享额度。参与分组不代表获得访问权限；关闭后，已预留的额度仍用于对应调用。"
+  },
+  "fields": {
+    "enable": "启用全站共享额度",
+    "enableHint": "开启后，属于所选分组的请求将优先由共享额度池支付",
+    "totalUsd": "总额度预算 (USD)",
+    "totalUsdHint": "累计总预算，支持最多 8 位小数，最大 1,000,000,000。追加额度请在此增加数值。",
+    "participatingGroups": "适用分组",
+    "participatingGroupsHint": "仅勾选的分组调用时可享受共享额度补贴；未选任何分组则不补贴任何请求。",
+    "selectedCount": "已选 {count} 个分组"
+  },
+  "ledger": {
+    "title": "额度消耗明细",
+    "refresh": "刷新明细",
+    "empty": "暂无共享额度消耗记录",
+    "time": "时间",
+    "user": "用户",
+    "group": "所属分组",
+    "model": "模型",
+    "amountBase": "扣减基准额 (USD)",
+    "coveredCost": "免除用户支出 (USD)",
+    "paginationInfo": "第 {page} 页 / 共 {total} 页",
+    "prev": "上一页",
+    "next": "下一页"
+  },
+  "errors": {
+    "endRequired": "临时活动启用时必须设置结束时间",
+    "invalidDates": "请填写有效时间，结束时间须晚于开始时间",
+    "totalRequired": "总额度不能为空",
+    "invalidTotalFormat": "请输入有效的非负数字，最多保留 8 位小数",
+    "totalRange": "总额度需在 0 到 1,000,000,000 之间",
+    "totalLessThanUsed": "总额度为累计值，不能小于已消耗与预占之和（至少 {min} USD）"
+  },
+  "groupSetting": {
+    "title": "全站共享额度参与状态",
+    "globalEnabled": "全站共享额度已启用",
+    "globalDisabled": "全站共享额度已停用",
+    "participateLabel": "允许此分组使用全站共享额度",
+    "participateHint": "开启后，本分组的授权请求将计入全站共享额度池。保存仅更改该分组的参与状态，不影响全局总预算。"
+  },
+  "groupsFailed": "分组列表加载失败，请重试",
+  "ledgerFailed": "明细加载失败，请重试",
+  "saved": "已保存"
+}

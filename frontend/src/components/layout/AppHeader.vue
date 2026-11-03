@@ -1,8 +1,8 @@
 <template>
   <header class="app-header glass sticky top-0 z-30 border-b border-gray-200/50 dark:border-dark-700/50">
-    <div class="relative flex h-16 items-center justify-between gap-2 px-2 sm:px-4 md:px-6">
+    <div class="header-inner relative flex h-16 items-center justify-between gap-2 px-2 sm:px-4 md:px-6">
       <!-- Left: Mobile Menu Toggle + Page Title -->
-      <div class="flex min-w-0 shrink-0 items-center gap-2 sm:gap-4">
+      <div class="header-leading flex min-w-0 shrink-0 items-center gap-2 sm:gap-4">
         <button
           @click="toggleMobileSidebar"
           class="btn-ghost btn-icon lg:hidden"
@@ -64,7 +64,7 @@
       </nav>
 
       <!-- Right: Docs + Language + Subscriptions + Announcements + Theme + Leaderboard + Balance -->
-      <div class="flex min-w-0 items-center gap-1 sm:gap-3">
+      <div class="header-actions flex min-w-0 items-center gap-1 sm:gap-3">
         <!-- Docs Link -->
         <a
           v-if="docUrl"
@@ -102,7 +102,9 @@
           <Icon name="grid" size="sm" />
         </router-link>
 
-        <div class="flex min-w-0 items-center gap-1 rounded-2xl border border-gray-200/70 bg-white/70 p-0.5 shadow-sm shadow-slate-900/5 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.06] dark:shadow-black/20 sm:gap-1.5">
+        <SharedCreditMini v-if="user" :key="user.id" :user-id="user.id" class="header-shared-credit shrink-0" />
+
+        <div class="header-utilities flex min-w-0 items-center gap-1 rounded-2xl border border-gray-200/70 bg-white/70 p-0.5 shadow-sm shadow-slate-900/5 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.06] dark:shadow-black/20 sm:gap-1.5">
           <!-- Language Switcher -->
           <LocaleSwitcher class="header-locale" />
 
@@ -190,6 +192,7 @@ import { useAdminSettingsStore } from '@/stores/adminSettings'
 import { useSupportTicketStore } from '@/stores/supportTickets'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMini.vue'
+import SharedCreditMini from '@/components/common/SharedCreditMini.vue'
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import ActivityLeaderboard from '@/components/common/ActivityLeaderboard.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -331,6 +334,17 @@ function openPurchase() {
   container: app-header / inline-size;
 }
 
+.app-header:has(.header-shared-credit) .header-leading { flex-shrink: 1; }
+.app-header:has(.header-shared-credit) .header-actions { flex-shrink: 0; }
+
+@container app-header (max-width: 56rem) {
+  .header-inner:has(.header-shared-credit) .header-model-plaza span,
+  .header-inner:has(.header-shared-credit) .header-locale :deep(button > span:nth-child(2)),
+  .header-inner:has(.header-shared-credit) .header-locale :deep(button > svg),
+  .header-shared-credit :deep([data-testid="shared-credit-trigger"] > svg) { display: none; }
+  .header-shared-credit :deep([data-testid="shared-credit-trigger"]) { width: 94px; }
+}
+
 .header-docs,
 .header-subscription {
   display: none;
@@ -422,6 +436,45 @@ function openPurchase() {
 
   .quick-menu-dashboard-label,
   .quick-menu-optional { display: none; }
+
+  .app-header:has(.header-shared-credit) .header-inner {
+    height: auto;
+    min-height: 4rem;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    row-gap: 0.375rem;
+    padding-top: 0.375rem;
+    padding-bottom: 0.375rem;
+  }
+
+  .app-header:has(.header-shared-credit) .header-actions {
+    display: contents;
+  }
+
+  .app-header:has(.header-shared-credit) .header-leading {
+    grid-row: 1;
+    grid-column: 1;
+  }
+
+  .app-header:has(.header-shared-credit) .header-model-plaza,
+  .app-header:has(.header-shared-credit) [data-testid="model-plaza-mobile-entry"] {
+    grid-row: 1;
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .app-header:has(.header-shared-credit) .header-shared-credit {
+    grid-row: 1;
+    grid-column: 3;
+    justify-self: end;
+  }
+
+  .app-header:has(.header-shared-credit) .header-utilities {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    width: 100%;
+    justify-content: space-between;
+  }
 }
 
 </style>

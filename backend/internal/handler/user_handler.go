@@ -22,6 +22,8 @@ type UserHandler struct {
 	emailCache            service.EmailCache
 	affiliateService      *service.AffiliateService
 	userPlatformQuotaRepo service.UserPlatformQuotaRepository
+	sharedCreditStore     userSharedCreditStore
+	sharedCreditGroups    userSharedCreditGroups
 }
 
 // NewUserHandler creates a new UserHandler

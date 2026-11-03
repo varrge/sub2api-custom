@@ -97,12 +97,17 @@ type Purchase struct {
 }
 
 type Store struct {
-	db                 *sql.DB
-	now                func() time.Time
-	balanceInvalidator func(context.Context, int64)
+	sharedCreditAvailable func(context.Context, int64) (bool, error)
+	db                    *sql.DB
+	now                   func() time.Time
+	balanceInvalidator    func(context.Context, int64)
 }
 
 func NewStore(db *sql.DB) *Store { return &Store{db: db, now: time.Now} }
+
+func (s *Store) SetSharedCreditAvailability(available func(context.Context, int64) (bool, error)) {
+	s.sharedCreditAvailable = available
+}
 
 func (s *Store) SetBalanceInvalidator(invalidate func(context.Context, int64)) {
 	s.balanceInvalidator = invalidate

@@ -509,8 +509,22 @@ func (r *apiKeyGroupRouting) admit(ctx context.Context, key *service.APIKey) (*s
 	if r.cfg != nil && r.cfg.RunMode == config.RunModeSimple {
 		return nil, nil
 	}
+	if key.User.Balance < 0 {
+		return nil, service.ErrAccountUsageDebt
+	}
 	if key.Group == nil || !key.Group.IsSubscriptionType() {
 		if key.User.Balance <= 0 {
+			if shared, ok := r.subscriptions.(interface {
+				SharedCreditAvailable(context.Context, *service.Group) (bool, error)
+			}); ok && key.User.Balance >= 0 {
+				available, err := shared.SharedCreditAvailable(ctx, key.Group)
+				if err != nil {
+					return nil, err
+				}
+				if available {
+					return nil, nil
+				}
+			}
 			return nil, errors.New("insufficient account balance")
 		}
 		return nil, nil
@@ -525,13 +539,21 @@ func (r *apiKeyGroupRouting) admit(ctx context.Context, key *service.APIKey) (*s
 		}
 		return nil, err
 	}
-	maintenance, err := r.subscriptions.ValidateAndCheckLimits(sub, key.Group)
+	validate := r.subscriptions.ValidateAndCheckLimits
+	if shared, ok := r.subscriptions.(interface {
+		ValidateAndCheckLimitsWithShared(context.Context, *service.UserSubscription, *service.Group) (bool, error)
+	}); ok {
+		validate = func(s *service.UserSubscription, g *service.Group) (bool, error) {
+			return shared.ValidateAndCheckLimitsWithShared(ctx, s, g)
+		}
+	}
+	maintenance, err := validate(sub, key.Group)
 	if maintenance {
 		sub, err = r.subscriptions.EnsureWindowMaintenance(ctx, sub)
 		if err != nil {
 			return nil, service.ErrBillingServiceUnavailable
 		}
-		_, err = r.subscriptions.ValidateAndCheckLimits(sub, key.Group)
+		_, err = validate(sub, key.Group)
 	}
 	return sub, err
 }

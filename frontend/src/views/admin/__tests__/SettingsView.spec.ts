@@ -2560,7 +2560,7 @@ describe("admin SettingsView tab navigation (responsive)", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders all 13 tabs with full labels, ARIA roles, and no truncation classes", async () => {
+  it("renders all 14 tabs including shared credit with full labels, ARIA roles, and no truncation classes", async () => {
     const wrapper = mountView(document.body);
     await flushPromises();
     await flushPromises();
@@ -2570,7 +2570,8 @@ describe("admin SettingsView tab navigation (responsive)", () => {
     expect(tablist.attributes("aria-label")).toBe("admin.settings.title");
 
     const tabs = wrapper.findAll('[role="tab"]');
-    expect(tabs).toHaveLength(13);
+    expect(tabs).toHaveLength(14);
+    expect(wrapper.get("#settings-tab-sharedCredit").text()).toContain("admin.settings.tabs.sharedCredit");
 
     for (const tab of tabs) {
       expect(tab.attributes("aria-selected")).toBeDefined();

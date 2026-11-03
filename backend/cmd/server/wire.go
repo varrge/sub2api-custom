@@ -134,7 +134,7 @@ func provideCleanup(
 	pluginManager *service.PluginManager,
 	usageBillingRepo service.UsageBillingRepository,
 ) func() {
-	stopMonthCardBilling := service.StartMonthCardBillingRecovery(usageBillingRepo)
+	stopMonthCardBilling := service.StartMonthCardBillingRecovery(usageBillingRepo, billingCache, apiKeyService)
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()

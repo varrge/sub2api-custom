@@ -21,7 +21,7 @@ var (
 	ErrNotFound = errors.New("推送渠道不存在")
 	ErrBusy     = errors.New("请稍后再发送测试通知")
 	placeholder = regexp.MustCompile(`{{\s*([a-zA-Z][a-zA-Z0-9_]*)\s*}}`)
-	sendKey     = regexp.MustCompile(`^(SCT[A-Za-z0-9]+|sctp[0-9]+t[A-Za-z0-9]+)$`)
+	sendKey     = regexp.MustCompile(`^[A-Za-z0-9._~-]+$`)
 	sc3Key      = regexp.MustCompile(`^sctp([0-9]+)t`)
 	channelIDs  = regexp.MustCompile(`^[0-9]+(\|[0-9]+)*$`)
 	channelID   = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
@@ -144,11 +144,28 @@ func validateChannel(c Channel) error {
 func destination(c Channel) (string, error) {
 	key := strings.TrimSpace(c.Credential)
 	if c.Type == "serverchan" {
-		if len(key) > 256 || !sendKey.MatchString(key) {
-			return "", invalid("请填写有效的 Server 酱 SendKey（SCT 或 sctp 开头）")
+		if key == "" {
+			return "", invalid("请填写 Server 酱 SendKey")
 		}
-		if match := sc3Key.FindStringSubmatch(key); len(match) > 0 {
+		if len(key) > 4096 {
+			return "", invalid("Server 酱 SendKey 不能超过 4096 个字符")
+		}
+		if !strings.HasPrefix(key, "SCT") && !strings.HasPrefix(key, "sctp") {
+			return "", invalid("SendKey 必须以 SCT 或 sctp 开头，请从 Server 酱官网复制完整 SendKey，不要填写 API 链接")
+		}
+		// The SDK only parses the UID prefix; retain URL-safe opaque token characters.
+		if !sendKey.MatchString(key) {
+			return "", invalid("SendKey 含有空白或不支持的字符，请重新复制完整 SendKey，不要填写 API 链接或缩略显示的内容")
+		}
+		if strings.HasPrefix(key, "sctp") {
+			match := sc3Key.FindStringSubmatch(key)
+			if len(match) == 0 || len(key) == len(match[0]) {
+				return "", invalid("Server 酱 3 的 SendKey 格式应为 sctp<数字 UID>t<密钥>，请从官网复制完整 SendKey")
+			}
 			return "https://" + match[1] + ".push.ft07.com/send/" + key + ".send", nil
+		}
+		if key == "SCT" {
+			return "", invalid("SCT 后缺少密钥内容，请从官网复制完整 SendKey")
 		}
 		return "https://sctapi.ftqq.com/" + key + ".send", nil
 	}

@@ -77,3 +77,62 @@ func (h *GroupBuyHandler) GiftBatches(c *gin.Context) {
 	}
 	response.Paginated(c, items, total, page, 20)
 }
+
+func giftPathID(c *gin.Context, key string) (int64, bool) {
+	id, err := strconv.ParseInt(c.Param(key), 10, 64)
+	if err != nil || id <= 0 {
+		response.BadRequest(c, "赠卡编号无效")
+		return 0, false
+	}
+	return id, true
+}
+
+func (h *GroupBuyHandler) GiftCards(c *gin.Context) {
+	if _, ok := requireAuth(c); !ok {
+		return
+	}
+	id, ok := giftPathID(c, "batch_id")
+	if !ok {
+		return
+	}
+	f, ok := adminEntitlementFilters(c, "all")
+	if !ok {
+		return
+	}
+	items, total, err := h.store.ListGiftCards(c.Request.Context(), id, f)
+	if err != nil {
+		groupBuyResponse(c, nil, err)
+		return
+	}
+	response.Paginated(c, items, total, f.Page, f.PageSize)
+}
+
+func (h *GroupBuyHandler) GiftAllocations(c *gin.Context) {
+	if _, ok := requireAuth(c); !ok {
+		return
+	}
+	batchID, ok := giftPathID(c, "batch_id")
+	if !ok {
+		return
+	}
+	cardID, ok := giftPathID(c, "card_id")
+	if !ok {
+		return
+	}
+	f, ok := adminEntitlementFilters(c, "all")
+	if !ok {
+		return
+	}
+	usage, total, err := h.store.ListGiftAllocations(c.Request.Context(), batchID, cardID, f.Page, f.PageSize)
+	if err != nil {
+		groupBuyResponse(c, nil, err)
+		return
+	}
+	response.Success(c, struct {
+		response.PaginatedData
+		Card *monthcard.Card `json:"card"`
+	}{
+		PaginatedData: response.PaginatedData{Items: usage.Items, Total: total, Page: f.Page, PageSize: f.PageSize, Pages: max(1, int((total+int64(f.PageSize)-1)/int64(f.PageSize)))},
+		Card:          usage.Card,
+	})
+}

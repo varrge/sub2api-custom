@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/auth'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
+import AdminGiftUsageDialog from './AdminGiftUsageDialog.vue'
 import { exactDate, usd } from './model'
 
 const props = defineProps<{ groups: AdminGroup[] }>()
@@ -19,6 +20,7 @@ const preview = ref<GiftCardPreview | null>(null)
 const previewing = ref(false), issuing = ref(false), loading = ref(false), confirmOpen = ref(false)
 const error = ref(''), historyError = ref(''), success = ref('')
 const batches = ref<GiftCardBatch[]>([]), page = ref(1), total = ref(0)
+const usageBatch = ref<GiftCardBatch | null>(null)
 const uncertain = ref(false)
 let pending: GiftCardIssue | null = null
 let alive = true, generation = 0, historyGeneration = 0
@@ -29,6 +31,7 @@ const identity = () => auth.user?.id
 const current = (epoch: number, user: number | undefined) => alive && epoch === generation && identity() === user
 watch(form, () => { if (!uncertain.value) { generation++; preview.value = null; pending = null; confirmOpen.value = false; success.value = ''; error.value = '' } }, { flush: 'sync' })
 watch(identity, () => {
+  usageBatch.value = null
   generation++; historyGeneration++; preview.value = null; pending = null; batches.value = []; total.value = 0
   confirmOpen.value = false; uncertain.value = false; issuing.value = false; previewing.value = false; loading.value = false
   error.value = ''; historyError.value = ''; success.value = ''
@@ -327,11 +330,12 @@ onMounted(() => {
             <th class="py-2.5 px-3 font-medium">{{ t('groupBuy.gifts.thCount') }}</th>
             <th class="py-2.5 px-3 font-medium">{{ t('groupBuy.gifts.thCreatedAt') }}</th>
             <th class="py-2.5 px-3 font-medium">{{ t('groupBuy.gifts.thExpiresAt') }}</th>
+            <th class="py-2.5 px-3 font-medium">{{ t('common.actions') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
           <tr v-if="batches.length === 0 && !loading">
-            <td colspan="7" class="py-8 text-center text-gray-500 dark:text-gray-400">
+            <td colspan="8" class="py-8 text-center text-gray-500 dark:text-gray-400">
               {{ t('groupBuy.gifts.noHistory') }}
             </td>
           </tr>
@@ -343,6 +347,11 @@ onMounted(() => {
             <td class="py-2.5 px-3 text-gray-600 dark:text-gray-300">{{ item.recipient_count }}</td>
             <td class="py-2.5 px-3 text-gray-500 dark:text-gray-400">{{ exactDate(item.created_at) }}</td>
             <td class="py-2.5 px-3 text-gray-500 dark:text-gray-400">{{ exactDate(item.expires_at) }}</td>
+            <td class="py-2.5 px-3">
+              <button type="button" class="btn btn-secondary btn-sm whitespace-nowrap" :data-testid="`gift-usage-${item.id}`" @click="usageBatch = item">
+                {{ t('groupBuy.gifts.viewUsage') }}
+              </button>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -374,6 +383,8 @@ onMounted(() => {
       </div>
     </div>
   </section>
+
+  <AdminGiftUsageDialog v-if="usageBatch" :key="usageBatch.id" :batch="usageBatch" @close="usageBatch = null" />
 
   <BaseDialog
     :show="confirmOpen"

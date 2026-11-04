@@ -135,6 +135,17 @@ func (s *Store) ListAdminTeamEntitlements(ctx context.Context, f AdminEntitlemen
 // A zero team ID selects independent solo purchases; positive IDs select all
 // members of that team. Details may include expired/revoked cards via "all".
 func (s *Store) ListAdminEntitlementCards(ctx context.Context, teamID int64, f AdminEntitlementFilter) ([]AdminCard, int64, error) {
+	return s.listAdminEntitlementCards(ctx, teamID, 0, f)
+}
+
+func (s *Store) ListGiftCards(ctx context.Context, batchID int64, f AdminEntitlementFilter) ([]AdminCard, int64, error) {
+	if batchID <= 0 {
+		return nil, 0, ErrInvalid
+	}
+	return s.listAdminEntitlementCards(ctx, 0, batchID, f)
+}
+
+func (s *Store) listAdminEntitlementCards(ctx context.Context, teamID, giftBatchID int64, f AdminEntitlementFilter) ([]AdminCard, int64, error) {
 	if err := f.Validate(); err != nil {
 		return nil, 0, err
 	}
@@ -150,19 +161,27 @@ func (s *Store) ListAdminEntitlementCards(ctx context.Context, teamID int64, f A
 		return nil, 0, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if giftBatchID > 0 {
+		var id int64
+		if err := tx.QueryRowContext(ctx, `SELECT id FROM month_card_gift_batches WHERE id=$1`, giftBatchID).Scan(&id); err != nil {
+			return nil, 0, notFound(err)
+		}
+	}
 	// Push team/group restrictions into the CTE before weekly usage is joined.
+	// Gift receipts retain revoked/deleted cards so historical usage stays visible.
 	base := `WITH card_data ` + adminCardColumns + ` AS (` + cardSelect + `
-		WHERE c.deleted_at IS NULL AND (($2::bigint=0 AND c.team_id IS NULL) OR c.team_id=$2) AND ($3::bigint=0 OR c.group_id=$3)) `
+		WHERE (($7::bigint=0 AND c.deleted_at IS NULL) OR c.gift_batch_id=$7)
+		AND (($2::bigint=0 AND c.team_id IS NULL) OR c.team_id=$2) AND ($3::bigint=0 OR c.group_id=$3)) `
 	from := ` FROM card_data d JOIN users u ON u.id=d.user_id
 		WHERE ($4='' OR d.code ILIKE $4 OR d.product_name ILIKE $4 OR d.group_name ILIKE $4
 		 OR u.username ILIKE $4 OR u.email ILIKE $4 OR d.user_id::text=$6)
 		AND ($5='all' OR ($5='active')=(d.status IN ('active','frozen') AND d.starts_at<=$1 AND d.expires_at>$1))`
-	args := []any{now, teamID, f.GroupID, entitlementSearch(f.Search), f.Validity, strings.TrimSpace(f.Search)}
+	args := []any{now, teamID, f.GroupID, entitlementSearch(f.Search), f.Validity, strings.TrimSpace(f.Search), giftBatchID}
 	var total int64
 	if err = tx.QueryRowContext(ctx, base+`SELECT COUNT(*)`+from, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	rows, err := tx.QueryContext(ctx, base+`SELECT d.*,COALESCE(u.username,''),u.email`+from+` ORDER BY d.starts_at DESC,d.id DESC LIMIT $7 OFFSET $8`, append(args, f.PageSize, (f.Page-1)*f.PageSize)...)
+	rows, err := tx.QueryContext(ctx, base+`SELECT d.*,COALESCE(u.username,''),u.email`+from+` ORDER BY d.starts_at DESC,d.id DESC LIMIT $8 OFFSET $9`, append(args, f.PageSize, (f.Page-1)*f.PageSize)...)
 	if err != nil {
 		return nil, 0, err
 	}

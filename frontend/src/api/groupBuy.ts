@@ -77,6 +77,12 @@ export const adminGroupBuyAPI = {
   async giftBatches(page = 1) {
     return (await apiClient.get<PaginatedResponse<GiftCardBatch>>('/admin/group-buy/gifts', { params: { page } })).data
   },
+  async giftCards(batchId: number, params: AdminEntitlementQuery, signal?: AbortSignal) {
+    return (await apiClient.get<PaginatedResponse<AdminMonthCard>>(`/admin/group-buy/gifts/${batchId}/cards`, { params, signal })).data
+  },
+  async giftAllocations(batchId: number, cardId: number, page = 1, signal?: AbortSignal) {
+    return (await apiClient.get<PaginatedResponse<ChargeAllocation> & { card: MonthCard }>(`/admin/group-buy/gifts/${batchId}/cards/${cardId}/allocations`, { params: { page, page_size: 20 }, signal })).data
+  },
   async deleteCard(id: number) {
     return (await apiClient.delete<{ deleted_id: number }>(`/admin/group-buy/entitlements/cards/${id}`)).data
   },

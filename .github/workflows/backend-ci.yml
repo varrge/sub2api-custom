@@ -85,6 +85,12 @@ jobs:
           MONTHCARD_PAYMENT_TEST_DSN: postgres://monthcard_test:isolated-test-password@127.0.0.1:55439/monthcard_test?sslmode=disable
         run: go test -race ./internal/monthcard -count=1
 
+      - name: Push notification PostgreSQL event delivery and concurrency
+        working-directory: backend
+        env:
+          PUSH_NOTIFICATION_TEST_DSN: postgres://monthcard_test:isolated-test-password@127.0.0.1:55439/monthcard_test?sslmode=disable
+        run: go test -race ./internal/pushnotify -count=1
+
       - name: EasyPay PostgreSQL webhook security and replay protection
         working-directory: backend
         env:

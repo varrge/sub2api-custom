@@ -123,6 +123,8 @@ var auditSensitiveReads = map[string]string{
 
 // auditActionOverrides 变更类请求的动作名精确映射（未命中时自动推导）。
 var auditActionOverrides = map[string]string{
+	"PUT /api/v1/admin/settings/push-notifications":           "admin.push_notifications.update",
+	"POST /api/v1/admin/settings/push-notifications/:id/test": "admin.push_notifications.test",
 	"POST /api/v1/auth/login":                                 service.AuditActionLogin,
 	"POST /api/v1/auth/login/2fa":                             service.AuditActionLogin2FA,
 	"POST /api/v1/auth/passkey/login/finish":                  service.AuditActionLogin,
@@ -148,6 +150,8 @@ var auditActionOverrides = map[string]string{
 // auditBodyOmittedRoutes 请求体几乎整体由凭证构成的路由（如整块粘贴 auth JSON 的导入接口）。
 // 这类 body 的凭证内嵌在普通字符串值里，键级脱敏无法覆盖，整体不入库。
 var auditBodyOmittedRoutes = map[string]struct{}{
+	"PUT /api/v1/admin/settings/push-notifications":          {},
+	"POST /api/v1/admin/settings/push-notifications/preview": {},
 	// Keep ballot choices out of the identity-bearing admin audit log.
 	"POST /api/v1/voting/polls/:id/votes":                       {},
 	"POST /api/v1/tickets":                                      {},

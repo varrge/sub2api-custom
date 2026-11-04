@@ -127,6 +127,7 @@
             <Icon :name="isDark ? 'sun' : 'moon'" size="md" :class="isDark ? 'text-amber-500' : ''" />
           </button>
 
+          <VotingPopover v-if="user && votingEnabled" :key="user.id" />
           <ActivityLeaderboard v-if="user && !isEnterprise" :key="user.id" />
 
           <!-- Balance Display -->
@@ -195,6 +196,7 @@ import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMi
 import SharedCreditMini from '@/components/common/SharedCreditMini.vue'
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import ActivityLeaderboard from '@/components/common/ActivityLeaderboard.vue'
+import VotingPopover from '@/components/voting/VotingPopover.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeUrl } from '@/utils/url'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
@@ -215,6 +217,7 @@ const isEnterprise = computed(() => user.value?.account_type === 'enterprise')
 const isDark = ref(document.documentElement.classList.contains('dark'))
 const docUrl = computed(() => sanitizeUrl(appStore.docUrl))
 const imageGenerationEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.imageGeneration))
+const votingEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.voting))
 const modelPlazaEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.modelPlaza))
 const supportTicketsEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.supportTicket))
 const paymentEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.payment))
@@ -334,8 +337,8 @@ function openPurchase() {
   container: app-header / inline-size;
 }
 
-.app-header:has(.header-shared-credit) .header-leading { flex-shrink: 1; }
-.app-header:has(.header-shared-credit) .header-actions { flex-shrink: 0; }
+.app-header:has(.header-shared-credit, [data-testid="header-voting"]) .header-leading { flex-shrink: 1; }
+.app-header:has(.header-shared-credit, [data-testid="header-voting"]) .header-actions { flex-shrink: 0; }
 
 @container app-header (max-width: 56rem) {
   .header-inner:has(.header-shared-credit) .header-model-plaza span,
@@ -437,7 +440,8 @@ function openPurchase() {
   .quick-menu-dashboard-label,
   .quick-menu-optional { display: none; }
 
-  .app-header:has(.header-shared-credit) .header-inner {
+  /* Extra header entries share the existing two-row phone layout. */
+  .app-header:has(.header-shared-credit, [data-testid="header-voting"]) .header-inner {
     height: auto;
     min-height: 4rem;
     display: grid;
@@ -447,29 +451,29 @@ function openPurchase() {
     padding-bottom: 0.375rem;
   }
 
-  .app-header:has(.header-shared-credit) .header-actions {
+  .app-header:has(.header-shared-credit, [data-testid="header-voting"]) .header-actions {
     display: contents;
   }
 
-  .app-header:has(.header-shared-credit) .header-leading {
+  .app-header:has(.header-shared-credit, [data-testid="header-voting"]) .header-leading {
     grid-row: 1;
     grid-column: 1;
   }
 
-  .app-header:has(.header-shared-credit) .header-model-plaza,
-  .app-header:has(.header-shared-credit) [data-testid="model-plaza-mobile-entry"] {
+  .app-header:has(.header-shared-credit, [data-testid="header-voting"]) .header-model-plaza,
+  .app-header:has(.header-shared-credit, [data-testid="header-voting"]) [data-testid="model-plaza-mobile-entry"] {
     grid-row: 1;
     grid-column: 2;
     justify-self: start;
   }
 
-  .app-header:has(.header-shared-credit) .header-shared-credit {
+  .app-header:has(.header-shared-credit, [data-testid="header-voting"]) .header-shared-credit {
     grid-row: 1;
     grid-column: 3;
     justify-self: end;
   }
 
-  .app-header:has(.header-shared-credit) .header-utilities {
+  .app-header:has(.header-shared-credit, [data-testid="header-voting"]) .header-utilities {
     grid-row: 2;
     grid-column: 1 / -1;
     width: 100%;

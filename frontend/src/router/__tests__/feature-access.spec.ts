@@ -31,6 +31,7 @@ const appStore = vi.hoisted(() => ({
     risk_control_enabled?: boolean
     image_generation_enabled?: boolean
     support_ticket_enabled?: boolean
+    voting_enabled?: boolean
     custom_menu_items?: []
   },
   fetchPublicSettings: vi.fn(),
@@ -132,6 +133,11 @@ describe('feature route guard', () => {
     appStore.cachedPublicSettings = null
     appStore.fetchPublicSettings.mockReset()
     appStore.showWarning.mockReset()
+  })
+
+  it('keeps only the administrator voting page; user voting is in the header', () => {
+    expect(routerHarness.routes.find(r => r.path === '/voting')).toBeUndefined()
+    expect(routerHarness.routes.find(r => r.path === '/admin/voting')?.meta).toMatchObject({ requiresAdmin: true })
   })
 
   it('waits for the first public-settings request before deciding payment access', async () => {

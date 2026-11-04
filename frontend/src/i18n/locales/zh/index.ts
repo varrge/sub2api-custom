@@ -1,4 +1,6 @@
 import activityCampaigns from './activityCampaigns'
+import voting from './voting'
+import votingEntry from './votingEntry'
 import activityLeaderboard from './activityLeaderboard'
 import luckyBox from './luckyBox'
 import groupBuy from './groupBuy'
@@ -21,6 +23,8 @@ import enterpriseExport from './enterpriseExport'
 import enterprisePayment from './enterprisePayment'
 
 export default {
+  voting,
+  votingEntry,
   sharedCredit,
   ...activityLeaderboard,
   ...luckyBox,

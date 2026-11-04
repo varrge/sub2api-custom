@@ -24,6 +24,7 @@ const state = vi.hoisted(() => ({
     top_quick_menu_items: [] as string[],
     custom_menu_items: [],
     subscription_enabled: true,
+    voting_enabled: false,
     payment_balance_disabled: false,
   },
 }))
@@ -106,6 +107,7 @@ vi.mock('@/utils/featureFlags', async (importOriginal) => ({
   isFeatureFlagEnabled: (flag: { key: string }) => {
     switch (flag.key) {
       case 'subscription_enabled': return state.settings.subscription_enabled
+      case 'voting_enabled': return state.settings.voting_enabled
       case 'image_generation_enabled': return state.imageGenerationEnabled
       case 'model_plaza_enabled': return state.modelPlazaEnabled
       case 'payment_enabled': return state.paymentEnabled
@@ -130,6 +132,7 @@ function mountHeader() {
       stubs: {
         RouterLink: RouterLinkStub,
         AnnouncementBell: true,
+        VotingPopover: { template: '<button data-testid="header-voting" aria-haspopup="dialog" />' },
         LocaleSwitcher: true,
         SubscriptionProgressMini: true,
         SharedCreditMini: true,
@@ -146,6 +149,7 @@ describe('AppHeader top quick menu', () => {
     state.routeName = 'Dashboard'
     state.routeMeta = {}
     state.settings.subscription_enabled = true
+    state.settings.voting_enabled = false
     state.settings.payment_balance_disabled = false
     state.isAdmin = false
     state.accountType = 'personal'
@@ -174,6 +178,31 @@ describe('AppHeader top quick menu', () => {
     const ids = view.findAll('[data-testid]').map((node) => node.attributes('data-testid'))
     const theme = ids.indexOf('header-theme-toggle')
     expect(ids.slice(theme, theme + 3)).toEqual(['header-theme-toggle', 'header-activity-leaderboard', 'header-balance'])
+  })
+
+  it('places voting immediately before the visible leaderboard', async () => {
+    state.settings.voting_enabled = true
+    const view = mountHeader()
+    await flushPromises()
+    const ids = view.findAll('[data-testid]').map(node => node.attributes('data-testid'))
+    const at = ids.indexOf('header-voting')
+    expect(at).toBeGreaterThan(0)
+    expect(ids[at + 1]).toBe('header-activity-leaderboard')
+    expect(view.get('[data-testid="header-voting"]').element.tagName).toBe('BUTTON')
+  })
+
+  it('keeps voting in the leaderboard slot when the leaderboard is hidden', async () => {
+    state.settings.voting_enabled = true
+    state.accountType = 'enterprise'
+    const view = mountHeader()
+    await flushPromises()
+    const ids = view.findAll('[data-testid]').map(node => node.attributes('data-testid'))
+    const at = ids.indexOf('header-theme-toggle')
+    expect(ids.slice(at, at + 3)).toEqual(['header-theme-toggle', 'header-voting', 'header-balance'])
+  })
+
+  it('hides the voting entry when disabled', () => {
+    expect(mountHeader().find('[data-testid="header-voting"]').exists()).toBe(false)
   })
 
   it('does not mount or request the activity leaderboard for enterprise accounts', async () => {

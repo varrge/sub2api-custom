@@ -410,6 +410,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		PluginManagementEnabled:  settings.PluginManagementEnabled,
 		NativeBoxEntryEnabled:    settings.NativeBoxEntryEnabled,
 		ActivityCampaignsEnabled: settings.ActivityCampaignsEnabled,
+		VotingEnabled:            settings.VotingEnabled,
 		ModelPlazaDescription:    settings.ModelPlazaDescription,
 
 		AffiliateEnabled: settings.AffiliateEnabled,

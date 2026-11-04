@@ -254,3 +254,35 @@ func TestActivityLeaderboardExportIsAuditedWithoutCSVContents(t *testing.T) {
 	require.Equal(t, http.StatusOK, entry.StatusCode)
 	require.NotContains(t, entry.RequestBody, "private-winner")
 }
+
+func TestVotingAuditOmitsChoicesAndPreservesHandlerBody(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repository := &auditCaptureRepository{}
+	auditService := service.NewAuditLogService(repository, nil)
+	auditService.Start()
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set(string(ContextKeyUser), AuthSubject{UserID: 77})
+		c.Next()
+	})
+	router.Use(gin.HandlerFunc(NewAuditLogMiddleware(auditService)))
+	router.POST("/api/v1/voting/polls/:id/votes", func(c *gin.Context) {
+		var body struct {
+			OptionIDs []int `json:"option_ids"`
+		}
+		require.NoError(t, c.ShouldBindJSON(&body))
+		require.Equal(t, []int{1, 3}, body.OptionIDs)
+		c.JSON(http.StatusOK, gin.H{"submitted": true})
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/voting/polls/1/votes", bytes.NewBufferString(`{"revision":1,"option_ids":[1,3]}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	auditService.Stop()
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	require.Len(t, repository.logs, 1)
+	require.NotContains(t, repository.logs[0].RequestBody, "option_ids")
+	require.NotContains(t, repository.logs[0].RequestBody, "[1,3]")
+}

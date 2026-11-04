@@ -833,6 +833,7 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
     { path: '/admin/plugins', label: t('nav.plugins'), icon: PluginIcon, featureFlag: flagPluginManagement },
     { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
+    { path: '/admin/voting', label: t('votingEntry.adminTitle'), icon: ChartIcon },
     { path: '/admin/tickets', label: t('supportTickets.management'), icon: TicketIcon, badge: () => supportTicketStore.adminUnreadCount },
     { path: '/admin/proxies', label: t('nav.proxies'), icon: ServerIcon },
     {

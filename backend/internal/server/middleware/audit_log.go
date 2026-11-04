@@ -148,6 +148,8 @@ var auditActionOverrides = map[string]string{
 // auditBodyOmittedRoutes 请求体几乎整体由凭证构成的路由（如整块粘贴 auth JSON 的导入接口）。
 // 这类 body 的凭证内嵌在普通字符串值里，键级脱敏无法覆盖，整体不入库。
 var auditBodyOmittedRoutes = map[string]struct{}{
+	// Keep ballot choices out of the identity-bearing admin audit log.
+	"POST /api/v1/voting/polls/:id/votes":                       {},
 	"POST /api/v1/tickets":                                      {},
 	"POST /api/v1/tickets/:id/replies":                          {},
 	"POST /api/v1/admin/tickets/:id/replies":                    {},

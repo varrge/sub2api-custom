@@ -248,6 +248,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyPluginManagementEnabled,
 		SettingKeyNativeBoxEntryEnabled,
 		SettingKeyActivityCampaignsEnabled,
+		SettingKeyVotingEnabled,
 		SettingKeyAffiliateEnabled,
 		SettingKeyRiskControlEnabled,
 		SettingKeyAllowUserViewErrorRequests,
@@ -388,6 +389,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		PluginManagementEnabled:  settings[SettingKeyPluginManagementEnabled] == "true",
 		NativeBoxEntryEnabled:    settings[SettingKeyNativeBoxEntryEnabled] == "true",
 		ActivityCampaignsEnabled: settings[SettingKeyActivityCampaignsEnabled] == "true",
+		VotingEnabled:            settings[SettingKeyVotingEnabled] == "true",
 
 		AffiliateEnabled: settings[SettingKeyAffiliateEnabled] == "true",
 
@@ -666,6 +668,7 @@ type PublicSettingsInjectionPayload struct {
 	PluginManagementEnabled       bool `json:"plugin_management_enabled"`
 	NativeBoxEntryEnabled         bool `json:"native_box_entry_enabled"`
 	ActivityCampaignsEnabled      bool `json:"activity_campaigns_enabled"`
+	VotingEnabled                 bool `json:"voting_enabled"`
 	AffiliateEnabled              bool `json:"affiliate_enabled"`
 	RiskControlEnabled            bool `json:"risk_control_enabled"`
 	AllowUserViewErrorRequests    bool `json:"allow_user_view_error_requests"`
@@ -759,6 +762,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		PluginManagementEnabled:              settings.PluginManagementEnabled,
 		NativeBoxEntryEnabled:                settings.NativeBoxEntryEnabled,
 		ActivityCampaignsEnabled:             settings.ActivityCampaignsEnabled,
+		VotingEnabled:                        settings.VotingEnabled,
 		AffiliateEnabled:                     settings.AffiliateEnabled,
 		RiskControlEnabled:                   settings.RiskControlEnabled,
 		AllowUserViewErrorRequests:           settings.AllowUserViewErrorRequests,

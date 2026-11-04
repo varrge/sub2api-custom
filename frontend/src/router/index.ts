@@ -657,6 +657,12 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/voting',
+    name: 'AdminVoting',
+    component: () => import('@/views/admin/VotingView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Voting Management', titleKey: 'votingEntry.adminTitle' }
+  },
+  {
     path: '/admin/proxies',
     name: 'AdminProxies',
     component: () => import('@/views/admin/ProxiesView.vue'),

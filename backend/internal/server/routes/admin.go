@@ -606,6 +606,13 @@ func registerPromoCodeRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 
 func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth middleware.StepUpAuthMiddleware) {
 	adminSettings := admin.Group("/settings")
+	if h.PushNotifications != nil {
+		adminSettings.GET("/push-notifications", h.PushNotifications.Get)
+		adminSettings.PUT("/push-notifications", h.PushNotifications.Save)
+		adminSettings.POST("/push-notifications/preview", h.PushNotifications.Preview)
+		adminSettings.POST("/push-notifications/:id/test", h.PushNotifications.Test)
+		adminSettings.GET("/push-notifications/history", h.PushNotifications.History)
+	}
 	adminSettings.GET("/shared-credit", h.Admin.Setting.GetSharedCredit)
 	adminSettings.PUT("/shared-credit", h.Admin.Setting.UpdateSharedCredit)
 	adminSettings.GET("/shared-credit/usage", h.Admin.Setting.GetSharedCreditUsage)

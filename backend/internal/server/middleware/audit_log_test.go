@@ -34,6 +34,14 @@ func TestDeriveAuditAction(t *testing.T) {
 	}
 }
 
+func TestPushNotificationAuditOmitsCredentialsAndTemplates(t *testing.T) {
+	for _, route := range []string{"PUT /api/v1/admin/settings/push-notifications", "POST /api/v1/admin/settings/push-notifications/preview"} {
+		require.Contains(t, auditBodyOmittedRoutes, route)
+	}
+	require.Equal(t, "admin.push_notifications.update", auditActionOverrides["PUT /api/v1/admin/settings/push-notifications"])
+	require.Equal(t, "admin.push_notifications.test", auditActionOverrides["POST /api/v1/admin/settings/push-notifications/:id/test"])
+}
+
 type auditCaptureRepository struct {
 	mu   sync.Mutex
 	logs []*service.AuditLog

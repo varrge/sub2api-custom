@@ -611,6 +611,7 @@ function mountView(attachTo?: HTMLElement) {
         ImageUpload: ImageUploadStub,
         BackupSettings: true,
         ActivityLeaderboardSettings: true,
+        PushNotificationSettings: true,
         RouterLink: true,
       },
     },
@@ -1040,6 +1041,16 @@ describe("admin SettingsView payment visible method controls", () => {
     await wrapper.find("form").trigger("submit.prevent");
     await flushPromises();
     expect(updateSettings).not.toHaveBeenCalled();
+  });
+
+  it("does not submit unrelated settings from the independent push tab", async () => {
+    const wrapper = mountView();
+    await flushPromises();
+    await wrapper.get('#settings-tab-push').trigger('click');
+    await wrapper.find('form').trigger('submit.prevent');
+    await flushPromises();
+    expect(updateSettings).not.toHaveBeenCalled();
+    expect(wrapper.find('push-notification-settings-stub').exists()).toBe(true);
   });
 
   it("defaults the native box entry switch off and saves it from the Features tab", async () => {
@@ -2575,7 +2586,7 @@ describe("admin SettingsView tab navigation (responsive)", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders all 14 tabs including shared credit with full labels, ARIA roles, and no truncation classes", async () => {
+  it("renders all 15 tabs including push notifications with full labels, ARIA roles, and no truncation classes", async () => {
     const wrapper = mountView(document.body);
     await flushPromises();
     await flushPromises();
@@ -2585,7 +2596,8 @@ describe("admin SettingsView tab navigation (responsive)", () => {
     expect(tablist.attributes("aria-label")).toBe("admin.settings.title");
 
     const tabs = wrapper.findAll('[role="tab"]');
-    expect(tabs).toHaveLength(14);
+    expect(tabs).toHaveLength(15);
+    expect(wrapper.get("#settings-tab-push").text()).toContain("admin.settings.tabs.push");
     expect(wrapper.get("#settings-tab-sharedCredit").text()).toContain("admin.settings.tabs.sharedCredit");
 
     for (const tab of tabs) {

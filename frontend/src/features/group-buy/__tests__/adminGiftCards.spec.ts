@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { reactive } from 'vue'
 import { flushPromises, shallowMount } from '@vue/test-utils'
 import AdminGiftCards from '../AdminGiftCards.vue'
+import AdminGiftUsageDialog from '../AdminGiftUsageDialog.vue'
 import { adminGroupBuyAPI } from '@/api/groupBuy'
 import type { AdminGroup } from '@/types'
 import type { GiftCardBatch, GiftCardPreview } from '@/types/groupBuy'
@@ -38,6 +39,15 @@ beforeEach(() => {
 afterEach(() => { wrappers.splice(0).forEach(wrapper => wrapper.unmount()); sessionStorage.clear(); vi.restoreAllMocks() })
 
 describe('batch gift issuance', () => {
+  it('offers usage inspection directly from each issued gift batch', async () => {
+    vi.mocked(adminGroupBuyAPI.giftBatches).mockResolvedValue({ items: [batch], total: 1, page: 1, page_size: 20, pages: 1 })
+    const wrapper = mount(); await flushPromises()
+    expect(wrapper.find('[data-testid="gift-usage-9"]').exists()).toBe(true)
+    await wrapper.get('[data-testid="gift-usage-9"]').trigger('click')
+    expect(wrapper.getComponent(AdminGiftUsageDialog).props('batch')).toEqual(batch)
+    auth.user = { id: 31 }; await flushPromises()
+    expect(wrapper.findComponent(AdminGiftUsageDialog).exists()).toBe(false)
+  })
   it('previews without issuing and invalidates preview when configuration changes', async () => {
     const wrapper = mount()
     await prepare(wrapper)

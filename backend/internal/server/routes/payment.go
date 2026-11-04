@@ -83,6 +83,8 @@ func RegisterPaymentRoutes(
 		adminGroupBuy.POST("/gifts/preview", h.PreviewGift)
 		adminGroupBuy.POST("/gifts", h.IssueGift)
 		adminGroupBuy.GET("/gifts", h.GiftBatches)
+		adminGroupBuy.GET("/gifts/:batch_id/cards", h.GiftCards)
+		adminGroupBuy.GET("/gifts/:batch_id/cards/:card_id/allocations", h.GiftAllocations)
 	}
 	// --- User-facing payment endpoints (authenticated) ---
 	authenticated := v1.Group("/payment")

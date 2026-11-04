@@ -133,6 +133,7 @@ deploy/docker-compose.override.yml
 .gocache/
 vite.config.js
 docs/*
+!docs/VOTING.md
 !docs/adr/
 !docs/ANTIGRAVITY_ATTRIBUTION_429.md
 !docs/admin-api-keys.md

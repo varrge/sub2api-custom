@@ -231,3 +231,24 @@ func TestUpdateSettingsVideoGenerationEntryRoundTrip(t *testing.T) {
 		nil, nil, UpdateSettingsRequest{},
 	), service.SettingKeyVideoGenerationEnabled)
 }
+
+func TestUpdateSettingsVotingRoundTrip(t *testing.T) {
+	h, repo := newStepUpSwitchTestHandler(t, map[string]string{})
+	for _, enabled := range []bool{true, false} {
+		rec := doUpdateSettings(t, h, map[string]any{"voting_enabled": enabled}, nil)
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+		require.Equal(t, enabled, gjson.Get(rec.Body.String(), "data.voting_enabled").Bool())
+		want := "false"
+		if enabled {
+			want = "true"
+		}
+		require.Equal(t, want, repo.values[service.SettingKeyVotingEnabled])
+		rec = doUpdateSettings(t, h, map[string]any{"site_name": "Voting site"}, nil)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, want, repo.values[service.SettingKeyVotingEnabled])
+	}
+	require.Contains(t, diffSettings(
+		&service.SystemSettings{VotingEnabled: true}, &service.SystemSettings{VotingEnabled: false},
+		nil, nil, UpdateSettingsRequest{},
+	), service.SettingKeyVotingEnabled)
+}

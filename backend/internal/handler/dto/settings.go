@@ -348,6 +348,7 @@ type SystemSettings struct {
 	PluginManagementEnabled  bool   `json:"plugin_management_enabled"`
 	NativeBoxEntryEnabled    bool   `json:"native_box_entry_enabled"`
 	ActivityCampaignsEnabled bool   `json:"activity_campaigns_enabled"`
+	VotingEnabled            bool   `json:"voting_enabled"`
 
 	// 风控中心功能开关
 	RiskControlEnabled bool `json:"risk_control_enabled"`
@@ -468,6 +469,7 @@ type PublicSettings struct {
 	PluginManagementEnabled  bool `json:"plugin_management_enabled"`
 	NativeBoxEntryEnabled    bool `json:"native_box_entry_enabled"`
 	ActivityCampaignsEnabled bool `json:"activity_campaigns_enabled"`
+	VotingEnabled            bool `json:"voting_enabled"`
 
 	AffiliateEnabled bool `json:"affiliate_enabled"`
 

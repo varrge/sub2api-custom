@@ -7406,6 +7406,17 @@
           </div>
         </div>
 
+        <div class="card" data-testid="voting-feature">
+          <div class="flex items-center justify-between gap-4 p-6">
+            <div>
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('votingEntry.settingsTitle') }}</h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('votingEntry.settingsHint') }}</p>
+              <router-link to="/admin/voting" class="mt-2 inline-block text-sm text-primary-600 hover:underline dark:text-primary-400">{{ t('votingEntry.adminTitle') }}</router-link>
+            </div>
+            <Toggle v-model="form.voting_enabled" :aria-label="t('votingEntry.settingsTitle')" data-testid="voting-enabled" />
+          </div>
+        </div>
+
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
@@ -10557,6 +10568,7 @@ const form = reactive<SettingsForm>({
   // Hosted image-generation page visibility
   image_generation_enabled: true,
   video_generation_enabled: true,
+  voting_enabled: false,
   // Support Tickets feature switch
   support_ticket_enabled: false,
   // Model Plaza feature switches + description
@@ -12362,6 +12374,7 @@ async function saveSettings() {
       // Hosted image-generation page visibility
       image_generation_enabled: form.image_generation_enabled,
       video_generation_enabled: form.video_generation_enabled,
+      voting_enabled: form.voting_enabled,
       // Support Tickets feature switch
       support_ticket_enabled: form.support_ticket_enabled,
       // Model Plaza feature switches + description

@@ -615,6 +615,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.ActivityCampaignsEnabled != after.ActivityCampaignsEnabled {
 		changed = append(changed, service.SettingKeyActivityCampaignsEnabled)
 	}
+	if before.VotingEnabled != after.VotingEnabled {
+		changed = append(changed, service.SettingKeyVotingEnabled)
+	}
 	if before.SubscriptionEnabled != after.SubscriptionEnabled {
 		changed = append(changed, "subscription_enabled")
 	}

@@ -386,6 +386,7 @@ export const useAppStore = defineStore('app', () => {
         plugin_management_enabled: false,
         native_box_entry_enabled: false,
         activity_campaigns_enabled: false,
+        voting_enabled: false,
         risk_control_enabled: false,
         service_quota_enabled: false,
         affiliate_enabled: false,

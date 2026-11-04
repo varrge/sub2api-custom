@@ -64,6 +64,20 @@ describe('resolveFeatureFlag', () => {
   })
 })
 
+describe('FeatureFlags.voting', () => {
+  it('defaults off and follows public settings injection and later changes', () => {
+    setActivePinia(createPinia())
+    expect(resolveFeatureFlag({}, FeatureFlags.voting)).toBe(false)
+    ;(window as any).__APP_CONFIG__ = { voting_enabled: true }
+    const store = useAppStore()
+    expect(store.initFromInjectedConfig()).toBe(true)
+    expect(isFeatureFlagEnabled(FeatureFlags.voting)).toBe(true)
+    store.cachedPublicSettings = { voting_enabled: false } as PublicSettings
+    expect(isFeatureFlagEnabled(FeatureFlags.voting)).toBe(false)
+    delete (window as any).__APP_CONFIG__
+  })
+})
+
 describe('FeatureFlags.nativeBoxEntry', () => {
   beforeEach(() => {
     setActivePinia(createPinia())

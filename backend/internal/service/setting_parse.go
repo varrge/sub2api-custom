@@ -216,6 +216,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyPluginManagementEnabled:  "false",
 		SettingKeyNativeBoxEntryEnabled:    "false",
 		SettingKeyActivityCampaignsEnabled: "false",
+		SettingKeyVotingEnabled:            "false",
 
 		// Affiliate (邀请返利) feature (default disabled; opt-in)
 		SettingKeyAffiliateEnabled:              "false",
@@ -851,6 +852,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result.PluginManagementEnabled = settings[SettingKeyPluginManagementEnabled] == "true"
 	result.NativeBoxEntryEnabled = settings[SettingKeyNativeBoxEntryEnabled] == "true"
 	result.ActivityCampaignsEnabled = settings[SettingKeyActivityCampaignsEnabled] == "true"
+	result.VotingEnabled = settings[SettingKeyVotingEnabled] == "true"
 
 	// Affiliate (邀请返利) feature (default: disabled; strict true)
 	result.AffiliateEnabled = settings[SettingKeyAffiliateEnabled] == "true"

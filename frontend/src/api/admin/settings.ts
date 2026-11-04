@@ -770,6 +770,7 @@ export interface SystemSettings {
   plugin_management_enabled: boolean;
   native_box_entry_enabled: boolean;
   activity_campaigns_enabled: boolean;
+  voting_enabled: boolean;
 
   // Affiliate (邀请返利) feature switch
   affiliate_enabled: boolean;
@@ -1097,6 +1098,7 @@ export interface UpdateSettingsRequest {
   plugin_management_enabled?: boolean;
   native_box_entry_enabled?: boolean;
   activity_campaigns_enabled?: boolean;
+  voting_enabled?: boolean;
 
   // Affiliate (邀请返利) feature switch
   affiliate_enabled?: boolean;

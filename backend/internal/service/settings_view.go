@@ -234,6 +234,7 @@ type SystemSettings struct {
 	PluginManagementEnabled  bool   `json:"plugin_management_enabled"`
 	NativeBoxEntryEnabled    bool   `json:"native_box_entry_enabled"`
 	ActivityCampaignsEnabled bool   `json:"activity_campaigns_enabled"`
+	VotingEnabled            bool   `json:"voting_enabled"`
 
 	// Claude Code version check
 	MinClaudeCodeVersion string
@@ -433,6 +434,7 @@ type PublicSettings struct {
 	PluginManagementEnabled  bool `json:"plugin_management_enabled"`
 	NativeBoxEntryEnabled    bool `json:"native_box_entry_enabled"`
 	ActivityCampaignsEnabled bool `json:"activity_campaigns_enabled"`
+	VotingEnabled            bool `json:"voting_enabled"`
 
 	// Affiliate (邀请返利) feature toggle
 	AffiliateEnabled bool `json:"affiliate_enabled"`

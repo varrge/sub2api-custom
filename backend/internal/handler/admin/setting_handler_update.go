@@ -370,6 +370,7 @@ type UpdateSettingsRequest struct {
 	PluginManagementEnabled  *bool `json:"plugin_management_enabled"`
 	NativeBoxEntryEnabled    *bool `json:"native_box_entry_enabled"`
 	ActivityCampaignsEnabled *bool `json:"activity_campaigns_enabled"`
+	VotingEnabled            *bool `json:"voting_enabled"`
 
 	// Affiliate (邀请返利) feature switch
 	AffiliateEnabled *bool `json:"affiliate_enabled"`
@@ -520,6 +521,9 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	// An unrelated settings save must not restore an outdated activity switch.
 	if req.ActivityCampaignsEnabled == nil {
 		omitted[service.SettingKeyActivityCampaignsEnabled] = struct{}{}
+	}
+	if req.VotingEnabled == nil {
+		omitted[service.SettingKeyVotingEnabled] = struct{}{}
 	}
 
 	previousSettings, err := h.settingService.GetAllSettings(c.Request.Context())
@@ -2099,6 +2103,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.ActivityCampaignsEnabled
 		}(),
+		VotingEnabled: func() bool {
+			if req.VotingEnabled != nil {
+				return *req.VotingEnabled
+			}
+			return previousSettings.VotingEnabled
+		}(),
 		AffiliateEnabled: func() bool {
 			if req.AffiliateEnabled != nil {
 				return *req.AffiliateEnabled
@@ -2553,6 +2563,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		PluginManagementEnabled:  updatedSettings.PluginManagementEnabled,
 		NativeBoxEntryEnabled:    updatedSettings.NativeBoxEntryEnabled,
 		ActivityCampaignsEnabled: updatedSettings.ActivityCampaignsEnabled,
+		VotingEnabled:            updatedSettings.VotingEnabled,
 
 		AffiliateEnabled: updatedSettings.AffiliateEnabled,
 

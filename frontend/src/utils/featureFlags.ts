@@ -94,6 +94,11 @@ function defineFlag<K extends keyof PublicSettings>(
  * public-settings-driven switch; see the "Adding a new flag" checklist above.
  */
 export const FeatureFlags = {
+  voting: defineFlag({
+    key: 'voting_enabled',
+    mode: 'opt-in',
+    label: 'Voting',
+  }),
   imageGeneration: defineFlag({
     key: 'image_generation_enabled',
     mode: 'opt-out',

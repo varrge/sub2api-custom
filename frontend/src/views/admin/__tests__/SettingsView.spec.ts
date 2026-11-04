@@ -431,6 +431,7 @@ const baseSettingsResponse = {
   compact_home_enabled: false,
   image_generation_enabled: true,
   video_generation_enabled: true,
+  voting_enabled: false,
   support_ticket_enabled: false,
   hide_ccs_import_button: false,
   table_default_page_size: 20,
@@ -1001,6 +1002,20 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(updateSettings).toHaveBeenCalledWith(
       expect.objectContaining({ video_generation_enabled: true, image_generation_enabled: true }),
     );
+    expect(fetchPublicSettings).toHaveBeenCalledWith(true);
+    wrapper.unmount();
+  });
+
+  it("saves the voting feature switch and refreshes the public settings", async () => {
+    const wrapper = mountView();
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+    const toggle = wrapper.get('[data-testid="voting-enabled"]');
+    expect((toggle.element as HTMLInputElement).checked).toBe(false);
+    await toggle.setValue(true);
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({ voting_enabled: true }));
     expect(fetchPublicSettings).toHaveBeenCalledWith(true);
     wrapper.unmount();
   });

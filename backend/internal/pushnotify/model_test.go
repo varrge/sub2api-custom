@@ -66,6 +66,53 @@ func TestValidationRenderingAndMasking(t *testing.T) {
 	require.Len(t, []rune(m.Title), 32)
 }
 
+func TestServerchanSendKeyOpaqueToken(t *testing.T) {
+	for _, tc := range []struct{ name, token string }{
+		{"hyphen", "demo-token"},
+		{"underscore", "demo_token"},
+		{"dots", "demo.payload.signature"},
+		{"tilde", "demo~token"},
+		{"long-token", strings.Repeat("a", 320)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testChannel()
+			c.Type, c.Credential = "serverchan", "sctp123t"+tc.token
+			require.NoError(t, validateChannel(c))
+			endpoint, err := destination(c)
+			require.NoError(t, err)
+			require.Equal(t, "https://123.push.ft07.com/send/"+c.Credential+".send", endpoint)
+		})
+	}
+}
+
+func TestServerchanSendKeyValidationErrors(t *testing.T) {
+	for _, tc := range []struct{ name, key, message string }{
+		{"empty", " \n\t", "请填写 Server 酱 SendKey"},
+		{"prefix", "wrong-secret", "SCT 或 sctp 开头"},
+		{"missing-uid", "sctptsecret", "sctp<数字 UID>t<密钥>"},
+		{"missing-separator", "sctp123secret", "sctp<数字 UID>t<密钥>"},
+		{"empty-sc3-token", "sctp123t", "sctp<数字 UID>t<密钥>"},
+		{"empty-turbo-token", "SCT", "SCT 后缺少密钥内容"},
+		{"url", "https://123.push.ft07.com/send/sctp123tsecret.send", "完整 SendKey"},
+		{"whitespace", "sctp123tsecret token", "空白或不支持的字符"},
+		{"invisible-space", "sctp123tsecret\u200b", "空白或不支持的字符"},
+		{"control", "sctp123tsecret\x00", "空白或不支持的字符"},
+		{"path", "sctp123tsecret/other", "空白或不支持的字符"},
+		{"query", "sctp123tsecret?other", "空白或不支持的字符"},
+		{"fragment", "sctp123tsecret#other", "空白或不支持的字符"},
+		{"escape", "sctp123tsecret%2fother", "空白或不支持的字符"},
+		{"too-long", "sctp123t" + strings.Repeat("a", 4096), "超过 4096 个字符"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			endpoint, err := destination(Channel{Type: "serverchan", Credential: tc.key})
+			require.ErrorIs(t, err, ErrInvalid)
+			require.ErrorContains(t, err, tc.message)
+			require.NotContains(t, err.Error(), "secret")
+			require.Empty(t, endpoint)
+		})
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
@@ -80,6 +127,7 @@ func TestSenderPayloadAndProviderAcknowledgement(t *testing.T) {
 		{"form", "webhook", "https://example.com/hook", "form", "ok", 200, false},
 		{"turbo", "serverchan", "SCT123secret", "", `{"code":0}`, 200, false},
 		{"sc3", "serverchan", "sctp123tsecret", "", `{"code":0}`, 200, false},
+		{"sc3-app-key", "serverchan", "sctp123tsecret_token-1.payload~signature", "", `{"code":0}`, 200, false},
 		{"provider-error", "serverchan", "SCT123secret", "", `{"code":40001,"message":"SCT123secret"}`, 200, true},
 		{"bad-json", "serverchan", "SCT123secret", "", "ok", 200, true},
 		{"redirect", "webhook", "https://example.com/hook", "json", "", 302, true},
@@ -91,6 +139,11 @@ func TestSenderPayloadAndProviderAcknowledgement(t *testing.T) {
 			d := Delivery{Event: "team.full", EventKey: "42", Title: "已满团", Body: "## 详情", Tags: "月卡|运营", OccurredAt: time.Now()}
 			s := &Sender{client: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 				require.Equal(t, "POST", r.Method)
+				if strings.HasPrefix(tc.key, "sctp") {
+					require.Equal(t, "123.push.ft07.com", r.URL.Host)
+					require.Equal(t, "/send/"+tc.key+".send", r.URL.Path)
+					require.Empty(t, r.URL.RawQuery)
+				}
 				require.Equal(t, "ops-1:team.full:42", r.Header.Get("X-Notification-ID"))
 				b, err := io.ReadAll(r.Body)
 				require.NoError(t, err)

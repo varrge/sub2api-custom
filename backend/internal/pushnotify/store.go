@@ -94,7 +94,7 @@ func (s *Store) Save(ctx context.Context, next Config) (Config, error) {
 		ch.EndpointHint = ""
 		ch.EventSince = map[string]time.Time{}
 		if err = validateChannel(*ch); err != nil {
-			return Config{}, err
+			return Config{}, fmt.Errorf("第 %d 个推送渠道（%s）：%w", i+1, ch.Name, err)
 		}
 		for _, event := range ch.Events {
 			at, ok := prior.EventSince[event]

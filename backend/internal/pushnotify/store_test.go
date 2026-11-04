@@ -73,6 +73,40 @@ func completed(t *testing.T, db *sql.DB, id int) {
 	sqlExec(t, db, `INSERT INTO payment_orders VALUES($1,1,'balance','COMPLETED',58)`, id)
 }
 
+func TestPostgresServerchanCredentialSaveAndValidation(t *testing.T) {
+	s, db := pushDB(t)
+	ctx := context.Background()
+	cfg, err := s.Get(ctx)
+	require.NoError(t, err)
+	ch := testChannel()
+	ch.Type, ch.Credential = "serverchan", "sctp123tsecret_token-1.payload~signature"+strings.Repeat("a", 320)
+	cfg.Channels = []Channel{ch}
+	saved, err := s.Save(ctx, cfg)
+	require.NoError(t, err)
+	require.True(t, saved.Channels[0].Configured)
+	require.Empty(t, saved.Channels[0].Credential)
+	require.Equal(t, "123.push.ft07.com", saved.Channels[0].EndpointHint)
+
+	saved, err = s.Save(ctx, saved)
+	require.NoError(t, err)
+	stored, err := readConfig(ctx, db, false)
+	require.NoError(t, err)
+	require.Equal(t, ch.Credential, stored.Channels[0].Credential)
+
+	bad := testChannel()
+	bad.ID, bad.Name, bad.Type, bad.Credential = "second", "备用提醒", "serverchan", "sctp123secret"
+	saved.Channels = append(saved.Channels, bad)
+	_, err = s.Save(ctx, saved)
+	require.ErrorIs(t, err, ErrInvalid)
+	require.ErrorContains(t, err, "第 2 个推送渠道（备用提醒）")
+	require.ErrorContains(t, err, "sctp<数字 UID>t<密钥>")
+	require.NotContains(t, err.Error(), "secret")
+	unchanged, err := s.Get(ctx)
+	require.NoError(t, err)
+	require.Equal(t, saved.Revision, unchanged.Revision)
+	require.Len(t, unchanged.Channels, 1)
+}
+
 func TestPostgresCapturesCommittedTransitionsAndNoHistoryReplay(t *testing.T) {
 	s, db := pushDB(t)
 	ctx := context.Background()

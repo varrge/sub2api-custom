@@ -250,13 +250,16 @@
                     type="password"
                     autocomplete="new-password"
                     class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-xs font-mono text-neutral-900 placeholder-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 dark:placeholder-neutral-500"
-                    :placeholder="selectedChannel.configured ? localText('留空保留已保存配置', 'Leave blank to keep saved credential') : (selectedChannel.type === 'serverchan' ? 'SCTxxxxxxxxxx...' : 'https://example.com/webhook')"
+                    :placeholder="selectedChannel.configured ? localText('留空保留已保存配置', 'Leave blank to keep saved credential') : (selectedChannel.type === 'serverchan' ? localText('SCT 开头或 sctp<数字 UID>t<密钥>', 'SCT key or sctp<UID>t<token>') : 'https://example.com/webhook')"
                   />
                   <p class="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400">
                     {{ selectedChannel.configured
                       ? localText('后端已保存该凭据。如无需修改请保持为空。', 'Saved on server. Leave empty if you do not want to change it.')
                       : localText('请输入推送凭据或可访问的 Webhook 回调地址。', 'Enter the SendKey or webhook endpoint URL.')
                     }}
+                  </p>
+                  <p v-if="selectedChannel.type === 'serverchan'" class="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                    {{ localText('支持 Server 酱 Turbo 和 Server 酱 3。请使用官网复制按钮获取完整 SendKey；不要粘贴带省略号的展示文本或整条 API 链接。', 'Supports ServerChan Turbo and ServerChan 3. Use the website’s copy button to get the full SendKey, not shortened text with ellipses or the full API URL.') }}
                   </p>
                 </div>
 

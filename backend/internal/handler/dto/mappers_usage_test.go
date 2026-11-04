@@ -329,6 +329,21 @@ func TestUsageLogFromService_PreservesHistoricalMissingImageSize(t *testing.T) {
 	require.NotContains(t, string(body), `"image_size":"2K"`)
 }
 
+func TestUsageLogFromService_IncludesSharedCreditForUserAndAdmin(t *testing.T) {
+	t.Parallel()
+	for _, applied := range []bool{false, true} {
+		log := &service.UsageLog{SharedCreditApplied: applied, ActualCost: 0.08}
+		for _, result := range []any{UsageLogFromService(log), UsageLogFromServiceAdmin(log)} {
+			body, err := json.Marshal(result)
+			require.NoError(t, err)
+			var fields map[string]any
+			require.NoError(t, json.Unmarshal(body, &fields))
+			require.Equal(t, applied, fields["shared_credit_applied"])
+			require.Equal(t, 0.08, fields["actual_cost"])
+		}
+	}
+}
+
 func f64Ptr(value float64) *float64 {
 	return &value
 }

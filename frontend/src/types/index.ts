@@ -1910,6 +1910,7 @@ export interface UsageLog {
   actual_cost: number
   rate_multiplier: number
   long_context_billing_applied: boolean
+  shared_credit_applied?: boolean
   billing_type: number
 
   request_type?: UsageRequestType

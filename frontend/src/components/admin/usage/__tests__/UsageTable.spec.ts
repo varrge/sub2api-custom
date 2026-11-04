@@ -18,6 +18,8 @@ import { nextTick } from 'vue'
 
 import en from '@/i18n/locales/en/admin/resources'
 import zh from '@/i18n/locales/zh/admin/resources'
+import enDashboard from '@/i18n/locales/en/dashboard'
+import zhDashboard from '@/i18n/locales/zh/dashboard'
 import UsageTable from '../UsageTable.vue'
 
 let locale: 'en' | 'zh' = 'en'
@@ -25,10 +27,18 @@ const localizedMessages: Record<'en' | 'zh', Record<string, string>> = {
   en: {
     'admin.usage.longContext': en.usage.longContext,
     'admin.usage.longContextPricingTooltip': en.usage.longContextPricingTooltip,
+    'usage.billingBalance': enDashboard.usage.billingBalance,
+    'usage.billingSubscription': enDashboard.usage.billingSubscription,
+    'usage.sharedCreditBadge': enDashboard.usage.sharedCreditBadge,
+    'usage.sharedCreditHint': enDashboard.usage.sharedCreditHint,
   },
   zh: {
     'admin.usage.longContext': zh.usage.longContext,
     'admin.usage.longContextPricingTooltip': zh.usage.longContextPricingTooltip,
+    'usage.billingBalance': zhDashboard.usage.billingBalance,
+    'usage.billingSubscription': zhDashboard.usage.billingSubscription,
+    'usage.sharedCreditBadge': zhDashboard.usage.sharedCreditBadge,
+    'usage.sharedCreditHint': zhDashboard.usage.sharedCreditHint,
   },
 }
 
@@ -217,6 +227,37 @@ describe('admin UsageTable tooltip', () => {
     expect(wrapper.find('[data-request-id="req-long-context-disabled"] [data-testid="long-context-billing-marker"]').exists()).toBe(false)
     expect(wrapper.find('[data-request-id="req-long-context-absent"] [data-testid="long-context-billing-marker"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('x2')
+  })
+
+  it.each([true, false])('shows shared-credit badges beside the billing source (account billing: %s)', (showAccountBilling) => {
+    locale = 'zh'
+    const wrapper = mount(UsageTable, {
+      props: {
+        data: [
+          { ...baseImageRow, request_id: 'full', actual_cost: 0, billing_type: 0, shared_credit_applied: true, service_tier: 'ultrafast' },
+          { ...baseImageRow, request_id: 'partial', billing_type: 1, shared_credit_applied: true, service_tier: 'priority' },
+          { ...baseImageRow, request_id: 'no-shared-credit', actual_cost: 0, billing_type: 0, shared_credit_applied: false },
+          { ...baseImageRow, request_id: 'legacy', actual_cost: 0, billing_type: 0 },
+        ],
+        loading: false,
+        columns: [],
+        showAccountBilling,
+      },
+      global: { stubs: { DataTable: DataTableStub, EmptyState: true, Icon: true, Teleport: true } },
+    })
+    expect(wrapper.findAll('[data-testid="shared-credit-badge"]')).toHaveLength(2)
+    for (const [requestId, source, tier] of [['full', '余额', 'UF'], ['partial', '订阅', 'FAST']]) {
+      const row = wrapper.get(`[data-request-id="${requestId}"]`)
+      const badge = row.get('[data-testid="shared-credit-badge"]')
+      expect(badge.text()).toBe('免享')
+      expect(badge.element.parentElement?.textContent).toContain(source)
+      expect(badge.attributes('title')).toBe('本次调用由全站共享额度承担了部分或全部费用。')
+      expect(row.text()).toContain(tier)
+    }
+    expect(wrapper.get('[data-request-id="partial"]').text()).toContain('$0.400000')
+    for (const requestId of ['no-shared-credit', 'legacy']) {
+      expect(wrapper.get(`[data-request-id="${requestId}"]`).find('[data-testid="shared-credit-badge"]').exists()).toBe(false)
+    }
   })
 
   it('keeps the request type badge and adds a separate badge only for native compaction rows', () => {

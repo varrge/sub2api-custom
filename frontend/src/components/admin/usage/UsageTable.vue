@@ -240,6 +240,17 @@
                 </div>
               </div>
             </div>
+            <div v-if="row.billing_type === 0 || row.billing_type === 1 || row.shared_credit_applied" class="mt-0.5 flex items-center gap-1.5">
+              <span v-if="row.billing_type === 1" class="text-[11px] text-gray-500 dark:text-gray-400">{{ t('usage.billingSubscription') }}</span>
+              <span v-else-if="row.billing_type === 0" class="text-[11px] text-gray-500 dark:text-gray-400">{{ t('usage.billingBalance') }}</span>
+              <span
+                v-if="row.shared_credit_applied"
+                data-testid="shared-credit-badge"
+                :title="t('usage.sharedCreditHint')"
+                :aria-label="t('usage.sharedCreditHint')"
+                class="inline-flex shrink-0 items-center whitespace-nowrap rounded bg-emerald-50 px-1 py-px text-[10px] font-semibold leading-tight text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-950/40 dark:text-emerald-400 dark:ring-emerald-500/30"
+              >{{ t('usage.sharedCreditBadge') }}</span>
+            </div>
             <div v-if="showAccountBilling && row.account_rate_multiplier != null" class="mt-0.5 text-[11px] text-orange-500 dark:text-orange-400">
               A ${{ accountBilled(row).toFixed(6) }}
             </div>

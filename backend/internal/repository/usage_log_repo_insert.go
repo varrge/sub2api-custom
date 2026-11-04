@@ -20,7 +20,7 @@ import (
 //  1. prepareUsageLogInsert().args
 //  2. every INSERT/CTE VALUES column list in this file
 //  3. execUsageLogInsertNoResult placeholder positions
-//  4. scanUsageLog selected column order (via usageLogSelectColumns)
+//  4. scanUsageLog physical column order (excluding id and read-only projections)
 //
 // When adding a usage_logs column, update all of those call sites together.
 var usageLogInsertArgTypes = [...]string{

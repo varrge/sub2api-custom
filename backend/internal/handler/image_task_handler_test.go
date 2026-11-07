@@ -44,6 +44,102 @@ func (s *asyncImageMemoryStore) Get(_ context.Context, id string) (*service.Imag
 	return &copy, nil
 }
 
+func TestAsyncImageHandlerCapabilities(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, tc := range []struct {
+		name       string
+		platform   string
+		permission bool
+		disabled   string
+		want       bool
+	}{
+		{name: "OpenAI", platform: service.PlatformOpenAI, permission: true, want: true},
+		{name: "Grok", platform: service.PlatformGrok, permission: true, want: true},
+		{name: "Composite", platform: service.PlatformComposite, permission: true},
+		{name: "Gemini", platform: service.PlatformGemini, permission: true},
+		{name: "Antigravity", platform: service.PlatformAntigravity, permission: true},
+		{name: "image permission disabled", platform: service.PlatformOpenAI},
+		{name: "no group"},
+		{name: "feature disabled", platform: service.PlatformOpenAI, permission: true, disabled: "feature"},
+		{name: "task store unavailable", platform: service.PlatformOpenAI, permission: true, disabled: "store"},
+		{name: "task service unavailable", platform: service.PlatformOpenAI, permission: true, disabled: "tasks"},
+		{name: "executor unavailable", platform: service.PlatformOpenAI, permission: true, disabled: "executor"},
+		{name: "gateway unavailable", platform: service.PlatformOpenAI, permission: true, disabled: "gateway"},
+		{name: "handler unavailable", platform: service.PlatformOpenAI, permission: true, disabled: "handler"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &asyncImageMemoryStore{tasks: make(map[string]*service.ImageTaskRecord)}
+			tasks := service.NewImageTaskServiceWithUploader(store, nil, time.Hour, time.Minute)
+			h := NewAsyncImageHandler(tasks, &OpenAIGatewayHandler{})
+			h.execute = func(string, *gin.Context) { t.Error("capability discovery must not execute an upstream request") }
+			switch tc.disabled {
+			case "feature":
+				h.tasks = service.NewImageTaskService(store)
+			case "store":
+				h.tasks = service.NewImageTaskServiceWithUploader(nil, nil, time.Hour, time.Minute)
+			case "tasks":
+				h.tasks = nil
+			case "executor":
+				h.execute = nil
+			case "gateway":
+				h = NewAsyncImageHandler(tasks, nil)
+			case "handler":
+				h = nil
+			}
+			key := &service.APIKey{ID: 9, UserID: 7}
+			if tc.platform != "" {
+				key.Group = &service.Group{Platform: tc.platform, AllowImageGeneration: tc.permission}
+			}
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Set(string(middleware2.ContextKeyAPIKey), key)
+			h.Capabilities(c)
+			require.Equal(t, http.StatusOK, w.Code)
+			require.Equal(t, "no-store", w.Header().Get("Cache-Control"))
+			var body map[string]bool
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+			require.Equal(t, map[string]bool{"async_tasks": tc.want}, body)
+			require.Empty(t, store.tasks)
+		})
+	}
+}
+
+func TestAsyncImageHandlerCapabilitiesRequiresAuthenticatedOwner(t *testing.T) {
+	for _, key := range []*service.APIKey{nil, {}, {ID: 9}, {UserID: 7}} {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		if key != nil {
+			c.Set(string(middleware2.ContextKeyAPIKey), key)
+		}
+		var h *AsyncImageHandler
+		h.Capabilities(c)
+		require.Equal(t, http.StatusForbidden, w.Code)
+	}
+}
+
+func TestAsyncImageHandlerCapabilitiesReflectsCurrentEnablement(t *testing.T) {
+	store := &asyncImageMemoryStore{tasks: make(map[string]*service.ImageTaskRecord)}
+	enabled := false
+	tasks := service.NewImageTaskServiceWithResolver(store, func() (*service.ImageResultUploader, bool) {
+		return nil, enabled
+	}, time.Hour, time.Minute)
+	h := NewAsyncImageHandler(tasks, &OpenAIGatewayHandler{})
+	for _, value := range []bool{false, true, false} {
+		enabled = value
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set(string(middleware2.ContextKeyAPIKey), &service.APIKey{
+			ID: 9, UserID: 7,
+			Group: &service.Group{Platform: service.PlatformOpenAI, AllowImageGeneration: true},
+		})
+		h.Capabilities(c)
+		var body map[string]bool
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+		require.Equal(t, enabled, body["async_tasks"])
+	}
+	require.Empty(t, store.tasks)
+}
+
 func TestAsyncImageHandlerSubmitAndPoll(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	store := &asyncImageMemoryStore{tasks: make(map[string]*service.ImageTaskRecord)}

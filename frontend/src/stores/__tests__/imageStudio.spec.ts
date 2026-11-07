@@ -3,16 +3,23 @@ import { reactive, nextTick, toRaw } from 'vue'
 import { flushPromises } from '@vue/test-utils'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { useImageStudioStore } from '../imageStudio'
+import { ImageGenerationError, type GenerateImageOptions, type ImageTask } from '@/api/imageGeneration'
 
-const { load, save, generate } = vi.hoisted(() => ({ load: vi.fn(), save: vi.fn(), generate: vi.fn() }))
+const { load, save, generate, capability, submit, query } = vi.hoisted(() => ({
+  load: vi.fn(), save: vi.fn(), generate: vi.fn(), capability: vi.fn(), submit: vi.fn(), query: vi.fn(),
+}))
 const auth = reactive({ isAuthenticated: true, user: { id: 1 } })
 vi.mock('../auth', () => ({ useAuthStore: () => auth }))
 vi.mock('../imageStudioStorage', () => ({ loadImageStudio: load, saveImageStudio: save }))
-vi.mock('@/api/imageGeneration', () => ({ generateImages: generate }))
+vi.mock('@/api/imageGeneration', async importOriginal => ({
+  ...await importOriginal<typeof import('@/api/imageGeneration')>(),
+  generateImages: generate, readImageAsyncCapability: capability, submitImageTask: submit, getImageTask: query,
+}))
 
 let store: ReturnType<typeof useImageStudioStore>
 beforeEach(async () => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
+  capability.mockResolvedValue(false)
   auth.isAuthenticated = true
   auth.user = { id: 1 }
   load.mockResolvedValue(null)
@@ -44,6 +51,7 @@ describe('image studio sessions', () => {
     const original = store.activeSession!
     const pending = store.generate('never-persist-this-secret', 'openai')
     await store.generate('never-persist-this-secret', 'openai')
+    await flushPromises()
     expect(generate).toHaveBeenCalledTimes(1)
     store.createSession()
     store.activeSession!.form.prompt = 'Next draft'
@@ -59,7 +67,7 @@ describe('image studio sessions', () => {
 
   it('restores completed sessions and marks refreshed pending requests without resubmitting', async () => {
     const session = structuredClone(toRaw(store.activeSession!))
-    session.pending = { count: 1, aspectRatio: 'auto' }
+    session.pending = { count: 1, aspectRatio: 'auto', completed: 0, startedAt: Date.now() }
     load.mockResolvedValue({ sessions: [session], activeId: session.id })
     auth.user = { id: 2 }
     await flushPromises()
@@ -86,6 +94,7 @@ describe('image studio sessions', () => {
     store.activeSession!.form.resolution = '4K'
     const pending = store.generate('secret', 'openai')
     store.activeSession!.form.resolution = '1K'
+    await flushPromises()
     expect(generate).toHaveBeenCalledWith(expect.objectContaining({ resolution: '4K', quality: 'standard' }))
     complete([{ src: 'data:image/png;base64,QUJD' }])
     await pending
@@ -117,6 +126,7 @@ describe('image studio sessions', () => {
     let complete!: (images: { src: string }[]) => void
     generate.mockImplementation(() => new Promise(resolve => { complete = resolve }))
     const pending = store.generate('secret', 'openai')
+    await flushPromises()
     auth.isAuthenticated = false
     expect(store.sessions).toEqual([])
     auth.user = { id: 2 }
@@ -176,5 +186,209 @@ describe('image studio sessions', () => {
     store.deleteSession(second)
     expect(store.sessions).toHaveLength(1)
     expect(store.activeId).not.toBe(second)
+  })
+})
+
+
+describe('image studio run records', () => {
+  it('persists each successful image before a later confirmed failure and retains unsubmitted progress', async () => {
+    store.activeSession!.form.count = 4
+    generate.mockImplementation(async (options: GenerateImageOptions) => {
+      options.onRequest?.(1)
+      await options.onImages?.([{ src: 'data:image/png;base64,FIRST' }])
+      expect(save.mock.calls.at(-1)?.[1].sessions[0].results).toHaveLength(1)
+      options.onRequest?.(1)
+      throw new ImageGenerationError('second request failed', 'confirmed', 400)
+    })
+    expect(await store.generate('secret', 'gemini')).toBe(1)
+    const session = store.activeSession!
+    expect(session.results).toHaveLength(1)
+    expect(session.runs[0]).toMatchObject({ status: 'failed', requested: 4, submitted: 2, completed: 1, errorKind: 'confirmed' })
+    expect(session.error).toBe('second request failed')
+    expect(session.pending).toBeNull()
+    expect(generate).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps partial results when the next submitted request has an unknown outcome', async () => {
+    generate.mockImplementation(async (options: GenerateImageOptions) => {
+      options.onRequest?.(1)
+      await options.onImages?.([{ src: 'first' }])
+      options.onRequest?.(1)
+      throw new ImageGenerationError('offline', 'unknown')
+    })
+    expect(await store.generate('secret', 'gemini')).toBe(1)
+    expect(store.activeSession!.runs[0]).toMatchObject({ status: 'interrupted', errorKind: 'unknown', completed: 1 })
+    expect(store.activeSession!.interrupted).toBe(true)
+    expect(store.activeSession!.error).toBe('imageGeneration.submitUnknown')
+  })
+
+  it('restores the normalized immutable run inputs and its original key without submitting', async () => {
+    const session = store.activeSession!
+    session.form = { ...session.form, apiKeyId: 73, model: ' models/gpt-image-2 ', prompt: '  A forest  ', aspectRatio: '16:9' }
+    const reference = new File(['source'], 'source.png', { type: 'image/png' })
+    session.referenceFiles = [reference]
+    generate.mockResolvedValue([{ src: 'first' }, { src: 'second' }])
+    await store.generate('must-not-be-saved', 'openai')
+    const run = session.runs[0]!
+    expect(run.form).toMatchObject({ apiKeyId: 73, model: 'gpt-image-2', prompt: 'A forest', aspectRatio: '1:1', resolution: '1K' })
+    expect(Object.isFrozen(run.form)).toBe(true)
+    expect(Object.isFrozen(run.referenceFiles)).toBe(true)
+    expect(session.results.every(result => result.runId === run.id && result.aspectRatio === '1:1')).toBe(true)
+    session.form.prompt = 'new draft'
+    session.form.apiKeyId = 999
+    session.referenceFiles = []
+    expect(store.restoreResult(session.results[1]!.id)).toBe(true)
+    expect(session.form).toEqual(run.form)
+    expect(session.form).not.toBe(run.form)
+    expect(session.referenceFiles).toEqual([reference])
+    expect(session.referenceFiles).not.toBe(run.referenceFiles)
+    expect(generate).toHaveBeenCalledTimes(1)
+    await store.flush()
+    expect(JSON.stringify(save.mock.calls)).not.toContain('must-not-be-saved')
+    expect(session.results[0]).not.toHaveProperty('referenceFiles')
+  })
+
+  it('loads legacy results and only reuses their recorded parameters', async () => {
+    const saved = structuredClone(toRaw(store.activeSession!))
+    Reflect.deleteProperty(saved, 'runs')
+    saved.results.push({ id: 'legacy', src: 'old', model: 'old-model', prompt: 'old prompt', aspectRatio: '3:2', createdAt: 'old', mode: 'text' })
+    load.mockResolvedValue({ sessions: [saved], activeId: saved.id })
+    auth.user = { id: 2 }
+    await flushPromises()
+    const session = store.activeSession!
+    session.form.apiKeyId = 11
+    session.form.resolution = '4K'
+    session.form.quality = 'high'
+    expect(store.restoreResult('legacy')).toBe(true)
+    expect(session.runs).toEqual([])
+    expect(session.form).toMatchObject({ model: 'old-model', prompt: 'old prompt', aspectRatio: '3:2', apiKeyId: 11, resolution: '4K', quality: 'high' })
+    expect(generate).not.toHaveBeenCalled()
+  })
+
+  it('does not submit after a capability check finishes for a different owner', async () => {
+    let complete!: (enabled: boolean) => void
+    capability.mockImplementation(() => new Promise(resolve => { complete = resolve }))
+    const pending = store.generate('secret', 'openai')
+    await flushPromises()
+    const signal = capability.mock.calls[0]![2] as AbortSignal
+    auth.user = { id: 2 }
+    await flushPromises()
+    expect(signal.aborted).toBe(true)
+    complete(true)
+    await pending
+    expect(submit).not.toHaveBeenCalled()
+    expect(generate).not.toHaveBeenCalled()
+    expect(store.activeSession!.runs).toEqual([])
+  })
+
+  it('renames a session without changing its generation inputs', () => {
+    const session = store.activeSession!
+    store.renameSession(session.id, '  Forest study  ')
+    expect(session.title).toBe('Forest study')
+    expect(session.form.prompt).toBe('A forest')
+  })
+})
+
+describe('image studio asynchronous recovery', () => {
+  const task = (status: ImageTask['status'] = 'processing'): ImageTask => ({
+    id: 'imgtask_original', status, images: status === 'completed' ? [{ src: 'stored-result' }] : [], retryAfterMs: 0,
+  })
+
+  function mockSubmission() {
+    capability.mockResolvedValue(true)
+    submit.mockImplementation(async (options: GenerateImageOptions) => {
+      options.onRequest?.(options.count)
+      return task()
+    })
+  }
+
+  it('persists the accepted task before polling and deduplicates completed recovery', async () => {
+    mockSubmission()
+    query.mockImplementation(async (key, id) => {
+      expect(key).toBe('original-key')
+      expect(id).toBe('imgtask_original')
+      expect(save.mock.calls.at(-1)?.[1].sessions[0].runs[0].taskId).toBe(id)
+      return task('completed')
+    })
+    expect(await store.generate('original-key', 'openai')).toBe(1)
+    const session = store.activeSession!
+    expect(session.runs[0]).toMatchObject({ taskId: 'imgtask_original', status: 'completed', completed: 1 })
+    expect(await store.recover(session.id, 'original-key')).toBe(0)
+    expect(query).toHaveBeenCalledTimes(1)
+    expect(submit).toHaveBeenCalledTimes(1)
+    expect(generate).not.toHaveBeenCalled()
+    expect(session.results).toHaveLength(1)
+  })
+
+  it('keeps task identity after a query network failure and resumes after reload with GET only', async () => {
+    mockSubmission()
+    query.mockRejectedValueOnce(new TypeError('offline'))
+    await expect(store.generate('original-key', 'openai')).rejects.toThrow('offline')
+    expect(store.activeSession!.runs[0]).toMatchObject({ taskId: 'imgtask_original', status: 'processing', errorKind: 'query' })
+    expect(store.activeSession!.pending).toBeNull()
+    await store.flush()
+    const snapshot = structuredClone(save.mock.calls.at(-1)![1])
+    load.mockResolvedValue(snapshot)
+    auth.user = { id: 2 }
+    await flushPromises()
+    const session = store.activeSession!
+    query.mockResolvedValue(task('completed'))
+    expect(await store.recover(session.id, 'original-key')).toBe(1)
+    expect(submit).toHaveBeenCalledTimes(1)
+    expect(capability).toHaveBeenCalledTimes(1)
+    expect(generate).not.toHaveBeenCalled()
+    expect(session.results).toHaveLength(1)
+  })
+
+  it('never falls back or retries when the async submission response is lost', async () => {
+    mockSubmission()
+    submit.mockImplementation(async (options: GenerateImageOptions) => {
+      options.onRequest?.(options.count)
+      throw new ImageGenerationError('connection lost', 'unknown')
+    })
+    await expect(store.generate('key', 'openai')).rejects.toThrow('connection lost')
+    const session = store.activeSession!
+    expect(session.runs[0]).toMatchObject({ status: 'interrupted', errorKind: 'unknown' })
+    expect(session.runs[0]!.taskId).toBeUndefined()
+    expect(await store.recover(session.id, 'key')).toBe(0)
+    expect(submit).toHaveBeenCalledTimes(1)
+    expect(generate).not.toHaveBeenCalled()
+    expect(query).not.toHaveBeenCalled()
+  })
+
+  it('does not submit when the capability check fails', async () => {
+    capability.mockRejectedValue(new Error('capability offline'))
+    await expect(store.generate('key', 'openai')).rejects.toThrow('capability offline')
+    expect(store.activeSession!.runs[0]).toMatchObject({ submitted: 0, errorKind: 'confirmed' })
+    expect(generate).not.toHaveBeenCalled()
+    expect(submit).not.toHaveBeenCalled()
+  })
+
+  it.each([[404, 'taskExpired'], [401, 'taskKeyUnavailable'], [403, 'taskKeyUnavailable']] as const)(
+    'stops polling on HTTP %s without losing the task or submitting again', async (status, key) => {
+      mockSubmission()
+      query.mockRejectedValue(new ImageGenerationError('query rejected', 'confirmed', status))
+      await expect(store.generate('original-key', 'openai')).rejects.toThrow('query rejected')
+      expect(store.activeSession!.runs[0]).toMatchObject({ status: 'processing', taskId: 'imgtask_original', errorKind: 'query', error: `imageGeneration.${key}` })
+      expect(query).toHaveBeenCalledTimes(1)
+      expect(submit).toHaveBeenCalledTimes(1)
+      expect(generate).not.toHaveBeenCalled()
+    },
+  )
+
+  it('aborts a pending task query when the owner changes and ignores late results', async () => {
+    mockSubmission()
+    let complete!: (result: ImageTask) => void
+    query.mockImplementation(() => new Promise(resolve => { complete = resolve }))
+    const pending = store.generate('key', 'openai')
+    await vi.waitFor(() => expect(query).toHaveBeenCalledTimes(1))
+    const signal = query.mock.calls[0]![2] as AbortSignal
+    auth.user = { id: 2 }
+    await flushPromises()
+    expect(signal.aborted).toBe(true)
+    complete(task('completed'))
+    await pending
+    expect(store.activeSession!.results).toEqual([])
+    expect(store.activeSession!.runs).toEqual([])
   })
 })

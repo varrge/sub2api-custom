@@ -46,6 +46,20 @@ func (h *AsyncImageHandler) pollable() bool {
 	return h != nil && h.tasks != nil && h.tasks.Pollable()
 }
 
+// Capabilities reports availability for the authenticated key's original group.
+func (h *AsyncImageHandler) Capabilities(c *gin.Context) {
+	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
+	if !ok || apiKey == nil || apiKey.UserID <= 0 || apiKey.ID <= 0 {
+		imageTaskError(c, service.ErrImageTaskForbidden)
+		return
+	}
+	group := apiKey.Group
+	available := group != nil && (group.Platform == service.PlatformOpenAI || group.Platform == service.PlatformGrok) &&
+		service.GroupAllowsImageGeneration(group) && h.enabled() && h.execute != nil && h.openAI != nil
+	c.Header("Cache-Control", "no-store")
+	c.JSON(http.StatusOK, gin.H{"async_tasks": available})
+}
+
 // Submit accepts the same payload as the synchronous Images endpoint and
 // returns before the upstream image generation begins.
 func (h *AsyncImageHandler) Submit(c *gin.Context) {

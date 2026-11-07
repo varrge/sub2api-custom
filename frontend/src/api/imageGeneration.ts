@@ -20,6 +20,26 @@ export interface GenerateImageOptions {
   resolution: ImageResolution
   count: number
   referenceImages: File[]
+  signal?: AbortSignal
+  onImages?: (images: GeneratedImage[]) => void | Promise<void>
+  onRequest?: (count: number) => void
+}
+
+export type ImageGenerationErrorKind = 'confirmed' | 'unknown'
+
+export class ImageGenerationError extends Error {
+  constructor(message: string, public readonly kind: ImageGenerationErrorKind, public readonly status?: number) {
+    super(message)
+    this.name = 'ImageGenerationError'
+  }
+}
+
+export interface ImageTask {
+  id: string
+  status: 'processing' | 'completed' | 'failed'
+  images: GeneratedImage[]
+  error?: string
+  retryAfterMs: number
 }
 
 const supportedPlatforms = new Set<GroupPlatform>([
@@ -112,6 +132,7 @@ async function responseJSON(response: Response): Promise<unknown> {
   try {
     payload = await response.json()
   } catch {
+    if (response.ok) throw new ImageGenerationError('imageGeneration.invalidResponse', 'unknown')
     // Keep the HTTP status as the useful fallback for non-JSON proxy errors.
   }
   if (response.ok) return payload
@@ -119,7 +140,8 @@ async function responseJSON(response: Response): Promise<unknown> {
   const body = asRecord(payload)
   const error = asRecord(body?.error)
   const message = asString(error?.message) || asString(body?.message) || response.statusText
-  throw new Error(message || `HTTP ${response.status}`)
+  throw new ImageGenerationError(message || `HTTP ${response.status}`,
+    [408, 502, 504, 524].includes(response.status) ? 'unknown' : 'confirmed', response.status)
 }
 
 function modelIDs(payload: unknown): string[] {
@@ -189,6 +211,25 @@ function fileBase64(file: File): Promise<string> {
   })
 }
 
+function checkAborted(signal?: AbortSignal) {
+  if (signal?.aborted) throw new DOMException('Image generation listener stopped', 'AbortError')
+}
+
+async function submitRequest(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(buildGatewayUrl(url), init)
+  } catch (error) {
+    if (init.signal?.aborted) throw error
+    throw new ImageGenerationError(error instanceof Error ? error.message : 'imageGeneration.submitUnknown', 'unknown')
+  }
+}
+
+function requireImages(payload: unknown): GeneratedImage[] {
+  const images = parseGeneratedImages(payload)
+  if (!images.length) throw new ImageGenerationError('imageGeneration.noImageReturned', 'confirmed')
+  return images
+}
+
 async function generateGeminiImages(options: GenerateImageOptions): Promise<GeneratedImage[]> {
   const model = options.model.replace(/^models\//, '')
   const prefix = options.platform === 'antigravity' ? '/antigravity/v1beta' : '/v1beta'
@@ -204,8 +245,10 @@ async function generateGeminiImages(options: GenerateImageOptions): Promise<Gene
 
   const images: GeneratedImage[] = []
   for (let index = 0; index < options.count; index += 1) {
-    const response = await fetch(buildGatewayUrl(`${prefix}/models/${encodeURIComponent(model)}:generateContent`), {
-      method: 'POST',
+    checkAborted(options.signal)
+    options.onRequest?.(1)
+    const response = await submitRequest(`${prefix}/models/${encodeURIComponent(model)}:generateContent`, {
+      method: 'POST', signal: options.signal,
       headers: { ...authHeaders(options.apiKey), 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ role: 'user', parts }],
@@ -218,7 +261,10 @@ async function generateGeminiImages(options: GenerateImageOptions): Promise<Gene
         },
       }),
     })
-    images.push(...parseGeneratedImages(await responseJSON(response)))
+    const received = requireImages(await responseJSON(response))
+    checkAborted(options.signal)
+    images.push(...received)
+    await options.onImages?.(received)
   }
   return images
 }
@@ -239,7 +285,7 @@ export function openAIImageSize(aspectRatio: ImageAspectRatio, resolution: Image
   return '1024x1024'
 }
 
-async function generateOpenAIImages(options: GenerateImageOptions): Promise<GeneratedImage[]> {
+function openAIImageRequest(options: GenerateImageOptions): { endpoint: string; body: BodyInit; headers: HeadersInit } {
   const grok = usesGrokProtocol(options.platform, options.model)
   const values: Record<string, string | number> = {
     model: options.model,
@@ -267,20 +313,90 @@ async function generateOpenAIImages(options: GenerateImageOptions): Promise<Gene
   }
 
   const endpoint = options.referenceImages.length ? '/v1/images/edits' : '/v1/images/generations'
-  const response = await fetch(buildGatewayUrl(endpoint), { method: 'POST', headers, body })
-  return parseGeneratedImages(await responseJSON(response))
+  return { endpoint, headers, body }
+}
+
+export function resolveImageCapabilities(platform: GroupPlatform | undefined, model: string, resolution: ImageResolution = '1K') {
+  return {
+    resolutions: supportedImageResolutions(platform, model),
+    aspectRatios: supportedImageAspectRatios(platform, model, resolution),
+    supportsQuality: supportsImageQuality(platform, model),
+    knownModel: isLikelyImageModel(model),
+    // These are the studio's existing upload/prompt policies, not upstream model limits.
+    maxReferenceImages: 4,
+    maxReferenceImageBytes: 10 * 1024 * 1024,
+    maxPromptLength: 4000,
+  }
+}
+
+export function normalizeImageRequest<T extends GenerateImageOptions>(options: T): T {
+  const model = options.model.trim().replace(/^models\//, '')
+  const { resolutions } = resolveImageCapabilities(options.platform, model)
+  const resolution = resolutions.includes(options.resolution) ? options.resolution : resolutions[resolutions.length - 1]!
+  const { aspectRatios } = resolveImageCapabilities(options.platform, model, resolution)
+  return {
+    ...options, model, prompt: options.prompt.trim(), resolution,
+    aspectRatio: aspectRatios.includes(options.aspectRatio) ? options.aspectRatio : '1:1',
+    referenceImages: [...options.referenceImages],
+  }
 }
 
 export async function generateImages(options: GenerateImageOptions): Promise<GeneratedImage[]> {
-  const resolutions = supportedImageResolutions(options.platform, options.model)
-  const resolution = resolutions.includes(options.resolution) ? options.resolution : resolutions[resolutions.length - 1]!
-  const ratios = supportedImageAspectRatios(options.platform, options.model, resolution)
-  const request = {
-    ...options,
-    resolution,
-    aspectRatio: ratios.includes(options.aspectRatio) ? options.aspectRatio : '1:1' as const,
+  const request = normalizeImageRequest(options)
+  checkAborted(request.signal)
+  if (usesGeminiProtocol(request.platform, request.model)) return generateGeminiImages(request)
+  const { endpoint, headers, body } = openAIImageRequest(request)
+  request.onRequest?.(request.count)
+  const response = await submitRequest(endpoint, { method: 'POST', headers, body, signal: request.signal })
+  const images = requireImages(await responseJSON(response))
+  checkAborted(request.signal)
+  await request.onImages?.(images)
+  return images
+}
+
+export async function readImageAsyncCapability(apiKey: string, platform: GroupPlatform, signal?: AbortSignal): Promise<boolean> {
+  if (platform !== 'openai' && platform !== 'grok') return false
+  const response = await fetch(buildGatewayUrl('/v1/images/capabilities'), { headers: authHeaders(apiKey), signal })
+  if (response.status === 404) return false
+  return asRecord(await responseJSON(response))?.async_tasks === true
+}
+
+function parseImageTask(payload: unknown, response: Response): ImageTask {
+  const body = asRecord(payload)
+  const id = asString(body?.task_id) || asString(body?.id)
+  const status = body?.status
+  if (!id || !['processing', 'completed', 'failed'].includes(asString(status))) {
+    throw new ImageGenerationError('imageGeneration.invalidTaskResponse', 'unknown')
   }
-  return usesGeminiProtocol(request.platform, request.model)
-    ? generateGeminiImages(request)
-    : generateOpenAIImages(request)
+  const retryAfter = response.headers?.get('Retry-After')
+  const seconds = retryAfter === null || retryAfter === undefined ? NaN : Number(retryAfter)
+  const retryAfterMs = Number.isFinite(seconds) ? Math.max(0, seconds * 1000)
+    : retryAfter && Number.isFinite(Date.parse(retryAfter)) ? Math.max(0, Date.parse(retryAfter) - Date.now()) : 3000
+  return {
+    id, status: status as ImageTask['status'],
+    images: parseGeneratedImages(body?.result),
+    error: asString(asRecord(body?.error)?.message) || undefined,
+    retryAfterMs,
+  }
+}
+
+export async function submitImageTask(options: GenerateImageOptions): Promise<ImageTask> {
+  const request = normalizeImageRequest(options)
+  if (request.platform !== 'openai' && request.platform !== 'grok') {
+    throw new ImageGenerationError('imageGeneration.asyncUnsupported', 'confirmed')
+  }
+  checkAborted(request.signal)
+  const { endpoint, headers, body } = openAIImageRequest(request)
+  request.onRequest?.(request.count)
+  const response = await submitRequest(`${endpoint}/async`, { method: 'POST', headers, body, signal: request.signal })
+  return parseImageTask(await responseJSON(response), response)
+}
+
+export async function getImageTask(apiKey: string, taskId: string, signal?: AbortSignal): Promise<ImageTask> {
+  const response = await fetch(buildGatewayUrl(`/v1/images/tasks/${encodeURIComponent(taskId)}`), {
+    headers: authHeaders(apiKey), signal,
+  })
+  const task = parseImageTask(await responseJSON(response), response)
+  if (task.id !== taskId) throw new ImageGenerationError('imageGeneration.invalidTaskResponse', 'unknown')
+  return task
 }

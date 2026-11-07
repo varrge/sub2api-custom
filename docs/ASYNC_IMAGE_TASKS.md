@@ -7,18 +7,33 @@ Asynchronous image tasks let clients submit long-running OpenAI-compatible image
 The authenticated gateway exposes both `/v1` paths and their existing no-prefix aliases:
 
 ```text
+GET  /v1/images/capabilities
 POST /v1/images/generations/async
 POST /v1/images/edits/async
 GET  /v1/images/tasks/{task_id}
 ```
 
-The aliases are `/images/generations/async`, `/images/edits/async`, and `/images/tasks/{task_id}`.
+The aliases are `/images/capabilities`, `/images/generations/async`, `/images/edits/async`, and `/images/tasks/{task_id}`.
 
 Only OpenAI and Grok groups are supported. Requests use the same JSON or multipart payload as the corresponding synchronous endpoint. Streaming image requests are rejected because a polled task returns one final JSON result.
 
+## Discover availability
+
+Before choosing the asynchronous submission path, call `GET /v1/images/capabilities` with the API key that will submit the task. It returns plain JSON with `Cache-Control: no-store`:
+
+```json
+{"async_tasks": true}
+```
+
+`async_tasks` is true only when the authenticated key's original group is OpenAI or Grok, the group permits image generation, object storage and task storage enable the existing task service, and the image executor is available. Other valid groups, including Composite, Gemini and Antigravity, receive `200` with `{"async_tasks": false}`. Discovery does not select a Composite target or require a model; model restrictions still apply when submitting a generation request. Existing key, user, IP and group authentication checks apply.
+
+This read-only request does not create tasks, call an upstream image provider, consume quota, or disclose storage configuration. It skips billing checks, so availability does not promise that the key has enough credit to submit a new task. Feature settings can change after discovery; a rejected or interrupted submission must not be automatically retried through the synchronous endpoint.
+
+Clients with an accepted task ID should query that original task even if discovery later returns false. Turning the feature off stops new submissions but preserves task polling. A lost submission response without a task ID is an uncertain submission, not permission to generate again.
+
 ## Enabling the feature (object storage)
 
-Asynchronous image tasks are **disabled by default** and gated on object storage. When the switch is off — or the S3 credentials are incomplete — the async endpoints return `404` and never create a task or write to Redis. This is deliberate: without offloading, large `b64_json` results (several MB each, e.g. `gpt-image-1`) would accumulate in Redis and exhaust its memory.
+Asynchronous image tasks are **disabled by default** and gated on object storage. When the switch is off — or the S3 credentials are incomplete — new async submissions return `404` and never create a task or write to Redis; capability discovery returns `200` with `async_tasks: false`. This is deliberate: without offloading, large `b64_json` results (several MB each, e.g. `gpt-image-1`) would accumulate in Redis and exhaust its memory.
 
 ### From the admin UI (recommended)
 

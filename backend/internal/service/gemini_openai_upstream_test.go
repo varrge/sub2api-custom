@@ -211,7 +211,8 @@ func TestGeminiOpenAIExplicitTextDeltasSurviveCompatibilityParsing(t *testing.T)
 				require.NoError(t, err)
 				wire, err := io.ReadAll(adapted.Body)
 				require.NoError(t, err)
-				var native, compatible, seen string
+				var native, compatible string
+				var seen geminiTextDelta
 				for _, line := range strings.Split(string(wire), "\n") {
 					payload, ok := strings.CutPrefix(line, "data: ")
 					if !ok {
@@ -222,8 +223,7 @@ func TestGeminiOpenAIExplicitTextDeltasSurviveCompatibilityParsing(t *testing.T)
 					for _, part := range extractGeminiParts(chunk) {
 						text, _ := part["text"].(string)
 						native += text
-						delta, next := computeGeminiResponseTextDelta(adapted, seen, text)
-						seen = next
+						delta := computeGeminiResponseTextDelta(adapted, &seen, text)
 						compatible += delta
 					}
 				}
@@ -240,13 +240,15 @@ func TestGeminiOpenAIExplicitTextDeltasJSONFallback(t *testing.T) {
 	))}
 	adapted, err := adaptGeminiOpenAIResponse(resp, "responses", true)
 	require.NoError(t, err)
-	delta, seen := computeGeminiResponseTextDelta(adapted, "a", "a")
+	var seen geminiTextDelta
+	require.Equal(t, "a", seen.next("a"))
+	delta := computeGeminiResponseTextDelta(adapted, &seen, "a")
 	require.Equal(t, "a", delta)
-	require.Equal(t, "aa", seen)
+	require.Equal(t, "a", seen.seen.String(), "explicit deltas do not need cumulative storage")
 	native := &http.Response{Body: io.NopCloser(strings.NewReader(""))}
-	delta, seen = computeGeminiResponseTextDelta(native, "a", "a")
+	delta = computeGeminiResponseTextDelta(native, &seen, "a")
 	require.Empty(t, delta)
-	require.Equal(t, "a", seen, "native cumulative compatibility is unchanged")
+	require.Equal(t, "a", seen.seen.String(), "native cumulative compatibility is unchanged")
 }
 
 type geminiOpenAITestReadCloser struct {

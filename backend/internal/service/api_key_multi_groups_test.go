@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Wei-Shaw/sub2api/internal/monthcard"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -25,10 +26,11 @@ func (r *multiGroupRepository) GetByID(_ context.Context, id int64) (*Group, err
 type multiGroupRPMRepository struct {
 	UserGroupRateRepository
 	values map[int64]*int
+	errors map[int64]error
 }
 
 func (r *multiGroupRPMRepository) GetRPMOverrideByUserAndGroup(_ context.Context, _, id int64) (*int, error) {
-	return r.values[id], nil
+	return r.values[id], r.errors[id]
 }
 
 func TestAPIKeyMultiGroupJSONPresence(t *testing.T) {
@@ -157,4 +159,52 @@ func TestAPIKeyCreateRequiresExplicitGroup(t *testing.T) {
 	_, err := svc.Create(context.Background(), 10, CreateAPIKeyRequest{Name: "ungrouped"})
 	require.Error(t, err)
 	require.Equal(t, "API_KEY_GROUP_REQUIRED", infraerrors.Reason(err))
+}
+
+func TestAPIKeyMultiGroupRPMResolutionSurvivesCacheAndSelection(t *testing.T) {
+	ctx := context.Background()
+	firstRPM := 7
+	groups := []*Group{{ID: 1}, {ID: 2}, {ID: 3}, {ID: 4}}
+	key := &APIKey{ID: 9, UserID: 10, GroupID: &groups[0].ID, Group: groups[0],
+		GroupIDs: []int64{1, 2, 3, 4}, Groups: groups, User: &User{ID: 10}}
+	zero := 0
+	svc := &APIKeyService{userGroupRateRepo: &multiGroupRPMRepository{
+		values: map[int64]*int{1: &firstRPM, 4: &zero}, errors: map[int64]error{3: errors.New("lookup failed")},
+	}}
+	snapshot := svc.snapshotFromAPIKey(ctx, key)
+	payload, err := json.Marshal(snapshot)
+	require.NoError(t, err)
+	var restored APIKeyAuthSnapshot
+	require.NoError(t, json.Unmarshal(payload, &restored))
+	cached := svc.snapshotToAPIKey("key", &restored)
+	require.Equal(t, int64(1), cached.User.UserGroupRPMOverrideGroupID)
+	for _, tc := range []struct {
+		id    int64
+		known bool
+		rpm   *int
+	}{{1, true, &firstRPM}, {2, true, nil}, {3, false, nil}, {4, true, &zero}} {
+		selected := cached.ForGroup(groups[tc.id-1])
+		require.Equal(t, tc.rpm, selected.User.UserGroupRPMOverride)
+		_, known := selected.UserGroupRPMOverrides[tc.id]
+		require.Equal(t, tc.known, known)
+		if tc.known {
+			require.Equal(t, tc.id, selected.User.UserGroupRPMOverrideGroupID)
+		} else {
+			require.Zero(t, selected.User.UserGroupRPMOverrideGroupID, "failed lookups must remain eligible for DB fallback")
+		}
+		require.Equal(t, int64(1), cached.User.UserGroupRPMOverrideGroupID, "selection must be request-private")
+	}
+	unbound := cached.ForGroup(nil)
+	require.Nil(t, unbound.User.UserGroupRPMOverride)
+	require.Zero(t, unbound.User.UserGroupRPMOverrideGroupID)
+}
+
+func TestAPIKeyForGroupPreservesLegacyResolvedRPM(t *testing.T) {
+	group := &Group{ID: 5}
+	key := &APIKey{GroupID: &group.ID, Group: group, User: &User{UserGroupRPMOverrideGroupID: group.ID}}
+	selected := key.ForGroup(group).ForGroup(group)
+	require.Nil(t, selected.User.UserGroupRPMOverride)
+	require.Equal(t, group.ID, selected.User.UserGroupRPMOverrideGroupID)
+	selected = key.ForGroup(&Group{ID: 6})
+	require.Zero(t, selected.User.UserGroupRPMOverrideGroupID)
 }

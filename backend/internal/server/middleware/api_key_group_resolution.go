@@ -102,6 +102,13 @@ func writeAPIKeyGroupResolutionError(c *gin.Context, err error, google bool) {
 	if errors.As(err, &resolution) {
 		status, code, message = resolution.Status, resolution.Code, resolution.Message
 	}
+	if status == statusClientClosedRequest {
+		if !c.Writer.Written() {
+			c.Status(status)
+		}
+		c.Abort()
+		return
+	}
 	if google {
 		if service.IsAPIKeySpendingLimitCode(code) {
 			service.SetOpsLocalErrorType(c, "billing_error", code)
@@ -114,8 +121,12 @@ func writeAPIKeyGroupResolutionError(c *gin.Context, err error, google bool) {
 		abortWithGoogleError(c, status, message)
 		return
 	}
-	if code == "invalid_request_error" || code == "INVALID_REQUEST_BODY" {
-		payload := gin.H{"error": gin.H{"type": "invalid_request_error", "message": message}}
+	if code == "invalid_request_error" || code == "INVALID_REQUEST_BODY" || code == "server_error" {
+		errorType := "invalid_request_error"
+		if code == "server_error" {
+			errorType = code
+		}
+		payload := gin.H{"error": gin.H{"type": errorType, "message": message}}
 		if strings.Contains(c.Request.URL.Path, "/messages") {
 			payload["type"] = "error"
 		}

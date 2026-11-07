@@ -5,6 +5,7 @@ import activityLeaderboard from './activityLeaderboard'
 import luckyBox from './luckyBox'
 import groupBuy from './groupBuy'
 import adminAccessKeys from './adminAccessKeys'
+import mcp from './mcp'
 import landing from './landing'
 import common from './common'
 import dashboard from './dashboard'
@@ -33,6 +34,7 @@ export default {
   activityCampaignsDescription: '签到答题领摇摇卡',
   ...groupBuy,
   adminAccessKeys,
+  mcp,
   ...landing,
   ...common,
   ...dashboard,

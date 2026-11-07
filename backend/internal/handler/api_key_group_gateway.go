@@ -41,6 +41,9 @@ func (h *GatewayHandler) ProbeAPIKeyGroup(ctx context.Context, key *service.APIK
 		return false, false, nil
 	}
 	if strings.Contains(req.Path, "/responses") {
+		if imageIntent && req.Platform == service.PlatformOpenAI {
+			req.ImageSize = service.OpenAIResponsesImageRequestSize(body)
+		}
 		req.Capability = openAIResponsesRequiredCapabilityForRequest(imageIntent, strings.HasSuffix(req.Path, "/compact") || isOpenAIRemoteCompactionV2Request(body), req.Platform)
 	} else if strings.Contains(req.Path, "/messages") {
 		req.Capability = service.OpenAIEndpointCapabilityChatCompletions
@@ -80,6 +83,7 @@ func (h *GatewayHandler) ProbeAPIKeyGroup(ctx context.Context, key *service.APIK
 				return false, false, nil
 			}
 			req.ImageCapability = parsed.RequiredCapability
+			req.ImageSize = parsed.Size
 			if req.Model == "" {
 				req.Model = parsed.Model
 			}

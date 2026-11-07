@@ -13,6 +13,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/monthcard"
@@ -805,7 +806,8 @@ func (s *APIKeyService) GetByKey(ctx context.Context, key string) (result *APIKe
 			}
 		}
 	}()
-	if len(key) == 0 || len(key) > MaxAPIKeyCredentialBytes {
+	// Invalid UTF-8 keys cannot exist and would otherwise fail the Postgres query.
+	if len(key) == 0 || len(key) > MaxAPIKeyCredentialBytes || !utf8.ValidString(key) {
 		return nil, ErrAPIKeyNotFound
 	}
 	cacheKey := s.authCacheKey(key)

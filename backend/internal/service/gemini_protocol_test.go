@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 	"github.com/stretchr/testify/require"
 )
 
@@ -82,12 +83,43 @@ func TestGeminiAlternateProtocolDoesNotAdvertiseNativeCacheOrBatch(t *testing.T)
 
 func TestGeminiAlternateProtocolPreservesToolIdentityWithoutChangingNative(t *testing.T) {
 	body := []byte(`{"model":"gemini-a","messages":[{"role":"assistant","content":[{"type":"tool_use","id":"call-first","name":"lookup","input":{"n":1}},{"type":"tool_use","id":"call-second","name":"lookup","input":{"n":2}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"call-second","content":"second"},{"type":"tool_result","tool_use_id":"call-first","content":"first"}]}]}`)
-	native, err := convertClaudeMessagesToGeminiGenerateContent(body)
+	native, err := convertClaudeMessagesToGeminiGenerateContent(body, "gemini-a")
 	require.NoError(t, err)
 	require.NotContains(t, string(native), `"id"`)
-	converted, err := convertClaudeMessagesToGeminiGenerateContent(body, true)
+	converted, err := convertClaudeMessagesToGeminiGenerateContent(body, "gemini-a", true)
 	require.NoError(t, err)
 	require.True(t, json.Valid(converted))
 	require.Equal(t, 2, strings.Count(string(converted), `"id":"call-first"`))
 	require.Equal(t, 2, strings.Count(string(converted), `"id":"call-second"`))
+}
+
+func TestGeminiToolMediaPreservesNativeAndOpenAIFormats(t *testing.T) {
+	body := []byte(`{"messages":[{"role":"assistant","content":[{"type":"tool_use","id":"call-image","name":"lookup","input":{}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"call-image","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"aGk="}}]}]}]}`)
+	for _, preserveIDs := range []bool{false, true} {
+		converted, err := convertClaudeMessagesToGeminiGenerateContent(body, "gemini-3-flash", preserveIDs)
+		require.NoError(t, err)
+		var request struct {
+			Contents []struct {
+				Parts []map[string]any `json:"parts"`
+			} `json:"contents"`
+		}
+		require.NoError(t, json.Unmarshal(converted, &request))
+		parts := request.Contents[1].Parts
+		response := parts[0]["functionResponse"].(map[string]any)
+		if preserveIDs {
+			require.Equal(t, "call-image", response["id"])
+			require.NotContains(t, response, "parts")
+			require.Len(t, parts, 2)
+			for _, protocol := range []string{GeminiUpstreamResponses, GeminiUpstreamChatCompletions} {
+				adapted, err := apicompat.GeminiToOpenAIRequest(converted, "gemini-3-flash", false, protocol)
+				require.NoError(t, err)
+				require.Contains(t, string(adapted), "data:image/png;base64,aGk=")
+				require.Contains(t, string(adapted), "call-image")
+			}
+		} else {
+			require.NotContains(t, response, "id")
+			require.Len(t, parts, 1)
+			require.Len(t, response["parts"], 1)
+		}
+	}
 }

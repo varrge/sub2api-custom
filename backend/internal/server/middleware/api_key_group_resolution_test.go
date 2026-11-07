@@ -33,3 +33,27 @@ func TestAPIKeyGroupBodyErrorsPreserveProtocolShape(t *testing.T) {
 		}
 	}
 }
+
+func TestGroupRoutingResourceErrorsPreserveResponse(t *testing.T) {
+	for _, google := range []bool{false, true} {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("POST", "/v1/responses", nil)
+		c.Header("Retry-After", "1")
+		writeAPIKeyGroupResolutionError(c, &APIKeyGroupResolutionError{503, "server_error", "retry later"}, google)
+		require.Equal(t, 503, w.Code)
+		require.Equal(t, "1", w.Header().Get("Retry-After"))
+		if !google {
+			require.Contains(t, w.Body.String(), `"type":"server_error"`)
+		}
+
+		w = httptest.NewRecorder()
+		c, _ = gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("POST", "/v1/responses", nil)
+		writeAPIKeyGroupResolutionError(c, &APIKeyGroupResolutionError{499, "INVALID_REQUEST_BODY", "disconnected"}, google)
+		c.Writer.WriteHeaderNow()
+		require.Equal(t, 499, w.Code)
+		require.Empty(t, w.Body.String())
+		require.True(t, c.IsAborted())
+	}
+}

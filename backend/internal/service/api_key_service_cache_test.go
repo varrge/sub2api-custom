@@ -615,6 +615,16 @@ func TestAPIKeyService_GetByKeyAllowsMaximumLength(t *testing.T) {
 	require.Equal(t, int32(1), repoCalls.Load())
 }
 
+func TestAPIKeyService_GetByKeyRejectsNonUTF8BeforeLookup(t *testing.T) {
+	repo := &authRepoStub{getByKeyForAuth: func(context.Context, string) (*APIKey, error) {
+		t.Fatal("non-UTF-8 credential reached repository")
+		return nil, nil
+	}}
+	svc := NewAPIKeyService(repo, nil, nil, nil, nil, nil, &config.Config{})
+	_, err := svc.GetByKey(context.Background(), "sk-\xff\xfe")
+	require.ErrorIs(t, err, ErrAPIKeyNotFound)
+}
+
 func TestAPIKeyService_AuthLookupBulkheadRejectsExcessMisses(t *testing.T) {
 	entered := make(chan struct{})
 	release := make(chan struct{})
@@ -691,4 +701,36 @@ func TestAPIKeyService_GetByKey_SingleflightCollapses(t *testing.T) {
 		require.NoError(t, err)
 	}
 	require.Equal(t, int32(1), atomic.LoadInt32(&calls))
+}
+
+type authEnterpriseRefreshRepo struct {
+	UserRepository
+	calls int
+}
+
+func (r *authEnterpriseRefreshRepo) RefreshEnterpriseIdentity(_ context.Context, user *User) error {
+	r.calls++
+	user.AccountType = "enterprise"
+	return nil
+}
+
+func TestAPIKeyService_GetByKeyCachedIdentityRefreshAndInvalidUTF8(t *testing.T) {
+	userRepo := &authEnterpriseRefreshRepo{}
+	snapshot := &APIKeyAuthSnapshot{Version: apiKeyAuthSnapshotVersion, APIKeyID: 1, UserID: 2,
+		User: APIKeyAuthUserSnapshot{ID: 2, AccountType: "personal"}}
+	cacheCalls := 0
+	cache := &authCacheStub{getAuthCache: func(context.Context, string) (*APIKeyAuthCacheEntry, error) {
+		cacheCalls++
+		return &APIKeyAuthCacheEntry{Snapshot: snapshot}, nil
+	}}
+	svc := NewAPIKeyService(nil, userRepo, nil, nil, nil, cache, &config.Config{APIKeyAuth: config.APIKeyAuthCacheConfig{L2TTLSeconds: 60}})
+	key, err := svc.GetByKey(context.Background(), "valid-key")
+	require.NoError(t, err)
+	require.Equal(t, "enterprise", key.User.AccountType)
+	require.Equal(t, "personal", snapshot.User.AccountType, "refresh must not mutate the shared snapshot")
+	require.Equal(t, 1, userRepo.calls)
+	_, err = svc.GetByKey(context.Background(), "sk-\xff\xfe")
+	require.ErrorIs(t, err, ErrAPIKeyNotFound)
+	require.Equal(t, 1, cacheCalls)
+	require.Equal(t, 1, userRepo.calls, "invalid credentials must not refresh enterprise identity")
 }

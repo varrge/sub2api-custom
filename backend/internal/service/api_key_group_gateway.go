@@ -19,6 +19,7 @@ type APIKeyGroupRequest struct {
 	Path            string
 	ForcePlatform   bool
 	ImageCapability OpenAIImagesCapability
+	ImageSize       string
 	Capability      OpenAIEndpointCapability
 	WebSocket       bool
 	BoundAccountID  int64
@@ -93,6 +94,10 @@ func (s *GatewayService) ProbeAPIKeyGroup(ctx context.Context, key *APIKey, req 
 func (s *OpenAIGatewayService) ProbeAPIKeyGroup(ctx context.Context, key *APIKey, req APIKeyGroupRequest) (bool, error) {
 	if s == nil || s.accountRepo == nil {
 		return false, ErrNoAvailableAccounts
+	}
+	// Group admission filters explicit sizes; unspecified sizes preserve the configured group order.
+	if tier, explicit := ClassifyImageBillingTier(req.ImageSize); req.Platform == PlatformOpenAI && explicit {
+		ctx = context.WithValue(ctx, openAIImageSizePassCtxKey{}, &openAIImageSizePass{tier: tier})
 	}
 	ctx = context.WithValue(ctx, ctxkey.UserID, key.UserID)
 	ctx = s.withOpenAIQuotaAutoPauseContext(ctx)

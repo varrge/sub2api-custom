@@ -130,6 +130,15 @@ func groupRoutingError(status int, code, message string) error {
 	return &middleware.APIKeyGroupResolutionError{Status: status, Code: code, Message: message}
 }
 
+func groupBodyReadError(c *gin.Context, err error) error {
+	if errors.Is(err, pkghttputil.ErrRequestBodyMemoryBudget) {
+		c.Header("Retry-After", "1")
+		return groupRoutingError(http.StatusServiceUnavailable, "server_error", "Request body buffering capacity is exhausted; retry later")
+	}
+	failure := pkghttputil.DescribeRequestBodyReadFailure(c.Request, err)
+	return groupRoutingError(failure.Status, "INVALID_REQUEST_BODY", failure.Message)
+}
+
 func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*service.APIKey, error) {
 	if middleware.IsImageCapabilitiesRead(c.Request.Method, c.Request.URL.Path) {
 		return key, nil
@@ -144,14 +153,7 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 	} else if c.Request.Body != nil && (c.Request.Method == http.MethodPost || c.Request.Method == http.MethodPut || c.Request.Method == http.MethodPatch) {
 		body, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request)
 		if err != nil {
-			status := http.StatusBadRequest
-			message := "Failed to read request body"
-			var large *http.MaxBytesError
-			if errors.As(err, &large) {
-				status = http.StatusRequestEntityTooLarge
-				message = "Request body is too large"
-			}
-			return nil, groupRoutingError(status, "INVALID_REQUEST_BODY", message)
+			return nil, groupBodyReadError(c, err)
 		}
 		requestmodel.ResetRequestBody(c.Request, body)
 		if err := requestmodel.ValidateBody(c.Request.URL.Path, c.GetHeader("Content-Type"), body); err != nil {
@@ -248,12 +250,7 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 		var err error
 		body, err = pkghttputil.ReadRequestBodyWithPrealloc(c.Request)
 		if err != nil {
-			status := 400
-			var large *http.MaxBytesError
-			if errors.As(err, &large) {
-				status = 413
-			}
-			return nil, groupRoutingError(status, "INVALID_REQUEST_BODY", "Failed to read request body")
+			return nil, groupBodyReadError(c, err)
 		}
 		requestmodel.ResetRequestBody(c.Request, body)
 		model = requestmodel.FromBodyForRoute(path, c.GetHeader("Content-Type"), body)

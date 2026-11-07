@@ -201,6 +201,7 @@ func ProvideHandlers(
 	pushNotificationHandler *PushNotificationHandler,
 	authHandler *AuthHandler,
 	userHandler *UserHandler,
+	mcpOAuthHandler *MCPOAuthHandler,
 	apiKeyHandler *APIKeyHandler,
 	usageHandler *UsageHandler,
 	redeemHandler *RedeemHandler,
@@ -252,6 +253,7 @@ func ProvideHandlers(
 		AsyncImage:          asyncImageHandler,
 		BatchImage:          batchImageHandler,
 		SupportTicket:       supportTicketHandler,
+		MCPOAuth:            mcpOAuthHandler,
 	}
 }
 
@@ -260,6 +262,7 @@ var ProviderSet = wire.NewSet(
 	// Top-level handlers
 	NewAuthHandler,
 	ProvideUserHandler,
+	NewMCPOAuthHandler,
 	NewAPIKeyHandler,
 	NewUsageHandler,
 	NewActivityLeaderboardHandler,

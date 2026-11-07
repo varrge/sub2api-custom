@@ -178,13 +178,13 @@ func adaptGeminiOpenAIResponse(resp *http.Response, protocol string, requestedSt
 // computeGeminiResponseTextDelta keeps the native compatibility heuristic only
 // for native upstreams. OpenAI delta events are explicit: repeated/prefix text
 // must be appended verbatim, and the marker stays inside the process.
-func computeGeminiResponseTextDelta(resp *http.Response, seen, incoming string) (delta, newSeen string) {
+func computeGeminiResponseTextDelta(resp *http.Response, seen *geminiTextDelta, incoming string) string {
 	if resp != nil {
 		if _, ok := resp.Body.(interface{ geminiExplicitTextDeltas() }); ok {
-			return incoming, seen + incoming
+			return incoming
 		}
 	}
-	return computeGeminiTextDelta(seen, incoming)
+	return seen.next(incoming)
 }
 
 type geminiOpenAIDeltaBody struct{ io.ReadCloser }

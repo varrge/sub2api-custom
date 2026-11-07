@@ -79,3 +79,15 @@ func TestAPIKeyService_RejectsV25AuthSnapshotWithoutOrderedGroups(t *testing.T) 
 		t.Fatalf("expected v25 snapshots without all group bindings to miss cache, got used=%v err=%v", ok, err)
 	}
 }
+
+func TestAPIKeyService_RejectsPreMergeRPMAuthSnapshots(t *testing.T) {
+	svc := &APIKeyService{}
+	for _, version := range []int{27, 32} {
+		key, used, err := svc.applyAuthCacheEntry("k-before-rpm-lookup-state", &APIKeyAuthCacheEntry{
+			Snapshot: &APIKeyAuthSnapshot{Version: version},
+		})
+		if err != nil || used || key != nil {
+			t.Fatalf("expected pre-merge v%d snapshot to miss cache, got used=%v err=%v", version, used, err)
+		}
+	}
+}

@@ -184,7 +184,9 @@ func (k *APIKey) ForGroup(group *Group) *APIKey {
 	selected.ModelGroupRoutes = CloneAPIKeyModelGroupRoutes(k.ModelGroupRoutes)
 	selected.GroupIDs = k.ConfiguredGroupIDs()
 	selected.Groups = append([]*Group{}, k.Groups...)
-	selected.UserGroupRPMOverrides = make(map[int64]*int, len(k.UserGroupRPMOverrides))
+	if k.UserGroupRPMOverrides != nil {
+		selected.UserGroupRPMOverrides = make(map[int64]*int, len(k.UserGroupRPMOverrides))
+	}
 	for id, rpm := range k.UserGroupRPMOverrides {
 		if rpm != nil {
 			value := *rpm
@@ -203,13 +205,20 @@ func (k *APIKey) ForGroup(group *Group) *APIKey {
 	if k.User != nil {
 		u := *k.User
 		u.UserGroupRPMOverride = nil
+		u.UserGroupRPMOverrideGroupID = 0
 		if group != nil {
-			if rpm := k.UserGroupRPMOverrides[group.ID]; rpm != nil {
-				value := *rpm
-				u.UserGroupRPMOverride = &value
-			} else if k.UserGroupRPMOverrides == nil && k.GroupID != nil && *k.GroupID == group.ID && k.User.UserGroupRPMOverride != nil {
-				value := *k.User.UserGroupRPMOverride
-				u.UserGroupRPMOverride = &value
+			if rpm, known := k.UserGroupRPMOverrides[group.ID]; known {
+				u.UserGroupRPMOverrideGroupID = group.ID
+				if rpm != nil {
+					value := *rpm
+					u.UserGroupRPMOverride = &value
+				}
+			} else if k.UserGroupRPMOverrides == nil && k.GroupID != nil && *k.GroupID == group.ID {
+				u.UserGroupRPMOverrideGroupID = k.User.UserGroupRPMOverrideGroupID
+				if k.User.UserGroupRPMOverride != nil {
+					value := *k.User.UserGroupRPMOverride
+					u.UserGroupRPMOverride = &value
+				}
 			}
 		}
 		selected.User = &u

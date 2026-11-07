@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { reactive } from 'vue'
+import { keysAPI } from '@/api/keys'
+import { getImageTask, ImageGenerationError } from '@/api/imageGeneration'
+import { resultImageFile } from '@/components/image-generation/image-result-file'
 import { useImageStudioStore } from '@/stores/imageStudio'
 import { useVideoStudioStore } from '@/stores/videoStudio'
 import ImageGenerationView from '../ImageGenerationView.vue'
@@ -21,7 +24,10 @@ vi.mock('@/api/imageGeneration', async importOriginal => ({
   ...await importOriginal<typeof import('@/api/imageGeneration')>(),
   listImageModels: vi.fn().mockImplementation(async (_key, platform) => platform === 'gemini' ? ['gemini-3-pro-image'] : ['gpt-image-1', 'gpt-image-1.5', 'gpt-image-2']),
   generateImages: generate,
+  readImageAsyncCapability: vi.fn().mockResolvedValue(false),
+  getImageTask: vi.fn(),
 }))
+vi.mock('@/components/image-generation/image-result-file', () => ({ resultImageFile: vi.fn() }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ cachedPublicSettings: publicSettings, showError, showSuccess: vi.fn() }) }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isAuthenticated: true, user: { id: 42 } }) }))
 vi.mock('@/stores/imageStudioStorage', () => ({ loadImageStudio: vi.fn().mockResolvedValue(null), saveImageStudio: vi.fn().mockResolvedValue(undefined) }))
@@ -50,8 +56,8 @@ const SelectStub = {
 let view: VueWrapper
 let pinia: ReturnType<typeof createPinia>
 
-function mountView() {
-  return mount(ImageGenerationView, { global: { plugins: [pinia], stubs: {
+function mountView(attachTo?: HTMLElement) {
+  return mount(ImageGenerationView, { attachTo, global: { plugins: [pinia], stubs: {
     AppLayout: { template: '<main><slot /></main>' },
     Select: SelectStub, BaseDialog: true, ConfirmDialog: true, RouterLink: true, Icon: true, LoadingSpinner: true,
   } } })
@@ -66,6 +72,8 @@ beforeEach(async () => {
     static revokeObjectURL = vi.fn()
   })
   generate.mockReset()
+  vi.mocked(getImageTask).mockReset()
+  vi.mocked(resultImageFile).mockReset()
   showError.mockReset()
   pinia = createPinia()
   view = mountView()
@@ -74,6 +82,7 @@ beforeEach(async () => {
 })
 afterEach(() => {
   view.unmount()
+  document.body.replaceChildren()
   useImageStudioStore(pinia).$dispose()
   useVideoStudioStore(pinia).$dispose()
   vi.unstubAllGlobals()
@@ -148,6 +157,7 @@ describe('image studio requests in progress', () => {
     generate.mockResolvedValue([{ src: 'data:image/png;base64,QUJD' }])
     await view.get('form').trigger('submit')
     await flushPromises()
+    await flushPromises()
     expect(generate).toHaveBeenCalledWith(expect.objectContaining({ referenceImages: [file, pasted, uploaded] }))
   })
 
@@ -157,6 +167,7 @@ describe('image studio requests in progress', () => {
     await view.get('#image-model').setValue('gpt-image-2')
     await view.findAll('.resolution-card').find(button => button.text() === '4K')!.trigger('click')
     await view.get('form').trigger('submit')
+    await flushPromises()
     await view.get('#studio-video-tab').trigger('click')
     await flushPromises()
     expect(view.get('#studio-video-tab').attributes('aria-selected')).toBe('true')
@@ -178,6 +189,7 @@ describe('image studio requests in progress', () => {
     expect(useImageStudioStore(pinia).activeSession!.form.quality).toBe('standard')
     generate.mockResolvedValue([{ src: 'data:image/png;base64,QUJD' }])
     await view.get('form').trigger('submit')
+    await flushPromises()
     await flushPromises()
     expect(generate).toHaveBeenCalledWith(expect.objectContaining({ resolution: '4K', quality: 'standard' }))
     await view.findAll('.ratio-card').find(button => button.text() === '16:9')!.trigger('click')
@@ -214,6 +226,7 @@ describe('image studio requests in progress', () => {
     generate.mockImplementation(() => new Promise(resolve => { complete = resolve }))
     await view.get('#image-model').setValue('gpt-image-1.5')
     await view.get('form').trigger('submit')
+    await flushPromises()
     view.unmount()
     complete([{ src: 'data:image/png;base64,QUJD' }])
     await flushPromises()
@@ -232,6 +245,7 @@ describe('image studio requests in progress', () => {
     await view.get('.composer-count-select').setValue('2')
     await view.findAll('.ratio-card').find(button => button.text() === '2:3')!.trigger('click')
     await view.get('form').trigger('submit')
+    await flushPromises()
 
     await view.get('#image-model').setValue('gpt-image-1.5')
     await view.get('.composer-count-select').setValue('4')
@@ -241,13 +255,13 @@ describe('image studio requests in progress', () => {
     expect(generate).toHaveBeenCalledWith(expect.objectContaining({
       model: 'gpt-image-1', count: 2, aspectRatio: '2:3', prompt: 'A quiet forest',
     }))
-    const progressCount = view.findAll('.result-skeleton-card').length
-    const progressRatio = view.get('.result-skeleton-card').attributes('style')
+    const progress = useImageStudioStore(pinia).activeSession!.pending
+    expect(view.get('.task-status').text()).toContain('imageGeneration.progressCount')
     complete([{ src: 'data:image/png;base64,QUJD' }, { src: 'data:image/png;base64,REVG' }])
     await flushPromises()
 
-    expect.soft(progressCount).toBe(2)
-    expect.soft(progressRatio).toContain('2 / 3')
+    expect.soft(progress?.count).toBe(2)
+    expect.soft(progress?.aspectRatio).toBe('2:3')
     expect(view.findAll('.history-item-card')).toHaveLength(2)
     for (const card of view.findAll('.history-item-card')) {
       expect.soft(card.text()).toContain('gpt-image-1')
@@ -262,7 +276,9 @@ describe('image studio requests in progress', () => {
     let fail!: (error: Error) => void
     generate.mockImplementation(() => new Promise((_resolve, reject) => { fail = reject }))
     await view.get('form').trigger('submit')
+    await flushPromises()
     await view.get('form').trigger('submit')
+    await flushPromises()
     expect(generate).toHaveBeenCalledTimes(1)
     fail(new Error('Temporary upstream error'))
     await flushPromises()
@@ -272,7 +288,208 @@ describe('image studio requests in progress', () => {
     generate.mockResolvedValueOnce([{ src: 'data:image/png;base64,QUJD' }])
     await view.get('form').trigger('submit')
     await flushPromises()
+    await flushPromises()
     expect(generate).toHaveBeenCalledTimes(2)
     expect(view.findAll('.history-item-card')).toHaveLength(1)
+  })
+})
+
+
+describe('image studio result workflows', () => {
+  async function createResult() {
+    generate.mockResolvedValueOnce([{ src: 'data:image/png;base64,QUJD' }])
+    await view.get('form').trigger('submit')
+    await flushPromises()
+    return useImageStudioStore(pinia).activeSession!.results[0]!
+  }
+
+  it('keeps the selected result visible during the next generation', async () => {
+    const result = await createResult()
+    generate.mockImplementation(() => new Promise(() => {}))
+    await view.get('form').trigger('submit')
+    await flushPromises()
+    expect(view.get('.canvas-viewport img').attributes('src')).toBe(result.src)
+    expect(view.get('.task-status').text()).toContain('imageGeneration.progressCount')
+  })
+
+  it('restores a complete run with its original key and model without generating', async () => {
+    await view.get('#image-model').setValue('gpt-image-2')
+    await view.findAll('.resolution-card').find(button => button.text() === '4K')!.trigger('click')
+    await createResult()
+    await view.get('#image-api-key').setValue('2')
+    await flushPromises()
+    await view.get('#image-prompt').setValue('Another draft')
+    await view.get('.reuse-result').trigger('click')
+    await flushPromises()
+    expect(useImageStudioStore(pinia).activeSession!.form).toMatchObject({ apiKeyId: 1, model: 'gpt-image-2', resolution: '4K', prompt: 'A quiet forest' })
+    expect(generate).toHaveBeenCalledTimes(1)
+  })
+
+  it('retains an unavailable historical key instead of silently selecting another group', async () => {
+    const session = useImageStudioStore(pinia).activeSession!
+    session.form.apiKeyId = 987
+    session.form.model = 'historical-custom-image'
+    await flushPromises()
+    expect(session.form.apiKeyId).toBe(987)
+    expect(view.text()).toContain('imageGeneration.savedKeyUnavailable')
+    expect(view.get('.generate-button').attributes('disabled')).toBeDefined()
+  })
+
+  it('loads the new provider model when explicitly replacing an unavailable saved key', async () => {
+    const session = useImageStudioStore(pinia).activeSession!
+    session.form.apiKeyId = 987
+    session.form.model = 'gpt-image-2'
+    await flushPromises()
+    await view.get('#image-api-key').setValue('2')
+    await flushPromises()
+    expect(session.form).toMatchObject({ apiKeyId: 2, model: 'gemini-3-pro-image' })
+  })
+
+  it('reorders reference files and reports references beyond the limit', async () => {
+    const session = useImageStudioStore(pinia).activeSession!
+    const files = [1, 2, 3, 4, 5].map(i => new File(['image'], `${i}.png`, { type: 'image/png' }))
+    await view.get('#image-prompt').trigger('paste', { clipboardData: { files } })
+    expect(session.referenceFiles.map(f => f.name)).toEqual(['1.png', '2.png', '3.png', '4.png'])
+    expect(showError).toHaveBeenCalledWith('imageGeneration.tooManyReferences')
+    await view.get('[aria-label="imageGeneration.moveReferenceRight"]').trigger('click')
+    expect(session.referenceFiles.map(f => f.name)).toEqual(['2.png', '1.png', '3.png', '4.png'])
+    await view.get('.reference-heading button').trigger('click')
+    expect(session.referenceFiles).toHaveLength(0)
+  })
+
+  it('does not add a downloaded reference to a different session', async () => {
+    await createResult()
+    let finish!: (file: File) => void
+    vi.mocked(resultImageFile).mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    await view.get('.reference-result').trigger('click')
+    const other = useImageStudioStore(pinia).createSession()!
+    finish(new File(['image'], 'result.png', { type: 'image/png' }))
+    await flushPromises()
+    expect(other.referenceFiles).toHaveLength(0)
+  })
+
+  it('filters history by prompt and exposes explicit session renaming', async () => {
+    await createResult()
+    await view.get('.history-search').setValue('forest')
+    expect(view.findAll('.history-item-card')).toHaveLength(1)
+    await view.get('.history-search').setValue('not in this prompt')
+    expect(view.findAll('.history-item-card')).toHaveLength(0)
+    await view.get('.history-search').setValue('')
+    expect(view.find('[aria-label="imageGeneration.renameSession"]').exists()).toBe(true)
+  })
+
+  it('queries an original task with its exhausted key, never the current draft key', async () => {
+    const response = await keysAPI.list(1, 100)
+    const original = response.items[0]!
+    const oldStatus = original.status
+    original.status = 'quota_exhausted'
+    try {
+      vi.mocked(getImageTask).mockResolvedValue({ id: 'task-original', status: 'completed', images: [{ src: 'data:image/png;base64,QUJD' }], retryAfterMs: 2000 })
+      const session = useImageStudioStore(pinia).activeSession!
+      session.form.apiKeyId = 2
+      session.runs.push({ id: 'stored-run', form: { ...session.form, apiKeyId: 1 }, platform: 'openai', referenceFiles: [], createdAt: '2026-11-07 12:00:00', status: 'processing', requested: 1, submitted: 1, completed: 0, taskId: 'task-original' })
+      await flushPromises()
+      expect(getImageTask).toHaveBeenCalledWith('test-key', 'task-original', expect.any(AbortSignal))
+      expect(generate).not.toHaveBeenCalled()
+      expect(session.results).toHaveLength(1)
+    } finally { original.status = oldStatus }
+  })
+
+  it('requires explicit confirmation before a new request after a lost submission response', async () => {
+    generate.mockImplementation(async options => {
+      options.onRequest(1)
+      throw new ImageGenerationError('imageGeneration.submitUnknown', 'unknown')
+    })
+    await view.get('form').trigger('submit')
+    await flushPromises()
+    expect(useImageStudioStore(pinia).activeSession!.interrupted).toBe(true)
+    generate.mockResolvedValueOnce([{ src: 'data:image/png;base64,QUJD' }])
+    await view.get('form').trigger('submit')
+    await flushPromises()
+    expect(generate).toHaveBeenCalledTimes(1)
+    const confirm = view.findAllComponents({ name: 'ConfirmDialog' })[1]!
+    expect(confirm.props('show')).toBe(true)
+    confirm.vm.$emit('confirm')
+    await flushPromises()
+    expect(generate).toHaveBeenCalledTimes(2)
+  })
+})
+
+
+describe('image workbench panels', () => {
+  it('keeps save and conflict warnings outside every switchable panel', async () => {
+    const store = useImageStudioStore(pinia)
+    for (const error of ['save', 'conflict'] as const) {
+      store.storageError = error
+      await flushPromises()
+      for (const tab of view.findAll('.mobile-panel-tabs button')) {
+        await tab.trigger('click')
+        const warning = view.get('.storage-notice[role="alert"]')
+        expect(warning.text()).toBe(error === 'conflict' ? 'imageGeneration.sessionStorageConflict' : 'imageGeneration.sessionStorageError')
+        expect(warning.element.closest('.studio-grid')).toBeNull()
+      }
+    }
+  })
+
+  it('moves mobile focus to the visible destination after submission, import and history actions', async () => {
+    view.unmount()
+    vi.stubGlobal('innerWidth', 390)
+    view = mountView(document.body)
+    await flushPromises()
+    generate.mockResolvedValueOnce([{ src: 'data:image/png;base64,QUJD' }])
+    view.get<HTMLTextAreaElement>('#image-prompt').element.focus()
+    await view.get('#image-prompt').trigger('keydown', { key: 'Enter', ctrlKey: true })
+    await flushPromises()
+    expect(document.activeElement).toBe(view.get('#image-result-panel').element)
+
+    vi.mocked(resultImageFile).mockResolvedValueOnce(new File(['image'], 'result.png', { type: 'image/png' }))
+    view.get<HTMLButtonElement>('.reference-result').element.focus()
+    await view.get('.reference-result').trigger('click')
+    await flushPromises()
+    expect(document.activeElement).toBe(view.get('#image-prompt').element)
+
+    await view.findAll('.mobile-panel-tabs button')[2]!.trigger('click')
+    view.get<HTMLButtonElement>('.history-result-select').element.focus()
+    await view.get('.history-result-select').trigger('click')
+    await flushPromises()
+    expect(document.activeElement).toBe(view.get('#image-result-panel').element)
+
+    await view.findAll('.mobile-panel-tabs button')[2]!.trigger('click')
+    await view.get('.session-select').trigger('click')
+    await flushPromises()
+    expect(document.activeElement).toBe(view.get('#image-prompt').element)
+
+    await view.findAll('.mobile-panel-tabs button')[2]!.trigger('click')
+    await view.get('.history-title button').trigger('click')
+    await flushPromises()
+    expect(document.activeElement).toBe(view.get('#image-prompt').element)
+    expect(generate).toHaveBeenCalledTimes(1)
+  })
+
+  it('adds a scene suggestion without discarding the existing prompt or generating', async () => {
+    await view.get('[data-scene="product"]').trigger('click')
+    expect(useImageStudioStore(pinia).activeSession!.form.prompt).toBe('A quiet forest\nimageGeneration.sceneProductPrompt')
+    expect(generate).not.toHaveBeenCalled()
+  })
+
+  it('starts a new creation while retaining the previous session draft', async () => {
+    const store = useImageStudioStore(pinia)
+    const previous = store.activeSession!
+    await view.get('.new-creation').trigger('click')
+    await flushPromises()
+    expect(store.activeId).not.toBe(previous.id)
+    expect(store.sessions.find(session => session.id === previous.id)?.form.prompt).toBe('A quiet forest')
+    expect(view.get('.studio-grid').attributes('data-panel')).toBe('compose')
+  })
+
+  it('submits with a keyboard shortcut and opens results, then reuse returns to creation', async () => {
+    generate.mockResolvedValueOnce([{ src: 'data:image/png;base64,QUJD' }])
+    await view.get('#image-prompt').trigger('keydown', { key: 'Enter', ctrlKey: true })
+    await flushPromises()
+    expect(generate).toHaveBeenCalledTimes(1)
+    expect(view.get('.studio-grid').attributes('data-panel')).toBe('result')
+    await view.get('.reuse-result').trigger('click')
+    expect(view.get('.studio-grid').attributes('data-panel')).toBe('compose')
+    expect(generate).toHaveBeenCalledTimes(1)
   })
 })

@@ -47,9 +47,9 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-function mountPanel(props = { apiKeys: keys, loadingKeys: false }) {
+function mountPanel(props = { apiKeys: keys, loadingKeys: false }, attachTo?: HTMLElement) {
   studio = useVideoStudioStore(pinia)
-  view = mount(VideoGenerationPanel, { props, global: {
+  view = mount(VideoGenerationPanel, { props, attachTo, global: {
     plugins: [pinia],
     stubs: { Select: SelectStub, ConfirmDialog: true, RouterLink: true, Icon: true, LoadingSpinner: true },
   } })
@@ -101,6 +101,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   view?.unmount()
+  document.body.replaceChildren()
   await studio?.flush()
   studio?.$dispose()
   await flushPromises()
@@ -110,6 +111,95 @@ afterEach(async () => {
 })
 
 describe('video generation panel', () => {
+  it('appends a scene suggestion while preserving the draft and does not generate', async () => {
+    const panel = mountPanel()
+    await flushPromises()
+    await panel.get('#video-prompt').setValue(' My existing shot ')
+    await panel.get('[data-video-scene="product"]').trigger('click')
+    expect(studio!.activeSession!.form.prompt).toBe(' My existing shot \nvideoGeneration.sceneProductPrompt')
+    expect(createTask).not.toHaveBeenCalled()
+  })
+
+  it('filters video history by mode and searches results and session drafts', async () => {
+    const panel = mountPanel()
+    await flushPromises()
+    const first = studio!.activeSession!
+    const textVideo = result({ id: 'text-shot', protocol: 'grok', status: 'succeeded' })
+    const imageVideo = { ...result({ id: 'image-shot', protocol: 'grok', status: 'succeeded' }), mode: 'image' as const }
+    first.results.push(textVideo, imageVideo)
+    first.form.prompt = 'Original shot'
+    const second = studio!.createSession()!
+    second.form.prompt = 'Unsubmitted landscape'
+    studio!.activeId = first.id
+    await flushPromises()
+    expect(panel.findAll('.video-result')).toHaveLength(2)
+    await panel.findAll('.video-history-filters button')[2]!.trigger('click')
+    expect(panel.findAll('.video-result')).toHaveLength(1)
+    expect(panel.get('.video-result').text()).toContain('image-shot')
+    await panel.get('.video-history-search').setValue('TEXT-SHOT')
+    expect(panel.findAll('.video-result')).toHaveLength(0)
+    await panel.findAll('.video-history-filters button')[0]!.trigger('click')
+    expect(panel.get('.video-result').text()).toContain('text-shot')
+    await panel.get('.video-history-search').setValue('landscape')
+    expect(panel.findAll('.video-session-select')).toHaveLength(1)
+    await panel.get('.video-session-select').trigger('click')
+    expect(studio!.activeId).toBe(second.id)
+    expect(createTask).not.toHaveBeenCalled()
+  })
+
+  it('keeps mobile focus on visible panels and retains drafts when starting another creation', async () => {
+    vi.stubGlobal('innerWidth', 390)
+    const panel = mountPanel(undefined, document.body)
+    await flushPromises()
+    const first = studio!.activeSession!
+    await panel.get('#video-prompt').setValue('Original shot')
+    panel.get<HTMLTextAreaElement>('#video-prompt').element.focus()
+    await panel.get('#video-prompt').trigger('keydown', { key: 'Enter', ctrlKey: true })
+    await flushPromises()
+    expect(createTask).toHaveBeenCalledTimes(1)
+    expect(panel.get('.video-grid').attributes('data-panel')).toBe('result')
+    expect(document.activeElement).toBe(panel.get('#video-result-panel').element)
+    await panel.findAll('.video-panel-tabs button')[2]!.trigger('click')
+    await panel.get('.video-task-entry').trigger('click')
+    await flushPromises()
+    expect(document.activeElement).toBe(panel.get('#video-result-panel').element)
+    await vi.advanceTimersByTimeAsync(5000)
+    await flushPromises()
+    await panel.get('.video-continue').trigger('click')
+    await flushPromises()
+    expect(document.activeElement).toBe(panel.get('#video-prompt').element)
+    await panel.findAll('.video-panel-tabs button')[2]!.trigger('click')
+    await panel.get('.video-result').trigger('click')
+    await flushPromises()
+    expect(document.activeElement).toBe(panel.get('#video-result-panel').element)
+    await panel.findAll('.video-panel-tabs button')[2]!.trigger('click')
+    await panel.get('.video-new-session').trigger('click')
+    await flushPromises()
+    expect(document.activeElement).toBe(panel.get('#video-prompt').element)
+    expect(studio!.activeId).not.toBe(first.id)
+    expect(first.form.prompt).toBe('Original shot')
+    expect(first.results).toHaveLength(1)
+    expect(createTask).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps persistence and uncertain-submission warnings outside all mobile panels', async () => {
+    const panel = mountPanel()
+    await flushPromises()
+    studio!.activeSession!.interrupted = true
+    for (const error of ['save', 'conflict'] as const) {
+      studio!.storageError = error
+      for (const tab of panel.findAll('.video-panel-tabs button')) {
+        await tab.trigger('click')
+        const storageWarning = panel.get('.video-storage-notice[role="alert"]')
+        expect(storageWarning.text()).toBe(error === 'conflict' ? 'videoGeneration.storageConflict' : 'videoGeneration.storageError')
+        expect(storageWarning.element.closest('.video-grid')).toBeNull()
+        const unknownWarning = panel.get('.video-storage-notice[role="status"]')
+        expect(unknownWarning.text()).toBe('videoGeneration.sessionInterrupted')
+        expect(unknownWarning.element.closest('.video-grid')).toBeNull()
+      }
+    }
+  })
+
   it('locks model resolutions on selection and restores choices for generic models', async () => {
     listModels.mockResolvedValue(['seedance-video', 'seedance-2.0-720p', 'seedance-2.0-1080p', 'seedance-2.0-4K'])
     const panel = mountPanel({ apiKeys: [{ ...keys[0]!, group: { ...grokGroup, platform: 'openai' } }], loadingKeys: false })

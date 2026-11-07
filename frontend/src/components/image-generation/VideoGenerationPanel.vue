@@ -1,209 +1,127 @@
 <template>
   <div class="video-panel">
-    <div v-if="loadingKeys || !studio.ready" class="flex flex-1 flex-col items-center justify-center gap-3 p-8">
-      <LoadingSpinner size="lg" />
-      <p class="text-xs text-gray-500 dark:text-dark-400">{{ t('videoGeneration.loading') }}</p>
-    </div>
-    <div v-else-if="!videoKeys.length && !studio.sessions.some(session => session.results.length || session.pending)" class="flex flex-1 items-center justify-center p-6 text-center">
-      <div class="max-w-sm">
-        <Icon name="key" size="xl" class="mx-auto text-gray-400" />
-        <h2 class="mt-4 font-semibold text-gray-900 dark:text-white">{{ t('videoGeneration.noKeysTitle') }}</h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">{{ t('videoGeneration.noKeysDescription') }}</p>
-        <RouterLink to="/keys" class="btn btn-primary mt-5">{{ t('imageGeneration.manageKeys') }}</RouterLink>
-      </div>
-    </div>
-    <template v-else>
-      <div class="flex shrink-0 items-center justify-between border-b border-gray-200/60 px-4 py-2 dark:border-dark-700/60">
-        <p class="text-[11px] font-medium text-gray-500 dark:text-dark-400">{{ t('videoGeneration.providers') }}</p>
-        <button ref="historyToggle" type="button" class="btn btn-ghost btn-sm lg:hidden" :aria-expanded="showMobileHistory" aria-controls="video-studio-history" @click="showMobileHistory = !showMobileHistory">
-          <Icon name="clock" size="sm" />{{ t('videoGeneration.historyTitle') }}
-        </button>
-      </div>
-      <div class="video-grid" :class="{ 'video-history-open': showMobileHistory }">
-        <section class="video-workspace">
-          <p v-if="studio.storageError" role="alert" class="video-notice">{{ storageErrorText }}</p>
-          <p v-if="studio.activeSession?.interrupted" role="status" class="video-notice">{{ t('videoGeneration.sessionInterrupted') }}</p>
-          <p v-if="sessionError" role="alert" class="shrink-0 rounded-lg bg-red-50 px-4 py-2 text-xs text-red-700 dark:bg-red-950/60 dark:text-red-200">{{ sessionError }}</p>
-          <div class="video-canvas">
-            <div v-if="pending" class="flex max-w-md flex-col items-center gap-3 p-6 text-center" role="status" aria-live="polite">
-              <LoadingSpinner v-if="generating" size="lg" />
-              <Icon v-else name="clock" size="xl" class="text-amber-500" />
-              <h2 class="text-base font-semibold text-gray-800 dark:text-white">{{ statusLabel }}</h2>
-              <p class="text-xs text-gray-500 dark:text-dark-400">{{ pending.model }} · {{ pending.duration }}s · {{ pending.resolution }}</p>
-              <p v-if="pending.task" class="max-w-full break-all font-mono text-[11px] text-gray-400">{{ t('videoGeneration.taskId') }}: {{ pending.task.id }}</p>
-              <p class="text-xs leading-relaxed text-gray-500 dark:text-dark-400">{{ t('videoGeneration.backgroundHint') }}</p>
-              <button v-if="pending.phase === 'paused'" type="button" class="btn btn-secondary btn-sm" @click="resumePolling">
-                <Icon name="refresh" size="sm" />{{ t('videoGeneration.resume') }}
-              </button>
-            </div>
-            <div v-else-if="activeResult" class="flex h-full min-h-0 w-full flex-col">
-              <div class="flex min-w-0 shrink-0 items-center justify-between gap-2 pb-2">
-                <div class="min-w-0 text-xs text-gray-500 dark:text-dark-400">
-                  <p class="truncate font-medium text-gray-800 dark:text-dark-100">{{ activeResult.model }}</p>
-                  <p class="mt-0.5">{{ activeResult.duration }}s · {{ activeResult.resolution }} · {{ activeResult.aspectRatio }}</p>
-                </div>
-                <button type="button" class="btn btn-secondary btn-sm shrink-0" :aria-label="t('videoGeneration.download')" :disabled="downloading || loadingPlayback" @click="downloadResult">
-                  <Icon name="download" size="sm" /><span class="hidden sm:inline">{{ t('videoGeneration.download') }}</span>
-                </button>
+    <header class="video-workflow">
+      <button type="button" class="video-new-creation" :disabled="!studio.ready" @click="newSession"><Icon name="plus" size="sm" />{{ t('imageGeneration.newCreation') }}</button>
+      <ol :aria-label="t('imageGeneration.creationSteps')">
+        <li><span>01</span>{{ t('imageGeneration.chooseScene') }}</li>
+        <li><span>02</span>{{ t('videoGeneration.describeMotion') }}</li>
+        <li><span>03</span>{{ t('videoGeneration.prepareFrame') }}</li>
+        <li><Icon name="check" size="sm" />{{ t('imageGeneration.confirmSettings') }}</li>
+      </ol>
+    </header>
+    <nav class="video-panel-tabs" :aria-label="t('imageGeneration.workspacePanels')">
+      <button v-for="panel in workspacePanels" :key="panel.value" type="button" :aria-pressed="mobilePanel === panel.value" :aria-controls="panel.control" @click="mobilePanel = panel.value">{{ panel.label }}<span v-if="panel.value === 'result' && results.length">{{ results.length }}</span></button>
+    </nav>
+    <p v-if="studio.storageError" role="alert" class="video-notice video-storage-notice">{{ storageErrorText }}</p>
+    <p v-if="studio.activeSession?.interrupted" role="status" class="video-notice video-storage-notice">{{ t('videoGeneration.sessionInterrupted') }}</p>
+    <div class="video-grid" :data-panel="mobilePanel">
+      <aside id="video-compose-panel" class="video-compose-panel video-card" :aria-label="t('imageGeneration.createTitle')">
+        <slot name="heading"><header class="video-composer-heading">{{ t('imageGeneration.videoTab') }}</header></slot>
+        <div v-if="loadingKeys || !studio.ready" class="video-loading">
+          <LoadingSpinner size="lg" /><p>{{ t('videoGeneration.loading') }}</p>
+        </div>
+        <div v-else-if="!videoKeys.length && !studio.sessions.some(session => session.results.length || session.pending)" class="video-loading">
+          <Icon name="key" size="lg" /><h2>{{ t('videoGeneration.noKeysTitle') }}</h2><p>{{ t('videoGeneration.noKeysDescription') }}</p>
+          <RouterLink to="/keys" class="btn btn-primary btn-sm">{{ t('imageGeneration.manageKeys') }}</RouterLink>
+        </div>
+        <form v-else class="video-composer" @submit.prevent="submitGeneration" @dragenter.prevent="onDragEnter" @dragover.prevent="onDragOver" @dragleave.prevent="onDragLeave" @drop.prevent="onDrop">
+          <input ref="fileInput" type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" @change="onReferenceChange" />
+          <div class="video-composer-scroll">
+            <section class="video-form-section">
+              <div class="video-section-heading"><span class="video-step">01</span><div><h2>{{ t('imageGeneration.sceneHeading') }}</h2><p>{{ t('imageGeneration.sceneHint') }}</p></div></div>
+              <div class="video-scenes">
+                <button v-for="scene in promptScenes" :key="scene.id" type="button" :data-video-scene="scene.id" @click="applyScene(scene.prompt)"><span class="video-scene-icon"><Icon :name="scene.icon" size="sm" /></span><span><strong>{{ scene.title }}</strong><small>{{ scene.hint }}</small></span><Icon name="chevronRight" size="xs" /></button>
               </div>
-              <div class="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-xl bg-gray-950">
-                <video v-if="playbackUrl" :key="activeResult.id" :src="playbackUrl" controls playsinline preload="metadata" :aria-label="activeResult.prompt" class="h-full min-h-0 w-full object-contain" @error="onPlaybackError"></video>
-                <div v-else class="flex flex-col items-center gap-3 p-5 text-center">
-                  <LoadingSpinner v-if="loadingPlayback" size="lg" />
-                  <Icon v-else name="play" size="xl" class="text-gray-500" />
-                  <p class="text-xs text-gray-300">{{ loadingPlayback ? t('videoGeneration.loadingVideo') : playbackError }}</p>
-                  <button v-if="!loadingPlayback" type="button" class="btn btn-secondary btn-sm" @click="loadPlayback">{{ t('videoGeneration.retryPlayback') }}</button>
-                </div>
+            </section>
+            <section class="video-form-section">
+              <div class="video-section-heading"><span class="video-step">02</span><div><h2><label for="video-prompt">{{ t('videoGeneration.describeMotion') }}</label></h2><p>{{ t('videoGeneration.promptGuide') }}</p></div></div>
+              <div class="video-prompt-area">
+                <textarea id="video-prompt" v-model="form.prompt" rows="5" :placeholder="t('videoGeneration.promptPlaceholder')" :aria-label="t('videoGeneration.prompt')" class="video-prompt" @paste="onPaste" @keydown.ctrl.enter.prevent="submitGeneration" @keydown.meta.enter.prevent="submitGeneration"></textarea>
+                <div class="video-prompt-meta"><span>{{ t('videoGeneration.promptCharacters', { count: form.prompt.length }) }}</span><kbd>⌘ / Ctrl + Enter</kbd></div>
+                <div v-if="dragging" class="video-drop-overlay"><Icon name="upload" size="md" />{{ t('videoGeneration.dropReference') }}</div>
               </div>
-              <p class="mt-2 line-clamp-2 shrink-0 text-xs leading-relaxed text-gray-500 dark:text-dark-400">{{ activeResult.prompt }}</p>
-            </div>
-            <div v-else class="flex max-w-sm flex-col items-center p-5 text-center">
-              <div class="mb-5 flex h-16 w-20 items-center justify-center rounded-2xl border border-gray-200 bg-gray-50 text-primary-500 shadow-sm dark:border-dark-700 dark:bg-dark-800">
-                <Icon name="play" size="xl" />
+            </section>
+            <section class="video-form-section video-reference-section">
+              <div class="video-section-heading"><span class="video-step">03</span><h2>{{ t('videoGeneration.prepareFrame') }} <small>{{ referenceUrl || form.referenceImageUrl?.trim() ? 1 : 0 }} / 1</small></h2><button v-if="referenceUrl || form.referenceImageUrl" type="button" class="video-icon-button" :aria-label="t('videoGeneration.removeReference')" @click="removeReference"><Icon name="x" size="sm" /></button></div>
+              <div class="video-reference-row">
+                <img v-if="referenceUrl" :src="referenceUrl" :alt="t('videoGeneration.referenceAlt')" class="video-reference-image" />
+                <button type="button" class="video-reference-upload" :title="t('videoGeneration.uploadHint')" @click="fileInput?.click()"><Icon name="upload" size="md" /><span>{{ t('videoGeneration.uploadReference') }}</span></button>
               </div>
-              <h2 class="text-lg font-semibold text-gray-800 dark:text-white">{{ t('videoGeneration.emptyTitle') }}</h2>
-              <p class="mt-2 text-xs leading-relaxed text-gray-500 dark:text-dark-400">{{ t('videoGeneration.emptyDescription') }}</p>
-            </div>
-          </div>
-
-          <form class="video-composer" @submit.prevent="submitGeneration">
-            <input ref="fileInput" type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" @change="onReferenceChange" />
-            <div v-if="referenceUrl" class="flex items-center gap-3 border-b border-gray-100 px-3 py-2 dark:border-dark-700">
-              <img :src="referenceUrl" :alt="t('videoGeneration.referenceAlt')" class="h-10 w-14 rounded-lg object-cover" />
-              <span class="flex-1 text-xs text-gray-500 dark:text-dark-400">{{ t('videoGeneration.imageToVideo') }}</span>
-              <button type="button" class="btn btn-ghost btn-sm" :aria-label="t('videoGeneration.removeReference')" @click="removeReference"><Icon name="x" size="sm" /></button>
-            </div>
-            <div
-              class="relative"
-              @dragenter.prevent="onDragEnter"
-              @dragover.prevent="onDragOver"
-              @dragleave.prevent="onDragLeave"
-              @drop.prevent="onDrop"
-            >
-              <label for="video-prompt" class="sr-only">{{ t('videoGeneration.prompt') }}</label>
-              <textarea
-                id="video-prompt"
-                v-model="form.prompt"
-                rows="6"
-                :placeholder="t('videoGeneration.promptPlaceholder')"
-                class="video-prompt"
-                @paste="onPaste"
-              ></textarea>
-              <p class="px-4 pb-2 text-xs text-slate-400 dark:text-slate-500 mt-1.5 leading-normal">
-                {{ t('videoGeneration.referenceInputHint') }}
-              </p>
-              <div
-                v-if="dragging"
-                class="pointer-events-none absolute inset-2 z-20 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary-500 bg-primary-50/95 p-4 text-center backdrop-blur-sm dark:bg-dark-900/95"
-              >
-                <Icon name="upload" size="lg" class="text-primary-600 dark:text-primary-400" />
-                <p class="text-xs font-medium text-primary-700 dark:text-primary-300">{{ t('videoGeneration.dropReference') }}</p>
-              </div>
-            </div>
-            <div class="video-controls">
-              <div class="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
-                <div class="min-w-0">
-                  <label for="video-api-key" class="sr-only">{{ t('imageGeneration.apiKey') }}</label>
-                  <Select id="video-api-key" v-model="form.apiKeyId" :options="keyOptions" :aria-label="t('imageGeneration.apiKey')" />
-                </div>
-                <div class="min-w-0">
-                  <label for="video-model" class="sr-only">{{ t('imageGeneration.model') }}</label>
-                  <Select id="video-model" v-model="form.model" :options="modelOptions" searchable creatable :placeholder="loadingModels ? t('imageGeneration.loadingModels') : t('videoGeneration.modelPlaceholder')" :aria-label="t('imageGeneration.model')" />
-                </div>
-              </div>
-              <p v-if="modelError" role="status" class="text-xs text-amber-700 dark:text-amber-300">{{ modelError }}</p>
-              <div class="grid grid-cols-3 gap-2">
-                <div class="min-w-0">
-                  <label for="video-ratio" class="video-label">{{ t('imageGeneration.aspectRatio') }}</label>
-                  <Select id="video-ratio" v-model="form.aspectRatio" :options="ratioOptions" :aria-label="t('imageGeneration.aspectRatio')" />
-                </div>
-                <div class="min-w-0">
-                  <label for="video-duration" class="video-label">{{ t('videoGeneration.duration') }}</label>
-                  <Select id="video-duration" v-model="form.duration" :options="durationOptions" :aria-label="t('videoGeneration.duration')" />
-                </div>
-                <div class="min-w-0">
-                  <label for="video-resolution" class="video-label">
-                    {{ t('imageGeneration.resolution') }}
-                    <span v-if="Boolean(fixedResolution)" class="font-normal text-gray-400 dark:text-dark-400">({{ t('videoGeneration.resolutionFixed') }})</span>
-                  </label>
-                  <Select
-                    id="video-resolution"
-                    v-model="form.resolution"
-                    :options="resolutionOptions"
-                    :disabled="Boolean(fixedResolution)"
-                    :aria-label="Boolean(fixedResolution) ? t('videoGeneration.resolutionFixed') : t('imageGeneration.resolution')"
-                  />
-                </div>
-              </div>
-              <details class="group min-w-0">
-                <summary class="cursor-pointer text-[11px] font-medium text-gray-500 hover:text-gray-700 dark:text-dark-400 dark:hover:text-dark-200">
-                  {{ t('videoGeneration.useImageUrl') }}
-                </summary>
-                <div class="mt-1.5 space-y-1">
-                  <label for="video-reference-url" class="video-label">{{ t('videoGeneration.referenceImageUrlLabel') }}</label>
-                  <input
-                    id="video-reference-url"
-                    v-model="form.referenceImageUrl"
-                    type="url"
-                    :placeholder="t('videoGeneration.referenceImageUrlPlaceholder')"
-                    class="video-url-input"
-                  />
-                  <p class="text-[10px] text-gray-400 dark:text-dark-400">{{ t('videoGeneration.referenceImageUrlHint') }}</p>
-                </div>
+              <p class="video-reference-hint">{{ t('videoGeneration.referenceInputHint') }}</p>
+              <details class="video-url-details">
+                <summary>{{ t('videoGeneration.useImageUrl') }}</summary>
+                <label for="video-reference-url" class="video-label">{{ t('videoGeneration.referenceImageUrlLabel') }}</label>
+                <input id="video-reference-url" v-model="form.referenceImageUrl" type="url" :placeholder="t('videoGeneration.referenceImageUrlPlaceholder')" class="video-url-input" />
+                <p class="video-reference-hint">{{ t('videoGeneration.referenceImageUrlHint') }}</p>
               </details>
-              <div class="flex min-w-0 items-center justify-between gap-2 pt-0.5">
-                <button type="button" class="btn btn-ghost btn-sm min-w-0" :title="t('videoGeneration.uploadHint')" @click="fileInput?.click()">
-                  <Icon name="upload" size="sm" /><span class="truncate">{{ t('videoGeneration.uploadReference') }}</span>
-                </button>
-                <button type="submit" class="btn btn-primary btn-sm shrink-0" :disabled="!canGenerate">
-                  <LoadingSpinner v-if="generating" size="sm" /><Icon v-else name="play" size="sm" />
-                  {{ t(generating ? 'videoGeneration.generating' : 'videoGeneration.generate') }}
-                </button>
+              <p v-if="requiresReference && !referenceUrl && !form.referenceImageUrl" role="status" class="video-inline-warning">{{ t('videoGeneration.requiresReference') }}</p>
+            </section>
+            <section class="video-form-section video-controls">
+              <div class="video-section-heading"><h2>{{ t('videoGeneration.videoSettings') }}</h2><span class="video-section-aside">{{ t('videoGeneration.providers') }}</span></div>
+              <label for="video-api-key" class="video-label">{{ t('imageGeneration.apiKey') }}</label>
+              <Select id="video-api-key" v-model="form.apiKeyId" :options="keyOptions" :aria-label="t('imageGeneration.apiKey')" />
+              <label for="video-model" class="video-label">{{ t('imageGeneration.model') }}</label>
+              <Select id="video-model" v-model="form.model" :options="modelOptions" searchable creatable :loading="loadingModels" :placeholder="loadingModels ? t('imageGeneration.loadingModels') : t('videoGeneration.modelPlaceholder')" :aria-label="t('imageGeneration.model')" />
+              <p v-if="modelError" role="status" class="video-inline-warning">{{ modelError }}</p>
+              <label for="video-ratio" class="video-label">{{ t('imageGeneration.aspectRatio') }}</label>
+              <Select id="video-ratio" v-model="form.aspectRatio" :options="ratioOptions" :aria-label="t('imageGeneration.aspectRatio')" />
+              <div class="video-spec-grid">
+                <div><label for="video-duration" class="video-label">{{ t('videoGeneration.duration') }}</label><Select id="video-duration" v-model="form.duration" :options="durationOptions" :aria-label="t('videoGeneration.duration')" /></div>
+                <div><label for="video-resolution" class="video-label">{{ t('imageGeneration.resolution') }}</label><Select id="video-resolution" v-model="form.resolution" :options="resolutionOptions" :disabled="Boolean(fixedResolution)" :aria-label="Boolean(fixedResolution) ? t('videoGeneration.resolutionFixed') : t('imageGeneration.resolution')" /></div>
               </div>
-              <p v-if="requiresReference && !referenceUrl && !form.referenceImageUrl" role="status" class="text-xs text-amber-700 dark:text-amber-300">{{ t('videoGeneration.requiresReference') }}</p>
-            </div>
-          </form>
-          <p class="video-footnote">{{ t('videoGeneration.requestHint') }}</p>
-        </section>
+              <p v-if="fixedResolution" class="video-reference-hint">{{ t('videoGeneration.resolutionFixed') }}</p>
+              <p class="video-reference-hint">{{ t('videoGeneration.requestHint') }}</p>
+            </section>
+          </div>
+          <footer class="video-composer-footer"><div><strong>{{ form.model || t('imageGeneration.selectModel') }}</strong><span>{{ form.aspectRatio }} · {{ form.duration }}s · {{ form.resolution }}</span></div><button type="submit" class="video-generate" :disabled="!canGenerate"><LoadingSpinner v-if="generating" size="sm" /><Icon v-else name="play" size="sm" />{{ t(generating ? 'videoGeneration.generating' : 'videoGeneration.generate') }}</button></footer>
+        </form>
+      </aside>
 
-        <aside id="video-studio-history" class="video-history" :class="{ 'video-history-visible': showMobileHistory }">
-          <div class="shrink-0 border-b border-gray-100 p-4 dark:border-dark-700">
-            <div class="flex items-center justify-between">
-              <h2 class="text-xs font-semibold text-gray-600 dark:text-dark-200">{{ t('videoGeneration.historyTitle') }}</h2>
-              <button type="button" class="btn btn-ghost btn-sm lg:hidden" :aria-label="t('common.close')" @click="closeHistory"><Icon name="x" size="sm" /></button>
+      <section id="video-result-panel" class="video-workspace video-card" tabindex="-1" :aria-label="t('videoGeneration.resultsTitle')">
+        <header class="video-result-heading"><div><h2>{{ t('videoGeneration.resultsTitle') }}</h2><p>{{ pending ? statusLabel : activeResult ? t('videoGeneration.resultReady') : t('videoGeneration.resultsHint') }}</p></div><span class="video-mode-badge">{{ t((pending?.mode ?? activeResult?.mode ?? (referenceUrl || form.referenceImageUrl ? 'image' : 'text')) === 'image' ? 'videoGeneration.imageToVideo' : 'videoGeneration.textToVideo') }}</span></header>
+        <p v-if="sessionError" role="alert" class="video-error">{{ sessionError }}</p>
+        <div class="video-canvas">
+          <div class="video-viewport" :class="{ 'has-video': activeResult && !pending }">
+            <div v-if="pending" class="video-placeholder" role="status" aria-live="polite">
+              <span class="video-empty-frame"><LoadingSpinner v-if="generating" size="lg" /><Icon v-else name="clock" size="xl" /></span>
+              <h3>{{ statusLabel }}</h3><p>{{ pending.model }} · {{ pending.duration }}s · {{ pending.resolution }}</p>
+              <p>{{ t('videoGeneration.backgroundHint') }}</p>
+              <button v-if="pending.phase === 'paused'" type="button" class="btn btn-secondary btn-sm" @click="resumePolling"><Icon name="refresh" size="sm" />{{ t('videoGeneration.resume') }}</button>
+              <details v-if="pending.task" class="video-task-details"><summary>{{ t('videoGeneration.taskId') }}</summary><code>{{ pending.task.id }}</code></details>
             </div>
-            <p class="mt-1 text-[11px] text-gray-400">{{ t('videoGeneration.historyHint') }}</p>
-            <button type="button" class="btn btn-secondary btn-sm mt-3 w-full justify-center" @click="newSession"><Icon name="plus" size="sm" />{{ t('imageGeneration.newSession') }}</button>
+            <template v-else-if="activeResult">
+              <video v-if="playbackUrl" :key="activeResult.id" :src="playbackUrl" controls playsinline preload="metadata" :aria-label="activeResult.prompt" @error="onPlaybackError"></video>
+              <div v-else class="video-placeholder video-playback-placeholder"><LoadingSpinner v-if="loadingPlayback" size="lg" /><Icon v-else name="play" size="xl" /><p>{{ loadingPlayback ? t('videoGeneration.loadingVideo') : playbackError }}</p><button v-if="!loadingPlayback" type="button" class="btn btn-secondary btn-sm" @click="loadPlayback">{{ t('videoGeneration.retryPlayback') }}</button></div>
+            </template>
+            <div v-else class="video-placeholder"><span class="video-empty-frame"><Icon name="play" size="xl" /></span><h3>{{ t('videoGeneration.emptyTitle') }}</h3><p>{{ t('videoGeneration.emptyDescription') }}</p></div>
           </div>
-          <div class="max-h-44 shrink-0 space-y-1 overflow-y-auto border-b border-gray-100 p-2 dark:border-dark-700" data-testid="video-sessions">
-            <div v-for="session in studio.sessions" :key="session.id" class="flex items-center gap-1 rounded-lg" :class="session.id === studio.activeId ? 'bg-primary-50 dark:bg-primary-500/10' : ''">
-              <button type="button" class="min-w-0 flex-1 px-2 py-2 text-left" :aria-pressed="session.id === studio.activeId" @click="chooseSession(session.id)">
-                <span class="block truncate text-xs font-medium text-gray-800 dark:text-dark-100">{{ session.title || t('imageGeneration.untitledSession') }}</span>
-                <span class="block text-[10px] text-gray-500 dark:text-dark-400">{{ session.pending ? t('videoGeneration.generating') : t('videoGeneration.sessionVideoCount', { count: session.results.length }) }}</span>
-              </button>
-              <button type="button" class="btn btn-ghost btn-sm shrink-0 px-2" :disabled="Boolean(session.pending)" :aria-label="t('imageGeneration.deleteSession')" @click="deletingSessionId = session.id"><Icon name="trash" size="xs" /></button>
-            </div>
+          <div v-if="activeResult && !pending" class="video-result-summary"><div><strong>{{ activeResult.model }}</strong><span>{{ activeResult.duration }}s · {{ activeResult.resolution }} · {{ activeResult.aspectRatio }}</span></div><p>{{ activeResult.prompt }}</p></div>
+          <footer v-if="activeResult && !pending" class="video-result-actions"><button type="button" class="btn btn-secondary btn-sm video-download" :aria-label="t('videoGeneration.download')" :disabled="downloading || loadingPlayback" @click="downloadResult"><Icon name="download" size="xs" />{{ t('videoGeneration.download') }}</button><button type="button" class="btn btn-ghost btn-sm video-continue" @click="revealWorkspacePanel('compose', true)"><Icon name="edit" size="xs" />{{ t('videoGeneration.continueCreating') }}</button></footer>
+        </div>
+      </section>
+
+      <aside id="video-studio-history" class="video-activity" :aria-label="t('videoGeneration.historyTitle')">
+        <section class="video-task-panel video-card"><header><div><h2>{{ t('imageGeneration.runningTasks') }}</h2><p>{{ t('imageGeneration.taskCount', { count: activeTaskSessions.length }) }}</p></div><Icon name="clock" size="sm" /></header><div class="video-task-list"><p v-if="!activeTaskSessions.length" class="video-empty-tasks">{{ t('imageGeneration.noRunningTasks') }}</p><button v-for="session in activeTaskSessions" :key="session.id" type="button" class="video-task-entry" @click="chooseSession(session.id, 'result')"><LoadingSpinner v-if="session.pending && session.pending.phase !== 'paused'" size="sm" /><Icon v-else name="exclamationCircle" size="sm" /><span><strong>{{ session.title || t('imageGeneration.untitledSession') }}</strong><small>{{ session.pending ? jobStatusLabel(session.pending) : t('imageGeneration.batchUncertain') }}</small></span><Icon name="chevronRight" size="xs" /></button></div></section>
+        <section class="video-history video-card">
+          <header class="video-history-heading"><div><h2>{{ t('videoGeneration.generationHistory') }}</h2><button type="button" class="video-icon-button video-new-session" :disabled="!studio.ready" :aria-label="t('imageGeneration.newSession')" @click="newSession"><Icon name="plus" size="sm" /></button></div><input v-model="historySearch" type="search" class="input video-history-search" :placeholder="t('imageGeneration.searchHistory')" :aria-label="t('imageGeneration.searchHistory')" /></header>
+          <div class="video-session-list" data-testid="video-sessions">
+            <div v-for="session in filteredSessions" :key="session.id" class="video-session-row" :class="{ 'is-active': session.id === studio.activeId }"><button type="button" class="video-session-select" :aria-pressed="session.id === studio.activeId" @click="chooseSession(session.id)"><span>{{ session.title || t('imageGeneration.untitledSession') }}</span><small>{{ session.pending ? jobStatusLabel(session.pending) : t('videoGeneration.sessionVideoCount', { count: session.results.length }) }}</small></button><button type="button" class="video-icon-button" :disabled="Boolean(session.pending)" :aria-label="t('imageGeneration.deleteSession')" @click="deletingSessionId = session.id"><Icon name="trash" size="xs" /></button></div>
           </div>
-          <div class="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
-            <p v-if="!results.length" class="py-10 text-center text-xs text-gray-400">{{ t('imageGeneration.noHistory') }}</p>
-            <button v-for="result in results" :key="result.id" type="button" class="video-result" :aria-pressed="activeResult?.id === result.id" @click="chooseResult(result)">
-              <span class="flex h-11 w-14 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-400 dark:bg-dark-800"><Icon name="play" size="sm" /></span>
-              <span class="min-w-0">
-                <span class="block truncate text-xs font-medium text-gray-800 dark:text-dark-100">{{ result.prompt }}</span>
-                <span class="mt-1 block truncate text-[10px] text-gray-500 dark:text-dark-400">{{ result.model }} · {{ result.duration }}s · {{ result.resolution }}</span>
-                <span class="mt-0.5 block text-[10px] text-gray-400">{{ result.createdAt }}</span>
-              </span>
-            </button>
+          <div class="video-history-filters"><button v-for="filter in historyFilters" :key="filter.value" type="button" :aria-pressed="historyFilter === filter.value" @click="historyFilter = filter.value">{{ filter.label }}</button></div>
+          <div class="video-history-results">
+            <p v-if="!filteredResults.length" class="video-history-empty">{{ t(historySearch ? 'imageGeneration.noSearchResults' : 'imageGeneration.noHistory') }}</p>
+            <button v-for="result in filteredResults" :key="result.id" type="button" class="video-result" :aria-pressed="activeResult?.id === result.id" @click="chooseResult(result)"><span class="video-history-play"><Icon name="play" size="sm" /></span><span class="video-history-info"><strong>{{ result.prompt }}</strong><span>{{ result.model }} · {{ result.duration }}s · {{ result.resolution }}</span><small>{{ result.createdAt }}</small></span></button>
           </div>
-        </aside>
-      </div>
-    </template>
+          <p class="video-history-hint">{{ t('videoGeneration.historyHint') }}</p>
+        </section>
+      </aside>
+    </div>
     <ConfirmDialog :show="Boolean(deletingSessionId)" :title="t('imageGeneration.deleteSession')" :message="t('videoGeneration.deleteSessionConfirm')" @confirm="deleteSession" @cancel="deletingSessionId = null" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { fetchVideoBlob, getVideoTask, listVideoModels, supportedVideoResolutions, supportsVideoGeneration, videoContentURL, videoNeedsAuthenticatedDownload, videoModelResolution, videoProtocolForModel, videoRequiresReference, type VideoAspectRatio } from '@/api/videoGeneration'
@@ -211,15 +129,32 @@ import { ConfirmDialog, LoadingSpinner } from '@/components/common'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores/app'
-import { useVideoStudioStore, type VideoStudioForm, type VideoStudioResult } from '@/stores/videoStudio'
+import { useVideoStudioStore, type VideoStudioForm, type VideoStudioJob, type VideoStudioResult } from '@/stores/videoStudio'
 import type { ApiKey, GroupPlatform } from '@/types'
 
 const props = defineProps<{ apiKeys: ApiKey[]; loadingKeys: boolean }>()
 const { t } = useI18n()
 const app = useAppStore()
 const studio = useVideoStudioStore()
-const showMobileHistory = ref(false)
-const historyToggle = ref<HTMLButtonElement | null>(null)
+type WorkspacePanel = 'compose' | 'result' | 'history'
+const mobilePanel = ref<WorkspacePanel>('compose')
+const historySearch = ref('')
+const historyFilter = ref<'all' | 'text' | 'image'>('all')
+const workspacePanels = computed(() => [
+  { value: 'compose' as const, label: t('imageGeneration.composePanel'), control: 'video-compose-panel' },
+  { value: 'result' as const, label: t('imageGeneration.worksPanel'), control: 'video-result-panel' },
+  { value: 'history' as const, label: t('imageGeneration.recordsPanel'), control: 'video-studio-history' },
+])
+const promptScenes = computed(() => [
+  { id: 'product', icon: 'grid' as const, title: t('videoGeneration.sceneProduct'), hint: t('videoGeneration.sceneProductHint'), prompt: t('videoGeneration.sceneProductPrompt') },
+  { id: 'portrait', icon: 'user' as const, title: t('videoGeneration.scenePortrait'), hint: t('videoGeneration.scenePortraitHint'), prompt: t('videoGeneration.scenePortraitPrompt') },
+  { id: 'landscape', icon: 'sparkles' as const, title: t('videoGeneration.sceneLandscape'), hint: t('videoGeneration.sceneLandscapeHint'), prompt: t('videoGeneration.sceneLandscapePrompt') },
+])
+const historyFilters = computed(() => [
+  { value: 'all' as const, label: t('imageGeneration.historyAll') },
+  { value: 'text' as const, label: t('videoGeneration.textToVideo') },
+  { value: 'image' as const, label: t('videoGeneration.imageToVideo') },
+])
 const deletingSessionId = ref<string | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const referenceUrl = ref('')
@@ -244,13 +179,21 @@ const pending = computed(() => studio.activeSession?.pending ?? null)
 const generating = computed(() => Boolean(pending.value && pending.value.phase !== 'paused'))
 const results = computed(() => studio.activeSession?.results ?? [])
 const activeResult = computed(() => results.value.find(result => result.id === studio.activeSession?.activeResultId) ?? null)
+const activeTaskSessions = computed(() => studio.sessions.filter(session => session.pending || session.interrupted))
+const searchTerm = computed(() => historySearch.value.trim().toLocaleLowerCase())
+const filteredSessions = computed(() => studio.sessions.filter(session => !searchTerm.value ||
+  [session.title, session.form.prompt, ...session.results.map(result => `${result.prompt} ${result.model}`)].some(text => text.toLocaleLowerCase().includes(searchTerm.value))))
+const filteredResults = computed(() => results.value.filter(result =>
+  (historyFilter.value === 'all' || result.mode === historyFilter.value) &&
+  (!searchTerm.value || `${result.prompt} ${result.model}`.toLocaleLowerCase().includes(searchTerm.value))))
 const message = (error: unknown, fallback: string) => {
   const text = error instanceof Error ? error.message : typeof error === 'string' ? error : fallback
   return text.startsWith('videoGeneration.') ? t(text) : text
 }
 const sessionError = computed(() => message(studio.activeSession?.error || '', 'videoGeneration.generateFailed'))
 const storageErrorText = computed(() => t(studio.storageError === 'conflict' ? 'videoGeneration.storageConflict' : 'videoGeneration.storageError'))
-const statusLabel = computed(() => t(`videoGeneration.${pending.value?.phase === 'submitting' ? 'submitting' : pending.value?.phase === 'paused' ? 'paused' : pending.value?.task?.status === 'queued' ? 'queued' : 'running'}`))
+const jobStatusLabel = (job: VideoStudioJob) => t(`videoGeneration.${job.phase === 'submitting' ? 'submitting' : job.phase === 'paused' ? 'paused' : job.task?.status === 'queued' ? 'queued' : 'running'}`)
+const statusLabel = computed(() => pending.value ? jobStatusLabel(pending.value) : '')
 
 function eligibleGroups(key: ApiKey) {
   return (key.groups?.length ? key.groups : key.group ? [key.group] : [])
@@ -307,21 +250,30 @@ async function loadModels() {
   }
 }
 
-function closeHistory() {
-  showMobileHistory.value = false
-  historyToggle.value?.focus()
+async function revealWorkspacePanel(panel: WorkspacePanel, focusOnDesktop = false) {
+  mobilePanel.value = panel
+  await nextTick()
+  if (disposed || mobilePanel.value !== panel || (!focusOnDesktop && window.innerWidth > 1199)) return
+  const destination = panel === 'compose'
+    ? document.getElementById('video-prompt') ?? document.getElementById('studio-video-tab')
+    : document.getElementById(panel === 'result' ? 'video-result-panel' : 'video-studio-history')
+  destination?.focus({ preventScroll: panel !== 'compose' })
+}
+function applyScene(prompt: string) {
+  form.value.prompt = [form.value.prompt, prompt].filter(Boolean).join('\n')
+  void revealWorkspacePanel('compose', true)
 }
 function newSession() {
   studio.createSession()
-  closeHistory()
+  void revealWorkspacePanel('compose')
 }
-function chooseSession(id: string) {
+function chooseSession(id: string, panel: WorkspacePanel = 'compose') {
   studio.activeId = id
-  closeHistory()
+  void revealWorkspacePanel(panel)
 }
 function chooseResult(result: VideoStudioResult) {
   if (studio.activeSession) studio.activeSession.activeResultId = result.id
-  closeHistory()
+  void revealWorkspacePanel('result')
 }
 function deleteSession() {
   if (deletingSessionId.value) studio.deleteSession(deletingSessionId.value)
@@ -376,6 +328,7 @@ function onPaste(event: ClipboardEvent) {
 }
 async function submitGeneration() {
   if (!canGenerate.value || !selectedKey.value || !platform.value) return
+  void revealWorkspacePanel('result')
   try {
     const count = await studio.generate(selectedKey.value.key, platform.value)
     if (count) app.showSuccess(t('videoGeneration.generated'))
@@ -529,42 +482,140 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.video-panel { @apply flex min-h-0 flex-1 flex-col overflow-hidden; }
-.video-grid { @apply grid min-h-0 flex-1 grid-cols-1 grid-rows-1 lg:grid-cols-[minmax(0,1fr)_280px]; }
-.video-workspace { @apply flex min-h-0 min-w-0 flex-col overflow-y-auto px-3 pb-3 pt-2 sm:px-4; }
-.video-canvas {
-  @apply flex min-h-[200px] flex-1 items-center justify-center overflow-hidden rounded-2xl border p-3 sm:p-4;
-  background: var(--surface-card);
-  border-color: var(--surface-border);
+.video-panel { @apply flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden; }
+.video-card { @apply min-w-0 overflow-hidden rounded-2xl border; background: var(--surface-card); border-color: var(--surface-border); }
+.video-workflow { @apply flex h-12 shrink-0 items-center gap-5 rounded-xl px-4; background: var(--surface-card); }
+.video-new-creation { @apply flex shrink-0 items-center gap-1.5 rounded-full bg-primary-50 px-3 py-2 text-xs font-medium text-primary-700 dark:bg-primary-500/10 dark:text-primary-300; }
+.video-workflow ol { @apply flex min-w-0 flex-1 items-center gap-4; }
+.video-workflow li { @apply flex min-w-0 flex-1 items-center gap-2 whitespace-nowrap text-xs font-medium text-gray-600 dark:text-dark-200; }
+.video-workflow li:not(:last-child)::after { content: ''; flex: 1; height: 1px; margin-left: 8px; background: var(--surface-border); }
+.video-workflow li > span, .video-step { @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-xs font-semibold text-primary-700 dark:bg-primary-500/10 dark:text-primary-300; }
+.video-workflow li:last-child { @apply text-primary-700 dark:text-primary-300; }
+.video-grid { @apply grid min-h-0 flex-1 gap-3; grid-template-columns: 350px minmax(0, 1fr) 240px; }
+.video-compose-panel, .video-composer { @apply flex min-h-0 flex-col; }
+.video-composer { @apply flex-1; }
+.video-composer-heading { @apply shrink-0 border-b px-4 py-5 text-sm font-semibold; border-color: var(--surface-border); }
+.video-loading { @apply flex flex-1 flex-col items-center justify-center gap-3 p-5 text-center text-sm text-gray-500 dark:text-dark-300; }
+.video-composer-scroll { @apply min-h-0 flex-1 overflow-y-auto px-4; scrollbar-width: thin; scrollbar-gutter: stable; }
+.video-form-section { @apply min-w-0 py-4; }
+.video-form-section + .video-form-section { border-top: 1px solid var(--surface-border); }
+.video-section-heading { @apply mb-3 flex min-w-0 items-center gap-2.5; }
+.video-section-heading h2 { @apply text-xs font-semibold text-gray-800 dark:text-gray-100; }
+.video-section-heading p { @apply mt-1 text-[11px] leading-relaxed text-gray-500 dark:text-dark-400; }
+.video-section-heading small { @apply ml-1 text-[11px] font-normal text-gray-400; }
+.video-section-aside { @apply ml-auto text-[10px] text-gray-400 dark:text-dark-400; }
+.video-scenes { @apply grid gap-1; }
+.video-scenes > button { @apply flex min-w-0 items-center gap-2.5 rounded-xl px-2 py-2 text-left transition hover:bg-gray-50 dark:hover:bg-dark-700/50; }
+.video-scene-icon { @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-300; }
+.video-scenes button > span:nth-child(2) { @apply min-w-0 flex-1; }
+.video-scenes strong { @apply block text-xs font-medium text-gray-700 dark:text-gray-100; }
+.video-scenes small { @apply mt-1 block truncate text-[10px] text-gray-500 dark:text-dark-400; }
+.video-scenes button > svg { @apply shrink-0 text-gray-400; }
+.video-prompt-area { @apply relative rounded-xl border px-3 pt-3; background: var(--surface-inset); border-color: var(--surface-border); }
+.video-prompt-area:focus-within { @apply border-primary-400; }
+.video-prompt { @apply block min-h-28 w-full resize-y bg-transparent text-sm leading-6 text-gray-900 outline-none placeholder:text-gray-400 dark:text-gray-100 dark:placeholder:text-dark-400; max-height: 260px; }
+.video-prompt-meta { @apply mt-2 flex items-center justify-between gap-2 border-t py-2 text-[10px] text-gray-400 dark:text-dark-400; border-color: var(--surface-border); }
+.video-prompt-meta kbd { @apply font-sans; }
+.video-drop-overlay { @apply pointer-events-none absolute inset-0 flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary-400 bg-primary-50/95 p-3 text-xs text-primary-700 dark:bg-dark-800/95 dark:text-primary-300; }
+.video-reference-section .video-icon-button { @apply ml-auto; }
+.video-reference-row { @apply flex items-center gap-2; }
+.video-reference-image { @apply h-24 w-24 rounded-xl border object-cover; border-color: var(--surface-border); }
+.video-reference-upload { @apply flex h-24 w-[88px] shrink-0 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 text-[11px] text-gray-500 transition hover:border-primary-400 hover:text-primary-700 dark:border-dark-500 dark:text-dark-300 dark:hover:text-primary-300; }
+.video-reference-hint { @apply mt-2 text-[10px] leading-relaxed text-gray-400 dark:text-dark-400; }
+.video-url-details { @apply mt-3 min-w-0; }
+.video-url-details summary { @apply mb-2 cursor-pointer text-[11px] font-medium text-gray-500 dark:text-dark-300; }
+.video-url-input { @apply block min-h-9 w-full min-w-0 rounded-lg border px-2.5 py-2 text-xs text-gray-800 placeholder:text-gray-400 focus:border-primary-400 focus:outline-none dark:text-dark-100; background: var(--surface-inset); border-color: var(--surface-border); }
+.video-label { @apply mb-1 block pt-1 text-[11px] font-medium text-gray-500 dark:text-dark-300; }
+.video-controls { @apply space-y-2; }
+.video-controls :deep(.select-trigger) { @apply min-h-9 rounded-lg px-3 py-2 text-xs shadow-none; background: var(--surface-inset); border-color: transparent; }
+.video-spec-grid { @apply grid grid-cols-2 gap-2; }
+.video-spec-grid > div { @apply min-w-0; }
+.video-inline-warning { @apply mt-2 text-[11px] leading-relaxed text-amber-800 dark:text-amber-200; }
+.video-composer-footer { @apply flex shrink-0 items-center gap-2 border-t p-3; border-color: var(--surface-border); background: var(--surface-card); }
+.video-composer-footer > div { @apply min-w-0 flex-1; }
+.video-composer-footer strong { @apply block truncate text-xs font-medium text-gray-700 dark:text-dark-100; }
+.video-composer-footer span { @apply mt-1 block truncate text-[10px] text-gray-500 dark:text-dark-400; }
+.video-generate { @apply flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-primary-500 px-4 text-xs font-semibold text-on-primary transition hover:bg-primary-400 disabled:cursor-not-allowed disabled:opacity-45; }
+.video-workspace { @apply flex min-h-0 flex-col p-4; }
+.video-result-heading { @apply mb-3 flex shrink-0 items-center justify-between gap-2; }
+.video-result-heading h2, .video-task-panel h2, .video-history-heading h2 { @apply text-sm font-semibold text-gray-800 dark:text-gray-100; }
+.video-result-heading p, .video-task-panel header p { @apply mt-1 text-[11px] text-gray-500 dark:text-dark-400; }
+.video-mode-badge { @apply shrink-0 rounded-full bg-primary-50 px-2 py-1 text-[10px] text-primary-700 dark:bg-primary-500/10 dark:text-primary-300; }
+.video-canvas { @apply flex min-h-0 flex-1 flex-col; }
+.video-viewport { @apply flex min-h-0 flex-1 items-center justify-center overflow-y-auto rounded-xl; background: var(--surface-inset); }
+.video-viewport.has-video { @apply overflow-hidden; background: #18181b; }
+.video-viewport video { @apply h-full min-h-0 w-full object-contain; }
+.video-placeholder { @apply flex max-w-sm flex-col items-center gap-3 p-5 text-center text-gray-400 dark:text-dark-400; max-height: 100%; }
+.video-placeholder h3 { @apply text-sm font-medium text-gray-500 dark:text-dark-300; }
+.video-placeholder p { @apply max-w-[280px] text-xs leading-relaxed; }
+.video-empty-frame { @apply mb-2 flex h-24 w-28 shrink-0 items-center justify-center rounded-2xl border border-dashed border-gray-300 dark:border-dark-600; }
+.video-playback-placeholder { @apply text-gray-300; }
+.video-task-details { @apply w-full text-[10px]; }
+.video-task-details summary { @apply cursor-pointer; }
+.video-task-details code { @apply mt-2 block break-all; }
+.video-result-summary { @apply shrink-0 py-3; }
+.video-result-summary > div { @apply flex flex-wrap items-center justify-between gap-2; }
+.video-result-summary strong { @apply min-w-0 truncate text-xs font-medium text-gray-700 dark:text-dark-100; }
+.video-result-summary span { @apply text-[10px] text-gray-500 dark:text-dark-300; }
+.video-result-summary p { @apply mt-2 line-clamp-2 text-xs leading-relaxed text-gray-500 dark:text-dark-400; }
+.video-result-actions { @apply flex shrink-0 flex-wrap items-center justify-end gap-1 border-t pt-3; border-color: var(--surface-border); }
+.video-result-actions .btn { @apply min-h-8 px-2 text-[11px]; }
+.video-result-actions .video-download { @apply order-1 border-transparent bg-primary-500 text-on-primary shadow-none hover:bg-primary-400; }
+.video-notice { @apply mb-2 shrink-0 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800 dark:bg-amber-950/40 dark:text-amber-200; }
+.video-storage-notice { @apply mb-0; }
+.video-error { @apply mb-2 shrink-0 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-200; }
+.video-activity { @apply flex min-h-0 min-w-0 flex-col gap-3; }
+.video-task-panel { @apply flex h-44 shrink-0 flex-col p-3; }
+.video-task-panel header { @apply flex items-center justify-between gap-2 text-gray-400; }
+.video-task-list { @apply mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto; }
+.video-empty-tasks { @apply pt-2 text-[11px] text-gray-400 dark:text-dark-400; }
+.video-task-entry { @apply flex w-full items-center gap-2 rounded-lg p-2 text-left; background: var(--surface-inset); }
+.video-task-entry > span { @apply min-w-0 flex-1; }
+.video-task-entry strong { @apply block truncate text-[11px] font-medium text-gray-700 dark:text-dark-100; }
+.video-task-entry small { @apply mt-1 block text-[10px] text-gray-500 dark:text-dark-300; }
+.video-task-entry > svg { @apply shrink-0 text-primary-600 dark:text-primary-300; }
+.video-history { @apply flex min-h-0 flex-1 flex-col; }
+.video-history-heading { @apply space-y-2 p-3 pb-2; }
+.video-history-heading > div { @apply flex items-center justify-between; }
+.video-history-search { @apply min-w-0 rounded-lg px-2.5 py-2 text-[11px]; }
+.video-session-list { @apply max-h-32 shrink-0 overflow-y-auto px-2 pb-2; }
+.video-session-row { @apply flex items-center rounded-lg px-1; }
+.video-session-row.is-active { @apply bg-primary-50/80 dark:bg-primary-500/10; }
+.video-session-select { @apply min-w-0 flex-1 px-1 py-2 text-left; }
+.video-session-select span { @apply block truncate text-[11px] font-medium text-gray-700 dark:text-dark-100; }
+.video-session-select small { @apply mt-1 block text-[10px] text-gray-500 dark:text-dark-400; }
+.video-icon-button { @apply flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-800 disabled:opacity-30 dark:hover:bg-dark-700 dark:hover:text-dark-100; }
+.video-history-filters { @apply mx-3 mb-2 grid shrink-0 grid-cols-3 gap-1 rounded-lg p-1; background: var(--surface-inset); }
+.video-history-filters button { @apply rounded py-1 text-[10px] text-gray-500 dark:text-dark-300; }
+.video-history-filters button[aria-pressed='true'] { @apply bg-white text-gray-900 shadow-sm dark:bg-dark-600 dark:text-gray-100; }
+.video-history-results { @apply min-h-0 flex-1 space-y-1 overflow-y-auto p-2; }
+.video-history-empty { @apply py-8 text-center text-xs text-gray-400; }
+.video-result { @apply flex w-full min-w-0 items-center gap-2 rounded-xl border border-transparent p-2 text-left transition hover:bg-gray-50 dark:hover:bg-dark-700; }
+.video-result[aria-pressed='true'] { @apply border-primary-400/50 bg-primary-50/40 dark:bg-primary-500/5; }
+.video-history-play { @apply flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-300; }
+.video-history-info { @apply min-w-0 flex-1; }
+.video-history-info strong { @apply line-clamp-2 text-[11px] font-medium text-gray-700 dark:text-dark-100; }
+.video-history-info > span, .video-history-info small { @apply mt-1 block truncate text-[9px] text-gray-500 dark:text-dark-400; }
+.video-history-hint { @apply shrink-0 px-3 pb-3 pt-1 text-[10px] leading-relaxed text-gray-400 dark:text-dark-400; }
+button:focus-visible { @apply outline-none ring-2 ring-primary-500 ring-offset-2 dark:ring-offset-dark-900; }
+.video-panel-tabs { display: none; }
+@media (min-width: 1200px) and (max-width: 1399px) { .video-grid { grid-template-columns: 320px minmax(0, 1fr) 220px; } }
+@media (max-width: 1199px) {
+  .video-workflow { display: none; }
+  .video-panel-tabs { @apply grid shrink-0 grid-cols-3 gap-1 rounded-xl border p-1; background: var(--surface-card); border-color: var(--surface-border); }
+  .video-panel-tabs button { @apply flex h-9 items-center justify-center gap-2 rounded-lg text-xs font-medium text-gray-500 dark:text-dark-300; }
+  .video-panel-tabs button[aria-pressed='true'] { @apply bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-300; }
+  .video-panel-tabs button > span { @apply text-[10px] opacity-70; }
+  .video-grid { grid-template-columns: minmax(0, 1fr); }
+  .video-grid[data-panel='compose'] > :not(.video-compose-panel),
+  .video-grid[data-panel='result'] > :not(.video-workspace),
+  .video-grid[data-panel='history'] > :not(.video-activity) { display: none; }
+  .video-activity { @apply h-full; }
+  .video-task-panel { @apply h-36; }
+  .video-result-actions .btn { @apply min-h-9; }
 }
-.video-composer {
-  @apply mx-auto mt-3 w-full max-w-4xl shrink-0 rounded-2xl border transition-shadow;
-  background: var(--surface-card);
-  border-color: var(--surface-border);
-  box-shadow: var(--surface-shadow);
-}
-.video-composer:focus-within { @apply ring-2 ring-primary-500/30; }
-.video-prompt { @apply block w-full min-h-[160px] resize-y rounded-t-2xl border-0 bg-transparent px-4 py-3 text-sm leading-6 text-gray-800 outline-none placeholder:text-gray-400 focus:ring-0 dark:text-dark-100; }
-.video-controls { @apply space-y-2.5 border-t border-gray-100 p-2.5 dark:border-dark-700 sm:p-3; }
-.video-controls :deep(.select-trigger) { @apply h-8 min-w-0 rounded-lg bg-gray-50 px-2 py-1 text-xs dark:bg-dark-800; }
-.video-label { @apply mb-1 block text-[10px] font-medium text-gray-500 dark:text-dark-400; }
-.video-url-input {
-  @apply block h-8 w-full min-w-0 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs text-gray-800 placeholder:text-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-dark-700 dark:bg-dark-800 dark:text-dark-100 dark:placeholder:text-dark-400;
-}
-.video-footnote { @apply mx-auto mt-1.5 max-w-3xl shrink-0 text-center text-[10px] leading-relaxed text-gray-400; }
-.video-notice { @apply mb-2 shrink-0 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200; }
-.video-history {
-  @apply hidden min-h-0 flex-col border-l lg:flex;
-  background: var(--surface-inset);
-  border-color: var(--surface-border);
-}
-.video-result { @apply flex w-full min-w-0 items-center gap-2 rounded-xl border border-transparent p-2 text-left transition hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:hover:bg-dark-800; }
-.video-result[aria-pressed='true'] { @apply border-primary-500/60 bg-primary-50 dark:bg-primary-950/40; }
-@media (max-width: 1023px) {
-  .video-history-visible { @apply flex border-l-0; }
-  .video-history-open .video-workspace { @apply hidden; }
-}
-@media (max-height: 640px) {
-  .video-canvas { min-height: 10rem; }
+@media (max-width: 479px) {
+  .video-panel { @apply gap-2; }
+  .video-workspace { @apply p-3; }
 }
 </style>

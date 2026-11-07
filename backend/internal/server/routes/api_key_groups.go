@@ -131,6 +131,9 @@ func groupRoutingError(status int, code, message string) error {
 }
 
 func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*service.APIKey, error) {
+	if middleware.IsImageCapabilitiesRead(c.Request.Method, c.Request.URL.Path) {
+		return key, nil
+	}
 	frameBody, framePresent := middleware.APIKeyGroupRequestBody(c)
 	// Authentication runs before this resolver. Reject ambiguity before resource
 	// lookup, composite mapping, per-group probing or subscription admission.

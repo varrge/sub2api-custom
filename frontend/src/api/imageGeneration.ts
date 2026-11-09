@@ -225,6 +225,11 @@ async function submitRequest(url: string, init: RequestInit): Promise<Response> 
 }
 
 function requireImages(payload: unknown): GeneratedImage[] {
+  // Image keepalives can commit HTTP 200 before the upstream returns an error.
+  const error = asRecord(asRecord(payload)?.error)
+  if (error) {
+    throw new ImageGenerationError(asString(error.message) || 'imageGeneration.generateFailed', 'confirmed')
+  }
   const images = parseGeneratedImages(payload)
   if (!images.length) throw new ImageGenerationError('imageGeneration.noImageReturned', 'confirmed')
   return images
@@ -372,10 +377,11 @@ function parseImageTask(payload: unknown, response: Response): ImageTask {
   const seconds = retryAfter === null || retryAfter === undefined ? NaN : Number(retryAfter)
   const retryAfterMs = Number.isFinite(seconds) ? Math.max(0, seconds * 1000)
     : retryAfter && Number.isFinite(Date.parse(retryAfter)) ? Math.max(0, Date.parse(retryAfter) - Date.now()) : 3000
+  const resultError = status === 'completed' ? asRecord(asRecord(body?.result)?.error) : null
   return {
-    id, status: status as ImageTask['status'],
+    id, status: resultError ? 'failed' : status as ImageTask['status'],
     images: parseGeneratedImages(body?.result),
-    error: asString(asRecord(body?.error)?.message) || undefined,
+    error: asString(asRecord(body?.error)?.message) || asString(resultError?.message) || undefined,
     retryAfterMs,
   }
 }

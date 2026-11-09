@@ -11,6 +11,7 @@ import (
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/google/uuid"
+	"github.com/tidwall/gjson"
 	"go.uber.org/zap"
 )
 
@@ -211,6 +212,11 @@ func (s *ImageTaskService) getOwnedRecord(ctx context.Context, owner ImageTaskOw
 func (s *ImageTaskService) Complete(ctx context.Context, id string, statusCode int, result json.RawMessage) error {
 	if !json.Valid(result) {
 		return s.Fail(ctx, id, http.StatusBadGateway, imageTaskErrorJSON("api_error", "upstream returned a non-JSON image response"))
+	}
+	// A keepalive can leave HTTP 200 committed even when generation fails.
+	if errorObj := gjson.GetBytes(result, "error"); errorObj.IsObject() {
+		upstreamErr := openAIImagesUpstreamErrorFromGJSON(errorObj, "")
+		return s.Fail(ctx, id, upstreamErr.clientStatusCode(), json.RawMessage(errorObj.Raw))
 	}
 	if uploader, _ := s.current(); uploader != nil {
 		rewritten, err := uploader.Rewrite(ctx, id, result)

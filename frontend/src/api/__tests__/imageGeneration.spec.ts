@@ -152,6 +152,39 @@ describe('image generation progress and task protocol', () => {
   }
   const jsonResponse = (body: unknown, status = 200, headers: HeadersInit = {}) => new Response(JSON.stringify(body), { status, headers })
 
+  const moderationError = {
+    message: 'Your request was rejected by the safety system. safety_violations=[sexual].',
+    type: 'image_generation_user_error', code: 'moderation_blocked',
+    moderation_details: { moderation_stage: 'output', categories: ['sexual'] },
+  }
+
+  it('surfaces a synchronous HTTP 200 moderation error instead of an empty-image message', async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse({ error: moderationError }))
+    vi.stubGlobal('fetch', fetcher)
+    await expect(generateImages(options)).rejects.toMatchObject({ message: moderationError.message, kind: 'confirmed' })
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
+  it('recognizes an error inside a legacy completed task as a failed generation', async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse({
+      id: 'imgtask_blocked', status: 'completed', http_status: 200, result: { error: moderationError },
+    }))
+    vi.stubGlobal('fetch', fetcher)
+    expect(await getImageTask('original-key', 'imgtask_blocked')).toMatchObject({
+      id: 'imgtask_blocked', status: 'failed', images: [], error: moderationError.message,
+    })
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns a failed task with its error instead of treating it as a failed poll', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
+      id: 'imgtask_blocked', status: 'failed', http_status: 400, error: moderationError,
+    })))
+    expect(await getImageTask('original-key', 'imgtask_blocked')).toMatchObject({
+      id: 'imgtask_blocked', status: 'failed', images: [], error: moderationError.message,
+    })
+  })
+
   it('exposes the existing capability policies and normalizes the same values used by snapshots', () => {
     expect(resolveImageCapabilities('grok', 'grok-imagine-image')).toMatchObject({
       resolutions: ['1K', '2K'], supportsQuality: false, knownModel: true,

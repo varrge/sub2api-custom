@@ -1056,6 +1056,13 @@ func (s *OpenAIGatewayService) handleOpenAIImagesNonStreamingResponse(
 	if err != nil {
 		return OpenAIUsage{}, 0, nil, err
 	}
+	// Compatible gateways may commit HTTP 200 before returning a JSON error.
+	if errorObj := gjson.GetBytes(body, "error"); errorObj.IsObject() {
+		upstreamErr := openAIImagesUpstreamErrorFromGJSON(errorObj, resp.Header.Get("x-request-id"))
+		setOpsUpstreamError(c, resp.StatusCode, upstreamErr.Message, string(body))
+		writeOpenAIImagesUpstreamErrorResponse(c, upstreamErr)
+		return OpenAIUsage{}, 0, nil, upstreamErr
+	}
 	body = s.backfillOpenAIImagesB64JSON(ctx, account, parsed, body)
 	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 	contentType := "application/json"

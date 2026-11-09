@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
 	"time"
 
@@ -108,16 +107,12 @@ func TestGetSchedulableAccount_AppliesGrokFreeSoftGate(t *testing.T) {
 	usageRepo := &grokFreeQuotaUsageRepoStub{stats: map[int64]*usagestats.AccountStats{
 		account.ID: {Tokens: 480_000}, // above 95% of 500k
 	}}
-	// Clear shared gateway free-gate cache so this test is deterministic.
-	gatewayGrokFreeQuotaGateCache.Range(func(key, _ any) bool {
-		gatewayGrokFreeQuotaGateCache.Delete(key)
-		return true
+	waitForGrokFreeQuotaRefresh(t, &gatewayGrokFreeQuotaGateCache)
+	gatewayGrokFreeQuotaGateCache.Delete(account.ID)
+	t.Cleanup(func() {
+		waitForGrokFreeQuotaRefresh(t, &gatewayGrokFreeQuotaGateCache)
+		gatewayGrokFreeQuotaGateCache.Delete(account.ID)
 	})
-	if root, ok := freeQuotaRefreshInFlight.Load(&gatewayGrokFreeQuotaGateCache); ok {
-		if m, ok := root.(*sync.Map); ok {
-			m.Delete(account.ID)
-		}
-	}
 	svc := &GatewayService{
 		cfg:          cfg,
 		accountRepo:  repo,
@@ -129,10 +124,10 @@ func TestGetSchedulableAccount_AppliesGrokFreeSoftGate(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, got, "first sticky hit fail-opens while free-gate stats refresh")
 
-	require.Eventually(t, func() bool {
-		got, err := svc.getSchedulableAccount(context.Background(), account.ID)
-		return err == nil && got == nil
-	}, 2*time.Second, 10*time.Millisecond, "over free soft-gate sticky hit must miss after cache warm")
+	waitForGrokFreeQuotaRefresh(t, &gatewayGrokFreeQuotaGateCache)
+	got, err = svc.getSchedulableAccount(context.Background(), account.ID)
+	require.NoError(t, err)
+	require.Nil(t, got, "over free soft-gate sticky hit must miss after cache warm")
 }
 
 func TestOpenAIGetSchedulableAccount_AppliesGrokFreeSoftGate(t *testing.T) {
@@ -155,15 +150,12 @@ func TestOpenAIGetSchedulableAccount_AppliesGrokFreeSoftGate(t *testing.T) {
 	usageRepo := &grokFreeQuotaUsageRepoStub{stats: map[int64]*usagestats.AccountStats{
 		account.ID: {Tokens: 480_000},
 	}}
-	openaiGrokFreeQuotaGateCache.Range(func(key, _ any) bool {
-		openaiGrokFreeQuotaGateCache.Delete(key)
-		return true
+	waitForGrokFreeQuotaRefresh(t, &openaiGrokFreeQuotaGateCache)
+	openaiGrokFreeQuotaGateCache.Delete(account.ID)
+	t.Cleanup(func() {
+		waitForGrokFreeQuotaRefresh(t, &openaiGrokFreeQuotaGateCache)
+		openaiGrokFreeQuotaGateCache.Delete(account.ID)
 	})
-	if root, ok := freeQuotaRefreshInFlight.Load(&openaiGrokFreeQuotaGateCache); ok {
-		if m, ok := root.(*sync.Map); ok {
-			m.Delete(account.ID)
-		}
-	}
 	svc := &OpenAIGatewayService{
 		cfg:          cfg,
 		accountRepo:  repo,
@@ -174,10 +166,10 @@ func TestOpenAIGetSchedulableAccount_AppliesGrokFreeSoftGate(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, got, "first sticky hit fail-opens while free-gate stats refresh")
 
-	require.Eventually(t, func() bool {
-		got, err := svc.getSchedulableAccount(context.Background(), account.ID)
-		return err == nil && got == nil
-	}, 2*time.Second, 10*time.Millisecond, "OpenAI legacy sticky must apply free soft-gate after cache warm")
+	waitForGrokFreeQuotaRefresh(t, &openaiGrokFreeQuotaGateCache)
+	got, err = svc.getSchedulableAccount(context.Background(), account.ID)
+	require.NoError(t, err)
+	require.Nil(t, got, "OpenAI legacy sticky must apply free soft-gate after cache warm")
 }
 
 func TestCountGrokNativeSearchCallsFromJSON_MessagesStyleBody(t *testing.T) {

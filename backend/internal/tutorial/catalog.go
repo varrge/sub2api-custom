@@ -133,6 +133,9 @@ func (s *Store) Get(ctx context.Context, admin bool) (Catalog, error) {
 	return catalog, nil
 }
 func (s *Store) Save(ctx context.Context, catalog Catalog) (Catalog, error) {
+	// Validation normalizes fields; keep the caller's catalog safe to reuse.
+	catalog.Articles = slices.Clone(catalog.Articles)
+	catalog.Routes = slices.Clone(catalog.Routes)
 	if err := catalog.Validate(); err != nil {
 		return Catalog{}, err
 	}

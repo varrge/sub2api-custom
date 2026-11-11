@@ -81,8 +81,12 @@ func TestStoreFeatureGatePublicationAndConcurrentSave(t *testing.T) {
 	initial, err := s.Get(ctx, true)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), initial.Revision)
-	saved, err := s.Save(ctx, sampleCatalog())
+	source := sampleCatalog()
+	source.Articles[0].Title = " 配置 "
+	saved, err := s.Save(ctx, source)
 	require.NoError(t, err)
+	require.Equal(t, " 配置 ", source.Articles[0].Title)
+	require.Equal(t, "配置", saved.Articles[0].Title)
 	require.Equal(t, int64(2), saved.Revision)
 	_, err = db.Exec("UPDATE settings SET value='true' WHERE key='tutorial_enabled'")
 	require.NoError(t, err)

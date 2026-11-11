@@ -29,6 +29,10 @@ FRONTEND_CRITICAL_VITEST := \
 	src/components/account/__tests__/OpenCodeGoProtocolRulesEditor.spec.ts \
 	src/components/keys/__tests__/BulkEditKeysModal.spec.ts \
 	src/components/keys/__tests__/ModelKeyAccessPanel.spec.ts \
+	src/components/keys/__tests__/UseKeyModal.spec.ts \
+	src/utils/__tests__/tutorial.spec.ts \
+	src/composables/__tests__/useTutorialCenter.spec.ts \
+	src/router/__tests__/feature-access.spec.ts \
 	src/composables/__tests__/useModelKeyAccess.spec.ts \
 	src/components/admin/user/__tests__/UserPlatformQuotaModal.spec.ts \
 	src/views/user/__tests__/KeysView.spec.ts \

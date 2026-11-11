@@ -103,6 +103,12 @@ jobs:
           VOTING_TEST_DSN: postgres://monthcard_test:isolated-test-password@127.0.0.1:55439/monthcard_test?sslmode=disable
         run: go test -race ./internal/voting -count=1
 
+      - name: Tutorial PostgreSQL publication and concurrent editing
+        working-directory: backend
+        env:
+          TUTORIAL_TEST_DSN: postgres://monthcard_test:isolated-test-password@127.0.0.1:55439/monthcard_test?sslmode=disable
+        run: go test -race ./internal/tutorial -count=1
+
   frontend:
     runs-on: ubuntu-latest
     steps:

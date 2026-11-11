@@ -4,7 +4,7 @@
       <p class="wallet-order-group-name">{{ group.name }}</p>
       <VueDraggable v-model="group.items" :animation="180" handle=".wallet-grip" :disabled="saving" :force-fallback="true"
         :delay-on-touch-only="true" :delay="100" :touch-start-threshold="5" ghost-class="wallet-drag-ghost"
-        class="wallet-order-list" role="list" @start="dragging = true; emit('dragging', true)" @end="finish(group)">
+        class="wallet-order-list" role="list" @start="dragging = true; emit('dragging', true)" @end="finish(group.id)">
         <article v-for="(item, index) in group.items" :key="refKey(item)" class="wallet-order-item" role="listitem"
           :class="{ selected: item.card?.id === selectedId, frozen: item.card?.status === 'frozen', legacy: item.kind === 'legacy' }"
           :data-testid="`wallet-item-${refKey(item)}`">
@@ -60,17 +60,20 @@ const priceOpen = ref<number | null>(null), hoverPrice = ref<number | null>(null
 function sync() { draft.value = props.groups.map(group => ({ ...group, items: [...group.items] })) }
 watch(() => props.groups, () => { if (!dragging.value) sync() }, { immediate: true })
 watch(() => props.saving, value => { if (!value && !dragging.value) sync() })
-function finish(group: WalletGroup) {
+function finish(groupId: number) {
   dragging.value = false
   emit('dragging', false)
   if (props.saving) { sync(); return }
+  // Sortable can retain an end callback from before the wallet clock replaced the group objects.
+  const group = draft.value.find(item => item.id === groupId)
+  if (!group) return
   emit('reorder', group.id, group.items.map(({kind,id}) => ({kind,id})))
 }
 function move(group: WalletGroup, from: number, to: number) {
   if (props.saving || to < 0 || to >= group.items.length) return
   const [item] = group.items.splice(from,1)
   group.items.splice(to,0,item)
-  finish(group)
+  finish(group.id)
 }
 </script>
 <style scoped>

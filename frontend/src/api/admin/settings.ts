@@ -771,6 +771,7 @@ export interface SystemSettings {
   native_box_entry_enabled: boolean;
   activity_campaigns_enabled: boolean;
   voting_enabled: boolean;
+  tutorial_enabled: boolean;
 
   // Affiliate (邀请返利) feature switch
   affiliate_enabled: boolean;
@@ -1099,6 +1100,7 @@ export interface UpdateSettingsRequest {
   native_box_entry_enabled?: boolean;
   activity_campaigns_enabled?: boolean;
   voting_enabled?: boolean;
+  tutorial_enabled?: boolean;
 
   // Affiliate (邀请返利) feature switch
   affiliate_enabled?: boolean;

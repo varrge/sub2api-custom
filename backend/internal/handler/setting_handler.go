@@ -128,6 +128,7 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 		NativeBoxEntryEnabled:    settings.NativeBoxEntryEnabled,
 		ActivityCampaignsEnabled: settings.ActivityCampaignsEnabled,
 		VotingEnabled:            settings.VotingEnabled,
+		TutorialEnabled:          settings.TutorialEnabled,
 
 		AffiliateEnabled: settings.AffiliateEnabled,
 

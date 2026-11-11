@@ -7420,6 +7420,17 @@
           </div>
         </div>
 
+        <div class="card" data-testid="tutorial-feature">
+          <div class="flex items-center justify-between gap-4 p-6">
+            <div>
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('tutorial.settingsTitle') }}</h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('tutorial.settingsHint') }}</p>
+              <router-link to="/admin/tutorial" class="mt-2 inline-block text-sm text-primary-600 hover:underline dark:text-primary-400">{{ t('tutorial.adminTitle') }}</router-link>
+            </div>
+            <Toggle v-model="form.tutorial_enabled" :aria-label="t('tutorial.settingsTitle')" data-testid="tutorial-enabled" />
+          </div>
+        </div>
+
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
@@ -10577,6 +10588,7 @@ const form = reactive<SettingsForm>({
   image_generation_enabled: true,
   video_generation_enabled: true,
   voting_enabled: false,
+  tutorial_enabled: false,
   // Support Tickets feature switch
   support_ticket_enabled: false,
   // Model Plaza feature switches + description
@@ -12383,6 +12395,7 @@ async function saveSettings() {
       image_generation_enabled: form.image_generation_enabled,
       video_generation_enabled: form.video_generation_enabled,
       voting_enabled: form.voting_enabled,
+      tutorial_enabled: form.tutorial_enabled,
       // Support Tickets feature switch
       support_ticket_enabled: form.support_ticket_enabled,
       // Model Plaza feature switches + description

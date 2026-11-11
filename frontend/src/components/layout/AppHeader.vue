@@ -77,6 +77,10 @@
           <span class="hidden sm:inline">{{ t('nav.docs') }}</span>
         </a>
 
+        <router-link v-if="user && tutorialEnabled" to="/tutorial" :title="t('tutorial.title')" :aria-label="t('tutorial.title')" data-testid="header-tutorial" class="flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-800">
+          <Icon name="book" size="sm" /><span class="hidden xl:inline">{{ t('tutorial.title') }}</span>
+        </router-link>
+
         <!-- Model Plaza Entry (icon only below sm) -->
         <router-link
           v-if="user && modelPlazaEnabled && !modelPlazaInQuickMenu"
@@ -217,6 +221,7 @@ const isEnterprise = computed(() => user.value?.account_type === 'enterprise')
 const isDark = ref(document.documentElement.classList.contains('dark'))
 const docUrl = computed(() => sanitizeUrl(appStore.docUrl))
 const imageGenerationEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.imageGeneration))
+const tutorialEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.tutorial))
 const votingEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.voting))
 const modelPlazaEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.modelPlaza))
 const supportTicketsEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.supportTicket))

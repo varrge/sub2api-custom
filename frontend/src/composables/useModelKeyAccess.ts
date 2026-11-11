@@ -5,24 +5,9 @@ import { modelKeyAccessAPI, type ModelAccessGroup, type ModelAccessKey, type Mod
 import { keysAPI } from '@/api/keys'
 import { userGroupsAPI } from '@/api/groups'
 import { useAppStore } from '@/stores/app'
-import type { ApiKeyModelAllowlist } from '@/types'
 
-export function modelPolicyAllows(policy: ApiKeyModelAllowlist, model: string): boolean {
-  if (!policy?.enabled) return true
-  if (policy.mode && policy.mode !== 'allow' && policy.mode !== 'deny') return false
-  const listed = (policy.models ?? []).some(id => id.trim() === model.trim())
-  return policy.mode === 'deny' ? !listed : listed
-}
-
-export function validModelAccessID(value: string): boolean {
-  const model = value.trim()
-  // Match the backend's concrete, case-sensitive public-ID validation.
-  return model.length > 0 && Array.from(model).length <= 256 &&
-    !Array.from(value).some(char => {
-      const code = char.codePointAt(0)!
-      return code <= 31 || (code >= 127 && code <= 159)
-    }) && !/[*?\[\]]/.test(model)
-}
+export { modelPolicyAllows, validModelAccessID } from '@/utils/modelKeyPolicy'
+import { modelPolicyAllows, validModelAccessID } from '@/utils/modelKeyPolicy'
 
 export function useModelKeyAccess() {
   const { t } = useI18n()

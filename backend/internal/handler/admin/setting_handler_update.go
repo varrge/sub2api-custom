@@ -371,6 +371,7 @@ type UpdateSettingsRequest struct {
 	NativeBoxEntryEnabled    *bool `json:"native_box_entry_enabled"`
 	ActivityCampaignsEnabled *bool `json:"activity_campaigns_enabled"`
 	VotingEnabled            *bool `json:"voting_enabled"`
+	TutorialEnabled          *bool `json:"tutorial_enabled"`
 
 	// Affiliate (邀请返利) feature switch
 	AffiliateEnabled *bool `json:"affiliate_enabled"`
@@ -524,6 +525,9 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	}
 	if req.VotingEnabled == nil {
 		omitted[service.SettingKeyVotingEnabled] = struct{}{}
+	}
+	if req.TutorialEnabled == nil {
+		omitted[service.SettingKeyTutorialEnabled] = struct{}{}
 	}
 
 	previousSettings, err := h.settingService.GetAllSettings(c.Request.Context())
@@ -2109,6 +2113,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.VotingEnabled
 		}(),
+		TutorialEnabled: func() bool {
+			if req.TutorialEnabled != nil {
+				return *req.TutorialEnabled
+			}
+			return previousSettings.TutorialEnabled
+		}(),
 		AffiliateEnabled: func() bool {
 			if req.AffiliateEnabled != nil {
 				return *req.AffiliateEnabled
@@ -2564,6 +2574,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		NativeBoxEntryEnabled:    updatedSettings.NativeBoxEntryEnabled,
 		ActivityCampaignsEnabled: updatedSettings.ActivityCampaignsEnabled,
 		VotingEnabled:            updatedSettings.VotingEnabled,
+		TutorialEnabled:          updatedSettings.TutorialEnabled,
 
 		AffiliateEnabled: updatedSettings.AffiliateEnabled,
 

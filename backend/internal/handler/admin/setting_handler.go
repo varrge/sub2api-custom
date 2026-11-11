@@ -411,6 +411,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		NativeBoxEntryEnabled:    settings.NativeBoxEntryEnabled,
 		ActivityCampaignsEnabled: settings.ActivityCampaignsEnabled,
 		VotingEnabled:            settings.VotingEnabled,
+		TutorialEnabled:          settings.TutorialEnabled,
 		ModelPlazaDescription:    settings.ModelPlazaDescription,
 
 		AffiliateEnabled: settings.AffiliateEnabled,

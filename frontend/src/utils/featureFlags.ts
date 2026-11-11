@@ -94,6 +94,7 @@ function defineFlag<K extends keyof PublicSettings>(
  * public-settings-driven switch; see the "Adding a new flag" checklist above.
  */
 export const FeatureFlags = {
+  tutorial: defineFlag({ key: 'tutorial_enabled', mode: 'opt-in', label: 'Tutorial center' }),
   voting: defineFlag({
     key: 'voting_enabled',
     mode: 'opt-in',

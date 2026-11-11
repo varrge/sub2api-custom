@@ -24,6 +24,8 @@ vi.mock('file-saver', () => ({
   saveAs: saveAsMock
 }))
 
+vi.mock('@/utils/featureFlags', () => ({ FeatureFlags: { tutorial: {} }, isFeatureFlagEnabled: () => false }))
+
 import UseKeyModal from '../UseKeyModal.vue'
 
 function readBlobAsText(blob: Blob): Promise<string> {
@@ -1233,4 +1235,22 @@ describe('UseKeyModal', () => {
       }
     }
   )
+})
+
+
+describe('tutorial selected-model configuration', () => {
+  it('uses the selected model across clients and normalizes endpoint suffixes', async () => {
+    const wrapper = mount(UseKeyModal, { props: { show: true, apiKey: 'YOUR_API_KEY', baseUrl: 'https://example.com/v1/', platform: 'openai', model: 'allowed-model' }, global: { stubs: { BaseDialog: { template: '<div><slot /></div>' }, Icon: true } } })
+    expect(wrapper.text()).toContain('model = "allowed-model"')
+    expect(wrapper.text()).not.toContain('/v1/v1')
+    await wrapper.setProps({ platform: 'anthropic' })
+    expect(wrapper.text()).toContain('ANTHROPIC_MODEL="allowed-model"')
+    const json = wrapper.findAll('pre code').map(c => c.text()).find(c => c.startsWith('{'))!
+    expect(JSON.parse(json).env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('allowed-model')
+    await wrapper.setProps({ platform: 'gemini', baseUrl: 'https://example.com/v1beta/' })
+    expect(wrapper.text()).toContain('GOOGLE_GEMINI_BASE_URL="https://example.com"')
+    expect(wrapper.text()).toContain('GEMINI_MODEL="allowed-model"')
+    await wrapper.setProps({ model: 'bad";execute' })
+    expect(wrapper.findAll('pre code')).toHaveLength(0)
+  })
 })

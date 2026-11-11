@@ -571,6 +571,7 @@ const (
 	// SettingKeyActivityCampaignsEnabled gates campaign entry and new participation/reward claims.
 	SettingKeyActivityCampaignsEnabled = "activity_campaigns_enabled"
 	SettingKeyVotingEnabled            = "voting_enabled"
+	SettingKeyTutorialEnabled          = "tutorial_enabled"
 
 	// SettingKeyUpstreamBillingProbeSettings stores the global enable switch and interval
 	// for probing remote Sub2API API-key billing metadata.

@@ -252,3 +252,24 @@ func TestUpdateSettingsVotingRoundTrip(t *testing.T) {
 		nil, nil, UpdateSettingsRequest{},
 	), service.SettingKeyVotingEnabled)
 }
+
+func TestUpdateSettingsTutorialRoundTrip(t *testing.T) {
+	h, repo := newStepUpSwitchTestHandler(t, map[string]string{})
+	for _, enabled := range []bool{true, false} {
+		rec := doUpdateSettings(t, h, map[string]any{"tutorial_enabled": enabled}, nil)
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+		require.Equal(t, enabled, gjson.Get(rec.Body.String(), "data.tutorial_enabled").Bool())
+		want := "false"
+		if enabled {
+			want = "true"
+		}
+		require.Equal(t, want, repo.values[service.SettingKeyTutorialEnabled])
+		rec = doUpdateSettings(t, h, map[string]any{"site_name": "Tutorial site"}, nil)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, want, repo.values[service.SettingKeyTutorialEnabled])
+	}
+	require.Contains(t, diffSettings(
+		&service.SystemSettings{TutorialEnabled: true}, &service.SystemSettings{TutorialEnabled: false},
+		nil, nil, UpdateSettingsRequest{},
+	), service.SettingKeyTutorialEnabled)
+}

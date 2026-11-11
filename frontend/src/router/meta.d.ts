@@ -60,6 +60,7 @@ declare module 'vue-router' {
 
     /** Whether the opt-in user support-ticket feature must be enabled. */
     requiresSupportTicket?: boolean
+    requiresTutorial?: boolean
 
     /**
      * 是否要求订阅功能开关（subscription_enabled，opt-out）未被显式关闭

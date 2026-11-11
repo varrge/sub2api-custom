@@ -1084,6 +1084,7 @@
 
     <!-- Use Key Modal -->
     <UseKeyModal
+      :key-id="selectedKey?.id"
       :show="showUseKeyModal"
       :api-key="selectedKey?.key || ''"
       :base-url="publicSettings?.api_base_url || ''"

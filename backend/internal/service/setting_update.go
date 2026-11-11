@@ -459,6 +459,7 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyNativeBoxEntryEnabled] = strconv.FormatBool(settings.NativeBoxEntryEnabled)
 	updates[SettingKeyActivityCampaignsEnabled] = strconv.FormatBool(settings.ActivityCampaignsEnabled)
 	updates[SettingKeyVotingEnabled] = strconv.FormatBool(settings.VotingEnabled)
+	updates[SettingKeyTutorialEnabled] = strconv.FormatBool(settings.TutorialEnabled)
 
 	// Affiliate (邀请返利) feature switch
 	updates[SettingKeyAffiliateEnabled] = strconv.FormatBool(settings.AffiliateEnabled)

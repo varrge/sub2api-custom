@@ -50,6 +50,7 @@ type Handlers struct {
 	ActivityLeaderboard *ActivityLeaderboardHandler
 	ActivityCampaigns   *ActivityCampaignHandler
 	Voting              *VotingHandler
+	Tutorial            *TutorialHandler
 	PushNotifications   *PushNotificationHandler
 	Auth                *AuthHandler
 	User                *UserHandler

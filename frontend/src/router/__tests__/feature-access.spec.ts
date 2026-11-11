@@ -32,6 +32,7 @@ const appStore = vi.hoisted(() => ({
     image_generation_enabled?: boolean
     support_ticket_enabled?: boolean
     voting_enabled?: boolean
+    tutorial_enabled?: boolean
     custom_menu_items?: []
   },
   fetchPublicSettings: vi.fn(),
@@ -208,6 +209,25 @@ describe('feature route guard', () => {
 
     expect(next).toHaveBeenCalledOnce()
     expect(next).toHaveBeenCalledWith('/dashboard')
+  })
+
+  it('gates tutorials while keeping administration available', async () => {
+    appStore.publicSettingsLoaded = true
+    appStore.cachedPublicSettings = { tutorial_enabled: false }
+    const disabled = runGuard({ requiresTutorial: true }, '/tutorial')
+    await disabled.navigation
+    expect(disabled.next).toHaveBeenCalledWith('/dashboard')
+    appStore.cachedPublicSettings = { tutorial_enabled: true }
+    const enabled = runGuard({ requiresTutorial: true }, '/tutorial')
+    await enabled.navigation
+    expect(enabled.next).toHaveBeenCalledWith()
+    authStore.isAdmin = true
+    appStore.cachedPublicSettings = { tutorial_enabled: false }
+    const admin = runGuard({ requiresAdmin: true }, '/admin/tutorial')
+    await admin.navigation
+    expect(admin.next).toHaveBeenCalledWith()
+    expect(routerHarness.routes.find(r => r.path === '/tutorial')?.meta).toMatchObject({ requiresTutorial: true })
+    expect(routerHarness.routes.find(r => r.path === '/admin/tutorial')?.meta).toMatchObject({ requiresAdmin: true })
   })
 
   it('fails closed with a localized notice when support-ticket settings cannot load', async () => {

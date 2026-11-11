@@ -680,6 +680,14 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/tutorial', name: 'TutorialCenter', component: () => import('@/views/user/TutorialCenterView.vue'),
+    meta: { requiresAuth: true, requiresTutorial: true, title: 'Tutorial center', titleKey: 'tutorial.title' }
+  },
+  {
+    path: '/admin/tutorial', name: 'AdminTutorial', component: () => import('@/views/admin/TutorialManagerView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Tutorial management', titleKey: 'tutorial.adminTitle' }
+  },
+  {
     path: '/admin/voting',
     name: 'AdminVoting',
     component: () => import('@/views/admin/VotingView.vue'),
@@ -939,7 +947,7 @@ function isBackendModePublicRouteAllowed(path: string, hasPendingAuthSession: bo
   return false
 }
 
-const enterprisePaths = ['/usage', '/keys', '/monitor', '/purchase', '/orders', '/payment', '/profile', '/tickets', '/model-plaza']
+const enterprisePaths = ['/tutorial', '/usage', '/keys', '/monitor', '/purchase', '/orders', '/payment', '/profile', '/tickets', '/model-plaza']
 const enterprisePathAllowed = (path: string) => enterprisePaths.some((allowed) => path === allowed || path.startsWith(allowed + '/'))
 let watchingEnterpriseIdentity = false
 
@@ -1090,7 +1098,7 @@ router.beforeEach(async (to, _from, next) => {
   // 公共设置可能尚未加载（App.vue 的 onMounted 异步拉取晚于首次导航，且纯静态部署
   // 无 __APP_CONFIG__ 注入）。此时 cachedPublicSettings 为空会把 payment/risk_control
   // 误判为“未启用”而错误拦截，故这里先确保设置加载完成。
-  if ((to.meta.requiresPayment || to.meta.requiresRiskControl || to.meta.requiresSubscription || to.meta.requiresImageGeneration || to.meta.requiresSupportTicket) && !appStore.publicSettingsLoaded) {
+  if ((to.meta.requiresPayment || to.meta.requiresRiskControl || to.meta.requiresSubscription || to.meta.requiresImageGeneration || to.meta.requiresSupportTicket || to.meta.requiresTutorial) && !appStore.publicSettingsLoaded) {
     try {
       await appStore.fetchPublicSettings()
     } catch (error) {
@@ -1143,6 +1151,12 @@ router.beforeEach(async (to, _from, next) => {
   ) {
     appStore.showWarning(i18n.global.t('supportTickets.featureDisabled'))
     next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+    return
+  }
+
+  if (to.meta.requiresTutorial && appStore.cachedPublicSettings?.tutorial_enabled !== true) {
+    appStore.showWarning(i18n.global.t('tutorial.disabled'))
+    next(authStore.isEnterprise ? '/usage' : authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
     return
   }
 

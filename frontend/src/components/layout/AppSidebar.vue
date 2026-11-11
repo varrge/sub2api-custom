@@ -703,6 +703,7 @@ const PriceTagIcon = {
 // Public-settings flags go through the registry in utils/featureFlags.ts,
 // which handles the opt-in vs opt-out fallback when settings haven't loaded
 // yet. Admin-only flags (not in public settings) stay inline below.
+const flagTutorial = makeSidebarFlag(FeatureFlags.tutorial)
 const flagChannelMonitor = makeSidebarFlag(FeatureFlags.channelMonitor)
 const flagImageGeneration = makeSidebarFlag(FeatureFlags.imageGeneration)
 const flagPayment = makeSidebarFlag(FeatureFlags.payment)
@@ -744,6 +745,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   }
   items.push(
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
+    { path: '/tutorial', label: t('tutorial.title'), icon: FolderIcon, featureFlag: flagTutorial },
     { path: '/image-generation', label: t('nav.imageGeneration'), icon: ImageGenerationIcon, hideInSimpleMode: true, featureFlag: flagImageGenerationAccess },
     { path: '/batch-image', label: t('nav.batchImage'), icon: BatchImageIcon, hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
@@ -786,6 +788,7 @@ const enterpriseNavItems = computed((): NavItem[] => applyFeatureFlags([
   { path: '/usage', label: t('enterpriseNav.usage'), icon: ChartIcon },
   { path: '/monitor', label: t('enterpriseNav.channelStatus'), icon: SignalIcon },
   { path: '/keys', label: t('enterpriseNav.apiKeys'), icon: KeyIcon },
+  { path: '/tutorial', label: t('tutorial.title'), icon: FolderIcon, featureFlag: flagTutorial },
   { path: '/purchase', label: t('enterpriseNav.recharge'), icon: RechargeSubscriptionIcon, featureFlag: flagPayment },
   { path: '/profile', label: t('enterpriseNav.profile'), icon: UserIcon },
   { path: '/tickets', label: t('enterpriseNav.tickets'), icon: TicketIcon, featureFlag: flagSupportTicket, badge: () => supportTicketStore.userUnreadCount },
@@ -839,6 +842,7 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
     { path: '/admin/plugins', label: t('nav.plugins'), icon: PluginIcon, featureFlag: flagPluginManagement },
     { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
+    { path: '/admin/tutorial', label: t('tutorial.adminTitle'), icon: FolderIcon },
     { path: '/admin/voting', label: t('votingEntry.adminTitle'), icon: ChartIcon },
     { path: '/admin/tickets', label: t('supportTickets.management'), icon: TicketIcon, badge: () => supportTicketStore.adminUnreadCount },
     { path: '/admin/proxies', label: t('nav.proxies'), icon: ServerIcon },

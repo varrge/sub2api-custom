@@ -349,6 +349,7 @@ type SystemSettings struct {
 	NativeBoxEntryEnabled    bool   `json:"native_box_entry_enabled"`
 	ActivityCampaignsEnabled bool   `json:"activity_campaigns_enabled"`
 	VotingEnabled            bool   `json:"voting_enabled"`
+	TutorialEnabled          bool   `json:"tutorial_enabled"`
 
 	// 风控中心功能开关
 	RiskControlEnabled bool `json:"risk_control_enabled"`
@@ -471,6 +472,7 @@ type PublicSettings struct {
 	NativeBoxEntryEnabled    bool `json:"native_box_entry_enabled"`
 	ActivityCampaignsEnabled bool `json:"activity_campaigns_enabled"`
 	VotingEnabled            bool `json:"voting_enabled"`
+	TutorialEnabled          bool `json:"tutorial_enabled"`
 
 	AffiliateEnabled bool `json:"affiliate_enabled"`
 

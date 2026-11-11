@@ -637,6 +637,7 @@ func TestAPIContracts(t *testing.T) {
 						"rate_multiplier": 1,
 						"long_context_billing_applied": false,
 						"shared_credit_applied": false,
+						"service_tier_free": false,
 						"billing_type": 0,
 							"stream": true,
 							"duration_ms": 100,

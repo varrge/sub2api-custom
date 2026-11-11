@@ -16,8 +16,11 @@ export function formatUsageServiceTier(serviceTier?: string | null): string {
 export function getUsageServiceTierLabel(
   serviceTier: string | null | undefined,
   translate: (key: string) => string,
+  serviceTierFree = false,
 ): string {
   const tier = formatUsageServiceTier(serviceTier)
+  if (serviceTierFree && tier === 'priority') return translate('usage.serviceTierFreePriority')
+  if (serviceTierFree && tier === 'ultrafast') return translate('usage.serviceTierFreeUltrafast')
   if (tier === 'priority') return translate('usage.serviceTierPriority')
   if (tier === 'ultrafast') return translate('usage.serviceTierUltrafast')
   if (tier === 'flex') return translate('usage.serviceTierFlex')

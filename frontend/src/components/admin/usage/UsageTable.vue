@@ -212,17 +212,17 @@
               <span
                 v-if="normalizeUsageServiceTier(row.service_tier) === 'ultrafast'"
                 role="img"
-                :title="`${t('usage.serviceTier')}: ${t('usage.serviceTierUltrafast')}`"
-                :aria-label="t('usage.serviceTierUltrafast')"
+                :title="`${t('usage.serviceTier')}: ${getUsageServiceTierLabel(row.service_tier, t, row.service_tier_free)}`"
+                :aria-label="getUsageServiceTierLabel(row.service_tier, t, row.service_tier_free)"
                 class="inline-flex shrink-0 items-center whitespace-nowrap rounded bg-violet-100 px-1 py-px text-[10px] font-semibold leading-tight text-violet-700 ring-1 ring-inset ring-violet-200 dark:bg-violet-500/20 dark:text-violet-300 dark:ring-violet-500/30"
-              >UF</span>
+              >{{ row.service_tier_free ? t('usage.serviceTierFreeUltrafast') : 'UF' }}</span>
               <span
                 v-else-if="normalizeUsageServiceTier(row.service_tier) === 'priority'"
                 role="img"
-                :title="`${t('usage.serviceTier')}: ${t('usage.serviceTierPriority')}`"
-                :aria-label="t('usage.serviceTierPriority')"
+                :title="`${t('usage.serviceTier')}: ${getUsageServiceTierLabel(row.service_tier, t, row.service_tier_free)}`"
+                :aria-label="getUsageServiceTierLabel(row.service_tier, t, row.service_tier_free)"
                 class="inline-flex shrink-0 items-center whitespace-nowrap rounded bg-sky-100 px-1 py-px text-[10px] font-semibold leading-tight text-sky-700 ring-1 ring-inset ring-sky-200 dark:bg-sky-500/20 dark:text-sky-300 dark:ring-sky-500/30"
-              >FAST</span>
+              >{{ row.service_tier_free ? t('usage.serviceTierFreePriority') : 'FAST' }}</span>
               <span
                 v-if="row.long_context_billing_applied"
                 data-testid="long-context-billing-marker"
@@ -521,7 +521,7 @@
           <!-- Rate and Summary -->
           <div class="flex items-center justify-between gap-6">
             <span class="text-gray-400">{{ t('usage.serviceTier') }}</span>
-            <span class="font-semibold text-cyan-300">{{ getUsageServiceTierLabel(tooltipData?.service_tier, t) }}</span>
+            <span class="font-semibold text-cyan-300">{{ getUsageServiceTierLabel(tooltipData?.service_tier, t, tooltipData?.service_tier_free) }}</span>
           </div>
           <div class="flex items-center justify-between gap-6">
             <span class="text-gray-400">{{ t('usage.rate') }}</span>

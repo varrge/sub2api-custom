@@ -31,6 +31,8 @@ const localizedMessages: Record<'en' | 'zh', Record<string, string>> = {
     'usage.billingSubscription': enDashboard.usage.billingSubscription,
     'usage.sharedCreditBadge': enDashboard.usage.sharedCreditBadge,
     'usage.sharedCreditHint': enDashboard.usage.sharedCreditHint,
+    'usage.serviceTierFreePriority': enDashboard.usage.serviceTierFreePriority,
+    'usage.serviceTierFreeUltrafast': enDashboard.usage.serviceTierFreeUltrafast,
   },
   zh: {
     'admin.usage.longContext': zh.usage.longContext,
@@ -39,6 +41,8 @@ const localizedMessages: Record<'en' | 'zh', Record<string, string>> = {
     'usage.billingSubscription': zhDashboard.usage.billingSubscription,
     'usage.sharedCreditBadge': zhDashboard.usage.sharedCreditBadge,
     'usage.sharedCreditHint': zhDashboard.usage.sharedCreditHint,
+    'usage.serviceTierFreePriority': zhDashboard.usage.serviceTierFreePriority,
+    'usage.serviceTierFreeUltrafast': zhDashboard.usage.serviceTierFreeUltrafast,
   },
 }
 
@@ -155,6 +159,39 @@ const baseImageRow = {
 }
 
 describe('admin UsageTable tooltip', () => {
+  it.each([true, false])('shows waived tier labels in rows and details (account billing: %s)', async (showAccountBilling) => {
+    locale = 'zh'
+    const rows = [
+      { tier: 'priority', free: true, label: '免FAST' },
+      { tier: 'ultrafast', free: true, label: '免UF' },
+      { tier: 'priority', free: false, label: 'FAST' },
+      { tier: 'ultrafast', free: undefined, label: 'UF' },
+    ]
+    const wrapper = mount(UsageTable, {
+      props: {
+        data: rows.map(({ tier, free }, i) => ({
+          ...baseImageRow, request_id: `tier-${i}`, service_tier: tier, service_tier_free: free,
+          actual_cost: 0, shared_credit_applied: true,
+        })),
+        loading: false, columns: [], showAccountBilling,
+      },
+      global: { stubs: { DataTable: DataTableStub, EmptyState: true, Icon: true, Teleport: true } },
+    })
+    for (const [i, { free, label }] of rows.entries()) {
+      const row = wrapper.get(`[data-request-id="tier-${i}"]`)
+      expect(row.get('[role="img"]').text()).toBe(label)
+      if (free) {
+        expect(row.get('[role="img"]').attributes('aria-label')).toBe(label)
+        expect(row.get('[role="img"]').attributes('title')).toContain(label)
+        const triggers = row.findAll('.group.relative')
+        await triggers[triggers.length - 1].trigger('mouseenter')
+        expect(wrapper.get('.fixed').text()).toContain(label)
+        await triggers[triggers.length - 1].trigger('mouseleave')
+      }
+    }
+    wrapper.unmount()
+  })
+
   it('shows output TPS in the latency cell using total duration', () => {
     const row = { ...baseImageRow, image_count: 0, billing_mode: 'token', output_tokens: 1000, duration_ms: 20_000, first_token_ms: 10_000 }
     const wrapper = mount(UsageTable, {

@@ -29,6 +29,8 @@ describe('usageServiceTier utils', () => {
     const translate = (key: string) => ({
       'usage.serviceTierPriority': 'Fast',
       'usage.serviceTierUltrafast': 'Ultrafast',
+      'usage.serviceTierFreePriority': '免FAST',
+      'usage.serviceTierFreeUltrafast': '免UF',
       'usage.serviceTierFlex': 'Flex',
       'usage.serviceTierStandard': 'Standard',
     })[key] ?? key
@@ -38,5 +40,10 @@ describe('usageServiceTier utils', () => {
     expect(getUsageServiceTierLabel('flex', translate)).toBe('Flex')
     expect(getUsageServiceTierLabel(undefined, translate)).toBe('Standard')
     expect(getUsageServiceTierLabel('custom-tier', translate)).toBe('custom-tier')
+    expect(getUsageServiceTierLabel('fast', translate, true)).toBe('免FAST')
+    expect(getUsageServiceTierLabel('ultrafast', translate, true)).toBe('免UF')
+    expect(getUsageServiceTierLabel('priority', translate, false)).toBe('Fast')
+    expect(getUsageServiceTierLabel('flex', translate, true)).toBe('Flex')
+    expect(getUsageServiceTierLabel(undefined, translate, true)).toBe('Standard')
   })
 })

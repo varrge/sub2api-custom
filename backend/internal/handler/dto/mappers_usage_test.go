@@ -104,6 +104,7 @@ func TestUsageLogFromService_IncludesServiceTierForUserAndAdmin(t *testing.T) {
 		RequestID:             "req_3",
 		Model:                 "gpt-5.4",
 		ServiceTier:           &serviceTier,
+		ServiceTierFree:       true,
 		InboundEndpoint:       &inboundEndpoint,
 		UpstreamEndpoint:      &upstreamEndpoint,
 		AccountRateMultiplier: f64Ptr(1.5),
@@ -112,6 +113,8 @@ func TestUsageLogFromService_IncludesServiceTierForUserAndAdmin(t *testing.T) {
 	userDTO := UsageLogFromService(log)
 	adminDTO := UsageLogFromServiceAdmin(log)
 
+	require.True(t, userDTO.ServiceTierFree)
+	require.True(t, adminDTO.ServiceTierFree)
 	require.NotNil(t, userDTO.ServiceTier)
 	require.Equal(t, serviceTier, *userDTO.ServiceTier)
 	require.NotNil(t, userDTO.InboundEndpoint)

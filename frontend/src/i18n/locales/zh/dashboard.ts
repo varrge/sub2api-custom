@@ -501,6 +501,8 @@ export default {
     serviceTier: '服务档位',
     serviceTierPriority: 'Fast',
     serviceTierUltrafast: 'Ultrafast',
+    serviceTierFreePriority: '免FAST',
+    serviceTierFreeUltrafast: '免UF',
     serviceTierFlex: 'Flex',
     serviceTierStandard: 'Standard',
     rate: '倍率',

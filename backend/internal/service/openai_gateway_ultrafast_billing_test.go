@@ -65,6 +65,7 @@ func TestOpenAIGatewayServiceRecordUsage_UltrafastResponseDoesNotLowerBilling(t 
 			log := usageRepo.lastLog
 			require.NotNil(t, log.ServiceTier)
 			require.Equal(t, "ultrafast", *log.ServiceTier)
+			require.Equal(t, tt.freeUltrafast, log.ServiceTierFree)
 			require.Equal(t, tt.responseTier, result.UpstreamResponseServiceTier)
 			require.Equal(t, 2540, log.InputTokens)
 			require.Equal(t, 133632, log.CacheReadTokens)

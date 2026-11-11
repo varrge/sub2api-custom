@@ -496,6 +496,8 @@ export default {
     serviceTier: 'Service tier',
     serviceTierPriority: 'Fast',
     serviceTierUltrafast: 'Ultrafast',
+    serviceTierFreePriority: 'Free FAST',
+    serviceTierFreeUltrafast: 'Free UF',
     serviceTierFlex: 'Flex',
     serviceTierStandard: 'Standard',
     rate: 'Rate',

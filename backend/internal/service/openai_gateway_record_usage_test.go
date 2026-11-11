@@ -3260,6 +3260,7 @@ func TestOpenAIGatewayServiceRecordUsage_FreeOpenAIFastChargesStandard(t *testin
 	require.NotNil(t, usageRepo.lastLog)
 	require.NotNil(t, usageRepo.lastLog.ServiceTier)
 	require.Equal(t, "priority", *usageRepo.lastLog.ServiceTier)
+	require.True(t, usageRepo.lastLog.ServiceTierFree)
 	require.InDelta(t, 0.5, usageRepo.lastLog.RateMultiplier, 1e-12)
 
 	standardTotal := float64(tokens.InputTokens)*inputPrice + float64(tokens.OutputTokens)*outputPrice
@@ -3310,6 +3311,7 @@ func TestOpenAIGatewayServiceRecordUsage_FreeOpenAIFastMissingPricingRecordsZero
 	require.Equal(t, "priority", *usageRepo.lastLog.ServiceTier)
 	require.Zero(t, usageRepo.lastLog.TotalCost)
 	require.Zero(t, usageRepo.lastLog.ActualCost)
+	require.False(t, usageRepo.lastLog.ServiceTierFree, "missing prices are not a tier surcharge waiver")
 }
 
 func TestGroupBillsOpenAIFastAtStandardRequiresOpenAIAccount(t *testing.T) {

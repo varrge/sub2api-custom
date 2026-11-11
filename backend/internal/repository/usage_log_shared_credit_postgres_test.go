@@ -41,10 +41,26 @@ func TestUsageLogSharedCreditPostgres(t *testing.T) {
 	columns := strings.Split(usageLogSelectColumns, ",")
 	definitions := []string{"id BIGSERIAL PRIMARY KEY"}
 	for i, typ := range usageLogInsertArgTypes {
+		if strings.TrimSpace(columns[i+1]) == "service_tier_free" {
+			continue // Add through the real migration, including its historical default.
+		}
 		definitions = append(definitions, strings.TrimSpace(columns[i+1])+" "+typ)
 	}
 	definitions = append(definitions, "UNIQUE(request_id, api_key_id)")
 	_, err = db.ExecContext(ctx, "CREATE TABLE usage_logs ("+strings.Join(definitions, ",")+")")
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, "INSERT INTO usage_logs (request_id, api_key_id) VALUES ('before-free-tier-migration', 1)")
+	require.NoError(t, err)
+	freeTierMigration, err := os.ReadFile("../../migrations/267_usage_log_service_tier_free.sql")
+	require.NoError(t, err)
+	for range 2 {
+		_, err = db.ExecContext(ctx, string(freeTierMigration))
+		require.NoError(t, err)
+	}
+	var historicalFree bool
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT service_tier_free FROM usage_logs WHERE request_id='before-free-tier-migration'").Scan(&historicalFree))
+	require.False(t, historicalFree, "historical charges must not be inferred to have a waived surcharge")
+	_, err = db.ExecContext(ctx, "DELETE FROM usage_logs WHERE request_id='before-free-tier-migration'")
 	require.NoError(t, err)
 	migration, err := os.ReadFile("../../migrations/262_site_shared_credit.sql")
 	require.NoError(t, err)
@@ -113,4 +129,29 @@ func TestUsageLogSharedCreditPostgres(t *testing.T) {
 		}
 		require.Equal(t, 4, covered)
 	}
+
+	t.Run("free tier snapshots survive all write paths", func(t *testing.T) {
+		writers := map[string]func(*service.UsageLog) error{
+			"single":      func(log *service.UsageLog) error { _, err := repo.createSingle(ctx, db, log); return err },
+			"batch":       func(log *service.UsageLog) error { _, err := repo.Create(ctx, log); return err },
+			"best-effort": func(log *service.UsageLog) error { return repo.CreateBestEffort(ctx, log) },
+		}
+		for name, write := range writers {
+			for _, tier := range []string{"priority", "ultrafast"} {
+				for _, free := range []bool{false, true} {
+					log := &service.UsageLog{UserID: 1, APIKeyID: 1, AccountID: 1,
+						RequestID: fmt.Sprintf("tier-%s-%s-%t", name, tier, free), Model: "test-model",
+						ServiceTier: &tier, ServiceTierFree: free, ActualCost: 0.1, TotalCost: 1, RateMultiplier: 0.1}
+					require.NoError(t, write(log))
+					var id int64
+					require.NoError(t, db.QueryRowContext(ctx, "SELECT id FROM usage_logs WHERE request_id=$1 AND api_key_id=1", log.RequestID).Scan(&id))
+					got, err := repo.GetByID(ctx, id)
+					require.NoError(t, err)
+					require.Equal(t, free, got.ServiceTierFree, log.RequestID)
+					require.Equal(t, tier, *got.ServiceTier)
+					require.InDelta(t, 0.1, got.ActualCost, 1e-10)
+				}
+			}
+		}
+	})
 }

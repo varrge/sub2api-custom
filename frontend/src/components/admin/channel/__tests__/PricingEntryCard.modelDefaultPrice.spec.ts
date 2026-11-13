@@ -66,6 +66,19 @@ describe('PricingEntryCard default price auto-fill', () => {
     })
   })
 
+  it('shows and updates 12h cache prices for composite group cards', async () => {
+    const wrapper = shallowMount(PricingEntryCard, { props: { entry: createEntry(['gpt-6-luna']), platform: 'composite' } })
+    try {
+      expect(wrapper.text()).toContain('admin.channels.form.cacheWrite1hPrice')
+      const field = wrapper.findAll('label').find(label => label.text().includes('cacheWrite12hPrice'))!
+      const input = wrapper.findAll('input').find(input => input.element === field.element.parentElement!.querySelector('input'))!
+      await input.setValue('12')
+      expect(emittedEntries(wrapper).at(-1)).toMatchObject({ cache_write_12h_price: '12' })
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
   it('does not overwrite prices when appending a model to an entry that already has one', async () => {
     const entry = createEntry(['claude-opus-4-7'])
     const wrapper = addModels(entry, ['claude-opus-4-7', 'claude-opus-4-8'])

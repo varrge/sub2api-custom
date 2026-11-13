@@ -141,6 +141,7 @@ func TestUsageLogSharedCreditPostgres(t *testing.T) {
 				for _, free := range []bool{false, true} {
 					log := &service.UsageLog{UserID: 1, APIKeyID: 1, AccountID: 1,
 						RequestID: fmt.Sprintf("tier-%s-%s-%t", name, tier, free), Model: "test-model",
+						CacheCreationTokens: 2399, CacheCreation30mTokens: 9, CacheCreation12hTokens: 2390,
 						ServiceTier: &tier, ServiceTierFree: free, ActualCost: 0.1, TotalCost: 1, RateMultiplier: 0.1}
 					require.NoError(t, write(log))
 					var id int64
@@ -148,6 +149,9 @@ func TestUsageLogSharedCreditPostgres(t *testing.T) {
 					got, err := repo.GetByID(ctx, id)
 					require.NoError(t, err)
 					require.Equal(t, free, got.ServiceTierFree, log.RequestID)
+					require.Equal(t, 2399, got.CacheCreationTokens)
+					require.Equal(t, 9, got.CacheCreation30mTokens)
+					require.Equal(t, 2390, got.CacheCreation12hTokens)
 					require.Equal(t, tier, *got.ServiceTier)
 					require.InDelta(t, 0.1, got.ActualCost, 1e-10)
 				}

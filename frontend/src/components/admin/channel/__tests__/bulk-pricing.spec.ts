@@ -25,7 +25,7 @@ describe('bulk default prices', () => {
     const entries = [blank(['claude-a', 'claude-b', 'unknown'])]
     const before = structuredClone(entries)
     const result = mergeDefaultPricing(entries, [
-      { model: 'claude-a', pricing: { found: true, input_price: 3e-6, output_price: 15e-6, cache_write_1h_price: 6e-6 } },
+      { model: 'claude-a', pricing: { found: true, input_price: 3e-6, output_price: 15e-6, cache_write_1h_price: 6e-6, cache_write_12h_price: 12e-6 } },
       { model: 'claude-b', pricing: { found: true, input_price: 12e-6, output_price: 60e-6, cache_read_price: 1.2e-6 } }
     ])
     expect(entries).toEqual(before)
@@ -33,6 +33,7 @@ describe('bulk default prices', () => {
     expect(result.entries.map(entry => entry.models)).toEqual([['unknown'], ['claude-a'], ['claude-b']])
     expect(result.entries[1].input_price).toBe(3)
     expect(result.entries[1].cache_write_1h_price).toBe(6)
+    expect(result.entries[1].cache_write_12h_price).toBe(12)
     expect(result.entries[2].input_price).toBe(12)
     expect(result.entries[2].cache_read_price).toBe(1.2)
     expect(mTokToPerToken(result.entries[2].input_price)).toBe(12e-6)
@@ -44,9 +45,10 @@ describe('bulk default prices', () => {
       blank(['CLAUDE-A'], { input_price: 0 }), blank(['claude-b*']),
       blank(['image-a'], { billing_mode: 'image', per_request_price: 0.1 }),
       blank(['claude-c'], { fast_multiplier: 2 }),
-      blank(['gpt-6.1-sol'], { ultrafast_multiplier: 1 })
+      blank(['gpt-6.1-sol'], { ultrafast_multiplier: 1 }),
+      blank(['gpt-6-luna'], { cache_write_12h_price: 0 })
     ]
-    for (const model of ['claude-a', 'claude-b-2026', 'image-a', 'claude-c', 'gpt-6.1-sol', '*']) {
+    for (const model of ['claude-a', 'claude-b-2026', 'image-a', 'claude-c', 'gpt-6.1-sol', 'gpt-6-luna', '*']) {
       expect(canImportDefaultPricing(model, entries)).toBe(false)
     }
     expect(canImportDefaultPricing('claude-d', entries)).toBe(true)
@@ -61,7 +63,8 @@ describe('bulk default prices', () => {
     for (const pricing of [
       { found: false }, { found: true, input_price: 0, output_price: 0 },
       { found: true, input_price: -1 }, { found: true, input_price: NaN },
-      { found: true, input_price: 1e-6, cache_read_price: Infinity }
+      { found: true, input_price: 1e-6, cache_read_price: Infinity },
+      { found: true, input_price: 1e-6, cache_write_12h_price: -1 }
     ]) expect(hasDefaultTokenPricing(pricing)).toBe(false)
     const original = [blank(['unknown'])]
     expect(mergeDefaultPricing(original, [{ model: 'unknown', pricing: { found: false } }]).entries).toBe(original)

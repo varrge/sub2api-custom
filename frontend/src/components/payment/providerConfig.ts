@@ -144,6 +144,11 @@ export const PROVIDER_CONFIG_FIELDS: Record<string, ConfigFieldDef[]> = {
       hintKey: 'admin.settings.payment.field_notificationConfirmModeHint',
       options: EASYPAY_NOTIFICATION_CONFIRMATION_MODES,
     },
+    {
+      key: 'refundSuccessCode', label: '', sensitive: false, defaultValue: '1',
+      hintKey: 'admin.settings.payment.field_refundSuccessCodeHint',
+      options: [{ value: '1', label: '1' }, { value: '0', label: '0' }],
+    },
     { key: 'cidAlipay', label: '', sensitive: false, optional: true },
     { key: 'cidWxpay', label: '', sensitive: false, optional: true },
   ],

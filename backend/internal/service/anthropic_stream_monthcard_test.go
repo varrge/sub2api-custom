@@ -56,8 +56,8 @@ func TestAnthropicStreamNormalizedUsageReachesMonthCardSettlement(t *testing.T) 
 					recorder.cfg.Default.RateMultiplier = 1
 					require.NoError(t, recorder.RecordUsage(context.Background(), &RecordUsageInput{Result: result, APIKey: key, User: user, Account: account, Subscription: subscription}))
 				}
-				// Sonnet 5.5: $2/M uncached input, $0.2/M cache reads, $10/M output.
-				wantCost := float64(1200-cached)*2e-6 + float64(cached)*0.2e-6 + 30*10e-6
+				// Sonnet 5.5: $2/M uncached input, $0.1/M cache reads, $10/M output.
+				wantCost := float64(1200-cached)*2e-6 + float64(cached)*0.1e-6 + 30*10e-6
 				require.Equal(t, 1, billingRepo.calls)
 				require.Same(t, snapshot, billingRepo.lastCmd.MonthCardSnapshot)
 				require.InDelta(t, wantCost, billingRepo.lastCmd.MonthCardCost, 1e-10)

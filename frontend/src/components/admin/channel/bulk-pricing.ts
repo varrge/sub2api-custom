@@ -7,7 +7,7 @@ export interface DefaultPricingRow {
 }
 
 const priceFields = [
-  'input_price', 'output_price', 'cache_write_price', 'cache_write_1h_price',
+  'input_price', 'output_price', 'cache_write_price', 'cache_write_1h_price', 'cache_write_12h_price',
   'cache_read_price', 'image_input_price', 'image_output_price'
 ] as const
 
@@ -67,6 +67,7 @@ export function mergeDefaultPricing(entries: PricingFormEntry[], rows: DefaultPr
       output_price: perTokenToMTok(pricing.output_price ?? null),
       cache_write_price: perTokenToMTok(pricing.cache_write_price ?? null),
       cache_write_1h_price: perTokenToMTok(pricing.cache_write_1h_price ?? null),
+      cache_write_12h_price: perTokenToMTok(pricing.cache_write_12h_price ?? null),
       cache_read_price: perTokenToMTok(pricing.cache_read_price ?? null),
       image_input_price: perTokenToMTok(pricing.image_input_price ?? null),
       image_output_price: perTokenToMTok(pricing.image_output_price ?? null),

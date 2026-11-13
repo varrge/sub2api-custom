@@ -104,8 +104,8 @@ export function modelPriceCells(variant: GroupModelVariant): PlazaPriceCell[] {
     return price === null ? null : price * rate * scale
   }
   if (pricing.billing_mode === 'token') {
-    const fields = ['input_price', 'output_price', 'cache_write_price', 'cache_write_1h_price', 'cache_read_price'] as const
-    const keys = ['inputPrice', 'outputPrice', 'cacheWritePrice', 'cacheWrite1hPrice', 'cacheReadPrice']
+    const fields = ['input_price', 'output_price', 'cache_write_price', 'cache_write_1h_price', 'cache_write_12h_price', 'cache_read_price'] as const
+    const keys = ['inputPrice', 'outputPrice', 'cacheWritePrice', 'cacheWrite1hPrice', 'cacheWrite12hPrice', 'cacheReadPrice']
     return fields.flatMap((field, index) => {
       const original = finite(modelBasePricing(model)?.[field])
       if (index > 1 && pricing[field] == null && original == null) return []

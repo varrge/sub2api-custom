@@ -3,11 +3,13 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -15,26 +17,34 @@ import (
 
 func TestSettingsClaudeCodeAndCodexTicketRoundTrip(t *testing.T) {
 	ctx := context.Background()
+	// Follow the supported CLI floor while keeping manual and synced values distinct.
+	var major, minor, patch int
+	n, err := fmt.Sscanf(claude.CLICurrentVersion, "%d.%d.%d", &major, &minor, &patch)
+	require.NoError(t, err)
+	require.Equal(t, 3, n)
+	oldVersion := fmt.Sprintf("%d.%d.%d", major, minor, patch+1)
+	syncedVersion := fmt.Sprintf("%d.%d.%d", major, minor, patch+2)
+	newVersion := fmt.Sprintf("%d.%d.%d", major, minor, patch+3)
 	oldProxy := "http://user:old-secret@old.example.com:8080"
 	newProxy := "socks5h://user:new-secret@new.example.com:1080"
 	h, repo := newStepUpSwitchTestHandler(t, map[string]string{
 		service.SettingKeyOpenAICodexTicketEnabled:         "false",
 		service.SettingKeyOpenAICodexTicketHarvestProxyURL: oldProxy,
-		service.SettingKeyClaudeCodeClientVersion:          "2.1.280",
-		service.SettingKeyClaudeCodeClientVersionSynced:    "2.1.281",
+		service.SettingKeyClaudeCodeClientVersion:          oldVersion,
+		service.SettingKeyClaudeCodeClientVersionSynced:    syncedVersion,
 		service.SettingKeyClaudeCodeVersionAutoSyncEnabled: "true",
 	})
 
 	// Prime both runtime caches before saving the combined gateway settings.
 	require.False(t, h.settingService.GetOpenAICodexTicketEnabled(ctx, false))
 	require.Equal(t, oldProxy, h.settingService.GetOpenAICodexTicketHarvestProxyURL(ctx))
-	require.Equal(t, "2.1.280", h.settingService.GetClaudeCodeClientVersion(ctx))
+	require.Equal(t, oldVersion, h.settingService.GetClaudeCodeClientVersion(ctx))
 
 	for _, payload := range []map[string]any{
 		{
 			service.SettingKeyOpenAICodexTicketEnabled:         true,
 			service.SettingKeyOpenAICodexTicketHarvestProxyURL: newProxy,
-			service.SettingKeyClaudeCodeClientVersion:          "2.1.282",
+			service.SettingKeyClaudeCodeClientVersion:          newVersion,
 			service.SettingKeyClaudeCodeVersionAutoSyncEnabled: false,
 		},
 		{"site_name": "updated"},
@@ -44,8 +54,8 @@ func TestSettingsClaudeCodeAndCodexTicketRoundTrip(t *testing.T) {
 		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 		require.True(t, h.settingService.GetOpenAICodexTicketEnabled(ctx, false))
 		require.Equal(t, newProxy, h.settingService.GetOpenAICodexTicketHarvestProxyURL(ctx))
-		require.Equal(t, "2.1.282", h.settingService.GetClaudeCodeClientVersion(ctx))
-		require.Equal(t, "2.1.281", repo.values[service.SettingKeyClaudeCodeClientVersionSynced])
+		require.Equal(t, newVersion, h.settingService.GetClaudeCodeClientVersion(ctx))
+		require.Equal(t, syncedVersion, repo.values[service.SettingKeyClaudeCodeClientVersionSynced])
 		require.Equal(t, "false", repo.values[service.SettingKeyClaudeCodeVersionAutoSyncEnabled])
 
 		get := httptest.NewRecorder()
@@ -62,8 +72,8 @@ func TestSettingsClaudeCodeAndCodexTicketRoundTrip(t *testing.T) {
 			require.True(t, body.Data.OpenAICodexTicketEnabled)
 			require.True(t, body.Data.OpenAICodexTicketHarvestProxyConfigured)
 			require.Equal(t, service.MaskProxyURL(newProxy), body.Data.OpenAICodexTicketHarvestProxyURL)
-			require.Equal(t, "2.1.282", body.Data.ClaudeCodeClientVersion)
-			require.Equal(t, "2.1.281", body.Data.ClaudeCodeClientVersionSynced)
+			require.Equal(t, newVersion, body.Data.ClaudeCodeClientVersion)
+			require.Equal(t, syncedVersion, body.Data.ClaudeCodeClientVersionSynced)
 			require.False(t, body.Data.ClaudeCodeVersionAutoSyncEnabled)
 		}
 	}

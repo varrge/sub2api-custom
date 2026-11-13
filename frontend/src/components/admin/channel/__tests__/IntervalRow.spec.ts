@@ -13,6 +13,15 @@ const interval: IntervalFormEntry = {
 }
 
 describe('pricing interval token bounds', () => {
+  it('allows composite groups to edit both 1h and 12h cache prices', async () => {
+    const wrapper = mount(IntervalRow, { props: { interval, mode: 'token', platform: 'composite' } })
+    expect(wrapper.text()).toContain('admin.channels.form.cacheWrite1hPriceShort')
+    const field = wrapper.findAll('label').find(label => label.text().includes('cacheWrite12hPriceShort'))!
+    const input = wrapper.findAll('input').find(input => input.element === field.element.parentElement!.querySelector('input'))!
+    await input.setValue('0')
+    expect(wrapper.emitted('update')?.at(-1)?.[0]).toMatchObject({ cache_write_12h_price: '0' })
+  })
+
   it.each([
     ['1e6', 1000000, 1000000],
     ['2.72e5', 272000, 272000],

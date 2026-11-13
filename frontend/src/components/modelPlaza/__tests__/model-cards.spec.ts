@@ -94,14 +94,15 @@ describe('catalog prices', () => {
     expect(cards).toHaveLength(2)
     expect(cards.find(card => card.billingMode === 'token')!.variants).toHaveLength(3)
   })
-  it('calculates from selected custom pricing, preserving nulls, zero and 1h cache rates', () => {
-    const entry = model({ pricing: { ...model().pricing!, input_price: 0, output_price: null, cache_write_1h_price: 8e-6 } })
+  it('calculates from selected custom pricing, preserving nulls, zero and 1h/12h cache rates', () => {
+    const entry = model({ pricing: { ...model().pricing!, input_price: 0, output_price: null, cache_write_1h_price: 8e-6, cache_write_12h_price: 12e-6 } })
     const card = aggregatePlazaModels([group({ models: [entry] })])[0]
     const cells = modelPriceCells(card.variants[0])
     expect(cells.find(cell => cell.id === 'input_price')).toMatchObject({ price: 0, original: 0 })
     expect(cells.find(cell => cell.id === 'output_price')).toMatchObject({ price: null, original: null })
     expect(cells.find(cell => cell.id === 'cache_write_price')).toMatchObject({ price: 1.5, original: 3 })
     expect(cells.find(cell => cell.id === 'cache_write_1h_price')).toMatchObject({ price: 4 })
+    expect(cells.find(cell => cell.id === 'cache_write_12h_price')).toMatchObject({ price: 6, original: 12, labelKey: 'modelPlaza.card.cacheWrite12hPrice' })
     expect(formatUsdPerMillion(null)).toBeNull()
     expect(formatUsdPerMillion(0)).toBe('$0')
   })

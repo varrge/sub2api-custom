@@ -618,3 +618,185 @@ func TestSetOpenAIFastPolicySettings_Validation(t *testing.T) {
 	require.Equal(t, BetaPolicyActionPass, got.Rules[1].Action)
 	require.Equal(t, OpenAIFastPolicyActionForcePriority, got.Rules[2].Action)
 }
+
+func openAIUltrafastGroupContext() context.Context {
+	return context.WithValue(context.Background(), ctxkey.Group, &Group{
+		ID: 7, Platform: PlatformOpenAI, Status: StatusActive, Hydrated: true, ForcedServiceTier: OpenAIFastTierUltrafast,
+	})
+}
+
+func TestApplyOpenAIFastPolicyToBody_GroupForceUltrafastInjectsAndOverridesTier(t *testing.T) {
+	svc := newOpenAIGatewayServiceWithSettings(t, DefaultOpenAIFastPolicySettings())
+	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth}
+
+	for _, body := range [][]byte{
+		[]byte(`{"model":"gpt-6.1-sol","input":"hi"}`),
+		[]byte(`{"model":"gpt-6.1-sol","service_tier":"default"}`),
+		[]byte(`{"model":"gpt-6.1-sol","service_tier":"fast"}`),
+		[]byte(`{"model":"gpt-6.1-sol","service_tier":"priority"}`),
+		[]byte(`{"model":"gpt-6.1-sol","service_tier":"flex"}`),
+		[]byte(`{"model":"gpt-6.1-sol","service_tier":"ultrafast"}`),
+		[]byte(`{"model":"gpt-6.1-sol","service_tier":"client-unknown"}`),
+	} {
+		updated, err := svc.applyOpenAIFastPolicyToBody(openAIUltrafastGroupContext(), account, "gpt-6.1-sol", body)
+		require.NoError(t, err)
+		require.Equal(t, OpenAIFastTierUltrafast, gjson.GetBytes(updated, "service_tier").String(), "body %s", body)
+	}
+}
+
+// 全局策略在分组强制之后裁决：针对 ultrafast 的 filter / block / force_priority
+// 规则必须作用在分组写入的 ultrafast 上，而只针对 priority 的规则不应误伤。
+func TestApplyOpenAIFastPolicyToBody_GroupForceUltrafastStillHonorsGlobalPolicy(t *testing.T) {
+	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth}
+	body := []byte(`{"model":"gpt-6.1-sol"}`)
+	rule := func(tier, action string) *OpenAIFastPolicySettings {
+		return &OpenAIFastPolicySettings{Rules: []OpenAIFastPolicyRule{{
+			ServiceTier: tier, Action: action, Scope: BetaPolicyScopeAll, ErrorMessage: "ultrafast disabled",
+		}}}
+	}
+
+	t.Run("ultrafast filter strips the forced tier", func(t *testing.T) {
+		svc := newOpenAIGatewayServiceWithSettings(t, rule(OpenAIFastTierUltrafast, BetaPolicyActionFilter))
+		updated, err := svc.applyOpenAIFastPolicyToBody(openAIUltrafastGroupContext(), account, "gpt-6.1-sol", body)
+		require.NoError(t, err)
+		require.False(t, gjson.GetBytes(updated, "service_tier").Exists())
+	})
+
+	t.Run("ultrafast block rejects the request", func(t *testing.T) {
+		svc := newOpenAIGatewayServiceWithSettings(t, rule(OpenAIFastTierUltrafast, BetaPolicyActionBlock))
+		_, err := svc.applyOpenAIFastPolicyToBody(openAIUltrafastGroupContext(), account, "gpt-6.1-sol", body)
+		var blocked *OpenAIFastBlockedError
+		require.ErrorAs(t, err, &blocked)
+		require.Equal(t, "ultrafast disabled", blocked.Message)
+	})
+
+	t.Run("ultrafast force_priority downgrades to priority", func(t *testing.T) {
+		svc := newOpenAIGatewayServiceWithSettings(t, rule(OpenAIFastTierUltrafast, OpenAIFastPolicyActionForcePriority))
+		updated, err := svc.applyOpenAIFastPolicyToBody(openAIUltrafastGroupContext(), account, "gpt-6.1-sol", body)
+		require.NoError(t, err)
+		require.Equal(t, OpenAIFastTierPriority, gjson.GetBytes(updated, "service_tier").String())
+	})
+
+	t.Run("priority-only filter leaves ultrafast alone", func(t *testing.T) {
+		svc := newOpenAIGatewayServiceWithSettings(t, openAIFastFilterPriorityPolicy())
+		updated, err := svc.applyOpenAIFastPolicyToBody(openAIUltrafastGroupContext(), account, "gpt-6.1-sol", body)
+		require.NoError(t, err)
+		require.Equal(t, OpenAIFastTierUltrafast, gjson.GetBytes(updated, "service_tier").String())
+	})
+
+	t.Run("model whitelist fallback filters unsupported models", func(t *testing.T) {
+		svc := newOpenAIGatewayServiceWithSettings(t, &OpenAIFastPolicySettings{Rules: []OpenAIFastPolicyRule{{
+			ServiceTier: OpenAIFastTierUltrafast, Action: BetaPolicyActionPass, Scope: BetaPolicyScopeAll,
+			ModelWhitelist: []string{"gpt-6.1-sol"}, FallbackAction: BetaPolicyActionFilter,
+		}}})
+		supported, err := svc.applyOpenAIFastPolicyToBody(openAIUltrafastGroupContext(), account, "gpt-6.1-sol", body)
+		require.NoError(t, err)
+		require.Equal(t, OpenAIFastTierUltrafast, gjson.GetBytes(supported, "service_tier").String())
+
+		// Astra 支持 Ultrafast，分组会写入；不在白名单内，由 fallback 过滤掉。
+		notWhitelisted, err := svc.applyOpenAIFastPolicyToBody(
+			openAIUltrafastGroupContext(), account, "gpt-6-astra", []byte(`{"model":"gpt-6-astra"}`))
+		require.NoError(t, err)
+		require.False(t, gjson.GetBytes(notWhitelisted, "service_tier").Exists())
+	})
+}
+
+func TestOpenAIModelSupportsUltrafast(t *testing.T) {
+	for _, model := range []string{
+		"gpt-6-astra", "gpt-6", "GPT-6-Astra", "openai/gpt-6-astra", "gpt-6-astra-2026-11-01",
+		"gpt-6.1-sol", "gpt-6.1-sol-high", "openai/gpt-6.1-sol", "gpt-6.1-sol-openai-compact",
+		"gpt-5.6-sol", "openai/gpt-5.6-sol", "GPT-5.6-Sol",
+	} {
+		require.True(t, openAIModelSupportsUltrafast(model), model)
+	}
+	for _, model := range []string{
+		"", "gpt-6.1-terra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-terra", "gpt-5.5", "gpt-5.4-mini",
+		"gpt-6.1-solar", "gpt-5.6-solar", "unknown-model", "grok-4", "claude-opus-5-5",
+	} {
+		require.False(t, openAIModelSupportsUltrafast(model), model)
+	}
+}
+
+func TestOpenAIGroupForcedServiceTier(t *testing.T) {
+	openAIAccount := &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth}
+	const sol, astra, unsupported = "gpt-6.1-sol", "gpt-6-astra", "gpt-6.1-terra"
+	group := func(platform, tier string) context.Context {
+		return context.WithValue(context.Background(), ctxkey.Group, &Group{
+			ID: 7, Platform: platform, Status: StatusActive, Hydrated: true, ForcedServiceTier: tier,
+		})
+	}
+	for _, tt := range []struct {
+		name    string
+		ctx     context.Context
+		account *Account
+		model   string
+		want    string
+	}{
+		{name: "nil context", ctx: nil, account: openAIAccount, model: sol, want: ""},
+		{name: "no group", ctx: context.Background(), account: openAIAccount, model: sol, want: ""},
+		{name: "nil account", ctx: group(PlatformOpenAI, OpenAIFastTierUltrafast), account: nil, model: sol, want: ""},
+		{name: "follow client", ctx: group(PlatformOpenAI, ""), account: openAIAccount, model: sol, want: ""},
+		{name: "invalid tier follows client", ctx: group(PlatformOpenAI, "unknown"), account: openAIAccount, model: sol, want: ""},
+		{name: "standard on supported model", ctx: group(PlatformOpenAI, OpenAIFastTierDefault), account: openAIAccount, model: sol, want: OpenAIFastTierDefault},
+		{name: "standard on unknown model", ctx: group(PlatformOpenAI, OpenAIFastTierDefault), account: openAIAccount, model: "unknown", want: OpenAIFastTierDefault},
+		{name: "fast on supported model", ctx: group(PlatformOpenAI, OpenAIFastTierPriority), account: openAIAccount, model: sol, want: OpenAIFastTierPriority},
+		{name: "fast on other model", ctx: group(PlatformOpenAI, OpenAIFastTierPriority), account: openAIAccount, model: unsupported, want: OpenAIFastTierPriority},
+		{name: "fast on empty model", ctx: group(PlatformOpenAI, OpenAIFastTierPriority), account: openAIAccount, model: "", want: OpenAIFastTierPriority},
+		{name: "ultrafast on sol", ctx: group(PlatformOpenAI, OpenAIFastTierUltrafast), account: openAIAccount, model: sol, want: OpenAIFastTierUltrafast},
+		{name: "ultrafast on astra", ctx: group(PlatformOpenAI, OpenAIFastTierUltrafast), account: openAIAccount, model: astra, want: OpenAIFastTierUltrafast},
+		{name: "ultrafast on sol effort alias", ctx: group(PlatformOpenAI, OpenAIFastTierUltrafast), account: openAIAccount, model: "gpt-6.1-sol-high", want: OpenAIFastTierUltrafast},
+		{name: "ultrafast on existing sol 5.6", ctx: group(PlatformOpenAI, OpenAIFastTierUltrafast), account: openAIAccount, model: "gpt-5.6-sol", want: OpenAIFastTierUltrafast},
+		{name: "unsupported model follows client", ctx: group(PlatformOpenAI, OpenAIFastTierUltrafast), account: openAIAccount, model: unsupported, want: ""},
+		{name: "unknown model follows client", ctx: group(PlatformOpenAI, OpenAIFastTierUltrafast), account: openAIAccount, model: "unknown", want: ""},
+		{name: "empty model follows client", ctx: group(PlatformOpenAI, OpenAIFastTierUltrafast), account: openAIAccount, model: "", want: ""},
+		{name: "composite group with openai account", ctx: group(PlatformComposite, OpenAIFastTierUltrafast), account: openAIAccount, model: sol, want: OpenAIFastTierUltrafast},
+		{name: "composite group with grok account", ctx: group(PlatformComposite, OpenAIFastTierUltrafast), account: &Account{Platform: PlatformGrok}, model: sol, want: ""},
+		{name: "unsupported group platform", ctx: group(PlatformAnthropic, OpenAIFastTierUltrafast), account: openAIAccount, model: sol, want: ""},
+		{name: "unhydrated group", ctx: context.WithValue(context.Background(), ctxkey.Group, &Group{ID: 7, Platform: PlatformOpenAI, Status: StatusActive, ForcedServiceTier: OpenAIFastTierUltrafast}), account: openAIAccount, model: sol, want: ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, openAIGroupForcedServiceTier(tt.ctx, tt.account, tt.model))
+		})
+	}
+}
+
+// 仅强制 Ultra Fast 的分组：不支持的模型保留客户端传入的档位（含省略）。
+func TestApplyOpenAIFastPolicyToBody_GroupForceUltrafastSkipsUnsupportedModels(t *testing.T) {
+	svc := newOpenAIGatewayServiceWithSettings(t, DefaultOpenAIFastPolicySettings())
+	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth}
+
+	for _, tt := range []struct {
+		body string
+		want string
+	}{
+		{body: `{"model":"gpt-6.1-terra","input":"hi"}`, want: ""},
+		{body: `{"model":"gpt-6.1-terra","service_tier":"fast"}`, want: OpenAIFastTierPriority},
+		{body: `{"model":"gpt-6.1-terra","service_tier":"flex"}`, want: OpenAIFastTierFlex},
+		{body: `{"model":"gpt-6.1-terra","service_tier":"ultrafast"}`, want: OpenAIFastTierUltrafast},
+	} {
+		updated, err := svc.applyOpenAIFastPolicyToBody(openAIUltrafastGroupContext(), account, "gpt-6.1-terra", []byte(tt.body))
+		require.NoError(t, err)
+		require.Equal(t, tt.want, gjson.GetBytes(updated, "service_tier").String(), "body %s", tt.body)
+	}
+}
+
+// 单选档位切换后，只有 Ultrafast 受模型门控；Standard 和 Fast 始终生效。
+func TestApplyOpenAIFastPolicyToBody_GroupForcedTierSwitches(t *testing.T) {
+	svc := newOpenAIGatewayServiceWithSettings(t, DefaultOpenAIFastPolicySettings())
+	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth}
+	group := &Group{ID: 7, Platform: PlatformOpenAI, Status: StatusActive, Hydrated: true}
+	ctx := context.WithValue(context.Background(), ctxkey.Group, group)
+
+	for _, model := range []string{"gpt-6.1-sol", "gpt-6-astra", "gpt-5.6-sol", "gpt-6.1-terra", "unknown-model"} {
+		for _, tier := range []string{OpenAIFastTierUltrafast, OpenAIFastTierPriority, OpenAIFastTierDefault, ""} {
+			group.ForcedServiceTier = tier
+			updated, err := svc.applyOpenAIFastPolicyToBody(ctx, account, model, []byte(`{"model":"`+model+`","service_tier":"flex"}`))
+			require.NoError(t, err)
+			want := tier
+			if tier == "" || (tier == OpenAIFastTierUltrafast && (model == "gpt-6.1-terra" || model == "unknown-model")) {
+				want = OpenAIFastTierFlex
+			}
+			require.Equal(t, want, gjson.GetBytes(updated, "service_tier").String(), "model %s, forced tier %s", model, tier)
+		}
+	}
+}

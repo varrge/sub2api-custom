@@ -2401,3 +2401,91 @@ func TestAdminService_CreateGroup_CodexModelsManifestConfigDisabledAccepted(t *t
 	require.Equal(t, []int64{1, 2}, group.CodexModelsManifestConfig.AccountIDs)
 	require.False(t, repo.created.CodexModelsManifestConfig.Enabled)
 }
+
+func TestAdminService_CreateGroup_NormalizesForcedUltrafastByPlatform(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		platform string
+		want     string
+	}{
+		{name: "openai", platform: PlatformOpenAI, want: OpenAIFastTierUltrafast},
+		{name: "composite", platform: PlatformComposite, want: OpenAIFastTierUltrafast},
+		{name: "anthropic", platform: PlatformAnthropic, want: ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &groupRepoStubForAdmin{}
+			svc := &adminServiceImpl{groupRepo: repo}
+
+			group, err := svc.CreateGroup(context.Background(), &CreateGroupInput{
+				Name: "ultrafast-" + tt.name, Platform: tt.platform, RateMultiplier: 1, ForcedServiceTier: OpenAIFastTierUltrafast,
+			})
+
+			require.NoError(t, err)
+			require.NotNil(t, group)
+			require.Equal(t, tt.want, repo.created.ForcedServiceTier)
+		})
+	}
+}
+
+func TestAdminService_CreateGroup_ForcedTierAndSubsidiesRemainIndependent(t *testing.T) {
+	for _, tier := range []string{"", OpenAIFastTierDefault, OpenAIFastTierPriority, OpenAIFastTierUltrafast} {
+		for _, platform := range []string{PlatformOpenAI, PlatformAnthropic} {
+			t.Run(platform+"/"+tier, func(t *testing.T) {
+				repo := &groupRepoStubForAdmin{}
+				svc := &adminServiceImpl{groupRepo: repo}
+				group, err := svc.CreateGroup(context.Background(), &CreateGroupInput{
+					Name: "forced", Platform: platform, RateMultiplier: 1, ForcedServiceTier: tier,
+					FreeOpenAIFast: true, FreeOpenAIUltrafast: true,
+				})
+				require.NoError(t, err)
+				require.NotNil(t, group)
+				if platform == PlatformOpenAI {
+					require.Equal(t, tier, repo.created.ForcedServiceTier)
+					require.True(t, repo.created.FreeOpenAIFast)
+					require.True(t, repo.created.FreeOpenAIUltrafast)
+				} else {
+					require.Empty(t, repo.created.ForcedServiceTier)
+					require.False(t, repo.created.FreeOpenAIFast)
+					require.False(t, repo.created.FreeOpenAIUltrafast)
+				}
+			})
+		}
+	}
+}
+
+func TestAdminService_UpdateGroup_ForcedServiceTier(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		initial  string
+		input    UpdateGroupInput
+		want     string
+		wantFree bool
+	}{
+		{name: "enables ultrafast", input: UpdateGroupInput{ForcedServiceTier: ptrString(OpenAIFastTierUltrafast)}, want: OpenAIFastTierUltrafast, wantFree: true},
+		{name: "switches fast to ultrafast", initial: OpenAIFastTierPriority, input: UpdateGroupInput{ForcedServiceTier: ptrString(OpenAIFastTierUltrafast)}, want: OpenAIFastTierUltrafast, wantFree: true},
+		{name: "switches ultrafast to fast", initial: OpenAIFastTierUltrafast, input: UpdateGroupInput{ForcedServiceTier: ptrString(OpenAIFastTierPriority)}, want: OpenAIFastTierPriority, wantFree: true},
+		{name: "switches ultrafast to standard", initial: OpenAIFastTierUltrafast, input: UpdateGroupInput{ForcedServiceTier: ptrString(OpenAIFastTierDefault)}, want: OpenAIFastTierDefault, wantFree: true},
+		{name: "explicit follow clears ultrafast", initial: OpenAIFastTierUltrafast, input: UpdateGroupInput{ForcedServiceTier: ptrString("")}, want: "", wantFree: true},
+		{name: "platform change clears ultrafast and subsidies", initial: OpenAIFastTierUltrafast, input: UpdateGroupInput{Platform: PlatformAnthropic}, want: "", wantFree: false},
+		{name: "platform change clears fast and subsidies", initial: OpenAIFastTierPriority, input: UpdateGroupInput{Platform: PlatformAnthropic}, want: "", wantFree: false},
+		{name: "unrelated update preserves ultrafast", initial: OpenAIFastTierUltrafast, input: UpdateGroupInput{Description: ptrString("renamed")}, want: OpenAIFastTierUltrafast, wantFree: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			existing := &Group{
+				ID: 1, Name: "g", Platform: PlatformOpenAI, Status: StatusActive, ForcedServiceTier: tt.initial,
+				FreeOpenAIFast: true, FreeOpenAIUltrafast: true,
+			}
+			repo := &groupRepoStubForAdmin{getByID: existing}
+			invalidator := &authCacheInvalidatorStub{}
+			svc := &adminServiceImpl{groupRepo: repo, authCacheInvalidator: invalidator}
+
+			_, err := svc.UpdateGroup(context.Background(), existing.ID, &tt.input)
+
+			require.NoError(t, err)
+			require.Equal(t, tt.want, repo.updated.ForcedServiceTier)
+			require.Equal(t, tt.wantFree, repo.updated.FreeOpenAIFast)
+			require.Equal(t, tt.wantFree, repo.updated.FreeOpenAIUltrafast)
+			require.Equal(t, []int64{existing.ID}, invalidator.groupIDs)
+		})
+	}
+}

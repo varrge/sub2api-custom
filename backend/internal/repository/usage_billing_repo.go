@@ -20,7 +20,7 @@ type usageBillingRepository struct {
 	recoveryFinalizer func(context.Context, *service.UsageBillingCommand, *service.UsageBillingApplyResult)
 }
 
-func NewUsageBillingRepository(_ *dbent.Client, sqlDB *sql.DB) service.UsageBillingRepository {
+func NewUsageBillingRepository(_ *dbent.Client, sqlDB *sql.DB) service.UsageBillingBatchRepository {
 	return &usageBillingRepository{db: sqlDB}
 }
 
@@ -604,13 +604,8 @@ func userExistsForBilling(ctx context.Context, tx *sql.Tx, userID int64) (bool, 
 	return true, nil
 }
 
-func incrementUsageBillingAPIKeyQuota(ctx context.Context, tx *sql.Tx, apiKeyID int64, amount float64, acceptedBatch bool) (bool, error) {
-	activeOnly := " AND deleted_at IS NULL"
-	if acceptedBatch {
-		activeOnly = ""
-	}
-	var exhausted bool
-	err := tx.QueryRowContext(ctx, `
+// Both paths use the same quota transition; accepted image jobs may outlive their key.
+const usageBillingAPIKeyQuotaUpdateBase = `
 		UPDATE api_keys
 		SET quota_used = quota_used + $1,
 			status = CASE
@@ -622,7 +617,17 @@ func incrementUsageBillingAPIKeyQuota(ctx context.Context, tx *sql.Tx, apiKeyID 
 				ELSE status
 			END,
 			updated_at = NOW()
-		WHERE id = $2`+activeOnly+`
+		WHERE id = $2`
+
+const usageBillingAPIKeyQuotaUpdate = usageBillingAPIKeyQuotaUpdateBase + " AND deleted_at IS NULL"
+
+func incrementUsageBillingAPIKeyQuota(ctx context.Context, tx *sql.Tx, apiKeyID int64, amount float64, acceptedBatch bool) (bool, error) {
+	activeOnly := " AND deleted_at IS NULL"
+	if acceptedBatch {
+		activeOnly = ""
+	}
+	var exhausted bool
+	err := tx.QueryRowContext(ctx, usageBillingAPIKeyQuotaUpdateBase+activeOnly+`
 		RETURNING quota > 0 AND quota_used >= quota AND quota_used - $1 < quota
 	`, amount, apiKeyID, service.StatusAPIKeyActive, service.StatusAPIKeyQuotaExhausted).Scan(&exhausted)
 	if errors.Is(err, sql.ErrNoRows) {

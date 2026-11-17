@@ -163,34 +163,11 @@ func TestPrepDeductBalanceRequiresForceWhenBalanceIsInsufficient(t *testing.T) {
 func TestExecuteRefundUsesActualAvailableBalanceDeduction(t *testing.T) {
 	ctx := context.Background()
 	client := newPaymentConfigServiceTestClient(t)
-	user, err := client.User.Create().
-		SetEmail("refund-execute-clamp@example.com").
-		SetPasswordHash("hash").
-		SetUsername("refund-execute-clamp").
-		Save(ctx)
-	require.NoError(t, err)
-	order, err := client.PaymentOrder.Create().
-		SetUserID(user.ID).
-		SetUserEmail(user.Email).
-		SetUserName(user.Username).
-		SetAmount(100).
-		SetPayAmount(100).
-		SetFeeRate(0).
-		SetRechargeCode("REFUND-EXECUTE-CLAMP").
-		SetOutTradeNo("refund_execute_clamp").
-		SetPaymentType(payment.TypeStripe).
-		SetPaymentTradeNo("").
-		SetOrderType(payment.OrderTypeBalance).
-		SetStatus(OrderStatusCompleted).
-		SetExpiresAt(time.Now().Add(time.Hour)).
-		SetPaidAt(time.Now()).
-		SetClientIP("127.0.0.1").
-		SetSrcHost("api.example.com").
-		Save(ctx)
-	require.NoError(t, err)
+	order := createCompletedRefundableOrderForTest(t, ctx, client, "refund-execute-clamp")
+	defer replacePaymentProviderFactoryForTest(t, successfulRefundProvider{})()
 
 	repo := &mockUserRepo{deductAvailableBalanceFn: func(_ context.Context, id int64, amount float64) (float64, error) {
-		require.Equal(t, user.ID, id)
+		require.Equal(t, order.UserID, id)
 		require.Equal(t, 100.0, amount)
 		return 25, nil
 	}}
@@ -199,7 +176,7 @@ func TestExecuteRefundUsesActualAvailableBalanceDeduction(t *testing.T) {
 		Reason: "concurrent spend", Force: true, DeductionType: payment.DeductionTypeBalance, BalanceToDeduct: 100,
 	}
 
-	result, err := (&PaymentService{entClient: client, userRepo: repo}).ExecuteRefund(ctx, plan)
+	result, err := (&PaymentService{entClient: client, userRepo: repo, loadBalancer: &captureLoadBalancer{}}).ExecuteRefund(ctx, plan)
 	require.NoError(t, err)
 	require.True(t, result.Success)
 	require.Equal(t, 25.0, plan.BalanceToDeduct)
@@ -286,7 +263,7 @@ func TestExecuteEasyPayRefundSuccessCode(t *testing.T) {
 			require.Equal(t, int32(1), calls.Load(), "do not retry a refund based on a different success code")
 			stored, err := client.PaymentOrder.Get(ctx, order.ID)
 			require.NoError(t, err)
-			wantStatus := OrderStatusCompleted
+			wantStatus := OrderStatusRefundFailed
 			if tc.wantSuccess {
 				wantStatus = OrderStatusRefunded
 				if tc.amount < order.Amount {
@@ -296,14 +273,14 @@ func TestExecuteEasyPayRefundSuccessCode(t *testing.T) {
 				require.NotNil(t, stored.RefundAt)
 				require.Equal(t, 200-tc.amount, balance)
 			} else {
-				require.Zero(t, stored.RefundAmount)
+				require.Equal(t, tc.amount, stored.RefundAmount)
 				require.Nil(t, stored.RefundAt)
 				require.Equal(t, 200.0, balance)
 			}
 			require.Equal(t, wantStatus, stored.Status)
 			failed, err := client.PaymentAuditLog.Query().Where(
 				paymentauditlog.OrderIDEQ(strconv.FormatInt(order.ID, 10)),
-				paymentauditlog.ActionEQ("REFUND_GATEWAY_FAILED"),
+				paymentauditlog.ActionEQ("REFUND_FAILED"),
 			).Exist(ctx)
 			require.NoError(t, err)
 			require.Equal(t, !tc.wantSuccess, failed)

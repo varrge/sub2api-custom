@@ -239,6 +239,63 @@ func TestAirwallexRefundRejectsUnsettledStatus(t *testing.T) {
 	}
 }
 
+func TestAirwallexRefundFailureClassification(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		authFailure bool
+		status      int
+		body        string
+		rejected    bool
+	}{
+		{"authentication failure", true, 401, `{"message":"unauthorized"}`, true},
+		{"unknown HTTP failure", false, 409, `{"message":"conflict"}`, false},
+		{"server failure", false, 502, `{"message":"unavailable"}`, false},
+		{"invalid response", false, 200, `<html>error</html>`, false},
+		{"empty response", false, 200, ``, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			refundCalls := 0
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/v1/authentication/login" && !tc.authFailure {
+					_, _ = w.Write([]byte(`{"token":"token","expires_at":"2099-01-01T00:00:00Z"}`))
+					return
+				}
+				if r.URL.Path == "/api/v1/pa/refunds/create" {
+					refundCalls++
+				}
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+			provider := mustTestAirwallexProvider(t, server)
+			_, err := provider.Refund(context.Background(), payment.RefundRequest{OrderID: "order", TradeNo: "int_123", Amount: "1.50"})
+			require.Error(t, err)
+			require.Equal(t, tc.rejected, payment.IsRefundRejected(err))
+			if tc.authFailure {
+				require.Zero(t, refundCalls)
+			} else {
+				require.Equal(t, 1, refundCalls)
+			}
+		})
+	}
+	provider := &Airwallex{}
+	for _, req := range []payment.RefundRequest{{Amount: "1.50"}, {TradeNo: "int_123", Amount: "invalid"}} {
+		_, err := provider.Refund(context.Background(), req)
+		require.True(t, payment.IsRefundRejected(err))
+	}
+	provider.httpClient = &http.Client{Transport: refundTestTransport(func(*http.Request) (*http.Response, error) {
+		t.Fatal("request construction failure must not send a refund")
+		return nil, nil
+	})}
+	err := provider.doJSON(nil, http.MethodPost, "/pa/refunds/create", "token", nil, nil)
+	require.True(t, payment.IsRefundRejected(err))
+	err = provider.doJSON(context.Background(), http.MethodPost, "/pa/refunds/create", "token", make(chan int), nil)
+	require.True(t, payment.IsRefundRejected(err))
+	err = provider.doJSON(nil, http.MethodGet, "/pa/refunds/ref_123", "token", nil, nil)
+	require.Error(t, err)
+	require.False(t, payment.IsRefundRejected(err), "a query failure cannot reject an earlier refund")
+}
+
 func TestAirwallexAuthErrorIncludesCredentialGuidance(t *testing.T) {
 	t.Parallel()
 

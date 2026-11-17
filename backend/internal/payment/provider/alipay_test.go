@@ -463,7 +463,7 @@ func TestAlipayRefundRecordsOutRequestNoAsRefundID(t *testing.T) {
 				t.Fatalf("unexpected refund param: %+v", param)
 			}
 			gotOutRequestNo = param.OutRequestNo
-			return &alipay.TradeRefundRsp{TradeNo: "2026101522001", FundChange: tc.fundChange}, nil
+			return &alipay.TradeRefundRsp{Error: alipay.Error{Code: alipay.CodeSuccess}, TradeNo: "2026101522001", FundChange: tc.fundChange}, nil
 		}
 
 		provider := &Alipay{client: &alipay.Client{}}
@@ -489,7 +489,7 @@ func TestAlipayRefundOutRequestNoIsStableAcrossRetries(t *testing.T) {
 	var outRequestNos []string
 	alipayTradeRefund = func(_ context.Context, _ *alipay.Client, param alipay.TradeRefund) (*alipay.TradeRefundRsp, error) {
 		outRequestNos = append(outRequestNos, param.OutRequestNo)
-		return &alipay.TradeRefundRsp{TradeNo: "2026101522001", FundChange: alipayFundChangeYes}, nil
+		return &alipay.TradeRefundRsp{Error: alipay.Error{Code: alipay.CodeSuccess}, TradeNo: "2026101522001", FundChange: alipayFundChangeYes}, nil
 	}
 
 	provider := &Alipay{client: &alipay.Client{}}
@@ -525,7 +525,7 @@ func TestAlipayRefundRetryDoesNotDoubleRefund(t *testing.T) {
 			seen[param.OutRequestNo] = struct{}{}
 			refundedCents += refundCents
 		}
-		return &alipay.TradeRefundRsp{TradeNo: "2026101522001", FundChange: alipayFundChangeYes}, nil
+		return &alipay.TradeRefundRsp{Error: alipay.Error{Code: alipay.CodeSuccess}, TradeNo: "2026101522001", FundChange: alipayFundChangeYes}, nil
 	}
 
 	provider := &Alipay{client: &alipay.Client{}}

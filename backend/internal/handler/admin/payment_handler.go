@@ -277,7 +277,7 @@ func (h *PaymentHandler) QueryAndFinalizeRefund(c *gin.Context) {
 
 // --- Subscription Plans ---
 
-// ConfirmMonthCardRefund records a full refund already verified at the provider.
+// ConfirmMonthCardRefund records a verified month-card or balance refund outcome.
 func (h *PaymentHandler) ConfirmMonthCardRefund(c *gin.Context) {
 	orderID, ok := parseIDParam(c, "id")
 	if !ok {
@@ -286,12 +286,27 @@ func (h *PaymentHandler) ConfirmMonthCardRefund(c *gin.Context) {
 	var req struct {
 		Reference string `json:"reference" binding:"required"`
 		Confirmed bool   `json:"confirmed"`
+		service.ConfirmBalanceRefundInput
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || !req.Confirmed {
-		response.BadRequest(c, "请先在原支付平台确认已全额退款，并填写退款流水号或核实说明")
+		response.BadRequest(c, "请先在原支付平台核实退款结果，并填写退款流水号或核实说明")
 		return
 	}
-	result, err := h.paymentService.ConfirmMonthCardRefund(c.Request.Context(), orderID, req.Reference)
+	order, err := h.paymentService.GetOrderByID(c.Request.Context(), orderID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	var result *service.RefundResult
+	if order.OrderType == "balance" {
+		req.ConfirmBalanceRefundInput.Reference = req.Reference
+		result, err = h.paymentService.ConfirmBalanceRefund(c.Request.Context(), orderID, req.ConfirmBalanceRefundInput)
+	} else if req.Outcome != "" && req.Outcome != "success" {
+		response.BadRequest(c, "月卡人工确认仅支持核实已全额退款")
+		return
+	} else {
+		result, err = h.paymentService.ConfirmMonthCardRefund(c.Request.Context(), orderID, req.Reference)
+	}
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return

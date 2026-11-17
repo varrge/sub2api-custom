@@ -578,7 +578,7 @@ func (e *EasyPay) Refund(ctx context.Context, req payment.RefundRequest) (*payme
 	}
 	attempts := e.refundAttempts(req)
 	if len(attempts) == 0 {
-		return nil, fmt.Errorf("easypay refund missing order identifier")
+		return nil, payment.RefundRejected(fmt.Errorf("easypay refund missing order identifier"))
 	}
 	var firstErr error
 	for i, attempt := range attempts {
@@ -631,16 +631,23 @@ func cloneStringMap(in map[string]string) map[string]string {
 	return out
 }
 
+type easyPayRefundRejection struct {
+	error
+	message string
+}
+
 func isEasyPayRefundOrderNotFound(err error) bool {
-	if err == nil {
+	var rejection *easyPayRefundRejection
+	if !payment.IsRefundRejected(err) || !errors.As(err, &rejection) {
 		return false
 	}
-	msg := err.Error()
+	msg := rejection.message
 	lower := strings.ToLower(msg)
 	return strings.Contains(msg, "订单编号不存在") ||
 		strings.Contains(msg, "订单不存在") ||
 		strings.Contains(lower, "order not found") ||
-		strings.Contains(lower, "not exist")
+		strings.Contains(lower, "order not exist") ||
+		strings.Contains(lower, "order does not exist")
 }
 
 func parseEasyPayRefundResponse(status int, body []byte, successCode int) error {
@@ -667,14 +674,32 @@ func parseEasyPayRefundResponse(status int, body []byte, successCode int) error 
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return fmt.Errorf("easypay refund non-JSON response (HTTP %d): %s", status, summary)
 	}
+	if !easyPayRefundCodeIsRecognized(resp.Code) {
+		return fmt.Errorf("easypay refund unrecognized response code (HTTP %d): %s", status, summary)
+	}
 	if !easyPayResponseCodeIsSuccess(resp.Code, successCode) {
 		msg := strings.TrimSpace(resp.Msg)
 		if msg == "" {
 			msg = summary
 		}
-		return fmt.Errorf("easypay refund failed (HTTP %d): %s", status, msg)
+		return payment.RefundRejected(&easyPayRefundRejection{
+			error:   fmt.Errorf("easypay refund failed (HTTP %d): %s", status, msg),
+			message: strings.TrimSpace(resp.Msg),
+		})
 	}
 	return nil
+}
+
+func easyPayRefundCodeIsRecognized(code any) bool {
+	switch v := code.(type) {
+	case float64:
+		return math.Trunc(v) == v && math.Abs(v) <= 1<<53
+	case string:
+		_, err := strconv.Atoi(strings.TrimSpace(v))
+		return err == nil
+	default:
+		return false
+	}
 }
 
 func easyPayResponseCodeIsSuccess(code any, successCode int) bool {
@@ -729,7 +754,7 @@ func (e *EasyPay) postRaw(ctx context.Context, endpoint string, params map[strin
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, payment.RefundRejected(err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	client := e.httpClient

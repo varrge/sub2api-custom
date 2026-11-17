@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -10,7 +11,86 @@ import (
 	"unicode/utf8"
 
 	"github.com/Wei-Shaw/sub2api/internal/payment"
+	"github.com/stretchr/testify/require"
 )
+
+type refundTestTransport func(*http.Request) (*http.Response, error)
+
+func (f refundTestTransport) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+func TestEasyPayRefundClassifiesRejectionsAndNeverRetriesUnknownResults(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		status   int
+		body     string
+		rejected bool
+	}{
+		{"business rejection", 200, `{"code":-1,"msg":"refund rejected"}`, true},
+		{"string business rejection", 200, `{"code":"-1","msg":"refund rejected"}`, true},
+		{"unrelated missing object", 200, `{"code":-1,"msg":"merchant does not exist"}`, true},
+		{"missing message", 200, `{"code":-1,"detail":"order not found"}`, true},
+		{"missing code", 200, `{"msg":"order not found"}`, false},
+		{"null code", 200, `{"code":null,"msg":"order not found"}`, false},
+		{"unknown code", 200, `{"code":"ERROR","msg":"order not found"}`, false},
+		{"fractional code", 200, `{"code":1.5,"msg":"order not found"}`, false},
+		{"HTML", 200, `<html>order not found</html>`, false},
+		{"empty", 200, ``, false},
+		{"server error", 502, `{"code":-1,"msg":"order not found"}`, false},
+		{"client HTTP error", 400, `{"code":-1,"msg":"order not found"}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				calls++
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+			provider := newTestEasyPay(t, server.URL)
+			_, err := provider.Refund(context.Background(), payment.RefundRequest{OrderID: "order", TradeNo: "trade", Amount: "1.50"})
+			require.Error(t, err)
+			require.Equal(t, tc.rejected, payment.IsRefundRejected(err))
+			require.Equal(t, 1, calls, "unknown results must not trigger another refund request")
+		})
+	}
+}
+
+func TestEasyPayRefundFallbackUnknownResultStaysUnknown(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		if calls == 1 {
+			_, _ = w.Write([]byte(`{"code":-1,"msg":"order not found"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`<html>upstream timeout</html>`))
+	}))
+	defer server.Close()
+	provider := newTestEasyPay(t, server.URL)
+	_, err := provider.Refund(context.Background(), payment.RefundRequest{OrderID: "order", TradeNo: "trade", Amount: "1.50"})
+	require.Error(t, err)
+	require.False(t, payment.IsRefundRejected(err))
+	require.Equal(t, 2, calls)
+}
+
+func TestEasyPayRefundRequestFailures(t *testing.T) {
+	provider := newTestEasyPay(t, "https://gateway.example")
+	_, err := provider.Refund(context.Background(), payment.RefundRequest{Amount: "1.50"})
+	require.True(t, payment.IsRefundRejected(err))
+	_, _, err = provider.postRaw(context.Background(), "://invalid-url", nil)
+	require.True(t, payment.IsRefundRejected(err))
+	for _, unknownErr := range []error{io.EOF, context.DeadlineExceeded} {
+		calls := 0
+		provider.httpClient = &http.Client{Transport: refundTestTransport(func(*http.Request) (*http.Response, error) {
+			calls++
+			return nil, unknownErr
+		})}
+		_, err := provider.Refund(context.Background(), payment.RefundRequest{OrderID: "order", TradeNo: "trade", Amount: "1.50"})
+		require.ErrorIs(t, err, unknownErr)
+		require.False(t, payment.IsRefundRejected(err))
+		require.Equal(t, 1, calls)
+	}
+}
 
 func TestNormalizeEasyPayAPIBase(t *testing.T) {
 	t.Parallel()

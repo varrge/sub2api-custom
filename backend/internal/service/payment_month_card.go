@@ -247,7 +247,7 @@ func (s *PaymentService) finishMonthCardRefund(ctx context.Context, p *RefundPla
 		return nil, err
 	}
 	claimed, err := tx.PaymentOrder.Update().Where(
-		paymentorder.IDEQ(p.OrderID),
+		refundVersionPredicate(p),
 		paymentorder.StatusIn(OrderStatusRefunding, OrderStatusRefundPending, OrderStatusRefunded),
 	).SetStatus(OrderStatusRefunded).SetRefundAmount(p.RefundAmount).SetRefundReason(p.Reason).SetRefundAt(time.Now()).SetForceRefund(p.Force).Save(ctx)
 	if err != nil {

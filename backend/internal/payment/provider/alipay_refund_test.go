@@ -22,7 +22,7 @@ func TestAlipayRefundLostResponseReusesProviderRequestAndQueriesAfterRestart(t *
 		if len(ids) == 1 {
 			return nil, errors.New("response lost after provider accepted refund")
 		}
-		return &alipay.TradeRefundRsp{FundChange: "N"}, nil
+		return &alipay.TradeRefundRsp{Error: alipay.Error{Code: alipay.CodeSuccess}, FundChange: "N"}, nil
 	}
 	alipayTradeFastPayRefundQuery = func(_ context.Context, _ *alipay.Client, req alipay.TradeFastPayRefundQuery) (*alipay.TradeFastPayRefundQueryRsp, error) {
 		require.Equal(t, ids[0], req.OutRequestNo)
@@ -44,6 +44,50 @@ func TestAlipayRefundLostResponseReusesProviderRequestAndQueriesAfterRestart(t *
 	resp, err = restarted.QueryRefund(context.Background(), payment.RefundQueryRequest{OrderID: req.OrderID, Amount: req.Amount})
 	require.NoError(t, err)
 	require.Equal(t, payment.ProviderStatusSuccess, resp.Status)
+}
+
+func TestAlipayRefundRejectsOnlyKnownFailures(t *testing.T) {
+	original := alipayTradeRefund
+	t.Cleanup(func() { alipayTradeRefund = original })
+	for _, tc := range []struct {
+		name     string
+		result   *alipay.TradeRefundRsp
+		err      error
+		rejected bool
+	}{
+		{name: "invalid parameter", result: &alipay.TradeRefundRsp{Error: alipay.Error{Code: alipay.CodeInvalidParam}}, rejected: true},
+		{name: "missing trade", result: &alipay.TradeRefundRsp{Error: alipay.Error{Code: alipay.CodeBusinessFailed, SubCode: alipayErrTradeNotExist}}, rejected: true},
+		{name: "system error", result: &alipay.TradeRefundRsp{Error: alipay.Error{Code: alipay.CodeBusinessFailed, SubCode: "ACQ.SYSTEM_ERROR"}}},
+		{name: "service unavailable", result: &alipay.TradeRefundRsp{Error: alipay.Error{Code: alipay.CodeUnknowError}}},
+		{name: "unknown business failure", result: &alipay.TradeRefundRsp{Error: alipay.Error{Code: alipay.CodeBusinessFailed, SubCode: "ACQ.NEW_ERROR"}}},
+		{name: "missing response"},
+		{name: "missing response code", result: &alipay.TradeRefundRsp{}},
+		{name: "transport error", err: context.DeadlineExceeded},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			alipayTradeRefund = func(context.Context, *alipay.Client, alipay.TradeRefund) (*alipay.TradeRefundRsp, error) {
+				return tc.result, tc.err
+			}
+			provider := &Alipay{client: &alipay.Client{}}
+			resp, err := provider.Refund(context.Background(), payment.RefundRequest{OrderID: "order", Amount: "1.50"})
+			require.Nil(t, resp)
+			require.Error(t, err)
+			require.Equal(t, tc.rejected, payment.IsRefundRejected(err))
+		})
+	}
+}
+
+func TestAlipayRefundLocalFailuresAreRejected(t *testing.T) {
+	original := alipayTradeRefund
+	t.Cleanup(func() { alipayTradeRefund = original })
+	alipayTradeRefund = func(context.Context, *alipay.Client, alipay.TradeRefund) (*alipay.TradeRefundRsp, error) {
+		t.Fatal("refund must not be sent")
+		return nil, nil
+	}
+	_, err := (&Alipay{}).Refund(context.Background(), payment.RefundRequest{OrderID: "order", Amount: "1.50"})
+	require.True(t, payment.IsRefundRejected(err))
+	_, err = (&Alipay{client: &alipay.Client{}}).Refund(context.Background(), payment.RefundRequest{OrderID: "order", Amount: "invalid"})
+	require.True(t, payment.IsRefundRejected(err))
 }
 
 func TestAlipayRefundQueryReconstructedRequestRespectsGrace(t *testing.T) {

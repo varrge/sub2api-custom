@@ -463,15 +463,21 @@ func (w *Wxpay) SupportsIdempotentRefund() bool { return true }
 func (w *Wxpay) Refund(ctx context.Context, req payment.RefundRequest) (*payment.RefundResponse, error) {
 	c, err := w.ensureClient()
 	if err != nil {
-		return nil, err
+		return nil, payment.RefundRejected(err)
 	}
 	rf, err := payment.YuanToFen(req.Amount)
 	if err != nil {
-		return nil, fmt.Errorf("wxpay refund amount: %w", err)
+		return nil, payment.RefundRejected(fmt.Errorf("wxpay refund amount: %w", err))
+	}
+	if rf <= 0 || strings.TrimSpace(req.OrderID) == "" {
+		return nil, payment.RefundRejected(fmt.Errorf("wxpay refund requires an order and positive amount"))
 	}
 	tf, err := w.queryOrderTotalFen(ctx, c, req.OrderID)
 	if err != nil {
-		return nil, err
+		return nil, payment.RefundRejected(err)
+	}
+	if tf <= 0 || rf > tf {
+		return nil, payment.RefundRejected(fmt.Errorf("wxpay refund amount exceeds original order total"))
 	}
 	rs := refunddomestic.RefundsApiService{Client: c}
 	cur := wxpayCurrency
@@ -485,9 +491,17 @@ func (w *Wxpay) Refund(ctx context.Context, req payment.RefundRequest) (*payment
 	if err != nil {
 		return nil, fmt.Errorf("wxpay refund: %w", err)
 	}
+	if res == nil {
+		return nil, fmt.Errorf("wxpay refund: empty response")
+	}
 	st := payment.ProviderStatusPending
-	if res.Status != nil && *res.Status == refunddomestic.STATUS_SUCCESS {
-		st = payment.ProviderStatusSuccess
+	if res.Status != nil {
+		switch *res.Status {
+		case refunddomestic.STATUS_SUCCESS:
+			st = payment.ProviderStatusSuccess
+		case refunddomestic.STATUS_CLOSED, refunddomestic.STATUS_ABNORMAL:
+			st = payment.ProviderStatusFailed
+		}
 	}
 	return &payment.RefundResponse{RefundID: outRefundNo, Status: st}, nil
 }
@@ -546,7 +560,7 @@ func (w *Wxpay) queryOrderTotalFen(ctx context.Context, c *core.Client, orderID 
 		return 0, fmt.Errorf("wxpay refund query order: %w", err)
 	}
 	var tf int64
-	if tx.Amount != nil && tx.Amount.Total != nil {
+	if tx != nil && tx.Amount != nil && tx.Amount.Total != nil {
 		tf = *tx.Amount.Total
 	}
 	return tf, nil

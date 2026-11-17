@@ -350,12 +350,12 @@ func (a *Alipay) SupportsIdempotentRefund() bool { return true }
 func (a *Alipay) Refund(ctx context.Context, req payment.RefundRequest) (*payment.RefundResponse, error) {
 	client, err := a.getClient()
 	if err != nil {
-		return nil, err
+		return nil, payment.RefundRejected(err)
 	}
 
 	refundID, err := alipayRefundRequestID(req.OrderID, req.Amount)
 	if err != nil {
-		return nil, err
+		return nil, payment.RefundRejected(err)
 	}
 	result, err := alipayTradeRefund(ctx, client, alipay.TradeRefund{
 		OutTradeNo:   req.OrderID,
@@ -368,6 +368,19 @@ func (a *Alipay) Refund(ctx context.Context, req payment.RefundRequest) (*paymen
 	}
 	if result == nil {
 		return nil, fmt.Errorf("alipay TradeRefund: empty response")
+	}
+	if result.IsFailure() {
+		err := fmt.Errorf("alipay TradeRefund: %w", result.Error)
+		// Business failures can include system errors; only proven rejections are final.
+		switch result.Code {
+		case alipay.CodeInvalidAuthToken, alipay.CodeMissingParam, alipay.CodeInvalidParam, alipay.CodePermissionDenied:
+			return nil, payment.RefundRejected(err)
+		case alipay.CodeBusinessFailed:
+			if result.SubCode == alipayErrTradeNotExist {
+				return nil, payment.RefundRejected(err)
+			}
+		}
+		return nil, err
 	}
 
 	refundStatus := payment.ProviderStatusPending

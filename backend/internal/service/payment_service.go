@@ -40,8 +40,6 @@ const (
 const (
 	// defaultMaxPendingOrders and defaultOrderTimeoutMin are defined in
 	// payment_config_service.go alongside other payment configuration defaults.
-	paymentGraceMinutes = 5
-
 	defaultPageSize    = 20
 	maxPageSize        = 100
 	topUsersLimit      = 10
@@ -145,10 +143,16 @@ type RefundPlan struct {
 	SubscriptionID  int64
 	// deductionHeld 表示扣减已在进入 REFUND_PENDING 前执行并保留，终态收敛时不再重复扣减。
 	deductionHeld bool
+	// Fences a refund response/query to the durable attempt it observed.
+	refundVersion     time.Time
+	refundRequestedAt time.Time
+	manualReference   string
+	manualOutcome     string
 }
 
 type RefundResult struct {
 	Success         bool    `json:"success"`
+	Resolved        bool    `json:"resolved,omitempty"`
 	Warning         string  `json:"warning,omitempty"`
 	RequireForce    bool    `json:"require_force,omitempty"`
 	BalanceDeducted float64 `json:"balance_deducted,omitempty"`
@@ -197,6 +201,8 @@ type TopUsersByCurrency map[string][]TopUserStat
 // --- Service ---
 
 type PaymentService struct {
+	refundRecoveryMu         sync.Mutex
+	refundRecoveryAfterID    int64
 	providerMu               sync.Mutex
 	providersLoaded          bool
 	entClient                *dbent.Client

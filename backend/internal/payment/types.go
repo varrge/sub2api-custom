@@ -4,6 +4,7 @@ package payment
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -204,6 +205,24 @@ type RefundQueryRequest struct {
 type RefundResponse struct {
 	RefundID string
 	Status   string // "success", "pending", "failed"
+}
+
+type refundRejectedError struct{ error }
+
+func (e *refundRejectedError) Unwrap() error { return e.error }
+
+// RefundRejected marks a refund that was not submitted or was explicitly rejected.
+// Transport errors and unrecognized responses must remain unmarked.
+func RefundRejected(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &refundRejectedError{error: err}
+}
+
+func IsRefundRejected(err error) bool {
+	var rejected *refundRejectedError
+	return errors.As(err, &rejected)
 }
 
 // InstanceSelection holds the selected provider instance and its decrypted config.

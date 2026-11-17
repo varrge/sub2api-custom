@@ -61,8 +61,16 @@ export interface ConfirmMonthCardRefundRequest {
   confirmed: true
 }
 
+export interface ConfirmBalanceRefundRequest extends ConfirmMonthCardRefundRequest {
+  outcome: 'success' | 'failed'
+  updated_at: string
+  refund_amount?: number
+  balance_deducted?: number
+}
+
 export interface RefundResult {
   success: boolean
+  resolved?: boolean
   warning?: string
   require_force?: boolean
   balance_deducted?: number
@@ -130,6 +138,11 @@ export const adminPaymentAPI = {
 
   /** Record a full month-card refund already verified with the original provider. */
   confirmMonthCardRefund(id: number, data: ConfirmMonthCardRefundRequest) {
+    return apiClient.post<RefundResult>(`/admin/payment/orders/${id}/refund/confirm`, data)
+  },
+
+  /** Record the balance refund outcome verified with the original provider. */
+  confirmBalanceRefund(id: number, data: ConfirmBalanceRefundRequest) {
     return apiClient.post<RefundResult>(`/admin/payment/orders/${id}/refund/confirm`, data)
   },
 

@@ -264,15 +264,15 @@ func (a *Airwallex) SupportsIdempotentRefund() bool { return true }
 func (a *Airwallex) Refund(ctx context.Context, req payment.RefundRequest) (*payment.RefundResponse, error) {
 	intentID := strings.TrimSpace(req.TradeNo)
 	if intentID == "" {
-		return nil, fmt.Errorf("airwallex refund missing payment intent id")
+		return nil, payment.RefundRejected(fmt.Errorf("airwallex refund missing payment intent id"))
 	}
 	amount, err := decimal.NewFromString(req.Amount)
 	if err != nil || amount.LessThanOrEqual(decimal.Zero) {
-		return nil, fmt.Errorf("airwallex refund: invalid amount %s", req.Amount)
+		return nil, payment.RefundRejected(fmt.Errorf("airwallex refund: invalid amount %s", req.Amount))
 	}
 	token, err := a.accessToken(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("airwallex auth: %w", err)
+		return nil, payment.RefundRejected(fmt.Errorf("airwallex auth: %w", err))
 	}
 
 	payload := airwallexCreateRefundRequest{
@@ -423,12 +423,18 @@ func (a *Airwallex) doJSON(ctx context.Context, method, path, token string, payl
 	if payload != nil {
 		body, err := json.Marshal(payload)
 		if err != nil {
+			if method == http.MethodPost && path == "/pa/refunds/create" {
+				return payment.RefundRejected(err)
+			}
 			return err
 		}
 		bodyReader = bytes.NewReader(body)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, a.config["apiBase"]+path, bodyReader)
 	if err != nil {
+		if method == http.MethodPost && path == "/pa/refunds/create" {
+			return payment.RefundRejected(err)
+		}
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")

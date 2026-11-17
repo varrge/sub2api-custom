@@ -3,10 +3,14 @@ package monthcard_test
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -55,11 +59,47 @@ func TestMonthCardPaymentFullMigrationsFulfillmentRefundAndRecovery(t *testing.T
 	db, client := paymentFlowDB(t)
 	ctx := context.Background()
 	store := monthcard.NewStore(db)
-	svc := service.NewPaymentService(client, payment.NewRegistry(), nil, nil, nil, nil, nil, nil, nil)
+	svc := service.NewPaymentService(client, payment.NewRegistry(), payment.NewDefaultLoadBalancer(client, nil), nil, nil, nil, nil, nil, nil)
 	svc.SetMonthCardStore(store)
+	var refundCalls atomic.Int32
+	refundRequests := make(chan url.Values, 4)
+	gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		refundCalls.Add(1)
+		if r.Method != http.MethodPost || r.URL.Path != "/api.php" || r.URL.Query().Get("act") != "refund" {
+			t.Errorf("unexpected gateway request: %s %s", r.Method, r.URL)
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			t.Errorf("parse refund form: %v", err)
+			http.Error(w, "invalid form", http.StatusBadRequest)
+			return
+		}
+		refundRequests <- r.PostForm
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":1,"msg":"refund successful"}`))
+	}))
+	t.Cleanup(gateway.Close)
+	assertRefund := func(order *dbent.PaymentOrder, expectedCalls int32) {
+		t.Helper()
+		require.Equal(t, expectedCalls, refundCalls.Load())
+		select {
+		case form := <-refundRequests:
+			require.Equal(t, order.OutTradeNo, form.Get("out_trade_no"))
+			require.Equal(t, "198.00", form.Get("money"))
+			require.Equal(t, "1001", form.Get("pid"))
+			require.Equal(t, "monthcard-fixture-secret", form.Get("key"))
+		default:
+			t.Fatal("refund succeeded without a real gateway request")
+		}
+	}
 	g, err := client.Group.Create().SetName("Month card integration").SetPlatform("openai").SetSubscriptionType("subscription").Save(ctx)
 	require.NoError(t, err)
-	inst, err := client.PaymentProviderInstance.Create().SetProviderKey(payment.TypeWxpay).SetName("fixture").SetConfig("{}").SetRefundEnabled(true).Save(ctx)
+	cfg, err := json.Marshal(map[string]string{"pid": "1001", "pkey": "monthcard-fixture-secret", "apiBase": gateway.URL,
+		"notifyUrl": "https://merchant.test/notify", "returnUrl": "https://merchant.test/return"})
+	require.NoError(t, err)
+	inst, err := client.PaymentProviderInstance.Create().SetProviderKey(payment.TypeEasyPay).SetName("fixture").
+		SetConfig(string(cfg)).SetSupportedTypes(payment.TypeWxpay).SetRefundEnabled(true).Save(ctx)
 	require.NoError(t, err)
 	p := monthcard.Product{GroupID: g.ID, Name: "198 month card", PriceCNY: 198, BaseQuotaUSD: 940,
 		Tiers: []monthcard.Tier{{Members: 2, QuotaUSD: 960}}, MaxMembers: 2, RecruitmentHours: 48, ForSale: true}
@@ -75,10 +115,12 @@ func TestMonthCardPaymentFullMigrationsFulfillmentRefundAndRecovery(t *testing.T
 		suffix := fmt.Sprintf("%d-%d", u.ID, time.Now().UnixNano())
 		o, err := client.PaymentOrder.Create().SetUserID(u.ID).SetUserEmail(u.Email).SetUserName(u.Username).
 			SetAmount(198).SetPayAmount(198).SetFeeRate(0).SetRechargeCode("MC-" + suffix).SetOutTradeNo("sub2_" + suffix).
-			SetPaymentType(payment.TypeWxpay).SetPaymentTradeNo("").SetProviderInstanceID(strconv.FormatInt(inst.ID, 10)).
+			SetPaymentType(payment.TypeWxpay).SetPaymentTradeNo("gateway_" + suffix).SetProviderInstanceID(strconv.FormatInt(inst.ID, 10)).SetProviderKey(payment.TypeEasyPay).
 			SetOrderType(payment.OrderTypeMonthCard).SetStatus(service.OrderStatusPaid).SetPaidAt(paid).
 			SetExpiresAt(paid.Add(time.Hour)).SetSubscriptionGroupID(g.ID).SetSubscriptionDays(30).
-			SetProviderSnapshot(map[string]any{"month_card_purchase": purchase}).SetClientIP("127.0.0.1").SetSrcHost("example.test").Save(ctx)
+			SetProviderSnapshot(map[string]any{"schema_version": 1, "provider_instance_id": strconv.FormatInt(inst.ID, 10),
+				"provider_key": payment.TypeEasyPay, "merchant_id": "1001", "month_card_purchase": purchase}).
+			SetClientIP("127.0.0.1").SetSrcHost("example.test").Save(ctx)
 		require.NoError(t, err)
 		return o
 	}
@@ -97,9 +139,9 @@ func TestMonthCardPaymentFullMigrationsFulfillmentRefundAndRecovery(t *testing.T
 	require.NoError(t, err)
 	second, missed := newOrder(users[1], join2), newOrder(users[2], join3)
 	require.NoError(t, svc.ExecuteMonthCardFulfillment(ctx, second.ID))
-	// This fixture has no external trade; the existing refund gateway adapter
-	// returns success locally. Provider identity/refund transport have unit tests.
+	require.Zero(t, refundCalls.Load())
 	require.NoError(t, svc.ExecuteMonthCardFulfillment(ctx, missed.ID))
+	assertRefund(missed, 1)
 	missed, err = client.PaymentOrder.Get(ctx, missed.ID)
 	require.NoError(t, err)
 	require.Equal(t, service.OrderStatusRefunded, missed.Status)
@@ -117,6 +159,7 @@ func TestMonthCardPaymentFullMigrationsFulfillmentRefundAndRecovery(t *testing.T
 	result, err := svc.ExecuteRefund(ctx, plan)
 	require.NoError(t, err)
 	require.True(t, result.Success)
+	assertRefund(first, 2)
 	card, err = store.GetCardByOrder(ctx, first.ID)
 	require.NoError(t, err)
 	require.Equal(t, "revoked", card.Status)
@@ -135,6 +178,7 @@ func TestMonthCardPaymentFullMigrationsFulfillmentRefundAndRecovery(t *testing.T
 	result, err = svc.ConfirmMonthCardRefund(ctx, second.ID, "provider-receipt-verified")
 	require.NoError(t, err)
 	require.True(t, result.Success)
+	require.Equal(t, int32(2), refundCalls.Load(), "manual confirmation must not send another refund")
 	other, err = store.GetCardByOrder(ctx, second.ID)
 	require.NoError(t, err)
 	require.Equal(t, "revoked", other.Status)
@@ -160,4 +204,5 @@ func TestMonthCardPaymentFullMigrationsFulfillmentRefundAndRecovery(t *testing.T
 	cards, err = store.ListCards(ctx, users[3].ID)
 	require.NoError(t, err)
 	require.Equal(t, "revoked", cards[0].Status)
+	require.Equal(t, int32(2), refundCalls.Load(), "recovery must not repeat the completed gateway refunds")
 }

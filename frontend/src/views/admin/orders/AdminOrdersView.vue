@@ -22,7 +22,7 @@
       <OrderTable :orders="orders" :loading="ordersLoading" show-user>
         <template #actions="{ row }">
           <div class="flex items-center gap-1">
-            <button v-if="canConfirmMonthCardRefund(row, refundNow)" class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950" @click="openRefundConfirmation(row)">{{ t('groupBuy.confirmRefund') }}</button>
+            <button v-if="canConfirmRefund(row, refundNow)" class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950" @click="openRefundConfirmation(row)">{{ row.order_type === 'balance' ? t('payment.admin.verifyRefund') : t('groupBuy.confirmRefund') }}</button>
             <button @click="showOrderDetail(row)" class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-dark-600">
               <Icon name="eye" size="sm" />
               {{ t('common.view') }}
@@ -46,7 +46,7 @@
               <Icon name="refresh" size="sm" />
               {{ t('payment.admin.retryRefund') }}
             </button>
-            <button v-else-if="row.status === 'REFUND_PENDING'" :disabled="refundQueryingIds.has(row.id)" @click="handleQueryRefund(row)" class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-orange-600 hover:bg-orange-50 disabled:opacity-60 dark:text-orange-400 dark:hover:bg-orange-900/20">
+            <button v-else-if="canQueryRefund(row, refundNow)" :disabled="refundQueryingIds.has(row.id)" @click="handleQueryRefund(row)" class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-orange-600 hover:bg-orange-50 disabled:opacity-60 dark:text-orange-400 dark:hover:bg-orange-900/20">
               <Icon name="refresh" size="sm" :class="refundQueryingIds.has(row.id) ? 'animate-spin' : ''" />
               {{ t('payment.admin.queryRefundStatus') }}
             </button>
@@ -63,7 +63,7 @@
     <!-- Order Detail Dialog -->
     <BaseDialog :show="showDetailDialog" :title="t('payment.admin.orderDetail')" width="wide" @close="showDetailDialog = false">
       <div v-if="selectedOrder" class="space-y-4">
-        <button v-if="canConfirmMonthCardRefund(selectedOrder, refundNow)" class="btn btn-secondary" @click="openRefundConfirmation(selectedOrder)">{{ t('groupBuy.confirmRefund') }}</button>
+        <button v-if="canConfirmRefund(selectedOrder, refundNow)" class="btn btn-secondary" @click="openRefundConfirmation(selectedOrder)">{{ selectedOrder.order_type === 'balance' ? t('payment.admin.verifyRefund') : t('groupBuy.confirmRefund') }}</button>
         <div v-if="selectedOrder.order_type === 'month_card'" class="space-y-2"><p class="text-sm text-amber-700">{{ t('groupBuy.refundHint') }}</p><RouterLink to="/admin/group-buy" class="text-sm text-primary-600">{{ t('groupBuy.cards') }}</RouterLink><button v-if="['COMPLETED', 'REFUND_REQUESTED', 'REFUND_FAILED'].includes(selectedOrder.status)" class="btn btn-secondary ml-3" @click="showDetailDialog = false; openRefundDialog(selectedOrder)">{{ t('payment.admin.refund') }}</button></div>
         <div class="grid grid-cols-2 gap-4">
           <div><p class="text-xs text-gray-500 dark:text-gray-400">{{ t('payment.orders.orderId') }}</p><p class="font-mono text-sm font-medium text-gray-900 dark:text-white">#{{ selectedOrder.id }}</p></div>
@@ -124,7 +124,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useTimestamp } from '@vueuse/core'
 import MonthCardRefundConfirmDialog from '@/features/group-buy/MonthCardRefundConfirmDialog.vue'
-import { canConfirmMonthCardRefund } from '@/features/group-buy/refundConfirmation'
+import { canConfirmRefund, canQueryRefund } from '@/features/group-buy/refundConfirmation'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminPaymentAPI } from '@/api/admin/payment'
@@ -165,13 +165,13 @@ const refundSubmitting = ref(false)
 const refundConfirmationOrder = ref<PaymentOrder | null>(null)
 const refundNow = useTimestamp({ interval: 1000 })
 function openRefundConfirmation(order: PaymentOrder) {
-  if (!canConfirmMonthCardRefund(order, refundNow.value)) return
+  if (!canConfirmRefund(order, refundNow.value)) return
   showDetailDialog.value = false
   refundConfirmationOrder.value = order
 }
 function onRefundConfirmed() {
+  appStore.showSuccess(refundConfirmationOrder.value?.order_type === 'balance' ? t('payment.admin.refundVerifiedComplete') : t('payment.admin.refundSuccess'))
   refundConfirmationOrder.value = null
-  appStore.showSuccess(t('payment.admin.refundSuccess'))
   loadOrders()
 }
 const refundRequireForce = ref(false)
@@ -307,6 +307,7 @@ async function handleRefund(data: { amount: number; reason: string; deduct_balan
 }
 
 async function handleQueryRefund(order: PaymentOrder) {
+  if (!canQueryRefund(order, refundNow.value) || refundQueryingIds.value.has(order.id)) return
   refundQueryingIds.value = new Set(refundQueryingIds.value).add(order.id)
   try {
     const res = await adminPaymentAPI.queryRefund(order.id)

@@ -5,6 +5,7 @@ package provider
 import (
 	"bytes"
 	"context"
+	"io"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/payment"
@@ -14,14 +15,73 @@ import (
 
 type stripeRefundBackend struct {
 	params []*stripe.RefundCreateParams
+	err    error
+	status stripe.RefundStatus
+	calls  int
 }
 
 func (b *stripeRefundBackend) Call(_ string, _ string, _ string, params stripe.ParamsContainer, v stripe.LastResponseSetter) error {
-	b.params = append(b.params, params.(*stripe.RefundCreateParams))
+	b.calls++
+	if p, ok := params.(*stripe.RefundCreateParams); ok {
+		b.params = append(b.params, p)
+	}
+	if b.err != nil {
+		return b.err
+	}
 	refund := v.(*stripe.Refund)
 	refund.ID = "re_123"
 	refund.Status = stripe.RefundStatusSucceeded
+	if b.status != "" {
+		refund.Status = b.status
+	}
 	return nil
+}
+
+func TestStripeRefundFailureClassification(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		amount     string
+		err        error
+		status     stripe.RefundStatus
+		wantStatus string
+		rejected   bool
+	}{
+		{name: "invalid amount", amount: "invalid", rejected: true},
+		{name: "zero amount", amount: "0", rejected: true},
+		{name: "transport error", amount: "1.50", err: io.EOF},
+		{name: "ambiguous 409", amount: "1.50", err: &stripe.Error{HTTPStatusCode: 409, Type: stripe.ErrorTypeIdempotency}},
+		{name: "failed response", amount: "1.50", status: stripe.RefundStatusFailed, wantStatus: payment.ProviderStatusFailed},
+		{name: "canceled response", amount: "1.50", status: stripe.RefundStatusCanceled, wantStatus: payment.ProviderStatusFailed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			backend := &stripeRefundBackend{err: tc.err, status: tc.status}
+			provider := &Stripe{initialized: true, sc: stripe.NewClient("sk_test", stripe.WithBackends(&stripe.Backends{API: backend}))}
+			resp, err := provider.Refund(context.Background(), payment.RefundRequest{OrderID: "order", TradeNo: "pi_123", Amount: tc.amount})
+			if tc.wantStatus != "" {
+				require.NoError(t, err)
+				require.Equal(t, tc.wantStatus, resp.Status)
+			} else {
+				require.Error(t, err)
+			}
+			require.Equal(t, tc.rejected, payment.IsRefundRejected(err))
+			if tc.rejected {
+				require.Zero(t, backend.calls)
+			}
+		})
+	}
+}
+
+func TestStripeQueryRefundRequiresThisAttemptsRefundID(t *testing.T) {
+	backend := &stripeRefundBackend{}
+	provider := &Stripe{initialized: true, sc: stripe.NewClient("sk_test", stripe.WithBackends(&stripe.Backends{API: backend}))}
+	_, err := provider.QueryRefund(context.Background(), payment.RefundQueryRequest{TradeNo: "pi_123", OrderID: "order", Amount: "1.50"})
+	require.ErrorContains(t, err, "verify manually")
+	require.Zero(t, backend.calls)
+	resp, err := provider.QueryRefund(context.Background(), payment.RefundQueryRequest{RefundID: "re_123"})
+	require.NoError(t, err)
+	require.Equal(t, "re_123", resp.RefundID)
+	require.Equal(t, payment.ProviderStatusSuccess, resp.Status)
+	require.Equal(t, 1, backend.calls)
 }
 
 func (*stripeRefundBackend) CallStreaming(string, string, string, stripe.ParamsContainer, stripe.StreamingLastResponseSetter) error {

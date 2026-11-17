@@ -101,6 +101,11 @@ func (s *PaymentOrderExpiryService) runOnce() {
 		slog.Warn("[PaymentOrderExpiry] month card recovery failed", "error", err)
 	}
 	monthCardCancel()
+	refundCtx, refundCancel := context.WithTimeout(context.Background(), expiryCheckTimeout)
+	if err := s.paymentSvc.RecoverBalanceRefunds(refundCtx); err != nil {
+		slog.Warn("[PaymentOrderExpiry] balance refund recovery failed", "error", err)
+	}
+	refundCancel()
 
 	reconcileCtx, cancel := context.WithTimeout(context.Background(), expiryCheckTimeout)
 	recovered, err := s.paymentSvc.ReconcilePendingPaymentOrders(reconcileCtx)

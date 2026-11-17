@@ -195,27 +195,24 @@ func (s *PaymentService) toPaid(ctx context.Context, o *dbent.PaymentOrder, trad
 	if o.OrderType == payment.OrderTypeMonthCard && len(confirmedAt) > 0 && !confirmedAt[0].IsZero() {
 		paidAt = confirmedAt[0]
 	}
+	if o.PaidAt != nil {
+		paidAt = *o.PaidAt
+	}
 	// Serialize recovery with conversion, including payments from expired links.
 	tx, err := s.entClient.Tx(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	accountType, err := lockAccountType(ctx, tx.Client(), o.UserID)
+	_, err = lockAccountType(ctx, tx.Client(), o.UserID)
 	if err != nil {
 		return err
 	}
-	grace := now.Add(-paymentGraceMinutes * time.Minute)
+	// A verified payment must be recorded even when checkout timed out or failed.
 	eligible := paymentorder.Or(
-		paymentorder.StatusEQ(OrderStatusPending),
-		paymentorder.StatusEQ(OrderStatusCancelled),
-		paymentorder.And(paymentorder.StatusEQ(OrderStatusExpired), paymentorder.UpdatedAtGTE(grace)),
+		paymentorder.StatusIn(OrderStatusPending, OrderStatusCancelled, OrderStatusExpired),
+		paymentorder.And(paymentorder.StatusEQ(OrderStatusFailed), paymentorder.Or(paymentorder.PaidAtIsNil(), paymentorder.PaymentTradeNoEQ(""))),
 	)
-	if o.OrderType == payment.OrderTypeMonthCard || accountType != paymentOrderAccountType(o) {
-		// Late verified card payments must be fulfilled or refunded even after
-		// the legacy payment grace period, never silently acknowledged and lost.
-		eligible = paymentorder.StatusIn(OrderStatusPending, OrderStatusCancelled, OrderStatusExpired)
-	}
 	c, err := tx.PaymentOrder.Update().Where(
 		paymentorder.IDEQ(o.ID),
 		eligible,
@@ -229,7 +226,7 @@ func (s *PaymentService) toPaid(ctx context.Context, o *dbent.PaymentOrder, trad
 	if c == 0 {
 		return s.alreadyProcessed(ctx, o)
 	}
-	if previousStatus == OrderStatusCancelled || previousStatus == OrderStatusExpired {
+	if previousStatus == OrderStatusCancelled || previousStatus == OrderStatusExpired || previousStatus == OrderStatusFailed {
 		slog.Info("order recovered from webhook payment success",
 			"orderID", o.ID,
 			"previousStatus", previousStatus,
@@ -257,18 +254,6 @@ func (s *PaymentService) alreadyProcessed(ctx context.Context, o *dbent.PaymentO
 		return nil
 	case OrderStatusFailed, OrderStatusPaid, OrderStatusRecharging:
 		return s.executeFulfillment(ctx, o.ID)
-	case OrderStatusExpired:
-		slog.Warn("webhook payment success for expired order beyond grace period",
-			"orderID", o.ID,
-			"status", cur.Status,
-			"updatedAt", cur.UpdatedAt,
-		)
-		s.writeAuditLog(ctx, o.ID, "PAYMENT_AFTER_EXPIRY", "system", map[string]any{
-			"status":    cur.Status,
-			"updatedAt": cur.UpdatedAt,
-			"reason":    "payment arrived after expiry grace period",
-		})
-		return nil
 	default:
 		return nil
 	}
@@ -897,7 +882,7 @@ WHERE NOT EXISTS (
 	WHERE order_id = $1::text
 	  AND action IN ('AFFILIATE_REBATE_APPLIED', 'AFFILIATE_REBATE_SKIPPED')
 )
-ON CONFLICT (order_id, action) DO NOTHING
+ON CONFLICT DO NOTHING
 RETURNING id`, nowExpr), []any{orderID, detail}
 	}
 	return fmt.Sprintf(`
@@ -909,7 +894,7 @@ WHERE NOT EXISTS (
 	WHERE order_id = ?
 	  AND action IN ('AFFILIATE_REBATE_APPLIED', 'AFFILIATE_REBATE_SKIPPED')
 )
-ON CONFLICT (order_id, action) DO NOTHING
+ON CONFLICT DO NOTHING
 RETURNING id`, nowExpr), []any{orderID, detail, orderID}
 }
 

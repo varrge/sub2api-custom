@@ -401,6 +401,20 @@ func newPaymentConfigServiceTestClient(t *testing.T) *dbent.Client {
 
 	drv := entsql.OpenDB(dialect.SQLite, db)
 	client := enttest.NewClient(t, enttest.WithOptions(dbent.Driver(drv)))
+	// SQLite stores time.Time's monotonic suffix as text; PostgreSQL does not.
+	// Strip it so timestamp compare-and-swap tests model the production database.
+	client.PaymentOrder.Use(func(next dbent.Mutator) dbent.Mutator {
+		return dbent.MutateFunc(func(ctx context.Context, m dbent.Mutation) (dbent.Value, error) {
+			order, ok := m.(*dbent.PaymentOrderMutation)
+			if !ok {
+				return next.Mutate(ctx, m)
+			}
+			if at, ok := order.UpdatedAt(); ok {
+				order.SetUpdatedAt(at.UTC())
+			}
+			return next.Mutate(ctx, m)
+		})
+	})
 	if _, err := db.Exec(`CREATE TABLE enterprise_conversion_cards(order_id BIGINT,credited_usd NUMERIC,refunded_at TIMESTAMP)`); err != nil {
 		t.Fatalf("create enterprise conversion fixture: %v", err)
 	}

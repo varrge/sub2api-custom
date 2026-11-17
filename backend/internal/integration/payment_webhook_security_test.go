@@ -139,6 +139,59 @@ func TestEasyPayWebhookSecurityPostgres(t *testing.T) {
 		return fixture{user, order, inst, url.Values{"pid": {"1001"}, "trade_no": {fmt.Sprintf("T%d", inst.ID)}, "out_trade_no": {order.OutTradeNo},
 			"type": {"wxpay"}, "name": {"balance"}, "money": {"10.00"}, "trade_status": {"TRADE_SUCCESS"}}, calls}
 	}
+	for _, initialStatus := range []string{payment.OrderStatusExpired, payment.OrderStatusFailed} {
+		t.Run("late payment recovers "+initialStatus, func(t *testing.T) {
+			f := makeFixture(t, "signed_callback", "")
+			_, err := db.Exec(`UPDATE payment_orders SET status=$1, updated_at=NOW()-INTERVAL '10 minutes', expires_at=NOW()-INTERVAL '10 minutes', paid_at=NULL, payment_trade_no='' WHERE id=$2`, initialStatus, f.order.ID)
+			require.NoError(t, err)
+			raw := signedEasyPayFixture(f.values, "fixture-secret")
+			var wg sync.WaitGroup
+			for i := 0; i < 12; i++ {
+				wg.Add(1)
+				go func() { defer wg.Done(); send(http.MethodPost, raw) }()
+			}
+			wg.Wait()
+			require.Equal(t, http.StatusOK, send(http.MethodPost, raw).Code)
+			order, err := client.PaymentOrder.Get(ctx, f.order.ID)
+			require.NoError(t, err)
+			require.Equal(t, payment.OrderStatusCompleted, order.Status)
+			require.NotNil(t, order.PaidAt)
+			require.Equal(t, f.values.Get("trade_no"), order.PaymentTradeNo)
+			user, err := client.User.Get(ctx, f.user.ID)
+			require.NoError(t, err)
+			require.Equal(t, 25.0, user.Balance)
+			codes, err := client.RedeemCode.Query().Where(redeemcode.CodeEQ(f.order.RechargeCode)).All(ctx)
+			require.NoError(t, err)
+			require.Len(t, codes, 1)
+			require.Equal(t, f.user.ID, *codes[0].UsedBy)
+			for _, terminal := range []string{payment.OrderStatusRefunded, payment.OrderStatusPartiallyRefunded} {
+				_, err = client.PaymentOrder.UpdateOneID(order.ID).SetStatus(terminal).Save(ctx)
+				require.NoError(t, err)
+				require.Equal(t, http.StatusOK, send(http.MethodPost, raw).Code)
+				user, err = client.User.Get(ctx, f.user.ID)
+				require.NoError(t, err)
+				require.Equal(t, 25.0, user.Balance)
+			}
+		})
+	}
+	t.Run("expired personal payment after enterprise conversion only requests refund", func(t *testing.T) {
+		f := makeFixture(t, "signed_callback", "")
+		_, err := db.Exec(`UPDATE payment_orders SET status='EXPIRED', updated_at=NOW()-INTERVAL '10 minutes' WHERE id=$1`, f.order.ID)
+		require.NoError(t, err)
+		_, err = client.User.UpdateOneID(f.user.ID).SetAccountType(service.AccountTypeEnterprise).Save(ctx)
+		require.NoError(t, err)
+		raw := signedEasyPayFixture(f.values, "fixture-secret")
+		send(http.MethodPost, raw)
+		send(http.MethodPost, raw)
+		order, err := client.PaymentOrder.Get(ctx, f.order.ID)
+		require.NoError(t, err)
+		require.Equal(t, payment.OrderStatusRefundRequested, order.Status)
+		require.NotNil(t, order.PaidAt)
+		require.Equal(t, f.values.Get("trade_no"), order.PaymentTradeNo)
+		user, err := client.User.Get(ctx, f.user.ID)
+		require.NoError(t, err)
+		require.Equal(t, 5.0, user.Balance)
+	})
 	assertUnpaid := func(t *testing.T, f fixture) {
 		t.Helper()
 		order, err := client.PaymentOrder.Get(ctx, f.order.ID)

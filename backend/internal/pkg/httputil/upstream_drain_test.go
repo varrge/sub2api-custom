@@ -52,3 +52,14 @@ func TestUpstreamDrainReleaseDoesNotCancelCaller(t *testing.T) {
 	require.NoError(t, client.Err())
 	cancelClient()
 }
+
+func TestUpstreamDrainDoesNotStartAnAttemptAfterClientCancellation(t *testing.T) {
+	client, cancelClient := context.WithCancel(context.Background())
+	parent := DetachUpstreamContext(client)
+	cancelClient()
+
+	upstream, release := NewUpstreamAttemptContext(parent, time.Second)
+	defer release()
+
+	require.ErrorIs(t, upstream.Err(), context.Canceled, "only an already-started attempt may drain")
+}

@@ -42,6 +42,11 @@ func NewUpstreamAttemptContext(parent context.Context, defaultTimeout time.Durat
 	if !ok || policy.client.Done() == nil {
 		return ctx, cancel
 	}
+	// The drain window belongs to an active attempt, never a new paid call.
+	if policy.client.Err() != nil {
+		cancel()
+		return ctx, cancel
+	}
 	timeout := policy.timeout
 	if timeout <= 0 {
 		timeout = defaultTimeout

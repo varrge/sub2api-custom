@@ -6,12 +6,35 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/stretchr/testify/require"
 )
+
+func TestHTTPUpstreamDrainPreCanceledRequestDoesNotReachUpstream(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	client, cancelClient := context.WithCancel(context.Background())
+	req, err := http.NewRequestWithContext(pkghttputil.DetachUpstreamContext(client), http.MethodGet, srv.URL, nil)
+	require.NoError(t, err)
+	// The client can leave during DNS validation or transport acquisition.
+	cancelClient()
+
+	resp, err := doUpstreamRequest(srv.Client(), req, time.Second)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+
+	require.ErrorIs(t, err, context.Canceled)
+	require.Zero(t, hits.Load(), "must not start a new paid call after cancellation")
+}
 
 func TestHTTPUpstreamDrainContinuousPingsCannotExtendBudget(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

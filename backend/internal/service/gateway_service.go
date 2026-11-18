@@ -690,7 +690,7 @@ type ForwardResult struct {
 	Stream                      bool
 	Duration                    time.Duration
 	FirstTokenMs                *int // 首字时间（流式请求）
-	ClientDisconnect            bool // 客户端是否在流式传输过程中断开
+	ClientDisconnect            bool // 客户端是否在上游请求完成前断开
 	ReasoningEffort             *string
 	// RequestedReasoningEffort is the client-requested effort before mapping.
 	RequestedReasoningEffort *string

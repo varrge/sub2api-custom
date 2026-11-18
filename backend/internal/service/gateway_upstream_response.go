@@ -1483,8 +1483,10 @@ func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *h
 
 	body, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, anthropicTooLargeError)
 	if err != nil {
+		markDisconnectedUsagePending(ctx, c, account, resp)
 		return nil, err
 	}
+	usageBody := body // Validate raw counters before cache overrides can rewrite them.
 	observer := upstreamResponseModelObserverFromContext(c)
 	if observer == nil {
 		observer = beginUpstreamResponseModelObservation(c)
@@ -1496,6 +1498,9 @@ func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *h
 		Usage ClaudeUsage `json:"usage"`
 	}
 	if err := json.Unmarshal(body, &response); err != nil {
+		if markDisconnectedUsagePending(ctx, c, account, resp) {
+			return nil, fmt.Errorf("parse upstream response after disconnect: %w", err)
+		}
 		if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
 			return nil, invalidNonStreamingJSONFailoverError(ctx, s.rateLimitService, resp, account, body, err, mappedModel)
 		}
@@ -1533,6 +1538,17 @@ func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *h
 				body = newBody
 			}
 		}
+	}
+
+	if ctx.Err() != nil {
+		if !hasCompleteDisconnectedClaudeUsage(usageBody) {
+			markDisconnectedUsagePending(ctx, c, account, resp)
+			return nil, errors.New("upstream response missing valid complete usage after client disconnect")
+		}
+		if !c.Writer.Written() {
+			c.Status(499) // Client Closed Request; usage is still settled.
+		}
+		return &response.Usage, nil
 	}
 
 	// 如果有模型映射，替换响应中的model字段

@@ -2154,6 +2154,7 @@ func isKnownOpsErrorType(t string) bool {
 		"service_unavailable",
 		"rate_limit_error",
 		"billing_error",
+		"billing_usage_pending",
 		"subscription_error",
 		"upstream_error",
 		"overloaded_error",

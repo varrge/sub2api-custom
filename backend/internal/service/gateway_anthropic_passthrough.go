@@ -95,7 +95,10 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 	var resp *http.Response
 	retryStart := time.Now()
 	for attempt := 1; attempt <= maxRetryAttempts; attempt++ {
-		upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, input.RequestStream)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
 		upstreamReq, wireBody, err := s.buildUpstreamRequestAnthropicAPIKeyPassthrough(upstreamCtx, c, account, input.Body, token)
 		releaseUpstreamCtx()
 		if err != nil {
@@ -109,8 +112,14 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 			input.Body = input.Parsed.Body.Bytes()
 		}
 
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		resp, err = s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
 		if err != nil {
+			if !input.RequestStream {
+				markDisconnectedUsagePending(ctx, c, account, resp)
+			}
 			if resp != nil && resp.Body != nil {
 				_ = resp.Body.Close()
 			}
@@ -271,6 +280,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 		if err != nil {
 			return nil, err
 		}
+		clientDisconnect = ctx.Err() != nil
 	}
 	if usage == nil {
 		usage = &ClaudeUsage{}
@@ -873,6 +883,7 @@ func (s *GatewayService) handleNonStreamingResponseAnthropicAPIKeyPassthrough(
 
 	body, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, anthropicTooLargeError)
 	if err != nil {
+		markDisconnectedUsagePending(ctx, c, account, resp)
 		return nil, err
 	}
 	observer := upstreamResponseModelObserverFromContext(c)
@@ -884,11 +895,24 @@ func (s *GatewayService) handleNonStreamingResponseAnthropicAPIKeyPassthrough(
 	if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
 		var raw json.RawMessage
 		if err := json.Unmarshal(body, &raw); err != nil {
+			if markDisconnectedUsagePending(ctx, c, account, resp) {
+				return nil, fmt.Errorf("parse upstream response after disconnect: %w", err)
+			}
 			return nil, invalidNonStreamingJSONFailoverError(ctx, s.rateLimitService, resp, account, body, err)
 		}
 	}
 
 	usage := parseClaudeUsageFromResponseBody(body)
+	if ctx.Err() != nil {
+		if !hasCompleteDisconnectedClaudeUsage(body) {
+			markDisconnectedUsagePending(ctx, c, account, resp)
+			return nil, errors.New("upstream response missing valid complete usage after client disconnect")
+		}
+		if !c.Writer.Written() {
+			c.Status(499) // Client Closed Request; usage is still settled.
+		}
+		return usage, nil
+	}
 	if IsForceCacheBilling(ctx) && usage.InputTokens > 0 {
 		body, err = classifyAnthropicResponseInputAsCacheRead(body, usage)
 		if err != nil {

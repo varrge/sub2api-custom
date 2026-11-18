@@ -121,6 +121,9 @@ func sleepWithContext(ctx context.Context, d time.Duration) error {
 // Forward 转发请求到Claude API
 func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, parsed *ParsedRequest) (result *ForwardResult, err error) {
 	startTime := time.Now()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if parsed == nil {
 		return nil, fmt.Errorf("parse request: empty request")
 	}
@@ -420,8 +423,12 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	retryStart := time.Now()
 	retriedRotatedToken := false
 	for attempt := 1; attempt <= maxRetryAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		// 构建上游请求（每次重试需要重新构建，因为请求体需要重新读取）
-		upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, reqStream)
+		// Non-streaming inference also incurs upstream cost after the client leaves.
+		upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
 		upstreamReq, wireBody, err := s.buildUpstreamRequest(upstreamCtx, c, account, body, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
 		releaseUpstreamCtx()
 		if err != nil {
@@ -431,8 +438,14 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		lastWireBody = wireBody
 
 		// 发送请求
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		resp, err = s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, tlsProfile)
 		if err != nil {
+			if !reqStream {
+				markDisconnectedUsagePending(ctx, c, account, resp)
+			}
 			if resp != nil && resp.Body != nil {
 				_ = resp.Body.Close()
 			}
@@ -500,10 +513,16 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 					//    also downgrade tool_use/tool_result blocks to text.
 
 					filteredBody := FilterThinkingBlocksForRetry(body, reqModel)
-					retryCtx, releaseRetryCtx := detachStreamUpstreamContext(ctx, reqStream)
+					if err := ctx.Err(); err != nil {
+						return nil, err
+					}
+					retryCtx, releaseRetryCtx := detachUpstreamContext(ctx)
 					retryReq, retryWireBody, buildErr := s.buildUpstreamRequest(retryCtx, c, account, filteredBody, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
 					releaseRetryCtx()
 					if buildErr == nil {
+						if err := ctx.Err(); err != nil {
+							return nil, err
+						}
 						retryResp, retryErr := s.httpUpstream.DoWithTLS(retryReq, proxyURL, account.ID, account.Concurrency, tlsProfile)
 						if retryErr == nil {
 							if retryResp.StatusCode < 400 {
@@ -543,10 +562,16 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 								if looksLikeToolSignatureError(msg2) && time.Since(retryStart) < maxRetryElapsed {
 									logger.LegacyPrintf("service.gateway", "Account %d: signature retry still failing and looks tool-related, retrying with tool blocks downgraded", account.ID)
 									filteredBody2 := FilterSignatureSensitiveBlocksForRetry(body, reqModel)
-									retryCtx2, releaseRetryCtx2 := detachStreamUpstreamContext(ctx, reqStream)
+									if err := ctx.Err(); err != nil {
+										return nil, err
+									}
+									retryCtx2, releaseRetryCtx2 := detachUpstreamContext(ctx)
 									retryReq2, retryWireBody2, buildErr2 := s.buildUpstreamRequest(retryCtx2, c, account, filteredBody2, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
 									releaseRetryCtx2()
 									if buildErr2 == nil {
+										if err := ctx.Err(); err != nil {
+											return nil, err
+										}
 										retryResp2, retryErr2 := s.httpUpstream.DoWithTLS(retryReq2, proxyURL, account.ID, account.Concurrency, tlsProfile)
 										if retryErr2 == nil {
 											if retryResp2.StatusCode < 400 {
@@ -562,6 +587,12 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 										}
 										if retryResp2 != nil && retryResp2.Body != nil {
 											_ = retryResp2.Body.Close()
+										}
+										if ctx.Err() != nil {
+											if !reqStream {
+												markDisconnectedUsagePending(ctx, c, account, retryResp2)
+											}
+											return nil, retryErr2
 										}
 										appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 											ProxyID:            opsUpstreamProxyID(account),
@@ -591,6 +622,12 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 						}
 						if retryResp != nil && retryResp.Body != nil {
 							_ = retryResp.Body.Close()
+						}
+						if ctx.Err() != nil {
+							if !reqStream {
+								markDisconnectedUsagePending(ctx, c, account, retryResp)
+							}
+							return nil, retryErr
 						}
 						logger.LegacyPrintf("service.gateway", "Account %d: signature error retry failed: %v", account.ID, retryErr)
 					} else {
@@ -625,11 +662,17 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 
 					rectifiedBody, applied := RectifyThinkingBudget(body)
 					if applied && time.Since(retryStart) < maxRetryElapsed {
+						if err := ctx.Err(); err != nil {
+							return nil, err
+						}
 						logger.LegacyPrintf("service.gateway", "Account %d: detected budget_tokens constraint error, retrying with rectified budget (budget_tokens=%d, max_tokens=%d)", account.ID, BudgetRectifyBudgetTokens, BudgetRectifyMaxTokens)
-						budgetRetryCtx, releaseBudgetRetryCtx := detachStreamUpstreamContext(ctx, reqStream)
+						budgetRetryCtx, releaseBudgetRetryCtx := detachUpstreamContext(ctx)
 						budgetRetryReq, budgetWireBody, buildErr := s.buildUpstreamRequest(budgetRetryCtx, c, account, rectifiedBody, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
 						releaseBudgetRetryCtx()
 						if buildErr == nil {
+							if err := ctx.Err(); err != nil {
+								return nil, err
+							}
 							budgetRetryResp, retryErr := s.httpUpstream.DoWithTLS(budgetRetryReq, proxyURL, account.ID, account.Concurrency, tlsProfile)
 							if retryErr == nil {
 								if budgetRetryResp.StatusCode < 400 {
@@ -645,6 +688,12 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 							}
 							if budgetRetryResp != nil && budgetRetryResp.Body != nil {
 								_ = budgetRetryResp.Body.Close()
+							}
+							if ctx.Err() != nil {
+								if !reqStream {
+									markDisconnectedUsagePending(ctx, c, account, budgetRetryResp)
+								}
+								return nil, retryErr
 							}
 							logger.LegacyPrintf("service.gateway", "Account %d: budget rectifier retry failed: %v", account.ID, retryErr)
 						} else {
@@ -882,6 +931,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		if err != nil {
 			return nil, err
 		}
+		clientDisconnect = ctx.Err() != nil
 	}
 
 	return &ForwardResult{

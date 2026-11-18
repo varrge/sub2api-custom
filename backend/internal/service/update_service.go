@@ -61,6 +61,7 @@ type GitHubReleaseClient interface {
 
 // UpdateService handles software updates
 type UpdateService struct {
+	managed        *managedUpdateClient
 	cache          UpdateCache
 	githubClient   GitHubReleaseClient
 	currentVersion string
@@ -75,6 +76,7 @@ func NewUpdateService(cache UpdateCache, githubClient GitHubReleaseClient, versi
 		githubRepo = defaultGitHubRepo
 	}
 	return &UpdateService{
+		managed:        newManagedUpdateClient(strings.TrimSpace(os.Getenv(ManagedUpdateSocketEnv))),
 		cache:          cache,
 		githubClient:   githubClient,
 		currentVersion: version,
@@ -408,6 +410,9 @@ func (s *UpdateService) fetchRollbackCandidates(ctx context.Context) ([]*GitHubR
 }
 
 func (s *UpdateService) fetchLatestRelease(ctx context.Context) (*UpdateInfo, error) {
+	if s.ManagedUpdatesEnabled() {
+		return s.checkManagedUpdate(ctx)
+	}
 	release, err := s.githubClient.FetchLatestRelease(ctx, s.githubRepo)
 	if err != nil {
 		return nil, err

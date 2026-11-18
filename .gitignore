@@ -119,6 +119,8 @@ backend/.installed
 tests
 !deploy/tests/
 !deploy/tests/**
+!deploy/security/tests/
+!deploy/security/tests/check_managed_update.py
 CLAUDE.md
 .claude
 scripts

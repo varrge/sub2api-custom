@@ -18,6 +18,9 @@ import (
 )
 
 type systemHandlerUpdateServiceStub struct {
+	managed               bool
+	queuedVersion         string
+	queuedCalls           int
 	performErr            error
 	updateInfo            *service.UpdateInfo
 	checkErr              error
@@ -34,6 +37,14 @@ type systemHandlerUpdateServiceStub struct {
 	rollbackVersions      []service.RollbackVersion
 	rollbackVersionsErr   error
 	rollbackVersionsCall  int
+}
+
+func (s *systemHandlerUpdateServiceStub) ManagedUpdatesEnabled() bool { return s.managed }
+
+func (s *systemHandlerUpdateServiceStub) QueueManagedUpdate(_ context.Context, version string) error {
+	s.queuedCalls++
+	s.queuedVersion = version
+	return s.performErr
 }
 
 func (s *systemHandlerUpdateServiceStub) CheckUpdate(_ context.Context, force bool) (*service.UpdateInfo, error) {
@@ -148,6 +159,61 @@ func TestSystemHandlerPerformUpdateAlreadyUpToDateReturnsOK(t *testing.T) {
 	require.Equal(t, "0.1.132", body.Data.CurrentVersion)
 	require.Equal(t, "0.1.132", body.Data.LatestVersion)
 	require.NotEmpty(t, body.Data.OperationID)
+}
+
+func TestSystemHandlerQueuesManagedUpdateWithoutReplacingBinary(t *testing.T) {
+	updateSvc := &systemHandlerUpdateServiceStub{managed: true}
+	router := newSystemHandlerTestRouter(t, updateSvc, newMemoryIdempotencyRepoStub())
+	for _, tc := range []struct {
+		body string
+		code int
+	}{
+		{`{}`, http.StatusBadRequest},
+		{`{"version":"0.2.22-custom.7"}`, http.StatusOK},
+	} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/system/update", strings.NewReader(tc.body))
+		req.Header.Set("Idempotency-Key", "managed-update")
+		router.ServeHTTP(rec, req)
+		require.Equal(t, tc.code, rec.Code, rec.Body.String())
+		if tc.code == http.StatusOK {
+			require.Contains(t, rec.Body.String(), `"deployment_pending":true`)
+			require.Contains(t, rec.Body.String(), `"need_restart":false`)
+		}
+	}
+	require.Equal(t, "0.2.22-custom.7", updateSvc.queuedVersion)
+	require.Zero(t, updateSvc.performCall)
+}
+
+func TestManagedUpdateStrictIdempotencyReplaysAndRejectsVersionChanges(t *testing.T) {
+	updateSvc := &systemHandlerUpdateServiceStub{managed: true}
+	repo := newMemoryIdempotencyRepoStub()
+	router := newSystemHandlerTestRouter(t, updateSvc, repo)
+	config := service.DefaultIdempotencyConfig()
+	config.ObserveOnly = false
+	service.SetDefaultIdempotencyCoordinator(service.NewIdempotencyCoordinator(repo, config))
+
+	for _, tc := range []struct {
+		key, version, reason string
+		code                 int
+	}{
+		{"", "0.2.22-custom.7", "IDEMPOTENCY_KEY_REQUIRED", http.StatusBadRequest},
+		{"managed-attempt", "0.2.22-custom.7", "", http.StatusOK},
+		{"managed-attempt", "0.2.22-custom.7", "", http.StatusOK},
+		{"managed-attempt", "0.2.22-custom.8", "IDEMPOTENCY_KEY_CONFLICT", http.StatusConflict},
+	} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/system/update",
+			strings.NewReader(`{"version":"`+tc.version+`"}`))
+		req.Header.Set("Idempotency-Key", tc.key)
+		router.ServeHTTP(rec, req)
+		require.Equal(t, tc.code, rec.Code, rec.Body.String())
+		if tc.reason != "" {
+			require.Contains(t, rec.Body.String(), tc.reason)
+		}
+	}
+	require.Equal(t, 1, updateSvc.queuedCalls, "replayed requests must not start another deployment")
+	require.Zero(t, updateSvc.performCall)
 }
 
 func TestSystemHandlerPerformUpdateFailureStillReturnsInternalError(t *testing.T) {

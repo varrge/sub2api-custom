@@ -480,6 +480,7 @@ export default {
   // Step-up (sudo) 2FA prompt
   stepUp: {
     title: 'Two-Factor Verification Required',
+    codeDigit: 'Verification code digit {position}',
     hint: 'Enter the 6-digit code from your authenticator app to continue this sensitive operation.',
     verifyFailed: 'Verification failed, please try again',
     notEnabled: 'This operation requires two-factor authentication. Please enable TOTP in your profile first.',

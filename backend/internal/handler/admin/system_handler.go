@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/sysutil"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -49,6 +50,8 @@ type systemUpdateService interface {
 	Rollback() error
 	ListRollbackVersions(ctx context.Context) ([]service.RollbackVersion, error)
 	RollbackToVersion(ctx context.Context, version string) error
+	ManagedUpdatesEnabled() bool
+	QueueManagedUpdate(ctx context.Context, version string) error
 }
 
 // NewSystemHandler creates a new SystemHandler
@@ -83,8 +86,24 @@ func (h *SystemHandler) CheckUpdates(c *gin.Context) {
 // PerformUpdate downloads and applies the update
 // POST /api/v1/admin/system/update
 func (h *SystemHandler) PerformUpdate(c *gin.Context) {
+	managed := h.updateSvc.ManagedUpdatesEnabled()
+	var version string
+	if managed {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1024)
+		var request struct {
+			Version string `json:"version"`
+		}
+		if err := c.ShouldBindJSON(&request); err != nil || request.Version == "" {
+			response.ErrorFrom(c, infraerrors.BadRequest("UPDATE_VERSION_REQUIRED", "Refresh the version and select the published update again"))
+			return
+		}
+		version = request.Version
+	}
 	operationID := buildSystemOperationID(c, "update")
 	payload := gin.H{"operation_id": operationID}
+	if managed {
+		payload["version"] = version
+	}
 	executeAdminIdempotentJSON(c, "admin.system.update", payload, service.DefaultSystemOperationIdempotencyTTL(), func(ctx context.Context) (any, error) {
 		lock, release, err := h.acquireSystemLock(ctx, operationID)
 		if err != nil {
@@ -98,6 +117,21 @@ func (h *SystemHandler) PerformUpdate(c *gin.Context) {
 
 		updateCtx, cancel := systemUpdateContext(ctx)
 		defer cancel()
+
+		if managed {
+			if err := h.updateSvc.QueueManagedUpdate(updateCtx, version); err != nil {
+				releaseReason = "MANAGED_DEPLOYMENT_REJECTED"
+				return nil, err
+			}
+			succeeded = true
+			return gin.H{
+				"message":            "Deployment requested",
+				"deployment_pending": true,
+				"target_version":     version,
+				"need_restart":       false,
+				"operation_id":       lock.OperationID(),
+			}, nil
+		}
 
 		if err := h.updateSvc.PerformUpdate(updateCtx); err != nil {
 			if errors.Is(err, service.ErrNoUpdateAvailable) {

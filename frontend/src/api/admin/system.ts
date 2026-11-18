@@ -44,6 +44,8 @@ export async function checkUpdates(force = false): Promise<VersionInfo> {
 export interface UpdateResult {
   message: string
   need_restart: boolean
+  deployment_pending?: boolean
+  target_version?: string
 }
 
 export interface RollbackVersionInfo {
@@ -74,9 +76,10 @@ const UPDATE_REQUEST_TIMEOUT_MS = 15 * 60 * 1000
  * Perform system update
  * Downloads and applies the latest version
  */
-export async function performUpdate(): Promise<UpdateResult> {
-  const { data } = await apiClient.post<UpdateResult>('/admin/system/update', undefined, {
-    timeout: UPDATE_REQUEST_TIMEOUT_MS
+export async function performUpdate(version: string, idempotencyKey: string): Promise<UpdateResult> {
+  const { data } = await apiClient.post<UpdateResult>('/admin/system/update', { version }, {
+    timeout: UPDATE_REQUEST_TIMEOUT_MS,
+    headers: { 'Idempotency-Key': idempotencyKey }
   })
   return data
 }

@@ -114,8 +114,22 @@
                 </p>
               </div>
 
+              <div v-if="deploymentStatus" class="space-y-2">
+                <p role="status" class="rounded-lg bg-gray-100 p-3 text-sm text-gray-700 dark:bg-dark-700 dark:text-dark-200">
+                  {{ t(`version.deployment${deploymentStatus}`, { version: deploymentTarget }) }}
+                </p>
+                <button
+                  v-if="deploymentStatus === 'Unconfirmed' && deploymentTarget"
+                  type="button"
+                  @click="waitForDeployment"
+                  class="w-full rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-on-primary hover:bg-primary-600"
+                >
+                  {{ t('version.checkDeployment') }}
+                </button>
+              </div>
+
               <!-- Priority 1: Update error (must check before hasUpdate) -->
-              <div v-if="updateError" class="space-y-2">
+              <div v-else-if="updateError" class="space-y-2">
                 <div
                   class="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800/50 dark:bg-red-900/20"
                 >
@@ -644,6 +658,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore, useAppStore } from '@/stores'
 import {
+  getVersion,
   performUpdate,
   restartService,
   getRollbackVersions,
@@ -682,6 +697,10 @@ const dockerImage = computed(() => `ghcr.io/${updateRepository.value.toLowerCase
 
 // Update process states (local to this component)
 const updating = ref(false)
+const deploymentTarget = ref('')
+const deploymentStatus = ref<'' | 'Pending' | 'Unconfirmed' | 'Complete'>('')
+let updateOperation: { version: string; key: string } | undefined
+let unmounted = false
 const restarting = ref(false)
 const restartError = ref('')
 const needRestart = ref(false)
@@ -753,17 +772,35 @@ async function refreshVersion(force = true) {
   resetRollbackState()
 
   await appStore.fetchVersion(force)
+  if (deploymentStatus.value === 'Complete') deploymentStatus.value = ''
 }
 
 async function handleUpdate() {
   if (updating.value) return
+  const target = latestVersion.value
+  if (!updateOperation || updateOperation.version !== target) {
+    const requestID = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    updateOperation = { version: target, key: `system-update-${requestID}` }
+  }
+  const operation = updateOperation
 
   updating.value = true
   updateError.value = ''
   updateSuccess.value = false
+  needRestart.value = false
 
   try {
-    const result = await systemStepUp.run(() => performUpdate())
+    const result = await systemStepUp.run(() => performUpdate(target, operation.key))
+    updateOperation = undefined
+    if (result.deployment_pending) {
+      deploymentTarget.value = result.target_version?.trim().replace(/^v/, '') || ''
+      if (deploymentTarget.value) {
+        void waitForDeployment()
+      } else {
+        deploymentStatus.value = 'Unconfirmed'
+      }
+      return
+    }
     successKind.value = 'update'
     updateSuccess.value = true
     needRestart.value = result.need_restart
@@ -771,11 +808,40 @@ async function handleUpdate() {
     appStore.clearVersionCache()
   } catch (error: unknown) {
     if (isStepUpCancelled(error)) return
-    const err = error as { response?: { data?: { message?: string } }; message?: string }
-    updateError.value = err.response?.data?.message || err.message || t('version.updateFailed')
+    const err = error as { response?: { data?: { message?: string; reason?: string } }; message?: string; reason?: string }
+    const reason = err.reason || err.response?.data?.reason
+    updateError.value = reason === 'WEB_SYSTEM_MUTATIONS_DISABLED'
+      ? t('version.deploymentNotConfigured')
+      : err.response?.data?.message || err.message || t('version.updateFailed')
   } finally {
     updating.value = false
   }
+}
+
+async function waitForDeployment() {
+  if (deploymentStatus.value === 'Pending') return
+  deploymentStatus.value = 'Pending'
+  const deadline = Date.now() + 5 * 60 * 1000
+
+  while (Date.now() < deadline) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 5000))
+    if (unmounted) return
+
+    try {
+      const { version } = await getVersion()
+      if (unmounted) return
+      if (version.replace(/^v/, '') === deploymentTarget.value) {
+        deploymentStatus.value = 'Complete'
+        appStore.clearVersionCache()
+        void appStore.fetchVersion()
+        return
+      }
+    } catch {
+      if (unmounted) return
+    }
+  }
+
+  deploymentStatus.value = 'Unconfirmed'
 }
 
 function resetRollbackState() {
@@ -928,6 +994,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  unmounted = true
   document.removeEventListener('click', handleClickOutside)
 })
 </script>

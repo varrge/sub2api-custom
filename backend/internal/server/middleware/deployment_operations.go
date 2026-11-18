@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -18,6 +19,13 @@ func WebDatabaseRestoreGuard() gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+func WebSystemUpdateGuard() gin.HandlerFunc {
+	if strings.TrimSpace(os.Getenv(service.ManagedUpdateSocketEnv)) != "" {
+		return func(c *gin.Context) { c.Next() }
+	}
+	return WebSystemMutationGuard()
 }
 
 func WebSystemMutationGuard() gin.HandlerFunc {

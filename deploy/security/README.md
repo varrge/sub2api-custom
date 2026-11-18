@@ -5,8 +5,12 @@ replace a running container's binary through the web updater.
 
 ## Host-only controls
 
-- `SUB2API_DISABLE_WEB_SYSTEM_MUTATIONS=true` disables HTTP update, rollback and
-  restart, even for an administrator with a recent MFA grant.
+- `SUB2API_DISABLE_WEB_SYSTEM_MUTATIONS=true` disables in-place HTTP update,
+  rollback and restart, even for an administrator with a recent MFA grant.
+- Setting `SUB2API_MANAGED_UPDATE_SOCKET` enables HTTP update through the host
+  executor with a recent administrator TOTP grant. The host guard still applies
+  to HTTP rollback and restart. Administrators can check the latest version
+  without a TOTP grant.
 - HTTP database restore is disabled by default. SQL input to `psql` is executable
   input, not inert data. Restore only in an isolated maintenance environment.
   `SUB2API_ALLOW_WEB_DATABASE_RESTORE=true` is an explicit host-level opt-in,
@@ -18,6 +22,40 @@ Run each release's migrations with a separate maintenance credential and
 `/app/sub2api --migrate-only` before starting that release with the runtime role.
 This command exits without HTTP listeners, schedulers or gateway workers.
 Keep maintenance credentials outside the app container and its mounted data.
+
+## Managed online updates
+
+Run `managed-update.py /absolute/path/config.json` as a host service in a
+root-owned directory. Give it a dedicated Compose project and absolute paths:
+
+```json
+{
+  "socket": "/var/lib/sub2api-deploy/managed/update.sock",
+  "socket_group": 1000,
+  "image_override": "/var/lib/sub2api-deploy/image.json",
+  "compose_files": ["/var/lib/sub2api-deploy/compose.yml"],
+  "project": "sub2api-prod",
+  "architecture": "amd64"
+}
+```
+
+The base Compose project must define `sub2api` with a health check and a
+separate maintenance-profile `migrate` service with database maintenance
+credentials. Start with both services pinned to the same verified GHCR digest
+in `image.json`. Keep the compose files, their environment files, and override
+root-owned. Mount only the socket directory into the app, read-only, and set
+`SUB2API_MANAGED_UPDATE_SOCKET` to the corresponding path inside the container.
+Set the directory to `root:1000` with mode `0750` and the socket group to the app
+group. Keep Docker and database maintenance credentials on the host. In this
+mode the app reads GitHub release metadata through the executor.
+
+The executor only accepts the latest published version from the fixed release
+repository. It checks the image's platform, source and tag revision, pins the
+downloaded digest, and runs migrations before switching the app. The update
+button shows completion after the newly running app reports the target version.
+If it cannot confirm completion, check the host service log before retrying.
+After a migration or startup failure, check schema state before attempting
+rollback. The previous application may require a compatible schema to run.
 
 The runtime role needs DML on business tables, sequence access, and SELECT on
 `schema_migrations`. It must not own the database or schema, inherit a maintenance

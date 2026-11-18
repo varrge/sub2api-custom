@@ -54,3 +54,45 @@ arbitrary HTTPS destination is safe merely because it uses port 443.
 
 Credentials belong in a local mode-0600 handover file or password manager, never
 in this repository. Record applied changes separately from prepared changes.
+
+## Host archive and firewall scripts
+
+`archive-send.py` runs as a host maintenance job, not inside the app. Install its
+root-only configuration as `/etc/sub2api-security/archive.json`, containing
+`certificate`, `ssh_key`, `known_hosts`, `port`, and `destination`. It uses a
+public RSA recipient certificate and authenticated AES-256-GCM CMS encryption;
+keep the encrypted private key and its password off the application host.
+The persistent outbox advances its cursor only after an acknowledged transfer.
+Audit windows overlap by 15 minutes to cover asynchronous inserts; consumers
+deduplicate audit rows by ID and access records by correlation ID/time.
+Log collection intentionally excludes request bodies, credentials and audit
+extras. Caddy retention still bounds recovery after a prolonged outage.
+
+The receiver SSH key must have `restrict` and a forced `archive-receive.py`
+command in a root-owned authorized_keys. Only a `backup` or `logs` upload with
+its SHA-256 is accepted; retries are idempotent. Install a root-owned
+`/etc/sub2api-archive.json` with `require_mount: true`, `max_storage_bytes` and
+`min_free_bytes`. Use a dedicated filesystem mounted at
+`/var/lib/sub2api-archive`, owned by the restricted account. The receiver never
+provides read/delete/command access. Root runs `archive-retention.py` separately:
+backup retention is three days with at least two distinct restore points;
+logs are retained seven days. Check that the quota accommodates this workload.
+Sender jobs require bounded systemd timeouts and monitored failure status;
+do not interpret an enabled timer as a successful backup.
+
+`egress-policy.py` reads root-only `/etc/sub2api-security/egress.json` with
+`app_addresses`, `database_addresses` and `redis_addresses`. These must match
+fixed Compose IP addresses. Install it before Docker starts and make Docker
+require the successful oneshot service so reboot does not open an unfiltered
+startup window. The baseline permits DB/Redis destinations and public TCP
+80/443/465/587, denies host/private-network access and Docker-forwarded IPv6.
+It **does not** restrict HTTPS destinations; a separate destination policy
+is required to prevent arbitrary HTTPS exfiltration.
+
+Run the offline boundary checks without host privileges:
+
+```sh
+python3 deploy/security/tests/check_sender_failures.py deploy/security/archive-send.py
+python3 deploy/security/tests/check_archive_bounds.py deploy/security/archive-receive.py deploy/security/archive-retention.py
+python3 deploy/security/tests/check_egress.py deploy/security/egress-policy.py
+```

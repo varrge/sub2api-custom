@@ -54,8 +54,8 @@ func TestScopedCodexImportCapturedRequestAndSafeResponse(t *testing.T) {
 	ctx := adminaccess.WithPrincipal(context.Background(), &adminaccess.Principal{KeyID: "fixture", Policy: adminaccess.Policy{Rules: []adminaccess.Rule{{Permissions: []string{"accounts.create", "accounts.credentials", "accounts.schedule", "accounts.network"}, AllGroups: true, AccountTypes: []string{"oauth"}}}}})
 	r := gin.New()
 	r.Use(func(c *gin.Context) { c.Request = c.Request.WithContext(ctx) })
-	r.Use(h.ScopedAdminKeyAccounts)
-	r.POST("/api/v1/admin/accounts/import/codex-session", func(c *gin.Context) { t.Fatal("不能回退到完整管理员导入") })
+	// Test the lower-level import behavior; production route denial has a separate regression test.
+	r.POST("/api/v1/admin/accounts/import/codex-session", h.scopedAdminImportCodexSession)
 	content := `{"access_token":"private-access-fixture","refresh_token":"private-refresh-fixture","email":"test@example.com"}`
 	req := map[string]any{"content": content, "name": "推送账户", "notes": "测试", "group_ids": []int64{2, 14}, "concurrency": 40, "priority": 0, "expires_at": nil, "auto_pause_on_expired": true, "proxy_id": nil, "rate_multiplier": 1, "update_existing": true, "extra": map[string]any{"codex_fingerprint_mode": "off", "openai_oauth_responses_websockets_v2_enabled": true, "openai_oauth_responses_websockets_v2_mode": "shared"}}
 	raw, err := json.Marshal(req)
@@ -146,8 +146,14 @@ func TestScopedCodexImportIdempotencySeparatesKeysAndPolicy(t *testing.T) {
 			c.Request = c.Request.WithContext(adminaccess.WithPrincipal(c.Request.Context(), principal))
 		}
 	})
-	r.Use(h.ScopedAdminKeyAccounts)
-	r.POST("/api/v1/admin/accounts/import/codex-session", h.ImportCodexSession)
+	// Exercise idempotency below the production MFA boundary.
+	r.POST("/api/v1/admin/accounts/import/codex-session", func(c *gin.Context) {
+		if principal != nil {
+			h.scopedAdminImportCodexSession(c)
+		} else {
+			h.ImportCodexSession(c)
+		}
+	})
 	call := func() *httptest.ResponseRecorder {
 		req := httptest.NewRequest("POST", "/api/v1/admin/accounts/import/codex-session", strings.NewReader(`{"content":"{\"access_token\":\"fixture-access\",\"refresh_token\":\"fixture-refresh\"}","group_ids":[2],"update_existing":false}`))
 		req.Header.Set("Content-Type", "application/json")

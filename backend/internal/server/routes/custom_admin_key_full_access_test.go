@@ -41,7 +41,7 @@ func TestAdminFullAccessRegisteredRoutesPreserveFullHandlers(t *testing.T) {
 	for _, tc := range []struct{ path, contains string }{
 		{"/accounts/3", `"group_ids":[2]`},
 		{"/groups/9", `"rate_multiplier":12.5`},
-		{"/proxies/9", `"password":"proxy-secret"`},
+		{"/proxies/9", `"has_password":true`},
 	} {
 		req := httptest.NewRequest("GET", "/api/v1/admin"+tc.path, nil)
 		req.Header.Set("x-api-key", key)
@@ -49,6 +49,7 @@ func TestAdminFullAccessRegisteredRoutesPreserveFullHandlers(t *testing.T) {
 		r.ServeHTTP(w, req)
 		require.Equal(t, 200, w.Code, tc.path+": "+w.Body.String())
 		require.Contains(t, w.Body.String(), tc.contains)
+		require.NotContains(t, w.Body.String(), "proxy-secret")
 	}
 	// 密钥全权模式仍不跨越真人会话边界。
 	for _, path := range []string{"/api/v1/admin/settings/admin-api-keys", "/api/v1/admin/accounts/data"} {

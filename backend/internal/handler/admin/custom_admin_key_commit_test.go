@@ -50,7 +50,7 @@ func (s *scopedCommitAccounts) ScopedAdminWrite(_ context.Context, id int64, _ s
 	return &service.Account{ID: id, Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth}, nil
 }
 
-func TestScopedAdminCredentialWritesInvalidateAfterCommit(t *testing.T) {
+func TestScopedAdminCredentialWritesDeniedBeforeTransactionChanges(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	for _, endpoint := range []string{"single", "bulk"} {
 		for _, mode := range []string{"commit", "rollback", "commit_failure", "write_failure", "name_only"} {
@@ -83,11 +83,7 @@ func TestScopedAdminCredentialWritesInvalidateAfterCommit(t *testing.T) {
 				req.Header.Set("Content-Type", "application/json")
 				w := httptest.NewRecorder()
 				r.ServeHTTP(w, req)
-				want := 200
-				if mode == "write_failure" && endpoint == "single" {
-					want = 503
-				}
-				require.Equal(t, want, w.Code, w.Body.String())
+				require.Equal(t, 403, w.Code, w.Body.String())
 				require.Empty(t, cache.ids, "事务提交前不得使令牌缓存失效")
 				if mode == "rollback" || mode == "write_failure" {
 					mock.ExpectRollback()
@@ -99,11 +95,7 @@ func TestScopedAdminCredentialWritesInvalidateAfterCommit(t *testing.T) {
 					mock.ExpectCommit()
 					require.NoError(t, tx.Commit())
 				}
-				if mode == "commit" {
-					require.Equal(t, []int64{7}, cache.ids)
-				} else {
-					require.Empty(t, cache.ids)
-				}
+				require.Empty(t, cache.ids, "被拒绝的凭据写入不能触发缓存变化")
 				require.Zero(t, cache.transactionContexts, "提交后的缓存清理不能携带已关闭事务")
 				require.NoError(t, mock.ExpectationsWereMet())
 			})

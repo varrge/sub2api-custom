@@ -178,7 +178,7 @@ func TestScopedAdminRegisteredModelDefaultsRequireExplicitPermission(t *testing.
 	}
 }
 
-// 使用真实注册路由，验证旧 Key 的模型读写入口也能进入受限处理器。
+// 真实注册路由保留受限读取；已有凭据的写入必须使用二次验证会话。
 func TestScopedAdminRegisteredLegacyModelInterfaces(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	for _, permission := range []string{"accounts.read", "accounts.models.write", "models.defaults.read"} {
@@ -213,7 +213,7 @@ func TestScopedAdminRegisteredLegacyModelInterfaces(t *testing.T) {
 				{"PUT", "/api/v1/admin/accounts/1", `{"credentials":{"model_mapping":{"custom-model":"upstream-model"}}}`, 200},
 			} {
 				want := tc.want
-				if (tc.method == "GET" && permission != "accounts.read") || (tc.method != "GET" && permission != "accounts.models.write") {
+				if (tc.method == "GET" && permission != "accounts.read") || tc.method != "GET" {
 					want = 403
 				}
 				req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
@@ -227,11 +227,7 @@ func TestScopedAdminRegisteredLegacyModelInterfaces(t *testing.T) {
 					require.Contains(t, w.Body.String(), "custom-model")
 				}
 			}
-			if permission == "accounts.models.write" {
-				require.Equal(t, []int64{1, 1}, accounts.writes)
-			} else {
-				require.Empty(t, accounts.writes)
-			}
+			require.Empty(t, accounts.writes)
 		})
 	}
 }
@@ -252,7 +248,7 @@ func (s *scopedRouteModelAccounts) ScopedAdminWrite(_ context.Context, id int64,
 	return &service.Account{ID: id}, nil
 }
 
-func TestScopedAdminCodexImportRouteReachesValidation(t *testing.T) {
+func TestScopedAdminCodexImportRouteRequiresInteractiveMFA(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	keys := &scopedRouteKeys{}
 	settings := service.NewSettingService(nil, nil)
@@ -270,7 +266,7 @@ func TestScopedAdminCodexImportRouteReachesValidation(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-	require.Equal(t, 400, w.Code, w.Body.String())
+	require.Equal(t, 403, w.Code, w.Body.String())
 }
 
 type scopedRouteCodexAccounts struct {
@@ -290,7 +286,7 @@ func (*scopedRouteCodexAccounts) ScopedAdminUpdateCodex(context.Context, int64, 
 }
 func TestScopedAdminCodexImportAuthenticatedRoute(t *testing.T) {
 	for _, allowed := range []bool{false, true} {
-		t.Run(map[bool]string{false: "未勾选拒绝", true: "无读取权限可导入"}[allowed], func(t *testing.T) {
+		t.Run(map[bool]string{false: "未勾选拒绝", true: "已授权仍需独立验证"}[allowed], func(t *testing.T) {
 			gin.SetMode(gin.TestMode)
 			rule := adminaccess.Rule{Permissions: []string{"accounts.credentials", "accounts.schedule"}, GroupIDs: []int64{2}, AccountTypes: []string{"oauth"}}
 			if allowed {
@@ -310,13 +306,8 @@ func TestScopedAdminCodexImportAuthenticatedRoute(t *testing.T) {
 			req.Header.Set("x-api-key", key)
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, req)
-			if allowed {
-				require.Equal(t, 200, w.Code, w.Body.String())
-				require.Contains(t, w.Body.String(), `"created":1`)
-			} else {
-				require.Equal(t, 403, w.Code, w.Body.String())
-			}
-			require.Equal(t, allowed, api.created)
+			require.Equal(t, 403, w.Code, w.Body.String())
+			require.False(t, api.created)
 			require.NotContains(t, w.Body.String(), "test-private")
 		})
 	}

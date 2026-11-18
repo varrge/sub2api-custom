@@ -52,9 +52,10 @@ func (u *disconnectRectifierUpstream) DoWithTLS(req *http.Request, _ string, _ i
 			u.cancelClient()
 		}
 		message := "Invalid signature in thinking block"
-		if u.kind == "tools" {
+		switch u.kind {
+		case "tools":
 			message = "Invalid signature in tool_use block"
-		} else if u.kind == "budget" {
+		case "budget":
 			message = "thinking.budget_tokens must be >= 1024"
 		}
 		return &http.Response{

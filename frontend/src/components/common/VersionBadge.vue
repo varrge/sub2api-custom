@@ -229,6 +229,7 @@
                   </template>
                   <span v-else>{{ t('version.restartNow') }}</span>
                 </button>
+                <p v-if="restartError" role="alert" class="break-words text-xs text-red-600 dark:text-red-400">{{ restartError }}</p>
               </div>
 
               <!-- Priority 3: Update available for source build - show git pull hint -->
@@ -634,6 +635,7 @@
     <span v-else-if="version" class="text-xs text-gray-500 dark:text-dark-400">
       v{{ version }}
     </span>
+    <TotpStepUpDialog :controller="systemStepUp" />
   </div>
 </template>
 
@@ -650,8 +652,11 @@ import {
 } from '@/api/admin/system'
 import { useClipboard } from '@/composables/useClipboard'
 import Icon from '@/components/icons/Icon.vue'
+import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
+import { useStepUp, isStepUpCancelled } from '@/composables/useStepUp'
 
 const { t } = useI18n()
+const systemStepUp = useStepUp()
 
 const props = defineProps<{
   version?: string
@@ -678,6 +683,7 @@ const dockerImage = computed(() => `ghcr.io/${updateRepository.value.toLowerCase
 // Update process states (local to this component)
 const updating = ref(false)
 const restarting = ref(false)
+const restartError = ref('')
 const needRestart = ref(false)
 const updateError = ref('')
 const updateSuccess = ref(false)
@@ -757,13 +763,14 @@ async function handleUpdate() {
   updateSuccess.value = false
 
   try {
-    const result = await performUpdate()
+    const result = await systemStepUp.run(() => performUpdate())
     successKind.value = 'update'
     updateSuccess.value = true
     needRestart.value = result.need_restart
     // Clear version cache to reflect update completed
     appStore.clearVersionCache()
   } catch (error: unknown) {
+    if (isStepUpCancelled(error)) return
     const err = error as { response?: { data?: { message?: string } }; message?: string }
     updateError.value = err.response?.data?.message || err.message || t('version.updateFailed')
   } finally {
@@ -831,7 +838,8 @@ async function handleRollback() {
   rollbackError.value = ''
 
   try {
-    const result = await rollbackAPI(selectedRollbackVersion.value)
+    const target = selectedRollbackVersion.value
+    const result = await systemStepUp.run(() => rollbackAPI(target))
     successKind.value = 'rollback'
     updateSuccess.value = true
     needRestart.value = result.need_restart
@@ -839,6 +847,7 @@ async function handleRollback() {
     // Clear version cache so the next check reflects the rolled-back version
     appStore.clearVersionCache()
   } catch (error: unknown) {
+    if (isStepUpCancelled(error)) return
     const err = error as { response?: { data?: { message?: string } }; message?: string }
     rollbackError.value = err.response?.data?.message || err.message || t('version.rollbackFailed')
   } finally {
@@ -850,16 +859,19 @@ async function handleRestart() {
   if (restarting.value) return
 
   restarting.value = true
-  restartCountdown.value = 8
+  restartError.value = ''
 
   try {
-    await restartService()
-    // Service will restart, page will reload automatically or show disconnected
+    await systemStepUp.run(() => restartService())
   } catch (error) {
-    // Expected - connection will be lost during restart
-    console.log('Service restarting...')
+    restarting.value = false
+    if (isStepUpCancelled(error)) return
+    const err = error as { message?: string }
+    restartError.value = err.message || t('version.updateFailed')
+    return
   }
 
+  restartCountdown.value = 8
   // Start countdown
   const countdownInterval = setInterval(() => {
     restartCountdown.value--

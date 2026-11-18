@@ -220,6 +220,14 @@ func TestLoadRedisUsernameFromEnvironment(t *testing.T) {
 	require.Equal(t, "app-user", cfg.Redis.Username)
 }
 
+func TestLoadDatabaseSkipMigrationsFromEnvironment(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("DATABASE_SKIP_MIGRATIONS", "true")
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.True(t, cfg.Database.SkipMigrations)
+}
+
 func TestLoadHTTPIngressSafetyDefaults(t *testing.T) {
 	resetViperWithJWTSecret(t)
 	cfg, err := Load()

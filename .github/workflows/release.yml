@@ -80,6 +80,11 @@ jobs:
     with:
       ref: ${{ needs.resolve-ref.outputs.sha }}
 
+  security:
+    needs: [resolve-ref]
+    uses: ./.github/workflows/security-scan.yml
+    with:
+      ref: ${{ needs.resolve-ref.outputs.sha }}
 
   prepare:
     needs: [resolve-ref]
@@ -240,7 +245,7 @@ jobs:
           key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
   release:
-    needs: [prepare, ci, build-binaries]
+    needs: [prepare, ci, security, build-binaries]
     if: ${{ needs.ci.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:

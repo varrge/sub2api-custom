@@ -148,6 +148,13 @@ def main() -> int:
     with open(args.audit, "r", encoding="utf-8") as handle:
         audit = json.load(handle)
 
+    if not isinstance(audit, dict) or audit.get("error") or not (
+        isinstance(audit.get("advisories"), dict)
+        or isinstance(audit.get("vulnerabilities"), dict)
+    ):
+        print("Audit did not return a valid vulnerability report; refusing to pass.", file=sys.stderr)
+        return 1
+
     # 读取异常清单并建立索引，便于快速匹配包名 + advisory。
     exceptions = parse_exceptions(args.exceptions)
     exception_index = {}

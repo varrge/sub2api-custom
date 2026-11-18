@@ -88,12 +88,25 @@ type SetupConfig struct {
 }
 
 type DatabaseConfig struct {
-	Host     string `json:"host" yaml:"host"`
-	Port     int    `json:"port" yaml:"port"`
-	User     string `json:"user" yaml:"user"`
-	Password string `json:"password" yaml:"password"`
-	DBName   string `json:"dbname" yaml:"dbname"`
-	SSLMode  string `json:"sslmode" yaml:"sslmode"`
+	SkipMigrations bool   `json:"-" yaml:"skip_migrations,omitempty"`
+	Host           string `json:"host" yaml:"host"`
+	Port           int    `json:"port" yaml:"port"`
+	User           string `json:"user" yaml:"user"`
+	Password       string `json:"password" yaml:"password"`
+	DBName         string `json:"dbname" yaml:"dbname"`
+	SSLMode        string `json:"sslmode" yaml:"sslmode"`
+}
+
+func (cfg *DatabaseConfig) skipMigrations() bool {
+	if cfg.SkipMigrations {
+		return true
+	}
+	value := strings.TrimSpace(os.Getenv("DATABASE_SKIP_MIGRATIONS"))
+	if value == "" {
+		return false
+	}
+	enabled, err := strconv.ParseBool(value)
+	return err != nil || enabled
 }
 
 type RedisConfig struct {
@@ -229,6 +242,9 @@ func testDatabaseConnection(cfg *DatabaseConfig, openDatabase postgresDatabaseOp
 	}
 	if !isDatabaseNotFoundError(err) {
 		return fmt.Errorf("ping target database failed: %w", err)
+	}
+	if cfg.skipMigrations() {
+		return fmt.Errorf("target database does not exist; provision it with the maintenance role first: %w", err)
 	}
 
 	// Preserve the existing postgres bootstrap path only when the target is missing.
@@ -385,7 +401,14 @@ func initializeDatabase(cfg *SetupConfig) error {
 
 	migrationCtx, cancel := context.WithTimeout(context.Background(), cfg.migrationTimeout())
 	defer cancel()
-	return repository.ApplyMigrations(migrationCtx, db)
+	return initializeDatabaseSchema(migrationCtx, db, &cfg.Database)
+}
+
+func initializeDatabaseSchema(ctx context.Context, db *sql.DB, cfg *DatabaseConfig) error {
+	if cfg.skipMigrations() {
+		return repository.VerifyMigrations(ctx, db)
+	}
+	return repository.ApplyMigrations(ctx, db)
 }
 
 func (cfg *SetupConfig) migrationTimeout() time.Duration {

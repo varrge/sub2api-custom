@@ -17,7 +17,9 @@ func RegisterUserRoutes(
 	auditLog middleware.AuditLogMiddleware,
 	settingService *service.SettingService,
 	panelRateLimiter *middleware.PanelRateLimiter,
+	stepUp ...middleware.StepUpAuthMiddleware,
 ) {
+	adminSensitive := adminSensitiveAction(stepUp)
 	authenticated := v1.Group("")
 	authenticated.Use(gin.HandlerFunc(jwtAuth))
 	authenticated.Use(middleware.BackendModeUserGuard(settingService))
@@ -46,14 +48,14 @@ func RegisterUserRoutes(
 				user.GET("/mcp/authorize", h.MCPOAuth.Preview)
 				user.POST("/mcp/authorize", h.MCPOAuth.Decide)
 			}
-			user.PUT("/password", h.User.ChangePassword)
+			user.PUT("/password", adminSensitive, h.User.ChangePassword)
 			user.PUT("", h.User.UpdateProfile)
 			user.GET("/aff", h.User.GetAffiliate)
 			user.POST("/aff/transfer", h.User.TransferAffiliateQuota)
 			user.POST("/account-bindings/email/send-code", h.User.SendEmailBindingCode)
-			user.POST("/account-bindings/email", h.User.BindEmailIdentity)
-			user.DELETE("/account-bindings/:provider", h.User.UnbindIdentity)
-			user.POST("/auth-identities/bind/start", h.User.StartIdentityBinding)
+			user.POST("/account-bindings/email", adminSensitive, h.User.BindEmailIdentity)
+			user.DELETE("/account-bindings/:provider", adminSensitive, h.User.UnbindIdentity)
+			user.POST("/auth-identities/bind/start", adminSensitive, h.User.StartIdentityBinding)
 			user.GET("/api-keys/:id/usage/daily", panelRateLimiter.Heavy(), h.Usage.GetMyAPIKeyDailyUsage)
 			user.GET("/platform-quotas", h.User.GetMyPlatformQuotas)
 			user.GET("/shared-credit", h.User.GetSharedCredit)
@@ -75,7 +77,7 @@ func RegisterUserRoutes(
 				totp.POST("/send-code", h.Totp.SendVerifyCode)
 				totp.POST("/setup", h.Totp.InitiateSetup)
 				totp.POST("/enable", h.Totp.Enable)
-				totp.POST("/disable", h.Totp.Disable)
+				totp.POST("/disable", adminSensitive, h.Totp.Disable)
 				// 敏感操作二次验证：授予当前会话一段时间的 step-up 权限
 				totp.POST("/step-up", h.Totp.StepUp)
 			}
@@ -83,10 +85,10 @@ func RegisterUserRoutes(
 			passkeys := user.Group("/passkeys")
 			{
 				passkeys.GET("", h.Passkey.List)
-				passkeys.POST("/register/begin", h.Passkey.BeginRegistration)
-				passkeys.POST("/register/finish", h.Passkey.FinishRegistration)
+				passkeys.POST("/register/begin", adminSensitive, h.Passkey.BeginRegistration)
+				passkeys.POST("/register/finish", adminSensitive, h.Passkey.FinishRegistration)
 				passkeys.PATCH("/:id", h.Passkey.Rename)
-				passkeys.DELETE("/:id", h.Passkey.Delete)
+				passkeys.DELETE("/:id", adminSensitive, h.Passkey.Delete)
 			}
 		}
 

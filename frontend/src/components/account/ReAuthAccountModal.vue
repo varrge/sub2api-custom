@@ -177,9 +177,14 @@
       </div>
     </template>
   </BaseDialog>
+  <TotpStepUpDialog :controller="credentialStepUp" />
 </template>
 
 <script setup lang="ts">
+import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
+import { useStepUp } from '@/composables/useStepUp'
+const credentialStepUp = useStepUp()
+
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -372,11 +377,12 @@ const handleExchangeCode = async () => {
 
     try {
       // Update account with new credentials
-      await adminAPI.accounts.update(props.account.id, {
+      const accountID = props.account.id
+      await credentialStepUp.run(() => adminAPI.accounts.update(accountID, {
         type: 'oauth', // OpenAI OAuth is always 'oauth' type
         credentials,
         extra
-      })
+      }))
 
       // Clear error status after successful re-authorization
       await adminAPI.accounts.clearError(props.account.id)
@@ -409,10 +415,11 @@ const handleExchangeCode = async () => {
     const credentials = geminiOAuth.buildCredentials(tokenInfo)
 
     try {
-      await adminAPI.accounts.update(props.account.id, {
+      const accountID = props.account.id
+      await credentialStepUp.run(() => adminAPI.accounts.update(accountID, {
         type: 'oauth',
         credentials
-      })
+      }))
       await adminAPI.accounts.clearError(props.account.id)
       appStore.showSuccess(t('admin.accounts.reAuthorizedSuccess'))
       emit('reauthorized')
@@ -441,10 +448,11 @@ const handleExchangeCode = async () => {
     const credentials = antigravityOAuth.buildCredentials(tokenInfo)
 
     try {
-      await adminAPI.accounts.update(props.account.id, {
+      const accountID = props.account.id
+      await credentialStepUp.run(() => adminAPI.accounts.update(accountID, {
         type: 'oauth',
         credentials
-      })
+      }))
       await adminAPI.accounts.clearError(props.account.id)
       appStore.showSuccess(t('admin.accounts.reAuthorizedSuccess'))
       emit('reauthorized')
@@ -477,11 +485,12 @@ const handleExchangeCode = async () => {
       const extra = claudeOAuth.buildExtraInfo(tokenInfo)
 
       // Update account with new credentials and type
-      await adminAPI.accounts.update(props.account.id, {
+      const accountID = props.account.id
+      await credentialStepUp.run(() => adminAPI.accounts.update(accountID, {
         type: addMethod.value, // Update type based on selected method
         credentials: tokenInfo,
         extra
-      })
+      }))
 
       // Clear error status after successful re-authorization
       await adminAPI.accounts.clearError(props.account.id)
@@ -520,11 +529,12 @@ const handleCookieAuth = async (sessionKey: string) => {
     const extra = claudeOAuth.buildExtraInfo(tokenInfo)
 
     // Update account with new credentials and type
-    await adminAPI.accounts.update(props.account.id, {
+    const accountID = props.account.id
+    await credentialStepUp.run(() => adminAPI.accounts.update(accountID, {
       type: addMethod.value, // Update type based on selected method
       credentials: tokenInfo,
       extra
-    })
+    }))
 
     // Clear error status after successful re-authorization
     await adminAPI.accounts.clearError(props.account.id)

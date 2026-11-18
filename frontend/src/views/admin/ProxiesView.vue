@@ -76,7 +76,7 @@
             <button @click="showImportData = true" class="btn btn-secondary">
               {{ t('admin.proxies.dataImport') }}
             </button>
-            <button @click="showExportDataDialog = true" class="btn btn-secondary">
+            <button @click="exportIncludeSecrets = false; exportReason = ''; showExportDataDialog = true" class="btn btn-secondary">
               {{ selectedCount > 0 ? t('admin.proxies.dataExportSelected') : t('admin.proxies.dataExport') }}
             </button>
             <button @click="showCreateModal = true" class="btn btn-primary">
@@ -141,7 +141,7 @@
                   class="rounded p-0.5 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
                   :title="t('admin.proxies.copyProxyUrl')"
                   @click.stop="copyProxyUrl(row)"
-                  @contextmenu.prevent="toggleCopyMenu(row.id)"
+                  @contextmenu.prevent="toggleCopyMenu(row)"
                 >
                   <Icon name="copy" size="sm" />
                 </button>
@@ -164,18 +164,18 @@
           </template>
 
           <template #cell-auth="{ row }">
-            <div v-if="row.username || row.password" class="flex items-center gap-1.5">
+            <div v-if="row.username || row.has_password || row.password" class="flex items-center gap-1.5">
               <div class="flex flex-col text-xs">
                 <span v-if="row.username" class="text-gray-700 dark:text-gray-200">{{ row.username }}</span>
-                <span v-if="row.password" class="font-mono text-gray-500 dark:text-gray-400">
+                <span v-if="row.has_password || row.password" class="font-mono text-gray-500 dark:text-gray-400">
                   {{ visiblePasswordIds.has(row.id) ? row.password : '••••••' }}
                 </span>
               </div>
               <button
-                v-if="row.password"
+                v-if="row.has_password || row.password"
                 type="button"
                 class="ml-1 rounded p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                @click.stop="visiblePasswordIds.has(row.id) ? visiblePasswordIds.delete(row.id) : visiblePasswordIds.add(row.id)"
+                @click.stop="toggleProxyPassword(row)"
               >
                 <Icon :name="visiblePasswordIds.has(row.id) ? 'eyeOff' : 'eye'" size="sm" />
               </button>
@@ -832,7 +832,11 @@
       :cancel-text="t('common.cancel')"
       @confirm="handleExportData"
       @cancel="showExportDataDialog = false"
-    />
+    >
+      <label class="flex items-center gap-2 text-sm"><input v-model="exportIncludeSecrets" type="checkbox" />{{ t('admin.accounts.dataExportIncludeSecrets') }}</label>
+      <p class="text-xs text-gray-500">{{ t('admin.accounts.dataExportRedactedHint') }}</p>
+      <input v-if="exportIncludeSecrets" v-model.trim="exportReason" maxlength="128" class="input" :placeholder="t('admin.accounts.dataExportReason')" />
+    </ConfirmDialog>
 
     <ImportDataModal
       :show="showImportData"
@@ -960,10 +964,15 @@
         </div>
       </template>
     </BaseDialog>
+    <TotpStepUpDialog :controller="proxyStepUp" />
   </AppLayout>
 </template>
 
 <script setup lang="ts">
+import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
+import { useStepUp, isStepUpCancelled } from '@/composables/useStepUp'
+const proxyStepUp = useStepUp()
+
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -1066,6 +1075,8 @@ const showImportData = ref(false)
 const showDeleteDialog = ref(false)
 const showBatchDeleteDialog = ref(false)
 const showExportDataDialog = ref(false)
+const exportIncludeSecrets = ref(false)
+const exportReason = ref('')
 const showAccountsModal = ref(false)
 const submitting = ref(false)
 const exportingData = ref(false)
@@ -1474,7 +1485,7 @@ const handleUpdateProxy = async () => {
       updateData.password = editForm.password.trim()
     }
 
-    await adminAPI.proxies.update(editingProxy.value.id, updateData)
+    await proxyStepUp.run(() => adminAPI.proxies.update(editingProxy.value!.id, updateData))
     appStore.showSuccess(t('admin.proxies.proxyUpdated'))
     closeEditModal()
     loadProxies()
@@ -1921,15 +1932,18 @@ const formatExportTimestamp = () => {
 
 const handleExportData = async () => {
   if (exportingData.value) return
+  if (exportIncludeSecrets.value && !exportReason.value.trim()) { appStore.showError(t('admin.accounts.dataExportReason')); return }
   exportingData.value = true
   try {
-    const dataPayload = await adminAPI.proxies.exportData(
+    const dataPayload = await proxyStepUp.run(() => adminAPI.proxies.exportData({
+      includeSecrets: exportIncludeSecrets.value, reason: exportReason.value,
+      ...(
       selectedCount.value > 0
         ? { ids: Array.from(selectedProxyIds.value) }
         : {
             filters: buildProxyQueryFilters()
-          }
-    )
+          })
+    }))
     const timestamp = formatExportTimestamp()
     const filename = `sub2api-proxy-${timestamp}.json`
     const blob = new Blob([JSON.stringify(dataPayload, null, 2)], { type: 'application/json' })
@@ -2044,7 +2058,7 @@ function buildProxyUrl(row: any): string {
 }
 
 function getCopyFormats(row: any) {
-  const hasAuth = row.username || row.password
+  const hasAuth = row.username || row.has_password || row.password
   const fullUrl = buildProxyUrl(row)
   const formats = [
     { label: fullUrl, value: fullUrl },
@@ -2057,13 +2071,32 @@ function getCopyFormats(row: any) {
   return formats
 }
 
-function copyProxyUrl(row: any) {
+async function loadProxyPassword(row: Proxy): Promise<boolean> {
+  if (!row.has_password || row.password) return true
+  try {
+    const data = await proxyStepUp.run(() => adminAPI.proxies.exportData({ ids: [row.id], includeSecrets: true, reason: 'View or copy a single proxy credential' }))
+    row.password = data.proxies[0]?.password || ''
+    return true
+  } catch (error: any) {
+    if (!isStepUpCancelled(error)) appStore.showError(error?.message || t('admin.proxies.dataExportFailed'))
+    return false
+  }
+}
+
+async function toggleProxyPassword(row: Proxy) {
+  if (visiblePasswordIds.has(row.id)) { visiblePasswordIds.delete(row.id); return }
+  if (await loadProxyPassword(row)) visiblePasswordIds.add(row.id)
+}
+
+async function copyProxyUrl(row: Proxy) {
+  if (!(await loadProxyPassword(row))) return
   copyToClipboard(buildProxyUrl(row), t('admin.proxies.urlCopied'))
   copyMenuProxyId.value = null
 }
 
-function toggleCopyMenu(id: number) {
-  copyMenuProxyId.value = copyMenuProxyId.value === id ? null : id
+async function toggleCopyMenu(row: Proxy) {
+  if (!(await loadProxyPassword(row))) return
+  copyMenuProxyId.value = copyMenuProxyId.value === row.id ? null : row.id
 }
 
 function copyFormat(value: string) {

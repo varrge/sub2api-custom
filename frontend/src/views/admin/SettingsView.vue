@@ -1688,7 +1688,7 @@
                     {{ t("admin.settings.security.stepUpHint") }}
                   </p>
                 </div>
-                <Toggle v-model="form.step_up_enabled" />
+                <Toggle :model-value="true" disabled />
               </div>
 
               <!-- 会话 IP/UA 绑定 -->
@@ -12577,13 +12577,13 @@ async function testSmtpConnection() {
     const smtpPasswordForTest = smtpPasswordManuallyEdited.value
       ? form.smtp_password
       : "";
-    const result = await adminAPI.settings.testSmtpConnection({
+    const result = await settingsStepUp.run(() => adminAPI.settings.testSmtpConnection({
       smtp_host: form.smtp_host,
       smtp_port: form.smtp_port,
       smtp_username: form.smtp_username,
       smtp_password: smtpPasswordForTest,
       smtp_use_tls: form.smtp_use_tls,
-    });
+    }));
     // API returns { message: "..." } on success, errors are thrown as exceptions
     appStore.showSuccess(
       result.message || t("admin.settings.smtpConnectionSuccess"),
@@ -12608,7 +12608,7 @@ async function sendTestEmail() {
     const smtpPasswordForSend = smtpPasswordManuallyEdited.value
       ? form.smtp_password
       : "";
-    const result = await adminAPI.settings.sendTestEmail({
+    const result = await settingsStepUp.run(() => adminAPI.settings.sendTestEmail({
       email: testEmailAddress.value,
       smtp_host: form.smtp_host,
       smtp_port: form.smtp_port,
@@ -12617,7 +12617,7 @@ async function sendTestEmail() {
       smtp_from_email: form.smtp_from_email,
       smtp_from_name: form.smtp_from_name,
       smtp_use_tls: form.smtp_use_tls,
-    });
+    }));
     // API returns { message: "..." } on success, errors are thrown as exceptions
     appStore.showSuccess(result.message || t("admin.settings.testEmailSent"));
   } catch (error: unknown) {

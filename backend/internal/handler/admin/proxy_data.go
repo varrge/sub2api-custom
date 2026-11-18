@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 )
@@ -15,6 +16,12 @@ import (
 // ExportData exports proxy-only data for migration.
 func (h *ProxyHandler) ExportData(c *gin.Context) {
 	ctx := c.Request.Context()
+	includeSecrets, err := parseExportSecrets(c)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	c.Header("Cache-Control", "no-store")
 
 	selectedIDs, err := parseProxyIDs(c)
 	if err != nil {
@@ -56,6 +63,11 @@ func (h *ProxyHandler) ExportData(c *gin.Context) {
 	for i := range proxies {
 		p := proxies[i]
 		key := buildProxyKey(p.Protocol, p.Host, p.Port, p.Username, p.Password)
+		if !includeSecrets {
+			key = fmt.Sprintf("proxy:%d", p.ID)
+			p.Username = ""
+			p.Password = ""
+		}
 
 		var expiresAt *int64
 		if p.ExpiresAt != nil {
@@ -83,11 +95,17 @@ func (h *ProxyHandler) ExportData(c *gin.Context) {
 	}
 
 	payload := DataPayload{
-		ExportedAt: time.Now().UTC().Format(time.RFC3339),
-		Proxies:    dataProxies,
-		Accounts:   []DataAccount{},
+		SecretsIncluded: includeSecrets,
+		ExportedAt:      time.Now().UTC().Format(time.RFC3339),
+		Proxies:         dataProxies,
+		Accounts:        []DataAccount{},
 	}
 
+	ids := make([]string, 0, len(proxies))
+	for _, p := range proxies {
+		ids = append(ids, strconv.FormatInt(p.ID, 10))
+	}
+	middleware.SetAuditExtra(c, map[string]any{"export_proxy_ids": strings.Join(ids, ","), "export_proxy_count": len(proxies), "secrets_included": includeSecrets, "export_reason": strings.TrimSpace(c.Query("reason"))})
 	response.Success(c, payload)
 }
 

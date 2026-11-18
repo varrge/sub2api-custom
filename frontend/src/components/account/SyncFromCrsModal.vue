@@ -238,9 +238,13 @@
       </div>
     </template>
   </BaseDialog>
+  <TotpStepUpDialog :controller="syncStepUp" />
 </template>
 
 <script setup lang="ts">
+import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
+import { useStepUp } from '@/composables/useStepUp'
+const syncStepUp = useStepUp()
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -370,13 +374,13 @@ const handleSync = async () => {
 
   syncing.value = true
   try {
-    const res = await adminAPI.accounts.syncFromCrs({
+    const res = await syncStepUp.run(() => adminAPI.accounts.syncFromCrs({
       base_url: form.base_url.trim(),
       username: form.username.trim(),
       password: form.password,
       sync_proxies: form.sync_proxies,
       selected_account_ids: [...selectedIds.value]
-    })
+    }))
     result.value = res
     currentStep.value = 'result'
 

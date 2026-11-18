@@ -459,3 +459,18 @@ func findSetCookieValue(cookies []*http.Cookie, name string) string {
 	}
 	return ""
 }
+
+func TestEmailOAuthCallbackCannotAutoBindAdministrator(t *testing.T) {
+	h, client := newOAuthPendingFlowTestHandler(t, false)
+	ctx := context.Background()
+	_, err := client.User.Create().SetEmail("admin@example.test").SetPasswordHash("hash").SetRole(service.RoleAdmin).SetStatus(service.StatusActive).Save(ctx)
+	require.NoError(t, err)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/auth/oauth/google/callback", nil)
+	h.emailOAuthCallbackWithProfile(c, "google", config.EmailOAuthProviderConfig{Enabled: true, ClientID: "fixture", ClientSecret: "fixture", RedirectURL: "https://app.example/api/v1/auth/oauth/google/callback", FrontendRedirectURL: "/auth/oauth/callback"}, "/auth/oauth/callback", "/dashboard", &emailOAuthProfile{Subject: "attacker-fixture", Email: "admin@example.test", EmailVerified: true})
+	require.NotContains(t, rec.Header().Get("Location"), "access_token=")
+	count, err := client.AuthIdentity.Query().Where(authidentity.ProviderTypeEQ("google"), authidentity.ProviderSubjectEQ("attacker-fixture")).Count(ctx)
+	require.NoError(t, err)
+	require.Zero(t, count)
+}

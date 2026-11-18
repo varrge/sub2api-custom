@@ -556,6 +556,7 @@ export async function forgotPassword(request: ForgotPasswordRequest): Promise<Fo
  * Reset password request
  */
 export interface ResetPasswordRequest {
+  totp_code?: string
   email: string
   token: string
   new_password: string

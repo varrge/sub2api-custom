@@ -82,9 +82,14 @@
       </div>
     </template>
   </BaseDialog>
+  <TotpStepUpDialog :controller="importStepUp" />
 </template>
 
 <script setup lang="ts">
+import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
+import { useStepUp } from '@/composables/useStepUp'
+const importStepUp = useStepUp()
+
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -178,7 +183,7 @@ const handleImport = async () => {
     const text = await readFileAsText(file.value)
     const dataPayload = JSON.parse(text)
 
-    const res = await adminAPI.proxies.importData({ data: dataPayload })
+    const res = await importStepUp.run(() => adminAPI.proxies.importData({ data: dataPayload }))
 
     result.value = res
 

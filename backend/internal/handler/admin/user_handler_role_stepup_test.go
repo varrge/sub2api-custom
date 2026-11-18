@@ -60,11 +60,11 @@ func TestUpdateUserKeepAdminRoleSkipsStepUp(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 }
 
-func TestUpdateUserRegularRoleSkipsStepUp(t *testing.T) {
+func TestUpdateUserEmailChangeRequiresStepUp(t *testing.T) {
 	router, _ := setupRoleStepUpRouter(t)
 
 	rec := doJSON(t, router, http.MethodPut, "/api/v1/admin/users/1", map[string]any{"role": "user", "email": "u@example.com"})
-	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
 func TestCreateAdminUserRequiresStepUp(t *testing.T) {
@@ -82,5 +82,11 @@ func TestCreateRegularUserSkipsStepUp(t *testing.T) {
 	rec := doJSON(t, router, http.MethodPost, "/api/v1/admin/users", map[string]any{
 		"email": "new-user@example.com", "password": "pass123", "role": "user",
 	})
+	require.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestUpdateUserUnchangedEmailSkipsStepUp(t *testing.T) {
+	router, svc := setupRoleStepUpRouter(t)
+	rec := doJSON(t, router, http.MethodPut, "/api/v1/admin/users/1", map[string]any{"email": svc.users[0].Email})
 	require.Equal(t, http.StatusOK, rec.Code)
 }

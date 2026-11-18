@@ -187,9 +187,14 @@
       </div>
     </template>
   </BaseDialog>
+  <TotpStepUpDialog :controller="credentialStepUp" />
 </template>
 
 <script setup lang="ts">
+import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
+import { useStepUp } from '@/composables/useStepUp'
+const credentialStepUp = useStepUp()
+
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -416,11 +421,12 @@ const handleExchangeCode = async () => {
     const extra = oauthClient.buildExtraInfo(tokenInfo)
 
     try {
-      const updatedAccount = await adminAPI.accounts.applyOAuthCredentials(props.account.id, {
+      const accountID = props.account.id
+      const updatedAccount = await credentialStepUp.run(() => adminAPI.accounts.applyOAuthCredentials(accountID, {
         type: 'oauth',
         credentials,
         extra
-      })
+      }))
 
       appStore.showSuccess(t('admin.accounts.reAuthorizedSuccess'))
       emit('reauthorized', updatedAccount)
@@ -450,10 +456,11 @@ const handleExchangeCode = async () => {
     const credentials = geminiOAuth.buildCredentials(tokenInfo)
 
     try {
-      await adminAPI.accounts.update(props.account.id, {
+      const accountID = props.account.id
+      await credentialStepUp.run(() => adminAPI.accounts.update(accountID, {
         type: 'oauth',
         credentials
-      })
+      }))
       const updatedAccount = await adminAPI.accounts.clearError(props.account.id)
       appStore.showSuccess(t('admin.accounts.reAuthorizedSuccess'))
       emit('reauthorized', updatedAccount)
@@ -482,10 +489,11 @@ const handleExchangeCode = async () => {
     const credentials = antigravityOAuth.buildCredentials(tokenInfo)
 
     try {
-      await adminAPI.accounts.update(props.account.id, {
+      const accountID = props.account.id
+      await credentialStepUp.run(() => adminAPI.accounts.update(accountID, {
         type: 'oauth',
         credentials
-      })
+      }))
       const updatedAccount = await adminAPI.accounts.clearError(props.account.id)
       appStore.showSuccess(t('admin.accounts.reAuthorizedSuccess'))
       emit('reauthorized', updatedAccount)
@@ -514,11 +522,12 @@ const handleExchangeCode = async () => {
     const extra = grokOAuth.buildExtraInfo(tokenInfo)
 
     try {
-      const updatedAccount = await adminAPI.accounts.applyOAuthCredentials(props.account.id, {
+      const accountID = props.account.id
+      const updatedAccount = await credentialStepUp.run(() => adminAPI.accounts.applyOAuthCredentials(accountID, {
         type: 'oauth',
         credentials,
         extra
-      })
+      }))
 
       appStore.showSuccess(t('admin.accounts.reAuthorizedSuccess'))
       emit('reauthorized', updatedAccount)
@@ -550,11 +559,12 @@ const handleExchangeCode = async () => {
 
       const extra = claudeOAuth.buildExtraInfo(tokenInfo)
 
-      const updatedAccount = await adminAPI.accounts.applyOAuthCredentials(props.account.id, {
+      const accountID = props.account.id
+      const updatedAccount = await credentialStepUp.run(() => adminAPI.accounts.applyOAuthCredentials(accountID, {
         type: addMethod.value as 'oauth' | 'setup-token',
         credentials: tokenInfo as unknown as Record<string, unknown>,
         extra
-      })
+      }))
 
       appStore.showSuccess(t('admin.accounts.reAuthorizedSuccess'))
       emit('reauthorized', updatedAccount)
@@ -589,11 +599,12 @@ const handleCookieAuth = async (sessionKey: string) => {
 
     const extra = claudeOAuth.buildExtraInfo(tokenInfo)
 
-    const updatedAccount = await adminAPI.accounts.applyOAuthCredentials(props.account.id, {
+    const accountID = props.account.id
+    const updatedAccount = await credentialStepUp.run(() => adminAPI.accounts.applyOAuthCredentials(accountID, {
       type: addMethod.value as 'oauth' | 'setup-token',
       credentials: tokenInfo as unknown as Record<string, unknown>,
       extra
-    })
+    }))
 
     appStore.showSuccess(t('admin.accounts.reAuthorizedSuccess'))
     emit('reauthorized', updatedAccount)
@@ -616,11 +627,12 @@ const applyGrokReauthTokenInfo = async (tokenInfo: {
   if (!props.account) return
   const credentials = grokOAuth.buildCredentials(tokenInfo as any)
   const extra = grokOAuth.buildExtraInfo(tokenInfo as any)
-  const updatedAccount = await adminAPI.accounts.applyOAuthCredentials(props.account.id, {
+  const accountID = props.account.id
+  const updatedAccount = await credentialStepUp.run(() => adminAPI.accounts.applyOAuthCredentials(accountID, {
     type: 'oauth',
     credentials,
     extra
-  })
+  }))
   appStore.showSuccess(t('admin.accounts.reAuthorizedSuccess'))
   emit('reauthorized', updatedAccount)
   handleClose()
@@ -647,11 +659,12 @@ const handleValidateRefreshToken = async (refreshTokenInput: string) => {
       const tokenInfo = await openaiOAuth.validateRefreshToken(refreshToken, props.account.proxy_id)
       if (!tokenInfo) return
 
-      const updatedAccount = await adminAPI.accounts.applyOAuthCredentials(props.account.id, {
+      const accountID = props.account.id
+      const updatedAccount = await credentialStepUp.run(() => adminAPI.accounts.applyOAuthCredentials(accountID, {
         type: 'oauth',
         credentials: openaiOAuth.buildCredentials(tokenInfo),
         extra: openaiOAuth.buildExtraInfo(tokenInfo)
-      })
+      }))
       appStore.showSuccess(t('admin.accounts.reAuthorizedSuccess'))
       emit('reauthorized', updatedAccount)
       handleClose()
@@ -675,10 +688,11 @@ const handleValidateRefreshToken = async (refreshTokenInput: string) => {
     const tokenInfo = await antigravityOAuth.validateRefreshToken(refreshToken, props.account.proxy_id)
     if (!tokenInfo) return
 
-    const updatedAccount = await adminAPI.accounts.applyOAuthCredentials(props.account.id, {
+    const accountID = props.account.id
+    const updatedAccount = await credentialStepUp.run(() => adminAPI.accounts.applyOAuthCredentials(accountID, {
       type: 'oauth',
       credentials: antigravityOAuth.buildCredentials(tokenInfo, refreshToken)
-    })
+    }))
     appStore.showSuccess(t('admin.accounts.reAuthorizedSuccess'))
     emit('reauthorized', updatedAccount)
     handleClose()

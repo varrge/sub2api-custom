@@ -80,9 +80,13 @@
       </div>
     </div>
   </div>
+  <TotpStepUpDialog :controller="securityStepUp" />
 </template>
 
 <script setup lang="ts">
+import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
+import { useStepUp } from '@/composables/useStepUp'
+const securityStepUp = useStepUp()
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -167,7 +171,7 @@ const handleDisable = async () => {
       ? { email_code: form.value.emailCode }
       : { password: form.value.password }
 
-    await totpAPI.disable(request)
+    await securityStepUp.run(() => totpAPI.disable(request))
     appStore.showSuccess(t('profile.totp.disableSuccess'))
     emit('success')
   } catch (err: any) {

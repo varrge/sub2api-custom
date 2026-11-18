@@ -153,6 +153,11 @@
         </div>
 
         <!-- Submit Button -->
+        <div>
+          <label for="recovery-totp" class="input-label">{{ t('auth.resetPasswordTotp') }}</label>
+          <input id="recovery-totp" v-model="formData.totpCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" class="input" :disabled="isLoading" />
+          <p class="mt-2 text-sm text-gray-500">{{ t('auth.resetPasswordTotpHint') }}</p>
+        </div>
         <button
           type="submit"
           :disabled="isLoading"
@@ -228,6 +233,7 @@ const email = ref<string>('')
 const token = ref<string>('')
 
 const formData = reactive({
+  totpCode: '',
   password: '',
   confirmPassword: ''
 })
@@ -306,7 +312,8 @@ async function handleSubmit(): Promise<void> {
     await resetPassword({
       email: email.value,
       token: token.value,
-      new_password: formData.password
+      new_password: formData.password,
+      totp_code: formData.totpCode
     })
 
     isSuccess.value = true

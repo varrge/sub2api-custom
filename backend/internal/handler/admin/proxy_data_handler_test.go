@@ -280,3 +280,30 @@ func TestProxyImportDataReusesAndTriggersLatencyProbe(t *testing.T) {
 		return len(adminSvc.testedProxyIDs) == 1
 	}, time.Second, 10*time.Millisecond)
 }
+
+func TestProxyExportDataSecretsRequireExplicitRequest(t *testing.T) {
+	for _, tc := range []struct {
+		query   string
+		status  int
+		secrets bool
+	}{{"", 200, false}, {"?include_secrets=true", 400, false}, {"?include_secrets=true&reason=migration", 200, true}} {
+		router, svc := setupProxyDataRouter()
+		svc.proxies = []service.Proxy{{ID: 1, Name: "test", Protocol: "http", Host: "proxy.test", Port: 8080, Username: "fixture-user", Password: "fixture-password"}}
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/admin/proxies/data"+tc.query, nil))
+		require.Equal(t, tc.status, rec.Code)
+		if tc.status != 200 {
+			continue
+		}
+		var result proxyDataResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &result))
+		require.Equal(t, tc.secrets, result.Data.SecretsIncluded)
+		if tc.secrets {
+			require.Equal(t, "fixture-password", result.Data.Proxies[0].Password)
+		} else {
+			require.NotContains(t, rec.Body.String(), "fixture-password")
+			require.NotContains(t, rec.Body.String(), "fixture-user")
+		}
+		require.Equal(t, "no-store", rec.Header().Get("Cache-Control"))
+	}
+}

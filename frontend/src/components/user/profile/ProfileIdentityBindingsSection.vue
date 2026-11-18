@@ -193,9 +193,13 @@
       </div>
     </div>
   </div>
+  <TotpStepUpDialog :controller="securityStepUp" />
 </template>
 
 <script setup lang="ts">
+import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
+import { useStepUp, isStepUpCancelled } from '@/composables/useStepUp'
+const securityStepUp = useStepUp()
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
@@ -562,14 +566,18 @@ function toggleEmailForm(): void {
   isEmailFormExpanded.value = !isEmailFormExpanded.value
 }
 
-function startBinding(provider: UserAuthProvider): void {
+async function startBinding(provider: UserAuthProvider): Promise<void> {
   if (provider === 'email') {
     return
   }
-  startOAuthBinding(provider, {
-    redirectTo: route.fullPath || '/profile',
-    wechatOAuthSettings: provider === 'wechat' ? wechatOAuthSettings.value : null,
-  })
+  try {
+    await securityStepUp.run(() => startOAuthBinding(provider, {
+      redirectTo: route.fullPath || '/profile',
+      wechatOAuthSettings: provider === 'wechat' ? wechatOAuthSettings.value : null,
+    }))
+  } catch (error) {
+    if (!isStepUpCancelled(error)) appStore.showError((error as { message?: string }).message || t('common.tryAgain'))
+  }
 }
 
 function applyUpdatedUser(user: User): void {
@@ -580,7 +588,7 @@ function applyUpdatedUser(user: User): void {
 async function handleUnbind(provider: BindableProvider, providerLabel: string): Promise<void> {
   unbindingProvider.value = provider
   try {
-    const user = await unbindAuthIdentity(provider)
+    const user = await securityStepUp.run(() => unbindAuthIdentity(provider))
     applyUpdatedUser(user)
     appStore.showSuccess(t('profile.authBindings.unbindSuccess', { providerName: providerLabel }))
   } catch (error) {
@@ -646,11 +654,11 @@ async function bindEmail(): Promise<void> {
   isEmailBindingFormDirty.value = true
   isBindingEmail.value = true
   try {
-    const user = await bindEmailIdentity({
+    const user = await securityStepUp.run(() => bindEmailIdentity({
       email: emailBindingForm.email,
       verify_code: emailBindingForm.verifyCode,
       password: emailBindingForm.password,
-    })
+    }))
     const replacingBoundEmail = emailBound.value
     applyUpdatedUser(user)
     resetEmailBindingForm(user)

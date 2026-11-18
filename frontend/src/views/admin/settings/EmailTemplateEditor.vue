@@ -227,9 +227,13 @@
       </template>
     </div>
   </div>
+  <TotpStepUpDialog :controller="securityStepUp" />
 </template>
 
 <script setup lang="ts">
+import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
+import { useStepUp } from '@/composables/useStepUp'
+const securityStepUp = useStepUp()
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { adminAPI } from "@/api";
@@ -641,14 +645,14 @@ async function saveTemplate() {
   }
   saving.value = true;
   try {
-    const template = await adminAPI.settings.updateEmailTemplate(
+    const template = await securityStepUp.run(() => adminAPI.settings.updateEmailTemplate(
       selectedEvent.value,
       selectedLocale.value,
       {
         subject: subject.value,
         html: html.value,
       },
-    );
+    ));
     applyTemplate(template);
     await refreshPreview();
     appStore.showSuccess(t("admin.settings.emailTemplates.saveSuccess"));
@@ -688,10 +692,10 @@ async function restoreOfficial() {
 
   restoring.value = true;
   try {
-    const template = await adminAPI.settings.restoreOfficialEmailTemplate(
+    const template = await securityStepUp.run(() => adminAPI.settings.restoreOfficialEmailTemplate(
       selectedEvent.value,
       selectedLocale.value,
-    );
+    ));
     applyTemplate(template);
     await refreshPreview();
     appStore.showSuccess(t("admin.settings.emailTemplates.restoreSuccess"));

@@ -778,7 +778,7 @@ async function saveSchedule() {
   savingSchedule.value = true
   try {
     const archive = archivePayload.value
-    await adminAPI.backup.updateSchedule({ ...scheduleForm.value, monthly_archive: archive })
+    await backupStepUp.run(() => adminAPI.backup.updateSchedule({ ...scheduleForm.value, monthly_archive: archive }))
     savedArchive.value = cloneArchive(archive)
     appStore.showSuccess(t('admin.backup.schedule.saved'))
   } catch (error) {
@@ -880,7 +880,7 @@ async function removeBackup(id: string) {
   const archived = !!backups.value.find(record => record.id === id)?.monthly_archive
   if (!window.confirm(t(archived ? 'admin.backup.archive.deleteConfirm' : 'admin.backup.actions.deleteConfirm'))) return
   try {
-    await adminAPI.backup.deleteBackup(id, archived)
+    await backupStepUp.run(() => adminAPI.backup.deleteBackup(id, archived))
     appStore.showSuccess(t('admin.backup.actions.deleted'))
     await loadBackups()
   } catch (error) {

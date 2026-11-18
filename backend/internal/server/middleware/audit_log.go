@@ -52,6 +52,7 @@ func SkipAudit(c *gin.Context) {
 // scalar, non-secret operation summaries. Request bodies and arbitrary maps
 // are never accepted through this channel.
 var auditExtraAllowedKeys = map[string]struct{}{
+	"export_account_ids": {}, "export_proxy_ids": {}, "export_account_count": {}, "export_proxy_count": {}, "secrets_included": {}, "export_reason": {},
 	"admin_key_id": {}, "full_access": {}, "full_access_before": {},
 	"mcp_grant_id": {}, "mcp_tool": {},
 	"result": {}, "error_code": {}, "enabled": {}, "blocking_enabled": {},
@@ -81,7 +82,11 @@ func SetAuditExtra(c *gin.Context, fields map[string]any) {
 			continue
 		}
 		if text, ok := value.(string); ok {
-			value = truncateAuditExtraString(text, 128)
+			limit := 128
+			if key == "export_account_ids" || key == "export_proxy_ids" {
+				limit = 16384
+			}
+			value = truncateAuditExtraString(text, limit)
 		}
 		current[key] = value
 	}

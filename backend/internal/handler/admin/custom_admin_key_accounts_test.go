@@ -148,3 +148,18 @@ func TestScopedAdminBulkUpdateValidatesTargetsAndRedactsResults(t *testing.T) {
 		})
 	}
 }
+
+func TestScopedAdminKeyCannotBypassSensitiveRouteGuards(t *testing.T) {
+	for _, tc := range []struct{ method, path string }{{"PUT", "/:id"}, {"POST", "/bulk-update"}, {"POST", "/import/codex-session"}} {
+		r := gin.New()
+		r.Use(func(c *gin.Context) {
+			c.Request = c.Request.WithContext(adminaccess.WithPrincipal(c.Request.Context(), &adminaccess.Principal{}))
+		})
+		h := &AccountHandler{}
+		r.Use(h.ScopedAdminKeyAccounts)
+		r.Handle(tc.method, "/api/v1/admin/accounts"+tc.path, func(c *gin.Context) { t.Fatal("must not reach mutation") })
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, httptest.NewRequest(tc.method, "/api/v1/admin/accounts"+strings.ReplaceAll(tc.path, ":id", "1"), strings.NewReader(`{}`)))
+		require.Equal(t, 403, rec.Code)
+	}
+}

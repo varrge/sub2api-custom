@@ -119,6 +119,10 @@ func (s *AuthService) loginOrRegisterVerifiedEmailOAuth(
 	if !user.IsActive() {
 		return nil, nil, ErrUserNotActive
 	}
+	// Email ownership cannot establish an administrator identity or bypass an enrolled factor.
+	if user.IsAdmin() || user.TotpEnabled {
+		return nil, nil, infraerrors.Forbidden("OAUTH_INDEPENDENT_LOGIN_REQUIRED", "Use password and authenticator login for this account")
+	}
 	if err := s.ensureEmailOAuthIdentity(ctx, user.ID, EmailOAuthIdentityInput{
 		ProviderType:     providerType,
 		ProviderKey:      providerKey,

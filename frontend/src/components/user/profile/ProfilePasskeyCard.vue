@@ -174,9 +174,13 @@
       </div>
     </div>
   </div>
+  <TotpStepUpDialog :controller="securityStepUp" />
 </template>
 
 <script setup lang="ts">
+import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
+import { useStepUp } from '@/composables/useStepUp'
+const securityStepUp = useStepUp()
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { passkeyAPI, type PasskeyCredentialSummary } from '@/api'
@@ -228,7 +232,7 @@ async function addPasskey(): Promise<void> {
   if (newPassword.value.length === 0) return
   busy.value = true
   try {
-    await passkeyAPI.register(newName.value.trim(), newPassword.value)
+    await securityStepUp.run(() => passkeyAPI.register(newName.value.trim(), newPassword.value))
     appStore.showSuccess(t('profile.passkey.added'))
     cancelAdd()
     await loadCredentials()
@@ -277,7 +281,7 @@ async function confirmDelete(): Promise<void> {
   if (!credential || deletePassword.value.length === 0) return
   busy.value = true
   try {
-    await passkeyAPI.remove(credential.id, deletePassword.value)
+    await securityStepUp.run(() => passkeyAPI.remove(credential.id, deletePassword.value))
     credentials.value = credentials.value.filter((item) => item.id !== credential.id)
     appStore.showSuccess(t('profile.passkey.deleted'))
     closeDeleteDialog()

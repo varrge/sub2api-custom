@@ -1538,9 +1538,14 @@
     @confirm="handleMixedChannelConfirm"
     @cancel="handleMixedChannelCancel"
   />
+  <TotpStepUpDialog :controller="credentialStepUp" />
 </template>
 
 <script setup lang="ts">
+import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
+import { useStepUp } from '@/composables/useStepUp'
+const credentialStepUp = useStepUp()
+
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -2375,12 +2380,13 @@ const submitBulkUpdate = async (baseUpdates: Record<string, unknown>) => {
   submitting.value = true
 
   try {
-    const res = targetMode.value === 'filtered' && props.target?.filters
-      ? await adminAPI.accounts.bulkUpdate({
-        filters: props.target.filters,
+    const filters = props.target?.filters
+    const res = targetMode.value === 'filtered' && filters
+      ? await credentialStepUp.run(() => adminAPI.accounts.bulkUpdate({
+        filters,
         ...updates
-      })
-      : await adminAPI.accounts.bulkUpdate(props.accountIds, updates)
+      }))
+      : await credentialStepUp.run(() => adminAPI.accounts.bulkUpdate(props.accountIds, updates))
     const success = res.success || 0
     const failed = res.failed || 0
     const inherited = res.long_context_inherited_count || 0

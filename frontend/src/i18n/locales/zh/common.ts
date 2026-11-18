@@ -456,6 +456,8 @@ export default {
     rememberedPassword: '想起密码了？',
     // 重置密码
     resetPasswordTitle: '设置新密码',
+    resetPasswordTotp: '管理员身份验证器验证码',
+    resetPasswordTotpHint: '管理员必须填写原有身份验证器的 6 位验证码。普通用户可留空；身份验证器丢失时联系服务器运维进行离线恢复。',
     resetPasswordHint: '请在下方输入您的新密码。',
     newPassword: '新密码',
     newPasswordPlaceholder: '输入新密码',

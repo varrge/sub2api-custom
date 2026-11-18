@@ -38,8 +38,8 @@ func StepUpSessionKey(c *gin.Context, userID int64) string {
 
 // NewStepUpAuthMiddleware 创建敏感操作 step-up 2FA 门控中间件。
 //
-// 功能开关 step_up_enabled（默认关闭）关闭时中间件直接放行，行为与门控引入前一致。
-// 开启时的通过条件（全部满足）：
+// 敏感操作始终要求独立验证；历史 step_up_enabled 开关不能解除保护。
+// 通过条件（全部满足）：
 //  1. 必须是 JWT 认证的真人会话——admin API key（机器凭证）一律拒绝
 //  2. 当前用户已启用 TOTP（未启用则拒绝并提示先启用 2FA）
 //  3. 当前会话在有效期内完成过 TOTP step-up 验证（POST /api/v1/user/totp/step-up）
@@ -112,11 +112,7 @@ func MachineCredentialReason(c *gin.Context) (string, bool) {
 }
 
 func enforceStepUp(c *gin.Context, grantChecker stepUpGrantChecker, userReader stepUpUserReader, settings stepUpSettingReader) bool {
-	// 功能开关关闭时直接放行（含 admin API key），恢复门控引入前的行为。
-	// settings 为 nil 时保持门控（fail-closed）：正常装配不会出现 nil。
-	if settings != nil && !settings.IsStepUpEnabled(c.Request.Context()) {
-		return true
-	}
+	// Keep the legacy settings argument for callers; never use it to bypass sensitive operations.
 
 	if reason, machine := MachineCredentialReason(c); machine {
 		AbortWithError(c, 403, reason,
@@ -131,7 +127,7 @@ func enforceStepUp(c *gin.Context, grantChecker stepUpGrantChecker, userReader s
 	}
 
 	user, err := userReader.GetByID(c.Request.Context(), subject.UserID)
-	if err != nil {
+	if err != nil || user == nil {
 		AbortWithError(c, 500, "INTERNAL_ERROR", "Failed to load user")
 		return false
 	}

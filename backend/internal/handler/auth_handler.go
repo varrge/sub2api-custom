@@ -262,7 +262,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	// Check if TOTP 2FA is enabled for this user
-	if h.totpService != nil && h.settingSvc.IsTotpEnabled(c.Request.Context()) && user.TotpEnabled {
+	if user.TotpEnabled {
+		if h.totpService == nil {
+			response.ErrorFrom(c, service.ErrServiceUnavailable)
+			return
+		}
 		// Create a temporary login session for 2FA
 		tempToken, err := h.totpService.CreateLoginSession(c.Request.Context(), user.ID, user.Email)
 		if err != nil {
@@ -312,13 +316,6 @@ func (h *AuthHandler) Login2FA(c *gin.Context) {
 	// Get the login session
 	session, err := h.totpService.GetLoginSession(c.Request.Context(), req.TempToken)
 	if err != nil || session == nil {
-		tokenPrefix := ""
-		if len(req.TempToken) >= 8 {
-			tokenPrefix = req.TempToken[:8]
-		}
-		slog.Debug("login_2fa_session_invalid",
-			"temp_token_prefix", tokenPrefix,
-			"error", err)
 		response.BadRequest(c, "Invalid or expired 2FA session")
 		return
 	}
@@ -635,6 +632,7 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 
 // ResetPasswordRequest 重置密码请求
 type ResetPasswordRequest struct {
+	TotpCode    string `json:"totp_code"`
 	Email       string `json:"email" binding:"required,email"`
 	Token       string `json:"token" binding:"required"`
 	NewPassword string `json:"new_password" binding:"required,min=6"`
@@ -655,7 +653,8 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	}
 
 	// Reset password
-	if err := h.authService.ResetPassword(c.Request.Context(), req.Email, req.Token, req.NewPassword); err != nil {
+	c.Header("Cache-Control", "no-store")
+	if err := h.authService.ResetPassword(c.Request.Context(), req.Email, req.Token, req.NewPassword, req.TotpCode); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}

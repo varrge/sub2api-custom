@@ -68,9 +68,13 @@
       </form>
     </div>
   </div>
+  <TotpStepUpDialog :controller="securityStepUp" />
 </template>
 
 <script setup lang="ts">
+import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
+import { useStepUp } from '@/composables/useStepUp'
+const securityStepUp = useStepUp()
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -105,7 +109,7 @@ const handleChangePassword = async () => {
 
   loading.value = true
   try {
-    await userAPI.changePassword(form.value.old_password, form.value.new_password)
+    await securityStepUp.run(() => userAPI.changePassword(form.value.old_password, form.value.new_password))
     form.value = { old_password: '', new_password: '', confirm_password: '' }
     appStore.showSuccess(t('profile.passwordChangeSuccess'))
   } catch (error: unknown) {

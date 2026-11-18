@@ -143,29 +143,17 @@ func TestEnforceStepUpPassesWithGrant(t *testing.T) {
 	require.False(t, c.IsAborted())
 }
 
-// 功能开关关闭时：不论 TOTP/grant/凭证类型，一律放行（恢复门控引入前行为）。
-func TestEnforceStepUpDisabledSkipsAllChecks(t *testing.T) {
-	disabled := stubStepUpSettingReader{enabled: false}
-
-	t.Run("no totp, no grant", func(t *testing.T) {
-		c, _ := newStepUpTestContext(t)
-		c.Set(string(ContextKeyUser), AuthSubject{UserID: 1})
-
-		ok := enforceStepUp(c, stubStepUpGrantChecker{granted: false}, stubStepUpUserReader{user: &service.User{ID: 1, TotpEnabled: false}}, disabled)
-
-		require.True(t, ok)
-		require.False(t, c.IsAborted())
-	})
-
-	t.Run("admin api key", func(t *testing.T) {
-		c, _ := newStepUpTestContext(t)
-		c.Set("auth_method", service.AuditAuthMethodAdminAPIKey)
-
-		ok := enforceStepUp(c, stubStepUpGrantChecker{granted: false}, stubStepUpUserReader{user: nil, err: errors.New("should not be called")}, disabled)
-
-		require.True(t, ok)
-		require.False(t, c.IsAborted())
-	})
+func TestEnforceStepUpDisabledStillRequiresIndependentProof(t *testing.T) {
+	c, rec := newStepUpTestContext(t)
+	c.Set(string(ContextKeyUser), AuthSubject{UserID: 1})
+	ok := enforceStepUp(c, stubStepUpGrantChecker{}, stubStepUpUserReader{user: &service.User{ID: 1, TotpEnabled: true}}, stubStepUpSettingReader{enabled: false})
+	require.False(t, ok)
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	require.Contains(t, rec.Body.String(), "STEP_UP_REQUIRED")
+	c, rec = newStepUpTestContext(t)
+	c.Set("auth_method", service.AuditAuthMethodAdminAPIKey)
+	require.False(t, enforceStepUp(c, nil, nil, stubStepUpSettingReader{enabled: false}))
+	require.Contains(t, rec.Body.String(), "STEP_UP_ADMIN_API_KEY_FORBIDDEN")
 }
 
 // settings 为 nil 时保持门控（fail-closed），避免装配缺陷静默关闭安全控制。

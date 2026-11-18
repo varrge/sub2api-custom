@@ -14,6 +14,7 @@ import (
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 )
@@ -33,7 +34,8 @@ type DataPayload struct {
 	Accounts   []DataAccount `json:"accounts"`
 	// SkippedShadows 记录导出时被排除的 spark 影子账号数量(见 ExportData)。仅作可见性提示,
 	// 导入侧忽略该字段;omitempty 保持向后兼容。
-	SkippedShadows int `json:"skipped_shadows,omitempty"`
+	SkippedShadows  int  `json:"skipped_shadows,omitempty"`
+	SecretsIncluded bool `json:"secrets_included"`
 }
 
 type DataProxy struct {
@@ -52,8 +54,7 @@ type DataProxy struct {
 }
 
 // DataAccount 是管理员显式备份导出使用的账号结构，故意不走 dto.Account 的脱敏路径，
-// Credentials 原文返回。这是"管理员备份"这一显式行为的一部分；如未来需要导出脱敏版本，
-// 应新增独立结构而非修改这里。
+// Credentials 仅在显式请求 include_secrets 且通过独立验证时返回；默认导出为空。
 // 注意:本结构不含 parent_account_id/quota_dimension——spark 影子账号在 ExportData 处被显式
 // 排除(影子不持凭据、通用凭据型导入强制 credentials 非空无法重建父子链接),不在此表达。
 // 影子的独立调度配置(priority/并发/分组/status 管理员可单独调)亦不在本备份范围,属已知局限
@@ -100,6 +101,12 @@ func buildProxyKey(protocol, host string, port int, username, password string) s
 
 func (h *AccountHandler) ExportData(c *gin.Context) {
 	ctx := c.Request.Context()
+	includeSecrets, err := parseExportSecrets(c)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	c.Header("Cache-Control", "no-store")
 
 	selectedIDs, err := parseAccountIDs(c)
 	if err != nil {
@@ -159,6 +166,11 @@ func (h *AccountHandler) ExportData(c *gin.Context) {
 	for i := range proxies {
 		p := proxies[i]
 		key := buildProxyKey(p.Protocol, p.Host, p.Port, p.Username, p.Password)
+		if !includeSecrets {
+			key = fmt.Sprintf("proxy:%d", p.ID)
+			p.Username = ""
+			p.Password = ""
+		}
 		proxyKeyByID[p.ID] = key
 
 		var expiresAt *int64
@@ -214,16 +226,42 @@ func (h *AccountHandler) ExportData(c *gin.Context) {
 			ExpiresAt:          expiresAt,
 			AutoPauseOnExpired: &acc.AutoPauseOnExpired,
 		})
+		if !includeSecrets {
+			dataAccounts[len(dataAccounts)-1].Credentials = map[string]any{}
+			dataAccounts[len(dataAccounts)-1].Extra = nil
+			dataAccounts[len(dataAccounts)-1].Notes = nil
+		}
 	}
 
 	payload := DataPayload{
-		ExportedAt:     time.Now().UTC().Format(time.RFC3339),
-		Proxies:        dataProxies,
-		Accounts:       dataAccounts,
-		SkippedShadows: skippedShadows,
+		ExportedAt:      time.Now().UTC().Format(time.RFC3339),
+		Proxies:         dataProxies,
+		Accounts:        dataAccounts,
+		SkippedShadows:  skippedShadows,
+		SecretsIncluded: includeSecrets,
 	}
+	ids := make([]string, 0, len(accounts))
+	for _, account := range accounts {
+		ids = append(ids, strconv.FormatInt(account.ID, 10))
+	}
+	middleware.SetAuditExtra(c, map[string]any{"export_account_ids": strings.Join(ids, ","), "export_account_count": len(accounts), "export_proxy_count": len(proxies), "secrets_included": includeSecrets, "export_reason": strings.TrimSpace(c.Query("reason"))})
 
 	response.Success(c, payload)
+}
+
+func parseExportSecrets(c *gin.Context) (bool, error) {
+	raw := c.Query("include_secrets")
+	if raw == "" || raw == "false" {
+		return false, nil
+	}
+	if raw != "true" {
+		return false, fmt.Errorf("include_secrets must be true or false")
+	}
+	reason := strings.TrimSpace(c.Query("reason"))
+	if reason == "" || len([]rune(reason)) > 128 {
+		return false, fmt.Errorf("secret export requires a reason of 1–128 characters")
+	}
+	return true, nil
 }
 
 func (h *AccountHandler) ImportData(c *gin.Context) {

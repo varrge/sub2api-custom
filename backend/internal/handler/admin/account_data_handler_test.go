@@ -116,7 +116,7 @@ func TestExportDataIncludesSecrets(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/accounts/data", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/accounts/data?include_secrets=true&reason=backup", nil)
 	router.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)
 
@@ -129,6 +129,33 @@ func TestExportDataIncludesSecrets(t *testing.T) {
 	require.Equal(t, "pass", resp.Data.Proxies[0].Password)
 	require.Len(t, resp.Data.Accounts, 1)
 	require.Equal(t, "secret", resp.Data.Accounts[0].Credentials["token"])
+}
+
+func TestExportDataDefaultOmitsAllSecretContainers(t *testing.T) {
+	router, svc := setupAccountDataRouter()
+	proxyID := int64(11)
+	notes := "private-note"
+	svc.proxies = []service.Proxy{{ID: proxyID, Name: "proxy", Protocol: "http", Host: "127.0.0.1", Port: 8080, Username: "private-user", Password: "private-password"}}
+	svc.accounts = []service.Account{{ID: 21, Name: "test", ProxyID: &proxyID, Notes: &notes, Credentials: map[string]any{"api_key": "private-key", "future_secret": "private-future"}, Extra: map[string]any{"unknown": "private-extra"}}}
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/admin/accounts/data", nil))
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "no-store", rec.Header().Get("Cache-Control"))
+	require.NotContains(t, rec.Body.String(), "private-")
+	var resp dataResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Empty(t, resp.Data.Accounts[0].Credentials)
+	require.Equal(t, "proxy:11", resp.Data.Proxies[0].ProxyKey)
+	require.Equal(t, "private-key", svc.accounts[0].Credentials["api_key"])
+}
+
+func TestExportDataSecretsRequireExplicitValidOptionAndReason(t *testing.T) {
+	for _, query := range []string{"include_secrets=true", "include_secrets=yes&reason=backup"} {
+		router, _ := setupAccountDataRouter()
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/admin/accounts/data?"+query, nil))
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+	}
 }
 
 func TestExportDataWithoutProxies(t *testing.T) {
@@ -327,7 +354,7 @@ func TestExportDataExcludesCodexTicketMaterial(t *testing.T) {
 	}
 	adminSvc.accounts = []service.Account{{ID: 21, Name: "account", Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth, Credentials: map[string]any{"access_token": "backup-token"}, Extra: extra}}
 	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/admin/accounts/data?include_proxies=false", nil))
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/admin/accounts/data?include_proxies=false&include_secrets=true&reason=backup", nil))
 	require.Equal(t, http.StatusOK, rec.Code)
 	var resp dataResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))

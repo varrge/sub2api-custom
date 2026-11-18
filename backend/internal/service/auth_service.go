@@ -71,6 +71,9 @@ type JWTClaims struct {
 
 // AuthService 认证服务
 type AuthService struct {
+	passwordResetTOTP interface {
+		VerifyCode(context.Context, int64, string) error
+	}
 	entClient             *dbent.Client
 	userRepo              UserRepository
 	redeemRepo            RedeemCodeRepository
@@ -850,6 +853,10 @@ func (s *AuthService) loginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 
 	if !user.IsActive() {
 		return nil, nil, ErrUserNotActive
+	}
+
+	if user.IsAdmin() || user.TotpEnabled {
+		return nil, nil, infraerrors.Forbidden("OAUTH_INDEPENDENT_LOGIN_REQUIRED", "Use password and authenticator login for this account")
 	}
 
 	if user.Username == "" && username != "" {
@@ -1640,7 +1647,7 @@ func (s *AuthService) RequestPasswordResetAsync(ctx context.Context, email, fron
 
 // ResetPassword 重置密码
 // Security: Increments TokenVersion to invalidate all existing JWT tokens
-func (s *AuthService) ResetPassword(ctx context.Context, email, token, newPassword string) error {
+func (s *AuthService) ResetPassword(ctx context.Context, email, token, newPassword string, totpCodes ...string) error {
 	// Check if password reset is enabled
 	if !s.IsPasswordResetEnabled(ctx) {
 		return infraerrors.Forbidden("PASSWORD_RESET_DISABLED", "password reset is not enabled")
@@ -1650,8 +1657,8 @@ func (s *AuthService) ResetPassword(ctx context.Context, email, token, newPasswo
 		return ErrServiceUnavailable
 	}
 
-	// Verify and consume the reset token (one-time use)
-	if err := s.emailService.ConsumePasswordResetToken(ctx, email, token); err != nil {
+	// Check the email token before revealing recovery requirements; consume only after MFA.
+	if err := s.emailService.VerifyPasswordResetToken(ctx, email, token); err != nil {
 		return err
 	}
 
@@ -1668,6 +1675,28 @@ func (s *AuthService) ResetPassword(ctx context.Context, email, token, newPasswo
 	// Check if user is active
 	if !user.IsActive() {
 		return ErrUserNotActive
+	}
+
+	if user.IsAdmin() {
+		if !user.TotpEnabled {
+			return infraerrors.Forbidden("ADMIN_RECOVERY_OFFLINE_REQUIRED", "Administrator recovery requires the existing authenticator; contact the server operator for offline recovery")
+		}
+		code := ""
+		if len(totpCodes) > 0 {
+			code = strings.TrimSpace(totpCodes[0])
+		}
+		if code == "" {
+			return infraerrors.Forbidden("ADMIN_RECOVERY_TOTP_REQUIRED", "Enter the code from your existing authenticator to reset an administrator password")
+		}
+		if s.passwordResetTOTP == nil {
+			return ErrServiceUnavailable
+		}
+		if err := s.passwordResetTOTP.VerifyCode(ctx, user.ID, code); err != nil {
+			return err
+		}
+	}
+	if err := s.emailService.ConsumePasswordResetToken(ctx, email, token); err != nil {
+		return err
 	}
 
 	// Hash new password

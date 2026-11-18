@@ -62,10 +62,11 @@ type TotpSetupSession struct {
 
 // TotpLoginSession represents a pending 2FA login session
 type TotpLoginSession struct {
-	UserID           int64
-	Email            string
-	TokenExpiry      time.Time
-	PendingOAuthBind *PendingOAuthBindLoginSession `json:"pending_oauth_bind,omitempty"`
+	CredentialVersion *int64 `json:"credential_version,omitempty"`
+	UserID            int64
+	Email             string
+	TokenExpiry       time.Time
+	PendingOAuthBind  *PendingOAuthBindLoginSession `json:"pending_oauth_bind,omitempty"`
 }
 
 type PendingOAuthBindLoginSession struct {
@@ -137,7 +138,7 @@ func (s *TotpService) GetStatus(ctx context.Context, userID int64) (*TotpStatus,
 	return &TotpStatus{
 		Enabled:        user.TotpEnabled,
 		EnabledAt:      user.TotpEnabledAt,
-		FeatureEnabled: featureEnabled,
+		FeatureEnabled: featureEnabled || user.IsAdmin() || user.TotpEnabled,
 	}, nil
 }
 
@@ -169,11 +170,6 @@ func (s *TotpService) verifyIdentity(ctx context.Context, user *User, emailCode,
 // InitiateSetup starts the TOTP setup process
 // If email verification is enabled, emailCode is required; otherwise password is required
 func (s *TotpService) InitiateSetup(ctx context.Context, userID int64, emailCode, password string) (*TotpSetupResponse, error) {
-	// Check if TOTP feature is enabled globally
-	if !s.settingService.IsTotpEnabled(ctx) {
-		return nil, ErrTotpNotEnabled
-	}
-
 	// Get user and check if TOTP is already enabled
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
@@ -182,6 +178,10 @@ func (s *TotpService) InitiateSetup(ctx context.Context, userID int64, emailCode
 
 	if user.TotpEnabled {
 		return nil, ErrTotpAlreadyEnabled
+	}
+	// Administrators must be able to enroll before opening mandatory protected settings.
+	if !user.IsAdmin() && !s.settingService.IsTotpEnabled(ctx) {
+		return nil, ErrTotpNotEnabled
 	}
 
 	if err := s.verifyIdentity(ctx, user, emailCode, password); err != nil {
@@ -224,8 +224,14 @@ func (s *TotpService) InitiateSetup(ctx context.Context, userID int64, emailCode
 
 // CompleteSetup completes the TOTP setup by verifying the code
 func (s *TotpService) CompleteSetup(ctx context.Context, userID int64, totpCode, setupToken string) error {
-	// Check if TOTP feature is enabled globally
-	if !s.settingService.IsTotpEnabled(ctx) {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("get user: %w", err)
+	}
+	if user.TotpEnabled {
+		return ErrTotpAlreadyEnabled
+	}
+	if !user.IsAdmin() && !s.settingService.IsTotpEnabled(ctx) {
 		return ErrTotpNotEnabled
 	}
 
@@ -249,42 +255,10 @@ func (s *TotpService) CompleteSetup(ctx context.Context, userID int64, totpCode,
 		return ErrTotpInvalidCode
 	}
 
-	setupSecretPrefix := "N/A"
-	if len(session.Secret) >= 4 {
-		setupSecretPrefix = session.Secret[:4]
-	}
-	slog.Debug("totp_complete_setup_before_encrypt",
-		"user_id", userID,
-		"secret_len", len(session.Secret),
-		"secret_prefix", setupSecretPrefix)
-
 	// Encrypt the secret
 	encryptedSecret, err := s.encryptor.Encrypt(session.Secret)
 	if err != nil {
 		return fmt.Errorf("encrypt totp secret: %w", err)
-	}
-
-	slog.Debug("totp_complete_setup_encrypted",
-		"user_id", userID,
-		"encrypted_len", len(encryptedSecret))
-
-	// Verify encryption by decrypting
-	decrypted, decErr := s.encryptor.Decrypt(encryptedSecret)
-	if decErr != nil {
-		slog.Debug("totp_complete_setup_verify_failed",
-			"user_id", userID,
-			"error", decErr)
-	} else {
-		decryptedPrefix := "N/A"
-		if len(decrypted) >= 4 {
-			decryptedPrefix = decrypted[:4]
-		}
-		slog.Debug("totp_complete_setup_verified",
-			"user_id", userID,
-			"original_len", len(session.Secret),
-			"decrypted_len", len(decrypted),
-			"match", session.Secret == decrypted,
-			"decrypted_prefix", decryptedPrefix)
 	}
 
 	// Update user with encrypted TOTP secret
@@ -336,7 +310,10 @@ func (s *TotpService) VerifyCode(ctx context.Context, userID int64, code string)
 
 	// Check rate limiting
 	attempts, err := s.cache.GetVerifyAttempts(ctx, userID)
-	if err == nil && attempts >= maxTotpAttempts {
+	if err != nil {
+		return infraerrors.ServiceUnavailable("TOTP_VERIFY_UNAVAILABLE", "Two-factor verification is temporarily unavailable")
+	}
+	if attempts >= maxTotpAttempts {
 		return ErrTotpTooManyAttempts
 	}
 
@@ -370,27 +347,18 @@ func (s *TotpService) VerifyCode(ctx context.Context, userID int64, code string)
 		return infraerrors.InternalServer("TOTP_VERIFY_ERROR", "failed to verify totp code")
 	}
 
-	secretPrefix := "N/A"
-	if len(secret) >= 4 {
-		secretPrefix = secret[:4]
-	}
-	slog.Debug("totp_verify_decrypted",
-		"user_id", userID,
-		"secret_len", len(secret),
-		"secret_prefix", secretPrefix)
-
 	// Verify the code
 	valid := totp.Validate(code, secret)
 	slog.Debug("totp_verify_result",
 		"user_id", userID,
 		"valid", valid,
-		"secret_len", len(secret),
-		"secret_prefix", secretPrefix,
 		"server_time", time.Now().UTC().Format(time.RFC3339))
 
 	if !valid {
 		// Increment failed attempts
-		_, _ = s.cache.IncrementVerifyAttempts(ctx, userID)
+		if _, err := s.cache.IncrementVerifyAttempts(ctx, userID); err != nil {
+			return infraerrors.ServiceUnavailable("TOTP_VERIFY_UNAVAILABLE", "Two-factor verification is temporarily unavailable")
+		}
 		return ErrTotpInvalidCode
 	}
 
@@ -446,6 +414,11 @@ func (s *TotpService) createLoginSession(
 	email string,
 	pendingOAuthBind *PendingOAuthBindLoginSession,
 ) (string, error) {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	version := resolvedTokenVersion(user)
 	// Generate a random temp token
 	tempToken, err := generateRandomToken(32)
 	if err != nil {
@@ -453,10 +426,11 @@ func (s *TotpService) createLoginSession(
 	}
 
 	session := &TotpLoginSession{
-		UserID:           userID,
-		Email:            email,
-		TokenExpiry:      time.Now().Add(totpLoginTTL),
-		PendingOAuthBind: pendingOAuthBind,
+		CredentialVersion: &version,
+		UserID:            userID,
+		Email:             email,
+		TokenExpiry:       time.Now().Add(totpLoginTTL),
+		PendingOAuthBind:  pendingOAuthBind,
 	}
 
 	if err := s.cache.SetLoginSession(ctx, tempToken, session, totpLoginTTL); err != nil {
@@ -468,7 +442,19 @@ func (s *TotpService) createLoginSession(
 
 // GetLoginSession retrieves a login session
 func (s *TotpService) GetLoginSession(ctx context.Context, tempToken string) (*TotpLoginSession, error) {
-	return s.cache.GetLoginSession(ctx, tempToken)
+	session, err := s.cache.GetLoginSession(ctx, tempToken)
+	if err != nil || session == nil {
+		return nil, err
+	}
+	user, err := s.userRepo.GetByID(ctx, session.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if session.CredentialVersion == nil || *session.CredentialVersion != resolvedTokenVersion(user) || !user.IsActive() || time.Now().After(session.TokenExpiry) {
+		_ = s.cache.DeleteLoginSession(ctx, tempToken)
+		return nil, ErrInvalidToken
+	}
+	return session, nil
 }
 
 // DeleteLoginSession deletes a login session

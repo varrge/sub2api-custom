@@ -1656,7 +1656,16 @@ func (h *AuthHandler) bindPendingOAuthLogin(c *gin.Context, provider string) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	if h.totpService != nil && h.settingSvc.IsTotpEnabled(c.Request.Context()) && user.TotpEnabled {
+
+	if user.IsAdmin() && !user.TotpEnabled {
+		response.ErrorFrom(c, infraerrors.Forbidden("STEP_UP_TOTP_NOT_ENABLED", "Enable an authenticator before binding an administrator identity"))
+		return
+	}
+	if user.TotpEnabled {
+		if h.totpService == nil {
+			response.ErrorFrom(c, service.ErrServiceUnavailable)
+			return
+		}
 		tempToken, err := h.totpService.CreatePendingOAuthBindLoginSession(
 			c.Request.Context(),
 			user.ID,
@@ -1957,6 +1966,10 @@ func (h *AuthHandler) ExchangePendingOAuthCompletion(c *gin.Context) {
 			response.ErrorFrom(c, err)
 			return
 		}
+		if loginUser.IsAdmin() || loginUser.TotpEnabled {
+			response.ErrorFrom(c, infraerrors.Forbidden("OAUTH_INDEPENDENT_LOGIN_REQUIRED", "Use password and authenticator login for this account"))
+			return
+		}
 		if err := ensureLoginUserActive(loginUser); err != nil {
 			clearCookies()
 			response.ErrorFrom(c, err)
@@ -2028,6 +2041,21 @@ func (h *AuthHandler) ExchangePendingOAuthCompletion(c *gin.Context) {
 		decisionReq = oauthAdoptionDecisionRequest{
 			AdoptDisplayName: &adoptDisplayName,
 			AdoptAvatar:      &adoptAvatar,
+		}
+	}
+
+	if strings.EqualFold(strings.TrimSpace(session.Intent), oauthIntentBindCurrentUser) {
+		if session.TargetUserID == nil {
+			response.Unauthorized(c, "Missing binding target")
+			return
+		}
+		target, err := h.userService.GetByID(c.Request.Context(), *session.TargetUserID)
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		if target.IsAdmin() && !h.enforceAdministratorOAuthBinding(c, target) {
+			return
 		}
 	}
 

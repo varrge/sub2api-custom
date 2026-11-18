@@ -457,6 +457,8 @@ export default {
     rememberedPassword: 'Remembered your password?',
     // Reset password
     resetPasswordTitle: 'Set New Password',
+    resetPasswordTotp: 'Administrator authenticator code',
+    resetPasswordTotpHint: 'Administrators must enter the 6-digit code from their existing authenticator. Other users may leave this blank. Contact the server operator for offline recovery if it is lost.',
     resetPasswordHint: 'Enter your new password below.',
     newPassword: 'New Password',
     newPasswordPlaceholder: 'Enter your new password',

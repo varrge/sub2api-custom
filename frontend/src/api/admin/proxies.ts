@@ -233,6 +233,8 @@ export async function batchDelete(ids: number[]): Promise<{
 }
 
 export async function exportData(options?: {
+  includeSecrets?: boolean
+  reason?: string
   ids?: number[]
   filters?: {
     protocol?: string
@@ -243,6 +245,7 @@ export async function exportData(options?: {
   }
 }): Promise<AdminDataPayload> {
   const params: Record<string, string> = {}
+  if (options?.includeSecrets) { params.include_secrets = "true"; params.reason = options.reason || "" }
   if (options?.ids && options.ids.length > 0) {
     params.ids = options.ids.join(',')
   } else if (options?.filters) {

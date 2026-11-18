@@ -1031,6 +1031,7 @@ export interface ClaudeModel {
 }
 
 export interface Proxy {
+  has_password?: boolean
   id: number
   name: string
   protocol: ProxyProtocol
@@ -1778,6 +1779,7 @@ export interface UpdateProxyRequest {
 }
 
 export interface AdminDataPayload {
+  secrets_included?: boolean
   type?: string
   version?: number
   exported_at: string

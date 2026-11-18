@@ -1267,3 +1267,28 @@ func parseOAuthBindUserCookieValue(value string, secret string) (int64, error) {
 	}
 	return userID, nil
 }
+
+// A pending browser cookie alone must never authorize adding an administrator login identity.
+func (h *AuthHandler) enforceAdministratorOAuthBinding(c *gin.Context, target *service.User) bool {
+	parts := strings.SplitN(c.GetHeader("Authorization"), " ", 2)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+		response.Unauthorized(c, "Sign in again before binding an administrator identity")
+		return false
+	}
+	claims, err := h.authService.ValidateToken(strings.TrimSpace(parts[1]))
+	if err != nil || claims.UserID != target.ID || claims.TokenVersion != target.TokenVersion || !target.IsActive() {
+		response.Unauthorized(c, "Invalid administrator binding session")
+		return false
+	}
+	if h.settingSvc != nil && h.settingSvc.IsSessionBindingEnabled(c.Request.Context()) && claims.BindingHash != "" {
+		binding := service.SessionBindingFromContext(c.Request.Context())
+		if binding == nil || binding.Hash() != claims.BindingHash {
+			_ = h.authService.RevokeSessionFamily(c.Request.Context(), claims.SessionID)
+			servermiddleware.AbortWithError(c, 401, "SESSION_BINDING_MISMATCH", "Session network fingerprint changed; sign in again")
+			return false
+		}
+	}
+	c.Set(string(servermiddleware.ContextKeyUser), servermiddleware.AuthSubject{UserID: target.ID})
+	c.Set(servermiddleware.ContextKeySessionID, claims.SessionID)
+	return servermiddleware.EnforceStepUp(c, h.totpService, h.userService, h.settingSvc)
+}

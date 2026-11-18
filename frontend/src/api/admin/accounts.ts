@@ -722,6 +722,8 @@ export async function syncFromCrs(params: {
 }
 
 export async function exportData(options?: {
+	includeSecrets?: boolean
+	reason?: string
   ids?: number[]
   filters?: {
     platform?: string
@@ -736,6 +738,10 @@ export async function exportData(options?: {
   includeProxies?: boolean
 }): Promise<AdminDataPayload> {
   const params: Record<string, string> = {}
+  if (options?.includeSecrets) {
+    params.include_secrets = 'true'
+    params.reason = options.reason?.trim() || ''
+  }
   if (options?.ids && options.ids.length > 0) {
     params.ids = options.ids.join(',')
   } else if (options?.filters) {

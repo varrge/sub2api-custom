@@ -478,6 +478,12 @@
     <ConfirmDialog :show="showDeleteDialog" :title="t('admin.accounts.deleteAccount')" :message="t('admin.accounts.deleteConfirm', { name: deletingAcc?.name })" :confirm-text="t('common.delete')" :cancel-text="t('common.cancel')" :danger="true" @confirm="confirmDelete" @cancel="showDeleteDialog = false" />
     <ConfirmDialog :show="showCreateShadowDialog" :title="t('admin.accounts.createSparkShadow')" :message="t('admin.accounts.createSparkShadowConfirm', { name: creatingShadowAcc?.name })" @confirm="confirmCreateSparkShadow" @cancel="showCreateShadowDialog = false" />
     <ConfirmDialog :show="showExportDataDialog" :title="t('admin.accounts.dataExport')" :message="t('admin.accounts.dataExportConfirmMessage')" :confirm-text="t('admin.accounts.dataExportConfirm')" :cancel-text="t('common.cancel')" @confirm="handleExportData" @cancel="showExportDataDialog = false">
+      <p class="mb-3 text-sm text-amber-700 dark:text-amber-300">{{ t('admin.accounts.dataExportRedactedHint') }}</p>
+      <label class="mb-3 flex items-center gap-2 text-sm">
+        <input type="checkbox" v-model="includeSecretsOnExport" />
+        <span>{{ t('admin.accounts.dataExportIncludeSecrets') }}</span>
+      </label>
+      <input v-if="includeSecretsOnExport" v-model="secretExportReason" class="input mb-3" maxlength="128" :aria-label="t('admin.accounts.dataExportReason')" :placeholder="t('admin.accounts.dataExportReason')" />
       <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
         <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" v-model="includeProxyOnExport" />
         <span>{{ t('admin.accounts.dataExportIncludeProxies') }}</span>
@@ -598,6 +604,8 @@ const showEdit = ref(false)
 const showSync = ref(false)
 const showImportData = ref(false)
 const showExportDataDialog = ref(false)
+const includeSecretsOnExport = ref(false)
+const secretExportReason = ref('')
 const includeProxyOnExport = ref(true)
 const showBulkEdit = ref(false)
 const bulkEditTarget = ref<AccountBulkEditTarget | null>(null)
@@ -2052,7 +2060,7 @@ const normalizeBulkSchedulableResult = (
 const handleBulkToggleSchedulable = async (schedulable: boolean) => {
   const accountIds = [...selIds.value]
   try {
-    const result = await adminAPI.accounts.bulkUpdate(accountIds, { schedulable })
+    const result = await accountExportStepUp.run(() => adminAPI.accounts.bulkUpdate(accountIds, { schedulable }))
     const { successIds, failedIds, successCount, failedCount, hasIds, hasCounts } = normalizeBulkSchedulableResult(result, accountIds)
     if (!hasIds && !hasCounts) {
       appStore.showError(t('admin.accounts.bulkSchedulableResultUnknown'))
@@ -2300,18 +2308,23 @@ const formatExportTimestamp = () => {
   return `${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}${pad2(now.getHours())}${pad2(now.getMinutes())}${pad2(now.getSeconds())}`
 }
 const openExportDataDialog = () => {
+  includeSecretsOnExport.value = false
+  secretExportReason.value = ''
   includeProxyOnExport.value = true
   showExportDataDialog.value = true
 }
 const handleExportData = async () => {
   if (exportingData.value) return
+  if (includeSecretsOnExport.value && !secretExportReason.value.trim()) { appStore.showError(t('admin.accounts.dataExportReason')); return }
   exportingData.value = true
   try {
     const dataPayload = await accountExportStepUp.run(() => adminAPI.accounts.exportData(
       selIds.value.length > 0
-        ? { ids: selIds.value, includeProxies: includeProxyOnExport.value }
+        ? { ids: selIds.value, includeProxies: includeProxyOnExport.value, includeSecrets: includeSecretsOnExport.value, reason: secretExportReason.value }
         : {
             includeProxies: includeProxyOnExport.value,
+            includeSecrets: includeSecretsOnExport.value,
+            reason: secretExportReason.value,
             filters: buildAccountQueryFilters()
           }
     ))

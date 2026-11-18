@@ -88,6 +88,11 @@ func (h *AccountHandler) ScopedAdminKeyAccounts(c *gin.Context) {
 	}
 	c.Abort()
 	base := "/api/v1/admin/accounts"
+	// This middleware dispatches before route guards; machine keys cannot bypass MFA here.
+	if (c.Request.Method == "PUT" && path == base+"/:id") || (c.Request.Method == "POST" && (path == base+"/bulk-update" || path == base+"/import/codex-session")) {
+		response.Error(c, 403, "Sensitive account changes require a two-factor verified browser session")
+		return
+	}
 	// 静态默认映射不读取任何账户；权限独立于账户查看及凭证写入。
 	if path == base+"/antigravity/default-model-mapping" && c.Request.Method == "GET" {
 		if !adminaccess.RouteAllowed(principal.Policy, c.Request.Method, path) {

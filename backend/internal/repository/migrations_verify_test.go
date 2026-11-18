@@ -23,7 +23,7 @@ func TestVerifyMigrationsDoesNotExecuteDDL(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			db, mock, err := sqlmock.New()
 			require.NoError(t, err)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			rows := sqlmock.NewRows([]string{"filename", "checksum"})
 			if tc.recorded != "" {
 				rows.AddRow("001_init.sql", tc.recorded)
@@ -46,7 +46,7 @@ func TestVerifyMigrationsDoesNotExecuteDDL(t *testing.T) {
 func TestVerifyMigrationsFailsClosedOnReadError(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	mock.ExpectQuery("SELECT filename, checksum FROM schema_migrations").
 		WillReturnError(errors.New("permission denied"))
 	require.ErrorContains(t, verifyMigrationsFS(context.Background(), db, fstest.MapFS{}), "permission denied")

@@ -18,7 +18,7 @@ func TestHostSkipMigrationsAppliesToEverySetupEntry(t *testing.T) {
 			cfg := &DatabaseConfig{DBName: "sub2api"}
 			db, mock, err := sqlmock.New()
 			require.NoError(t, err)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			mock.ExpectQuery("SELECT filename, checksum FROM schema_migrations").
 				WillReturnRows(sqlmock.NewRows([]string{"filename", "checksum"}))
 			require.ErrorContains(t, initializeDatabaseSchema(context.Background(), db, cfg), "pending migration")

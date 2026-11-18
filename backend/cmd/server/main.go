@@ -112,7 +112,7 @@ func runMigrationsOnly() error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	return repository.ApplyMigrations(ctx, db)

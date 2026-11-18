@@ -25,7 +25,7 @@ func verifyMigrationsFS(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 	if err != nil {
 		return fmt.Errorf("read migration status (run --migrate-only with the migration role first): %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	applied := make(map[string]string)
 	for rows.Next() {
 		var name, checksum string

@@ -274,7 +274,11 @@ func decorateEvent(e *Event) {
 		e.Values["summary"] = eventNames[e.Kind]
 	}
 	lines := []string{}
-	for _, pair := range [][2]string{{"user_id", "用户 ID"}, {"order_id", "订单 ID"}, {"amount", "支付金额"}, {"currency", "支付币种"}, {"product_name", "月卡名称"}, {"team_code", "团号"}, {"member_count", "人数"}, {"severity", "级别"}, {"description", "告警详情"}} {
+	fields := [][2]string{{"user_id", "用户 ID"}, {"order_id", "订单 ID"}, {"amount", "支付金额"}, {"currency", "支付币种"}, {"product_name", "月卡名称"}, {"team_code", "团号"}, {"member_count", "人数"}, {"severity", "级别"}, {"description", "告警详情"}}
+	if e.Kind == "admin.activity" {
+		fields = [][2]string{{"action", "操作"}, {"actor_email", "账号"}, {"client_ip", "来源 IP"}, {"auth_method", "认证方式"}, {"method", "方法"}, {"path", "接口"}, {"status_code", "状态码"}, {"request_id", "请求 ID"}}
+	}
+	for _, pair := range fields {
 		if value := e.Values[pair[0]]; value != "" {
 			lines = append(lines, "- **"+pair[1]+"**："+escapeMarkdown(value))
 		}

@@ -4,7 +4,7 @@ import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { pushNotificationsApi, type PushChannel, type PushConfig, type PushDelivery, type PushEvent, type PushPreview } from '@/api/admin/pushNotifications'
 
-export const pushVariables = ['site_name', 'event_name', 'event_id', 'occurred_at', 'summary', 'details', 'user_id', 'order_id', 'amount', 'currency', 'product_name', 'team_code', 'remaining_quota']
+export const pushVariables = ['site_name', 'event_name', 'event_id', 'occurred_at', 'summary', 'details', 'user_id', 'order_id', 'amount', 'currency', 'product_name', 'team_code', 'remaining_quota', 'action', 'method', 'path', 'client_ip', 'actor_email', 'auth_method', 'status_code', 'request_id']
 const events: [PushEvent, string, string, string, string][] = [
   ['payment.recharged', '充值成功', 'Recharge completed', '在线充值到账后通知', 'After an online recharge is fulfilled'],
   ['subscription.purchased', '订阅购买成功', 'Subscription purchased', '订阅订单完成后通知', 'After a subscription order is fulfilled'],
@@ -12,6 +12,7 @@ const events: [PushEvent, string, string, string, string][] = [
   ['team.full', '拼团已满', 'Team filled', '拼团首次达到满团时通知', 'When a team first becomes full'],
   ['ops.alert', '运行告警', 'Operations alert', '监控规则产生告警时通知，请先配置运行监控规则', 'When configured monitoring rules raise an alert'],
   ['shared_credit.low', '共享额度不足', 'Shared credit low', '活动可用额度低于或等于阈值；每个活动配置版本提醒一次', 'Available activity credit reaches the threshold; once per pool revision'],
+  ['admin.activity', '管理员操作', 'Admin action', '导出、恢复、改密、删除、推送设置等敏感管理员操作', 'Sensitive admin actions such as exports, restores, key changes, deletions and push settings'],
 ]
 export function usePushNotifications() {
   const { locale } = useI18n()

@@ -132,6 +132,8 @@ var auditSensitiveReads = map[string]string{
 var auditActionOverrides = map[string]string{
 	"PUT /api/v1/admin/settings/push-notifications":           "admin.push_notifications.update",
 	"POST /api/v1/admin/settings/push-notifications/:id/test": "admin.push_notifications.test",
+	"POST /api/v1/auth/forgot-password":                       service.AuditActionPasswordForgot,
+	"POST /api/v1/auth/reset-password":                        service.AuditActionPasswordReset,
 	"POST /api/v1/auth/login":                                 service.AuditActionLogin,
 	"POST /api/v1/auth/login/2fa":                             service.AuditActionLogin2FA,
 	"POST /api/v1/auth/passkey/login/finish":                  service.AuditActionLogin,

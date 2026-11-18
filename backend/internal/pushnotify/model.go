@@ -27,11 +27,12 @@ var (
 	channelID   = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 )
 
-var Events = []string{"payment.recharged", "subscription.purchased", "monthcard.purchased", "team.full", "ops.alert", "shared_credit.low"}
-var Variables = []string{"site_name", "event_name", "event_id", "occurred_at", "summary", "details", "user_id", "order_id", "amount", "currency", "product_name", "team_code", "remaining_quota"}
+var Events = []string{"payment.recharged", "subscription.purchased", "monthcard.purchased", "team.full", "ops.alert", "shared_credit.low", "admin.activity"}
+var Variables = []string{"site_name", "event_name", "event_id", "occurred_at", "summary", "details", "user_id", "order_id", "amount", "currency", "product_name", "team_code", "remaining_quota", "action", "method", "path", "client_ip", "actor_email", "auth_method", "status_code", "request_id"}
 var eventNames = map[string]string{
 	"payment.recharged": "充值成功", "subscription.purchased": "订阅购买成功", "monthcard.purchased": "月卡购买成功",
 	"team.full": "拼团已满", "ops.alert": "运行告警", "shared_credit.low": "共享额度不足",
+	"admin.activity": "管理员操作",
 }
 
 type Config struct {
@@ -242,5 +243,6 @@ func Sample(kind string) Event {
 		"summary": "这是一条推送预览，实际发送时将替换为真实事件内容。",
 		"details": "- **用户 ID**：10001\n- **订单号**：202611040001\n- **金额**：58.00",
 		"user_id": "10001", "order_id": "202611040001", "amount": "58.00", "currency": "CNY", "product_name": "轻享月卡", "team_code": "T-preview", "remaining_quota": "20.00",
+		"action": "admin.accounts.export", "method": "GET", "path": "/api/v1/admin/accounts/data", "client_ip": "203.0.113.10", "actor_email": "admin@example.com", "auth_method": "jwt", "status_code": "200", "request_id": "preview-request",
 	}}
 }

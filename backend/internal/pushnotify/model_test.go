@@ -192,3 +192,15 @@ func TestSenderRejectsPrivateResolvedAddresses(t *testing.T) {
 	require.Nil(t, transport.Proxy)
 	require.Equal(t, http.ErrUseLastResponse, s.client.CheckRedirect(nil, nil))
 }
+
+func TestAdminActivitySampleExposesAttributionFields(t *testing.T) {
+	e := Sample("admin.activity")
+	if e.Kind != "admin.activity" {
+		t.Fatalf("kind = %q", e.Kind)
+	}
+	for _, key := range []string{"action", "method", "path", "client_ip", "auth_method", "status_code", "request_id"} {
+		if e.Values[key] == "" {
+			t.Fatalf("missing sample field %q", key)
+		}
+	}
+}

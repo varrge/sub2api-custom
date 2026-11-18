@@ -42,6 +42,12 @@ Redis must use named ACL users and a read-only ACL file. Disable the unauthentic
 default user. Restrict the app to the commands it uses, including Lua and
 transactions, and exclude administrative commands, replication and module loading.
 Use a separate maintenance user and non-root Redis process.
+Generate the ACL from `redis.acl.template`, replacing both placeholders with
+SHA-256 password hashes. `TIME` must remain explicitly allowed after category
+restrictions: the scheduler and Lua lock scripts use the Redis server clock.
+Validate both direct `TIME` and `EVAL "return redis.call('TIME')" 0`, along with
+login/recharge and active gateway traffic. Check ACL LOG for business denials;
+successful login alone does not exercise the scheduling path.
 
 Restrict admin paths on every public alias and direct-origin address. Preserve
 public model, payment callback and user endpoints. Access logs must omit all

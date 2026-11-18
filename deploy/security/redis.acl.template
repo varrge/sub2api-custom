@@ -1,0 +1,3 @@
+user default off
+user sub2api_app on #__APP_PASSWORD_SHA256__ ~* &* -@all +@read +@write +@connection +@transaction +@pubsub +@scripting -@admin -@dangerous +eval +evalsha +script|load +script|exists +client|setname +client|setinfo +client|id +time
+user sub2api_admin on #__MAINTENANCE_PASSWORD_SHA256__ ~* &* +@all

@@ -11,6 +11,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/internal/invitation"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
@@ -59,8 +60,12 @@ func (s *AuthService) SendPendingOAuthVerifyCode(ctx context.Context, email stri
 }
 
 func (s *AuthService) validateOAuthRegistrationInvitation(ctx context.Context, invitationCode string) (*RedeemCode, error) {
-	if s == nil || s.settingService == nil || !s.settingService.IsInvitationCodeEnabled(ctx) {
+	invitationCode = strings.TrimSpace(invitationCode)
+	if invitationCode == "" && (s == nil || s.settingService == nil || !s.settingService.IsInvitationCodeEnabled(ctx)) {
 		return nil, nil
+	}
+	if s == nil {
+		return nil, ErrServiceUnavailable
 	}
 	if s.redeemRepo == nil && s.oauthEmailFlowClient(ctx) == nil {
 		return nil, ErrServiceUnavailable
@@ -269,8 +274,7 @@ func (s *AuthService) RegisterVerifiedOAuthEmailAccount(
 	return tokenPair, user, nil
 }
 
-// FinalizeOAuthEmailAccount applies invitation usage and normal signup bootstrap
-// only after the pending OAuth flow has fully reached its last reversible step.
+// FinalizeOAuthEmailAccount claims the invitation within the account transaction.
 func (s *AuthService) FinalizeOAuthEmailAccount(
 	ctx context.Context,
 	user *User,
@@ -294,12 +298,18 @@ func (s *AuthService) FinalizeOAuthEmailAccount(
 	}
 
 	s.updateOAuthSignupSource(ctx, user.ID, signupSource)
-	grantPlan := s.resolveSignupGrantPlan(ctx, signupSource)
-	s.assignSubscriptions(ctx, user.ID, grantPlan.Subscriptions, "auto assigned by signup defaults")
-	// snapshot user × platform quota（fail-open）
-	_ = s.snapshotPlatformQuotaDefaults(ctx, user.ID, &grantPlan)
-	s.bindOAuthAffiliate(ctx, user.ID, affiliateCode)
 	return nil
+}
+
+// ApplyOAuthSignupGrants runs only after the new account transaction commits.
+// The fail-open quota snapshot deliberately uses a separate connection.
+func (s *AuthService) ApplyOAuthSignupGrants(ctx context.Context, userID int64, signupSource, affiliateCode string) {
+	signupSource = normalizeOAuthSignupSource(signupSource)
+	grantPlan := s.resolveSignupGrantPlan(ctx, signupSource)
+	s.assignSubscriptions(ctx, userID, grantPlan.Subscriptions, "auto assigned by signup defaults")
+	// snapshot user × platform quota（fail-open）
+	_ = s.snapshotPlatformQuotaDefaults(ctx, userID, &grantPlan)
+	s.bindOAuthAffiliate(ctx, userID, affiliateCode)
 }
 
 // RollbackOAuthEmailAccountCreation removes a partially-created local account
@@ -307,6 +317,17 @@ func (s *AuthService) FinalizeOAuthEmailAccount(
 func (s *AuthService) RollbackOAuthEmailAccountCreation(ctx context.Context, userID int64, invitationCode string) error {
 	if s == nil || s.userRepo == nil || userID <= 0 {
 		return ErrServiceUnavailable
+	}
+	if s.entClient != nil && dbent.TxFromContext(ctx) == nil {
+		tx, err := s.entClient.Tx(ctx)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = tx.Rollback() }()
+		if err := s.RollbackOAuthEmailAccountCreation(dbent.NewTxContext(ctx, tx), userID, invitationCode); err != nil {
+			return err
+		}
+		return tx.Commit()
 	}
 	if err := s.restoreOAuthRegistrationInvitation(ctx, invitationCode, userID); err != nil {
 		return err
@@ -318,8 +339,20 @@ func (s *AuthService) RollbackOAuthEmailAccountCreation(ctx context.Context, use
 }
 
 func (s *AuthService) restoreOAuthRegistrationInvitation(ctx context.Context, invitationCode string, userID int64) error {
-	if s == nil || s.settingService == nil || !s.settingService.IsInvitationCodeEnabled(ctx) {
+	invitationCode = strings.TrimSpace(invitationCode)
+	if s == nil || invitationCode == "" || userID <= 0 {
 		return nil
+	}
+	if s.entClient != nil && dbent.TxFromContext(ctx) == nil {
+		tx, err := s.entClient.Tx(ctx)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = tx.Rollback() }()
+		if err := s.restoreOAuthRegistrationInvitation(dbent.NewTxContext(ctx, tx), invitationCode, userID); err != nil {
+			return err
+		}
+		return tx.Commit()
 	}
 	if s.redeemRepo == nil && s.oauthEmailFlowClient(ctx) == nil {
 		return ErrServiceUnavailable
@@ -339,6 +372,11 @@ func (s *AuthService) restoreOAuthRegistrationInvitation(ctx context.Context, in
 	}
 	if redeemCode.Type != RedeemTypeInvitation || redeemCode.Status != StatusUsed || redeemCode.UsedBy == nil || *redeemCode.UsedBy != userID {
 		return nil
+	}
+	if client := s.oauthEmailFlowClient(ctx); client != nil {
+		if err := invitation.UnbindRegistration(ctx, client, redeemCode.ID, userID); err != nil {
+			return err
+		}
 	}
 
 	redeemCode.Status = StatusUnused
@@ -388,10 +426,22 @@ func (s *AuthService) loadOAuthRegistrationInvitation(ctx context.Context, invit
 }
 
 func (s *AuthService) useOAuthRegistrationInvitation(ctx context.Context, invitationID, userID int64) error {
+	if s.entClient != nil && dbent.TxFromContext(ctx) == nil {
+		tx, err := s.entClient.Tx(ctx)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = tx.Rollback() }()
+		if err := s.useOAuthRegistrationInvitation(dbent.NewTxContext(ctx, tx), invitationID, userID); err != nil {
+			return err
+		}
+		return tx.Commit()
+	}
 	if client := s.oauthEmailFlowClient(ctx); client != nil {
 		affected, err := client.RedeemCode.Update().
 			Where(
 				redeemcode.IDEQ(invitationID),
+				redeemcode.TypeEQ(RedeemTypeInvitation),
 				redeemcode.StatusEQ(StatusUnused),
 				redeemcode.Or(redeemcode.ExpiresAtIsNil(), redeemcode.ExpiresAtGT(time.Now().UTC())),
 			).
@@ -405,7 +455,7 @@ func (s *AuthService) useOAuthRegistrationInvitation(ctx context.Context, invita
 		if affected == 0 {
 			return ErrRedeemCodeUsed
 		}
-		return nil
+		return invitation.BindRegistration(ctx, client, invitationID, userID)
 	}
 	return s.redeemRepo.Use(ctx, invitationID, userID)
 }

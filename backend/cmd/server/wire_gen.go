@@ -12,6 +12,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
+	"github.com/Wei-Shaw/sub2api/internal/invitation"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/securityaudit"
@@ -341,9 +342,10 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	supportTicketRepository := repository.NewSupportTicketRepository(client)
 	supportTicketService := service.NewSupportTicketService(supportTicketRepository)
 	supportTicketHandler := handler.NewSupportTicketHandler(supportTicketService)
+	invitationHandler := handler.NewInvitationHandler(client, apiKeyAuthCacheInvalidator, billingCacheService)
 	idempotencyCleanupService := service.ProvideIdempotencyCleanupService(idempotencyRepository, configConfig)
 	openAIQuotaAutoResetService := service.ProvideOpenAIQuotaAutoResetService(accountRepository, openAIQuotaService, rateLimitService, idempotencyCoordinator, auditLogService, settingService, leaderLockCache)
-	handlers := handler.ProvideHandlers(activityLeaderboardHandler, activityCampaignHandler, votingHandler, tutorialHandler, pushNotificationHandler, authHandler, userHandler, mcpoAuthHandler, apiKeyHandler, usageHandler, redeemHandler, subscriptionHandler, announcementHandler, channelMonitorUserHandler, channelMonitorV2Handler, adminHandlers, gatewayHandler, openAIGatewayHandler, handlerSettingHandler, totpHandler, passkeyHandler, handlerPaymentHandler, paymentWebhookHandler, availableChannelHandler, modelPlazaHandler, asyncImageHandler, batchImageHandler, supportTicketHandler, idempotencyCoordinator, idempotencyCleanupService, openAIQuotaAutoResetService)
+	handlers := handler.ProvideHandlers(activityLeaderboardHandler, activityCampaignHandler, votingHandler, tutorialHandler, pushNotificationHandler, authHandler, userHandler, mcpoAuthHandler, apiKeyHandler, usageHandler, redeemHandler, subscriptionHandler, announcementHandler, channelMonitorUserHandler, channelMonitorV2Handler, adminHandlers, gatewayHandler, openAIGatewayHandler, handlerSettingHandler, totpHandler, passkeyHandler, handlerPaymentHandler, paymentWebhookHandler, availableChannelHandler, modelPlazaHandler, asyncImageHandler, batchImageHandler, supportTicketHandler, invitationHandler, idempotencyCoordinator, idempotencyCleanupService, openAIQuotaAutoResetService)
 	jwtAuthMiddleware := middleware.NewJWTAuthMiddleware(authService, userService, settingService, auditLogService)
 	optionalJWTAuthMiddleware := middleware.NewOptionalJWTAuthMiddleware(authService, userService, settingService, auditLogService)
 	adminAuthMiddleware := middleware.NewAdminAuthMiddleware(authService, userService, settingService, auditLogService)
@@ -466,6 +468,17 @@ func provideCleanup(
 	usageBillingRepo service.UsageBillingBatchRepository,
 ) func() {
 	stopMonthCardBilling := service.StartMonthCardBillingRecovery(usageBillingRepo, billingCache, apiKeyService)
+	stopInvitationAutoApprove := func() {}
+	if entClient != nil {
+		stopInvitationAutoApprove = invitation.NewStore(entClient).StartAutoApprove(10*time.Minute, func(ctx context.Context, inviterID int64) {
+			if apiKeyService != nil {
+				apiKeyService.InvalidateAuthCacheByUserID(ctx, inviterID)
+			}
+			if billingCache != nil {
+				_ = billingCache.InvalidateUserBalance(ctx, inviterID)
+			}
+		})
+	}
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -476,6 +489,10 @@ func provideCleanup(
 		}
 
 		parallelSteps := []cleanupStep{
+			{"InvitationAutoApprove", func() error {
+				stopInvitationAutoApprove()
+				return nil
+			}},
 			{"MonthCardBillingRecovery", func() error {
 				stopMonthCardBilling()
 				return nil

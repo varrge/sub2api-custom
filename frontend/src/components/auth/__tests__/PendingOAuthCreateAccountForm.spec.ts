@@ -39,6 +39,7 @@ vi.mock('@/stores', () => ({
 
 describe('PendingOAuthCreateAccountForm', () => {
   beforeEach(() => {
+    sessionStorage.clear()
     sendVerifyCode.mockReset()
     sendPendingOAuthVerifyCode.mockReset()
     getPublicSettings.mockReset()
@@ -234,6 +235,23 @@ describe('PendingOAuthCreateAccountForm', () => {
         }
       ]
     ])
+  })
+
+  it.each([false, true])('only clears a previously visible optional invitation (prefilled: %s)', async (prefilled) => {
+    getPublicSettings.mockResolvedValue({ invitation_code_enabled: false, email_verify_enabled: false })
+    if (prefilled) sessionStorage.setItem('registration_invitation_code', 'OPTIONAL')
+    const wrapper = mount(PendingOAuthCreateAccountForm, {
+      props: { testIdPrefix: 'oidc', initialEmail: 'user@example.com', isSubmitting: false }
+    })
+    await flushPromises()
+    const field = wrapper.find('[data-testid="oidc-create-account-invitation-code"]')
+    expect(field.exists()).toBe(prefilled)
+    if (prefilled) await field.setValue('')
+    await wrapper.get('[data-testid="oidc-create-account-password"]').setValue('secret-123')
+    await wrapper.get('form').trigger('submit.prevent')
+    const payload = wrapper.emitted('submit')![0][0] as { invitationCode?: string }
+    expect(payload.invitationCode).toBe(prefilled ? '' : undefined)
+    wrapper.unmount()
   })
 
   it('sends a verify code for the trimmed email value', async () => {

@@ -123,11 +123,12 @@
           </div>
         </div>
 
-        <div v-if="invitationCodeEnabled || affiliateEnabled || promoCodeEnabled" class="auth-code-fields">
+        <div v-if="invitationCodeVisible || affiliateEnabled || promoCodeEnabled" class="auth-code-fields">
           <!-- Invitation Code Input (Required when enabled) -->
-          <div v-if="invitationCodeEnabled">
+          <div v-if="invitationCodeVisible">
             <label for="invitation_code" class="input-label">
               {{ t('auth.invitationCodeLabel') }}
+              <span v-if="!invitationCodeEnabled" class="ml-1 text-xs font-normal text-gray-400">({{ t('common.optional') }})</span>
             </label>
             <div class="relative">
               <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
@@ -398,6 +399,7 @@ import {
   resolveAffiliateReferralCode
 } from '@/utils/oauthAffiliate'
 import type { LoginAgreementDocument } from '@/types'
+import { clearRegistrationInvitation, loadRegistrationInvitation, storeRegistrationInvitation } from '@/utils/registrationInvitation'
 
 const { t, locale } = useI18n()
 const showAlternativeLogin = ref(false)
@@ -502,9 +504,12 @@ const formData = reactive({
   email: '',
   password: '',
   promo_code: '',
-  invitation_code: '',
+  invitation_code: loadRegistrationInvitation(),
   aff_code: ''
 })
+
+const nativeInvitationProvided = ref(!!formData.invitation_code)
+const invitationCodeVisible = computed(() => invitationCodeEnabled.value || nativeInvitationProvided.value)
 
 const errors = reactive({
   email: '',
@@ -555,6 +560,16 @@ function syncAffiliateReferralCode(): string {
   }
   return code
 }
+
+watch(() => route.query.invitation_code, (value) => {
+  if (value !== undefined) {
+    formData.invitation_code = storeRegistrationInvitation(value)
+    nativeInvitationProvided.value = true
+    handleInvitationCodeInput()
+  }
+}, { immediate: true })
+watch(() => formData.invitation_code, storeRegistrationInvitation)
+
 
 // ==================== Lifecycle ====================
 
@@ -765,6 +780,7 @@ function getPromoErrorMessage(errorCode?: string): string {
 function handleInvitationCodeInput(): void {
   const code = formData.invitation_code.trim()
 
+  if (invitationValidateTimeout) clearTimeout(invitationValidateTimeout)
   // Clear previous validation
   invitationValidation.valid = false
   invitationValidation.invalid = false
@@ -772,6 +788,7 @@ function handleInvitationCodeInput(): void {
   errors.invitation_code = ''
 
   if (!code) {
+    invitationValidating.value = false
     return
   }
 
@@ -790,6 +807,7 @@ async function validateInvitationCodeDebounced(code: string): Promise<void> {
 
   try {
     const result = await validateInvitationCode(code)
+    if (formData.invitation_code.trim() !== code) return
 
     if (result.valid) {
       invitationValidation.valid = true
@@ -866,6 +884,8 @@ async function handleOAuthStart(request: OAuthLoginStart): Promise<void> {
   if (registrationActionDisabled.value) return
   showAlternativeLogin.value = false
   await nextTick()
+  const invitationCode = storeRegistrationInvitation(formData.invitation_code)
+  if (invitationCode) request = { ...request, params: { ...request.params, invitation_code: invitationCode } }
 
   if (!actionCaptchaEnabled.value) {
     window.location.href = buildOAuthLoginStartURL(request)
@@ -1018,8 +1038,8 @@ async function handleRegister(): Promise<void> {
     }
   }
 
-  // Check invitation code validation status (if enabled and code provided)
-  if (invitationCodeEnabled.value) {
+  // Validate explicitly supplied codes even when invite-only registration is disabled.
+  if (formData.invitation_code.trim()) {
     // If still validating, wait
     if (invitationValidating.value) {
       errorMessage.value = t('auth.invitationCodeValidating')
@@ -1090,6 +1110,7 @@ async function handleRegister(): Promise<void> {
       ...(affCode ? { aff_code: affCode } : {})
     })
     clearAffiliateReferralCode()
+    clearRegistrationInvitation()
 
     // Show success toast
     appStore.showSuccess(t('auth.accountCreatedSuccess', { siteName: siteName.value }))

@@ -178,6 +178,7 @@
 </template>
 
 <script setup lang="ts">
+import { clearRegistrationInvitation } from '@/utils/registrationInvitation'
 import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -738,6 +739,7 @@ async function handleVerify(): Promise<void> {
     // Clear session data
     sessionStorage.removeItem('register_data')
     clearAllAffiliateReferralCodes()
+    clearRegistrationInvitation()
 
     // Show success toast
     appStore.showSuccess(t('auth.accountCreatedSuccess', { siteName: siteName.value }))

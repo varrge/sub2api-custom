@@ -147,6 +147,10 @@ func (h *AuthHandler) DingTalkOAuthStart(c *gin.Context) {
 	intent := normalizeOAuthIntent(c.Query("intent"))
 	setDingTalkCookie(c, dingTalkOAuthIntentCookieName, encodeCookieValue(intent), dingTalkOAuthCookieMaxAgeSec, secureCookie)
 	captureOAuthPromoCode(c, secureCookie)
+	if err := h.captureOAuthInvitationCode(c, "dingtalk", state, secureCookie); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 
 	setOAuthPendingBrowserCookie(c, browserSessionKey, secureCookie)
 	clearOAuthPendingSessionCookie(c, secureCookie)
@@ -317,6 +321,7 @@ func (h *AuthHandler) DingTalkOAuthCallback(c *gin.Context) {
 	}
 
 	secureCookie := isRequestHTTPS(c)
+	clearOAuthInvitationCodeCookie(c, "dingtalk", secureCookie)
 	defer func() {
 		clearDingTalkCookie(c, dingTalkOAuthStateCookieName, secureCookie)
 		clearDingTalkCookie(c, dingTalkOAuthRedirectCookie, secureCookie)
@@ -327,6 +332,10 @@ func (h *AuthHandler) DingTalkOAuthCallback(c *gin.Context) {
 	expectedState, err := readCookieDecoded(c, dingTalkOAuthStateCookieName)
 	if err != nil || state != expectedState {
 		redirectOAuthError(c, frontendCallback, "csrf", "state mismatch", "")
+		return
+	}
+	if err := h.restoreOAuthInvitationCode(c, "dingtalk", state); err != nil {
+		redirectOAuthError(c, frontendCallback, "invalid_state", "invalid oauth invitation context", "")
 		return
 	}
 	redirectTo, _ := readCookieDecoded(c, dingTalkOAuthRedirectCookie)
@@ -691,10 +700,10 @@ func buildDingTalkAuthorizeURL(cfg config.DingTalkConnectConfig, state string) (
 // ─── Complete Registration ─────────────────────────────────────────────────
 
 type completeDingTalkOAuthRequest struct {
-	InvitationCode   string `json:"invitation_code" binding:"required"`
-	AffCode          string `json:"aff_code,omitempty"`
-	AdoptDisplayName *bool  `json:"adopt_display_name,omitempty"`
-	AdoptAvatar      *bool  `json:"adopt_avatar,omitempty"`
+	InvitationCode   *string `json:"invitation_code,omitempty"`
+	AffCode          string  `json:"aff_code,omitempty"`
+	AdoptDisplayName *bool   `json:"adopt_display_name,omitempty"`
+	AdoptAvatar      *bool   `json:"adopt_avatar,omitempty"`
 }
 
 // CompleteDingTalkOAuthRegistration completes a pending OAuth registration by validating
@@ -788,7 +797,7 @@ func (h *AuthHandler) CompleteDingTalkOAuthRegistration(c *gin.Context) {
 		c.Request.Context(),
 		email,
 		username,
-		req.InvitationCode,
+		pendingOAuthInvitationCode(session, req.InvitationCode),
 		req.AffCode,
 		pendingOAuthPromoCode(session),
 		"dingtalk",

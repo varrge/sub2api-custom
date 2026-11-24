@@ -137,6 +137,10 @@ func (h *AuthHandler) WeChatOAuthStart(c *gin.Context) {
 	wechatSetCookie(c, wechatOAuthIntentCookieName, encodeCookieValue(intent), wechatOAuthCookieMaxAgeSec, secureCookie)
 	wechatSetCookie(c, wechatOAuthModeCookieName, encodeCookieValue(cfg.mode), wechatOAuthCookieMaxAgeSec, secureCookie)
 	captureOAuthPromoCode(c, secureCookie)
+	if err := h.captureOAuthInvitationCode(c, "wechat", state, secureCookie); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 	setOAuthPendingBrowserCookie(c, browserSessionKey, secureCookie)
 	clearOAuthPendingSessionCookie(c, secureCookie)
 	if intent == oauthIntentBindCurrentUser {
@@ -177,6 +181,7 @@ func (h *AuthHandler) WeChatOAuthCallback(c *gin.Context) {
 	}
 
 	secureCookie := isRequestHTTPS(c)
+	clearOAuthInvitationCodeCookie(c, "wechat", secureCookie)
 	defer func() {
 		wechatClearCookie(c, wechatOAuthStateCookieName, secureCookie)
 		wechatClearCookie(c, wechatOAuthRedirectCookieName, secureCookie)
@@ -189,6 +194,10 @@ func (h *AuthHandler) WeChatOAuthCallback(c *gin.Context) {
 	expectedState, err := readCookieDecoded(c, wechatOAuthStateCookieName)
 	if err != nil || expectedState == "" || state != expectedState {
 		redirectOAuthError(c, frontendCallback, "invalid_state", "invalid oauth state", "")
+		return
+	}
+	if err := h.restoreOAuthInvitationCode(c, "wechat", state); err != nil {
+		redirectOAuthError(c, frontendCallback, "invalid_state", "invalid oauth invitation context", "")
 		return
 	}
 
@@ -514,10 +523,10 @@ func (h *AuthHandler) wechatPaymentResumeService() *service.PaymentResumeService
 }
 
 type completeWeChatOAuthRequest struct {
-	InvitationCode   string `json:"invitation_code" binding:"required"`
-	AffCode          string `json:"aff_code,omitempty"`
-	AdoptDisplayName *bool  `json:"adopt_display_name,omitempty"`
-	AdoptAvatar      *bool  `json:"adopt_avatar,omitempty"`
+	InvitationCode   *string `json:"invitation_code,omitempty"`
+	AffCode          string  `json:"aff_code,omitempty"`
+	AdoptDisplayName *bool   `json:"adopt_display_name,omitempty"`
+	AdoptAvatar      *bool   `json:"adopt_avatar,omitempty"`
 }
 
 // CompleteWeChatOAuthRegistration completes a pending WeChat OAuth registration by
@@ -586,7 +595,7 @@ func (h *AuthHandler) CompleteWeChatOAuthRegistration(c *gin.Context) {
 		c.Request.Context(),
 		email,
 		username,
-		req.InvitationCode,
+		pendingOAuthInvitationCode(session, req.InvitationCode),
 		req.AffCode,
 		pendingOAuthPromoCode(session),
 		"wechat",

@@ -11,6 +11,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/user"
+	"github.com/Wei-Shaw/sub2api/internal/invitation"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/lib/pq"
 )
@@ -129,6 +130,13 @@ func (r *affiliateRepository) AccrueQuota(ctx context.Context, inviterID, invite
 
 	var applied bool
 	err := r.withTx(ctx, func(txCtx context.Context, txClient *dbent.Client) error {
+		native, err := invitation.HasInviter(txCtx, txClient, inviteeUserID)
+		if err != nil {
+			return err
+		}
+		if native {
+			return nil
+		}
 		allowed, err := personalAffiliateUsers(txCtx, txClient, inviterID, inviteeUserID)
 		if err != nil {
 			return err

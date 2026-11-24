@@ -109,6 +109,13 @@ jobs:
           TUTORIAL_TEST_DSN: postgres://monthcard_test:isolated-test-password@127.0.0.1:55439/monthcard_test?sslmode=disable
         run: go test -race ./internal/tutorial -count=1
 
+      - name: Native invitation PostgreSQL registration and rebate transactions
+        working-directory: backend
+        env:
+          INVITATION_TEST_DSN: postgres://monthcard_test:isolated-test-password@127.0.0.1:55439/monthcard_test?sslmode=disable
+          INVITATION_SERVICE_TEST_DSN: postgres://monthcard_test:isolated-test-password@127.0.0.1:55439/monthcard_test?sslmode=disable
+        run: go test -race ./internal/invitation -count=1
+
   frontend:
     runs-on: ubuntu-latest
     steps:

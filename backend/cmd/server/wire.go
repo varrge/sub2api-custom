@@ -13,6 +13,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	"github.com/Wei-Shaw/sub2api/internal/invitation"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/securityaudit"
@@ -139,6 +140,17 @@ func provideCleanup(
 	usageBillingRepo service.UsageBillingBatchRepository,
 ) func() {
 	stopMonthCardBilling := service.StartMonthCardBillingRecovery(usageBillingRepo, billingCache, apiKeyService)
+	stopInvitationAutoApprove := func() {}
+	if entClient != nil {
+		stopInvitationAutoApprove = invitation.NewStore(entClient).StartAutoApprove(10*time.Minute, func(ctx context.Context, inviterID int64) {
+			if apiKeyService != nil {
+				apiKeyService.InvalidateAuthCacheByUserID(ctx, inviterID)
+			}
+			if billingCache != nil {
+				_ = billingCache.InvalidateUserBalance(ctx, inviterID)
+			}
+		})
+	}
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -150,6 +162,10 @@ func provideCleanup(
 
 		// 应用层清理步骤可并行执行，基础设施资源（Redis/Ent）最后按顺序关闭。
 		parallelSteps := []cleanupStep{
+			{"InvitationAutoApprove", func() error {
+				stopInvitationAutoApprove()
+				return nil
+			}},
 			{"MonthCardBillingRecovery", func() error {
 				stopMonthCardBilling()
 				return nil

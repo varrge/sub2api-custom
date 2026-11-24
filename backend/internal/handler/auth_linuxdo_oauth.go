@@ -114,6 +114,10 @@ func (h *AuthHandler) LinuxDoOAuthStart(c *gin.Context) {
 	intent := normalizeOAuthIntent(c.Query("intent"))
 	setCookie(c, linuxDoOAuthIntentCookieName, encodeCookieValue(intent), linuxDoOAuthCookieMaxAgeSec, secureCookie)
 	captureOAuthPromoCode(c, secureCookie)
+	if err := h.captureOAuthInvitationCode(c, "linuxdo", state, secureCookie); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 	setOAuthPendingBrowserCookie(c, browserSessionKey, secureCookie)
 	clearOAuthPendingSessionCookie(c, secureCookie)
 	if intent == oauthIntentBindCurrentUser {
@@ -180,6 +184,7 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 	}
 
 	secureCookie := isRequestHTTPS(c)
+	clearOAuthInvitationCodeCookie(c, "linuxdo", secureCookie)
 	defer func() {
 		clearCookie(c, linuxDoOAuthStateCookieName, secureCookie)
 		clearCookie(c, linuxDoOAuthVerifierCookie, secureCookie)
@@ -192,6 +197,10 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 	expectedState, err := readCookieDecoded(c, linuxDoOAuthStateCookieName)
 	if err != nil || expectedState == "" || state != expectedState {
 		redirectOAuthError(c, frontendCallback, "invalid_state", "invalid oauth state", "")
+		return
+	}
+	if err := h.restoreOAuthInvitationCode(c, "linuxdo", state); err != nil {
+		redirectOAuthError(c, frontendCallback, "invalid_state", "invalid oauth invitation context", "")
 		return
 	}
 
@@ -338,7 +347,7 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 			c.Request.Context(),
 			email,
 			username,
-			"",
+			readOAuthInvitationCode(c),
 			"",
 			readOAuthPromoCode(c),
 			"linuxdo",
@@ -502,10 +511,10 @@ func (h *AuthHandler) createLinuxDoOAuthChoicePendingSession(
 }
 
 type completeLinuxDoOAuthRequest struct {
-	InvitationCode   string `json:"invitation_code" binding:"required"`
-	AffCode          string `json:"aff_code,omitempty"`
-	AdoptDisplayName *bool  `json:"adopt_display_name,omitempty"`
-	AdoptAvatar      *bool  `json:"adopt_avatar,omitempty"`
+	InvitationCode   *string `json:"invitation_code,omitempty"`
+	AffCode          string  `json:"aff_code,omitempty"`
+	AdoptDisplayName *bool   `json:"adopt_display_name,omitempty"`
+	AdoptAvatar      *bool   `json:"adopt_avatar,omitempty"`
 }
 
 // CompleteLinuxDoOAuthRegistration completes a pending OAuth registration by validating
@@ -591,7 +600,7 @@ func (h *AuthHandler) CompleteLinuxDoOAuthRegistration(c *gin.Context) {
 		c.Request.Context(),
 		email,
 		username,
-		req.InvitationCode,
+		pendingOAuthInvitationCode(session, req.InvitationCode),
 		req.AffCode,
 		pendingOAuthPromoCode(session),
 		"linuxdo",

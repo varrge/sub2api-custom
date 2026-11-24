@@ -223,6 +223,7 @@ func ProvideHandlers(
 	asyncImageHandler *AsyncImageHandler,
 	batchImageHandler *BatchImageHandler,
 	supportTicketHandler *SupportTicketHandler,
+	invitationHandler *InvitationHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 	_ *service.OpenAIQuotaAutoResetService,
@@ -256,12 +257,14 @@ func ProvideHandlers(
 		BatchImage:          batchImageHandler,
 		SupportTicket:       supportTicketHandler,
 		MCPOAuth:            mcpOAuthHandler,
+		Invitation:          invitationHandler,
 	}
 }
 
 // ProviderSet is the Wire provider set for all handlers
 var ProviderSet = wire.NewSet(
 	// Top-level handlers
+	NewInvitationHandler,
 	NewAuthHandler,
 	ProvideUserHandler,
 	NewMCPOAuthHandler,

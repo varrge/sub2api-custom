@@ -758,6 +758,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/purchase', label: purchaseNavLabel.value, icon: RechargeSubscriptionIcon, hideInSimpleMode: true, featureFlag: flagPayment },
     { path: '/orders', label: t('nav.myOrders'), icon: OrderListIcon, hideInSimpleMode: true, featureFlag: flagPayment },
     { path: '/redeem', label: t('nav.redeem'), icon: GiftIcon, hideInSimpleMode: true },
+    { path: '/invitations', label: t('invitations.title'), icon: UsersIcon },
     { path: '/activities/box', label: t('nav.box'), icon: GiftIcon, hideInSimpleMode: true, featureFlag: flagNativeBoxEntry },
     { path: '/activities/double11', label: t('activityCampaignsNav'), icon: GiftIcon, hideInSimpleMode: true, featureFlag: flagActivityCampaigns },
     { path: '/affiliate', label: t('nav.affiliate'), icon: UsersIcon, hideInSimpleMode: true, featureFlag: flagAffiliate },
@@ -858,6 +859,7 @@ const adminNavItems = computed((): NavItem[] => {
       ],
     },
     { path: '/admin/redeem', label: t('nav.redeemCodes'), icon: TicketIcon, hideInSimpleMode: true },
+    { path: '/admin/invitations', label: t('invitations.adminTitle'), icon: UsersIcon },
     { path: '/admin/promo-codes', label: t('nav.promoCodes'), icon: GiftIcon, hideInSimpleMode: true },
     {
       path: '/admin/affiliates',

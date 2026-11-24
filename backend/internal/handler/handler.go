@@ -75,6 +75,7 @@ type Handlers struct {
 	BatchImage          *BatchImageHandler
 	SupportTicket       *SupportTicketHandler
 	MCPOAuth            *MCPOAuthHandler
+	Invitation          *InvitationHandler
 }
 
 // BuildInfo contains build-time information

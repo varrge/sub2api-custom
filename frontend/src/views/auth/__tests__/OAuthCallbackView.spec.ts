@@ -223,4 +223,25 @@ describe('OAuthCallbackView', () => {
     expect(apiPostMock.mock.calls[0][1]).not.toHaveProperty('email')
     expect(setTokenMock).toHaveBeenCalledWith('token-2')
   })
+
+  it.each([false, true])('preserves hidden invitations and honors explicit removal (prefilled: %s)', async (prefilled) => {
+    routeState.path = '/auth/oauth/callback'
+    exchangePendingOAuthCompletionMock.mockResolvedValue({
+      error: 'registration_completion_required', provider: 'github',
+      redirect: '/dashboard', resolved_email: 'verified@example.com', invitation_required: false
+    })
+    apiPostMock.mockResolvedValue({ data: { access_token: 'token' } })
+    if (prefilled) sessionStorage.setItem('registration_invitation_code', 'OPTIONAL')
+    const wrapper = mount(OAuthCallbackView)
+    await vi.dynamicImportSettled()
+    const passwords = wrapper.findAll('input[type="password"]')
+    await passwords[0].setValue('secret-123')
+    await passwords[1].setValue('secret-123')
+    const invitation = wrapper.find('input[type="text"]:not([readonly])')
+    expect(invitation.exists()).toBe(prefilled)
+    if (prefilled) await invitation.setValue('')
+    await wrapper.findAll('button').at(0)?.trigger('click')
+    expect(apiPostMock.mock.calls[0][1].invitation_code).toBe(prefilled ? '' : undefined)
+    wrapper.unmount()
+  })
 })

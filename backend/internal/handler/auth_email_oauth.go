@@ -82,6 +82,10 @@ func (h *AuthHandler) emailOAuthStart(c *gin.Context, provider string) {
 	emailOAuthSetCookie(c, emailOAuthRedirectCookie, encodeCookieValue(redirectTo), secureCookie)
 	emailOAuthSetCookie(c, emailOAuthProviderCookie, encodeCookieValue(provider), secureCookie)
 	captureOAuthPromoCode(c, secureCookie)
+	if err := h.captureOAuthInvitationCode(c, provider, state, secureCookie); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 	if affCode := strings.TrimSpace(firstNonEmpty(c.Query("aff_code"), c.Query("aff"))); affCode != "" {
 		emailOAuthSetCookie(c, emailOAuthAffiliateCookie, encodeCookieValue(affCode), secureCookie)
 	} else {
@@ -118,6 +122,7 @@ func (h *AuthHandler) emailOAuthCallback(c *gin.Context, provider string) {
 	}
 
 	secureCookie := isRequestHTTPS(c)
+	clearOAuthInvitationCodeCookie(c, provider, secureCookie)
 	defer func() {
 		emailOAuthClearCookie(c, emailOAuthStateCookieName, secureCookie)
 		emailOAuthClearCookie(c, emailOAuthRedirectCookie, secureCookie)
@@ -128,6 +133,10 @@ func (h *AuthHandler) emailOAuthCallback(c *gin.Context, provider string) {
 	expectedState, err := readCookieDecoded(c, emailOAuthStateCookieName)
 	if err != nil || expectedState == "" || expectedState != state {
 		redirectOAuthError(c, frontendCallback, "invalid_state", "invalid oauth state", "")
+		return
+	}
+	if err := h.restoreOAuthInvitationCode(c, provider, state); err != nil {
+		redirectOAuthError(c, frontendCallback, "invalid_state", "invalid oauth invitation context", "")
 		return
 	}
 	expectedProvider, _ := readCookieDecoded(c, emailOAuthProviderCookie)
@@ -189,7 +198,7 @@ func (h *AuthHandler) emailOAuthCallbackWithProfile(
 	tokenPair, user, err := h.authService.LoginOrRegisterVerifiedEmailOAuthWithSignupCodes(
 		c.Request.Context(),
 		input,
-		"",
+		readOAuthInvitationCode(c),
 		affiliateCode,
 		readOAuthPromoCode(c),
 	)
@@ -337,9 +346,9 @@ func (h *AuthHandler) createEmailOAuthRegistrationPendingSession(
 }
 
 type completeEmailOAuthRequest struct {
-	Password       string `json:"password" binding:"required,min=6"`
-	InvitationCode string `json:"invitation_code,omitempty"`
-	AffCode        string `json:"aff_code,omitempty"`
+	Password       string  `json:"password" binding:"required,min=6"`
+	InvitationCode *string `json:"invitation_code,omitempty"`
+	AffCode        string  `json:"aff_code,omitempty"`
 }
 
 func (h *AuthHandler) completeEmailOAuthRegistration(c *gin.Context, provider string) {
@@ -367,26 +376,20 @@ func (h *AuthHandler) completeEmailOAuthRegistration(c *gin.Context, provider st
 		return
 	}
 
+	invitationCode := pendingOAuthInvitationCode(session, req.InvitationCode)
 	affiliateCode := strings.TrimSpace(req.AffCode)
 	if affiliateCode == "" {
 		affiliateCode = pendingSessionStringValue(session.UpstreamIdentityClaims, "aff_code")
 	}
 
-	tokenPair, user, err := h.authService.RegisterVerifiedOAuthEmailAccount(
-		c.Request.Context(),
-		strings.TrimSpace(session.ResolvedEmail),
-		req.Password,
-		strings.TrimSpace(req.InvitationCode),
-		strings.TrimSpace(session.ProviderType),
-	)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-
 	client := h.entClient()
 	if client == nil {
 		response.ErrorFrom(c, infraerrors.ServiceUnavailable("PENDING_AUTH_NOT_READY", "pending auth service is not ready"))
+		return
+	}
+	decision, err := h.ensurePendingOAuthAdoptionDecision(c, session.ID, oauthAdoptionDecisionRequest{})
+	if err != nil {
+		response.ErrorFrom(c, err)
 		return
 	}
 	tx, err := client.Tx(c.Request.Context())
@@ -396,48 +399,49 @@ func (h *AuthHandler) completeEmailOAuthRegistration(c *gin.Context, provider st
 	}
 	defer func() { _ = tx.Rollback() }()
 	txCtx := dbent.NewTxContext(c.Request.Context(), tx)
-	sessionForBinding := *session
-	sessionForBinding.UpstreamIdentityClaims = clonePendingMap(session.UpstreamIdentityClaims)
-	if strings.TrimSpace(req.InvitationCode) != "" {
-		sessionForBinding.UpstreamIdentityClaims["invitation_code"] = strings.TrimSpace(req.InvitationCode)
-	}
-	decision, err := h.ensurePendingOAuthAdoptionDecision(c, session.ID, oauthAdoptionDecisionRequest{})
+	tokenPair, user, err := h.authService.RegisterVerifiedOAuthEmailAccount(
+		txCtx,
+		strings.TrimSpace(session.ResolvedEmail),
+		req.Password,
+		invitationCode,
+		strings.TrimSpace(session.ProviderType),
+	)
 	if err != nil {
-		_ = tx.Rollback()
-		_ = h.authService.RollbackOAuthEmailAccountCreation(c.Request.Context(), user.ID, strings.TrimSpace(req.InvitationCode))
 		response.ErrorFrom(c, err)
 		return
 	}
+	sessionForBinding := *session
+	sessionForBinding.UpstreamIdentityClaims = clonePendingMap(session.UpstreamIdentityClaims)
+	if invitationCode != "" {
+		sessionForBinding.UpstreamIdentityClaims["invitation_code"] = invitationCode
+	}
 	if err := applyPendingOAuthBinding(txCtx, client, h.authService, h.userService, &sessionForBinding, decision, &user.ID, true, false); err != nil {
 		_ = tx.Rollback()
-		_ = h.authService.RollbackOAuthEmailAccountCreation(c.Request.Context(), user.ID, strings.TrimSpace(req.InvitationCode))
 		respondPendingOAuthBindingApplyError(c, err)
 		return
 	}
 	if err := h.authService.FinalizeOAuthEmailAccount(
 		txCtx,
 		user,
-		strings.TrimSpace(req.InvitationCode),
+		invitationCode,
 		strings.TrimSpace(session.ProviderType),
 		affiliateCode,
 	); err != nil {
 		_ = tx.Rollback()
-		_ = h.authService.RollbackOAuthEmailAccountCreation(c.Request.Context(), user.ID, strings.TrimSpace(req.InvitationCode))
 		response.ErrorFrom(c, err)
 		return
 	}
 	if err := consumePendingOAuthBrowserSessionTx(c.Request.Context(), tx, session); err != nil {
 		_ = tx.Rollback()
-		_ = h.authService.RollbackOAuthEmailAccountCreation(c.Request.Context(), user.ID, strings.TrimSpace(req.InvitationCode))
 		clearCookies()
 		response.ErrorFrom(c, err)
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		_ = h.authService.RollbackOAuthEmailAccountCreation(c.Request.Context(), user.ID, strings.TrimSpace(req.InvitationCode))
 		response.ErrorFrom(c, infraerrors.InternalServer("PENDING_AUTH_BIND_APPLY_FAILED", "failed to consume pending oauth session").WithCause(err))
 		return
 	}
+	h.authService.ApplyOAuthSignupGrants(c.Request.Context(), user.ID, session.ProviderType, affiliateCode)
 	h.authService.ApplyOAuthSignupPromoCode(c.Request.Context(), user.ID, pendingOAuthPromoCode(session))
 	h.authService.RecordSuccessfulLogin(c.Request.Context(), user.ID)
 	clearCookies()

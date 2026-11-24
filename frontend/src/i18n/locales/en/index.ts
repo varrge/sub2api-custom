@@ -25,6 +25,7 @@ import enterpriseExport from './enterpriseExport'
 import enterprisePayment from './enterprisePayment'
 
 export default {
+  ...invitations,
   voting,
   votingEntry,
   tutorial,
@@ -55,3 +56,4 @@ export default {
   ...enterprisePayment,
 }
 import sharedCredit from './sharedCredit'
+import invitations from './invitations'

@@ -418,6 +418,12 @@ func newPaymentConfigServiceTestClient(t *testing.T) *dbent.Client {
 	if _, err := db.Exec(`CREATE TABLE enterprise_conversion_cards(order_id BIGINT,credited_usd NUMERIC,refunded_at TIMESTAMP)`); err != nil {
 		t.Fatalf("create enterprise conversion fixture: %v", err)
 	}
+	// This SQL-only table is installed by migration 270, outside Ent's test schema.
+	if _, err := db.Exec(`CREATE TABLE native_invitation_bindings(
+		invitee_id INTEGER PRIMARY KEY,invite_id INTEGER NOT NULL UNIQUE,inviter_id INTEGER NOT NULL
+	)`); err != nil {
+		t.Fatalf("create native invitation binding fixture: %v", err)
+	}
 	t.Cleanup(func() { _ = client.Close() })
 	return client
 }

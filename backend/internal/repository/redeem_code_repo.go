@@ -94,6 +94,9 @@ func (r *redeemCodeRepository) GetByCode(ctx context.Context, code string) (*ser
 }
 
 func (r *redeemCodeRepository) Delete(ctx context.Context, id int64) error {
+	if err := rejectManagedInvitationEdit(ctx, clientFromContext(ctx, r.client), []int64{id}); err != nil {
+		return err
+	}
 	_, err := r.client.RedeemCode.Delete().Where(redeemcode.IDEQ(id)).Exec(ctx)
 	return err
 }
@@ -196,6 +199,9 @@ func redeemCodeListOrder(params pagination.PaginationParams) []func(*entsql.Sele
 }
 
 func (r *redeemCodeRepository) Update(ctx context.Context, code *service.RedeemCode) error {
+	if err := rejectManagedInvitationEdit(ctx, clientFromContext(ctx, r.client), []int64{code.ID}); err != nil {
+		return err
+	}
 	up := r.client.RedeemCode.UpdateOneID(code.ID).
 		SetCode(code.Code).
 		SetType(code.Type).
@@ -272,6 +278,9 @@ func (r *redeemCodeRepository) BatchUpdate(ctx context.Context, ids []int64, fie
 }
 
 func (r *redeemCodeRepository) batchUpdate(ctx context.Context, client *dbent.Client, ids []int64, fields service.RedeemCodeBatchUpdateFields) (int64, error) {
+	if err := rejectManagedInvitationEdit(ctx, client, ids); err != nil {
+		return 0, err
+	}
 	existing, err := client.RedeemCode.Query().
 		Where(redeemcode.IDIn(ids...)).
 		All(ctx)
@@ -325,7 +334,8 @@ func (r *redeemCodeRepository) Use(ctx context.Context, id, userID int64) error 
 	now := time.Now()
 	client := clientFromContext(ctx, r.client)
 	affected, err := client.RedeemCode.Update().
-		Where(redeemcode.IDEQ(id), redeemcode.StatusEQ(service.StatusUnused)).
+		Where(redeemcode.IDEQ(id), redeemcode.StatusEQ(service.StatusUnused),
+			redeemcode.Or(redeemcode.ExpiresAtIsNil(), redeemcode.ExpiresAtGT(now))).
 		SetStatus(service.StatusUsed).
 		SetUsedBy(userID).
 		SetUsedAt(now).

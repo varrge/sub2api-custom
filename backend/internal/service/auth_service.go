@@ -185,7 +185,8 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 	}
 	// 检查是否需要邀请码
 	var invitationRedeemCode *RedeemCode
-	if s.settingService != nil && s.settingService.IsInvitationCodeEnabled(ctx) {
+	invitationCode = strings.TrimSpace(invitationCode)
+	if invitationCode != "" || (s.settingService != nil && s.settingService.IsInvitationCodeEnabled(ctx)) {
 		if invitationCode == "" {
 			return "", nil, ErrInvitationCodeRequired
 		}
@@ -735,7 +736,8 @@ func (s *AuthService) loginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 
 			// 检查是否需要邀请码
 			var invitationRedeemCode *RedeemCode
-			if s.settingService != nil && s.settingService.IsInvitationCodeEnabled(ctx) {
+			invitationCode = strings.TrimSpace(invitationCode)
+			if invitationCode != "" || (s.settingService != nil && s.settingService.IsInvitationCodeEnabled(ctx)) {
 				if invitationCode == "" {
 					return nil, nil, ErrOAuthInvitationRequired
 				}
@@ -803,7 +805,7 @@ func (s *AuthService) loginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 						return nil, nil, ErrServiceUnavailable
 					}
 				} else {
-					if err := s.redeemRepo.Use(txCtx, invitationRedeemCode.ID, newUser.ID); err != nil {
+					if err := s.useOAuthRegistrationInvitation(txCtx, invitationRedeemCode.ID, newUser.ID); err != nil {
 						return nil, nil, ErrInvitationCodeInvalid
 					}
 					if err := tx.Commit(); err != nil {
@@ -839,7 +841,7 @@ func (s *AuthService) loginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 					_ = s.snapshotPlatformQuotaDefaults(ctx, user.ID, &grantPlan)
 					s.bindOAuthAffiliate(ctx, user.ID, affiliateCode)
 					if invitationRedeemCode != nil {
-						if err := s.redeemRepo.Use(ctx, invitationRedeemCode.ID, user.ID); err != nil {
+						if err := s.useOAuthRegistrationInvitation(ctx, invitationRedeemCode.ID, user.ID); err != nil {
 							return nil, nil, ErrInvitationCodeInvalid
 						}
 					}
@@ -1330,7 +1332,7 @@ func (s *AuthService) createUserAndClaimInvitation(ctx context.Context, user *Us
 		// createUserWithRegistrationEmailGuard 会回填 user.ID（applyUserEntityToService），
 		// 直接以其原子占用邀请码；占用失败即整体回滚（含用户创建，见 user_repo.create
 		// 对外部事务的复用）。
-		if err := s.redeemRepo.Use(execCtx, invitation.ID, user.ID); err != nil {
+		if err := s.useOAuthRegistrationInvitation(execCtx, invitation.ID, user.ID); err != nil {
 			// 并发下唯一的合法失败路径：另一个注册已占用该码
 			logger.LegacyPrintf("service.auth",
 				"[Auth] Rejected registration: invitation code %s already claimed (user_id=%d err=%v)",

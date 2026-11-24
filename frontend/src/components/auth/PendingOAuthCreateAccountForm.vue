@@ -68,7 +68,7 @@
       {{ t('auth.verificationCodeHint') }}
     </p>
     <input
-      v-if="invitationCodeEnabled"
+      v-if="invitationCodeEnabled || savedInvitationCode"
       v-model="invitationCode"
       :data-testid="`${testIdPrefix}-create-account-invitation-code`"
       type="text"
@@ -102,6 +102,7 @@ import { useI18n } from 'vue-i18n'
 import TurnstileWidget from '@/components/CaptchaChallenge.vue'
 import { getPublicSettings, sendPendingOAuthVerifyCode } from '@/api/auth'
 import { useAppStore } from '@/stores'
+import { loadRegistrationInvitation } from '@/utils/registrationInvitation'
 
 export type PendingOAuthCreateAccountPayload = {
   email: string
@@ -131,7 +132,8 @@ const appStore = useAppStore()
 const email = ref('')
 const password = ref('')
 const verifyCode = ref('')
-const invitationCode = ref('')
+const savedInvitationCode = loadRegistrationInvitation()
+const invitationCode = ref(savedInvitationCode)
 const isSendingCode = ref(false)
 const sendCodeError = ref('')
 const sendCodeSuccess = ref(false)
@@ -333,7 +335,7 @@ async function handleSubmit() {
           tencentCaptchaRandstr: tencentCaptchaRandstr.value
         }
       : {}),
-    invitationCode: invitationCode.value.trim() || undefined
+    invitationCode: invitationCodeEnabled.value || savedInvitationCode ? invitationCode.value.trim() : undefined
   })
 
   if (actionCaptchaEnabled.value) {

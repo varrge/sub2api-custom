@@ -73,6 +73,7 @@ func RegisterAdminRoutes(
 		// 公告管理
 		registerAnnouncementRoutes(admin, h)
 		registerSupportTicketRoutes(admin, h)
+		registerInvitationAdminRoutes(admin, h.Invitation, stepUpAuth)
 
 		// OpenAI OAuth
 		registerOpenAIOAuthRoutes(admin, h)

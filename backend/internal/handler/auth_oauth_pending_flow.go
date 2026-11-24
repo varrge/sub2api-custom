@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -66,16 +65,16 @@ type bindPendingOAuthLoginRequest struct {
 }
 
 type createPendingOAuthAccountRequest struct {
-	Email                 string `json:"email" binding:"required,email"`
-	VerifyCode            string `json:"verify_code,omitempty"`
-	Password              string `json:"password" binding:"required,min=6"`
-	TurnstileToken        string `json:"turnstile_token,omitempty"`
-	TencentCaptchaTicket  string `json:"tencent_captcha_ticket,omitempty"`
-	TencentCaptchaRandstr string `json:"tencent_captcha_randstr,omitempty"`
-	InvitationCode        string `json:"invitation_code,omitempty"`
-	AffCode               string `json:"aff_code,omitempty"`
-	AdoptDisplayName      *bool  `json:"adopt_display_name,omitempty"`
-	AdoptAvatar           *bool  `json:"adopt_avatar,omitempty"`
+	Email                 string  `json:"email" binding:"required,email"`
+	VerifyCode            string  `json:"verify_code,omitempty"`
+	Password              string  `json:"password" binding:"required,min=6"`
+	TurnstileToken        string  `json:"turnstile_token,omitempty"`
+	TencentCaptchaTicket  string  `json:"tencent_captcha_ticket,omitempty"`
+	TencentCaptchaRandstr string  `json:"tencent_captcha_randstr,omitempty"`
+	InvitationCode        *string `json:"invitation_code,omitempty"`
+	AffCode               string  `json:"aff_code,omitempty"`
+	AdoptDisplayName      *bool   `json:"adopt_display_name,omitempty"`
+	AdoptAvatar           *bool   `json:"adopt_avatar,omitempty"`
 }
 
 type sendPendingOAuthVerifyCodeRequest struct {
@@ -242,6 +241,9 @@ func (h *AuthHandler) createOAuthPendingSession(c *gin.Context, payload oauthPen
 	}
 	if promoCode := readOAuthPromoCode(c); promoCode != "" {
 		localFlowState[oauthPromoCodeStateKey] = promoCode
+	}
+	if invitationCode := readOAuthInvitationCode(c); invitationCode != "" && normalizeOAuthIntent(payload.Intent) == oauthIntentLogin {
+		localFlowState[oauthInvitationCodeStateKey] = invitationCode
 	}
 
 	session, err := svc.CreatePendingSession(c.Request.Context(), service.CreatePendingAuthSessionInput{
@@ -1504,6 +1506,9 @@ func clearOAuthLogoutCookies(c *gin.Context) {
 	clearOAuthPendingSessionCookie(c, secureCookie)
 	clearOAuthPendingBrowserCookie(c, secureCookie)
 	clearOAuthBindAccessTokenCookie(c, secureCookie)
+	for _, provider := range []string{"linuxdo", "wechat", "oidc", "github", "google", "dingtalk"} {
+		clearOAuthInvitationCodeCookie(c, provider, secureCookie)
+	}
 
 	clearCookie(c, linuxDoOAuthStateCookieName, secureCookie)
 	clearCookie(c, linuxDoOAuthVerifierCookie, secureCookie)
@@ -1775,15 +1780,31 @@ func (h *AuthHandler) createPendingOAuthAccount(c *gin.Context, provider string)
 		return
 	}
 
+	invitationCode := pendingOAuthInvitationCode(session, req.InvitationCode)
+	decision, err := h.ensurePendingOAuthAdoptionDecision(c, session.ID, req.adoptionDecision())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	// Keep the password account invisible until identity, invitation and pending
+	// session consumption all commit, so an early login cannot bypass attribution.
+	tx, err := client.Tx(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, infraerrors.InternalServer("PENDING_AUTH_BIND_APPLY_FAILED", "failed to bind pending oauth identity").WithCause(err))
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+	txCtx := dbent.NewTxContext(c.Request.Context(), tx)
 	tokenPair, user, err := h.authService.RegisterOAuthEmailAccount(
-		c.Request.Context(),
+		txCtx,
 		email,
 		req.Password,
 		strings.TrimSpace(req.VerifyCode),
-		strings.TrimSpace(req.InvitationCode),
+		invitationCode,
 		strings.TrimSpace(session.ProviderType),
 	)
 	if err != nil {
+		_ = tx.Rollback()
 		if errors.Is(err, service.ErrEmailExists) {
 			existingUser, lookupErr := findUserByNormalizedEmail(c.Request.Context(), client, email)
 			if lookupErr != nil {
@@ -1802,50 +1823,8 @@ func (h *AuthHandler) createPendingOAuthAccount(c *gin.Context, provider string)
 		return
 	}
 
-	rollbackCreatedUser := func(originalErr error) bool {
-		if user == nil || user.ID <= 0 {
-			return false
-		}
-		if rollbackErr := h.authService.RollbackOAuthEmailAccountCreation(
-			c.Request.Context(),
-			user.ID,
-			strings.TrimSpace(req.InvitationCode),
-		); rollbackErr != nil {
-			response.ErrorFrom(c, infraerrors.InternalServer(
-				"PENDING_AUTH_ACCOUNT_ROLLBACK_FAILED",
-				"failed to rollback pending oauth account creation",
-			).WithCause(fmt.Errorf("original error: %w; rollback error: %v", originalErr, rollbackErr)))
-			return true
-		}
-		user = nil
-		return false
-	}
-
-	decision, err := h.ensurePendingOAuthAdoptionDecision(c, session.ID, req.adoptionDecision())
-	if err != nil {
-		if rollbackCreatedUser(err) {
-			return
-		}
-		response.ErrorFrom(c, err)
-		return
-	}
-
-	tx, err := client.Tx(c.Request.Context())
-	if err != nil {
-		if rollbackCreatedUser(err) {
-			return
-		}
-		response.ErrorFrom(c, infraerrors.InternalServer("PENDING_AUTH_BIND_APPLY_FAILED", "failed to bind pending oauth identity").WithCause(err))
-		return
-	}
-	defer func() { _ = tx.Rollback() }()
-	txCtx := dbent.NewTxContext(c.Request.Context(), tx)
-
 	if err := applyPendingOAuthBinding(txCtx, client, h.authService, h.userService, session, decision, &user.ID, true, false); err != nil {
 		_ = tx.Rollback()
-		if rollbackCreatedUser(err) {
-			return
-		}
 		respondPendingOAuthBindingApplyError(c, err)
 		return
 	}
@@ -1853,23 +1832,17 @@ func (h *AuthHandler) createPendingOAuthAccount(c *gin.Context, provider string)
 	if err := h.authService.FinalizeOAuthEmailAccount(
 		txCtx,
 		user,
-		strings.TrimSpace(req.InvitationCode),
+		invitationCode,
 		strings.TrimSpace(session.ProviderType),
 		strings.TrimSpace(req.AffCode),
 	); err != nil {
 		_ = tx.Rollback()
-		if rollbackCreatedUser(err) {
-			return
-		}
 		response.ErrorFrom(c, err)
 		return
 	}
 
 	if err := consumePendingOAuthBrowserSessionTx(txCtx, tx, session); err != nil {
 		_ = tx.Rollback()
-		if rollbackCreatedUser(err) {
-			return
-		}
 		clearCookies()
 		response.ErrorFrom(c, err)
 		return
@@ -1878,22 +1851,17 @@ func (h *AuthHandler) createPendingOAuthAccount(c *gin.Context, provider string)
 	if pendingOAuthCreateAccountPreCommitHook != nil {
 		if err := pendingOAuthCreateAccountPreCommitHook(txCtx, session); err != nil {
 			_ = tx.Rollback()
-			if rollbackCreatedUser(err) {
-				return
-			}
 			respondPendingOAuthBindingApplyError(c, err)
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		if rollbackCreatedUser(err) {
-			return
-		}
 		response.ErrorFrom(c, infraerrors.InternalServer("PENDING_AUTH_BIND_APPLY_FAILED", "failed to bind pending oauth identity").WithCause(err))
 		return
 	}
 
+	h.authService.ApplyOAuthSignupGrants(c.Request.Context(), user.ID, session.ProviderType, strings.TrimSpace(req.AffCode))
 	h.authService.ApplyOAuthSignupPromoCode(c.Request.Context(), user.ID, pendingOAuthPromoCode(session))
 	h.authService.RecordSuccessfulLogin(c.Request.Context(), user.ID)
 	// createPendingOAuthAccount = 注册新账户，需要把钉钉昵称同步到 users.username 作为初始值

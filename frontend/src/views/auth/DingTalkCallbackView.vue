@@ -235,6 +235,7 @@
 </template>
 
 <script setup lang="ts">
+import { clearRegistrationInvitation, loadRegistrationInvitation } from '@/utils/registrationInvitation'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -272,7 +273,8 @@ const errorMessage = ref('')
 
 // Invitation code flow state
 const needsInvitation = ref(false)
-const invitationCode = ref('')
+const savedInvitationCode = loadRegistrationInvitation()
+const invitationCode = ref(savedInvitationCode)
 const isSubmitting = ref(false)
 const invitationError = ref('')
 const redirectTo = ref('/dashboard')
@@ -573,6 +575,7 @@ async function finalizeCompletion(completion: PendingOAuthExchangeResponse, redi
     const bindRedirect = sanitizeRedirectPath(completion.redirect || '/profile')
     clearPendingAuthSession()
     clearAllAffiliateReferralCodes()
+    clearRegistrationInvitation()
     appStore.showSuccess(bindSuccessMessage)
     await router.replace(bindRedirect)
     return
@@ -585,6 +588,7 @@ async function finalizeCompletion(completion: PendingOAuthExchangeResponse, redi
   persistOAuthTokenContext(completion)
   await authStore.setToken(completion.access_token)
   clearAllAffiliateReferralCodes()
+  clearRegistrationInvitation()
   appStore.showSuccess(t('auth.loginSuccess'))
   await router.replace(redirect)
 }
@@ -690,7 +694,7 @@ async function handleCreateAccount(payload: PendingOAuthCreateAccountPayload) {
             tencent_captcha_randstr: payload.tencentCaptchaRandstr
         }
         : {}),
-      invitation_code: payload.invitationCode || undefined,
+      invitation_code: payload.invitationCode,
       ...oauthAffiliatePayload(loadOAuthAffiliateCode()),
       ...serializeAdoptionDecision(currentAdoptionDecision())
     })
@@ -740,6 +744,7 @@ async function handleSubmitTotpChallenge() {
     })
     await authStore.setToken(completion.access_token)
     clearAllAffiliateReferralCodes()
+    clearRegistrationInvitation()
     appStore.showSuccess(t('auth.loginSuccess'))
     await router.replace(redirectTo.value)
   } catch (e: unknown) {
@@ -764,6 +769,7 @@ onMounted(async () => {
       persistOAuthTokenContext(legacyLogin)
       await authStore.setToken(legacyLogin.access_token)
       clearAllAffiliateReferralCodes()
+      clearRegistrationInvitation()
       appStore.showSuccess(t('auth.loginSuccess'))
       await router.replace(redirect)
       return

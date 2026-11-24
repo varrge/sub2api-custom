@@ -501,7 +501,7 @@ func TestRollbackOAuthEmailAccountCreationPropagatesDeleteError(t *testing.T) {
 	require.Contains(t, err.Error(), "delete created oauth user")
 }
 
-func TestFinalizeOAuthEmailAccount_SnapshotsPlatformQuotaDefaults(t *testing.T) {
+func TestApplyOAuthSignupGrants_SnapshotsPlatformQuotaDefaults(t *testing.T) {
 	userRepo := &userRepoStub{nextID: 99}
 	quotaRepo := &userPlatformQuotaRepoStub{}
 
@@ -526,15 +526,12 @@ func TestFinalizeOAuthEmailAccount_SnapshotsPlatformQuotaDefaults(t *testing.T) 
 		SignupSource: "oidc",
 	}
 
-	err := authService.FinalizeOAuthEmailAccount(
+	authService.ApplyOAuthSignupGrants(
 		context.Background(),
-		user,
-		"",
+		user.ID,
 		"oidc",
 		"",
 	)
-
-	require.NoError(t, err)
 
 	require.Len(t, quotaRepo.bulkInsertCalls, 1, "snapshotPlatformQuotaDefaults must call BulkInsertInitial once on successful OAuth signup")
 

@@ -863,6 +863,11 @@ func newPaymentOrderLifecycleTestClient(t *testing.T) *dbent.Client {
 	client := enttest.NewClient(t, enttest.WithOptions(dbent.Driver(drv)))
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS enterprise_conversion_cards(order_id BIGINT,credited_usd NUMERIC,refunded_at TIMESTAMP)`)
 	require.NoError(t, err)
+	// Migration 270 installs this SQL-only table, outside Ent's test schema.
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS native_invitation_bindings(
+		invitee_id INTEGER PRIMARY KEY,invite_id INTEGER NOT NULL UNIQUE,inviter_id INTEGER NOT NULL
+	)`)
+	require.NoError(t, err)
 	t.Cleanup(func() { _ = client.Close() })
 	return client
 }

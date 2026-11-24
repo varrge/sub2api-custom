@@ -304,6 +304,12 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/invitations',
+    name: 'Invitations',
+    component: () => import('@/views/user/InvitationsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: false, title: 'Registration Invitations', titleKey: 'invitations.title', descriptionKey: 'invitations.description' }
+  },
+  {
     path: '/affiliate',
     name: 'Affiliate',
     component: () => import('@/views/user/AffiliateView.vue'),
@@ -802,6 +808,12 @@ const routes: RouteRecordRaw[] = [
       titleKey: 'admin.usage.title',
       descriptionKey: 'admin.usage.description'
     }
+  },
+  {
+    path: '/admin/invitations',
+    name: 'AdminInvitations',
+    component: () => import('@/views/admin/InvitationsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Registration Invitation Management', titleKey: 'invitations.adminTitle', descriptionKey: 'invitations.adminDescription' }
   },
   {
     path: '/admin/affiliates',

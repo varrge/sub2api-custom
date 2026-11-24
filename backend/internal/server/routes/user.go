@@ -164,6 +164,7 @@ func RegisterUserRoutes(
 		}
 
 		registerSupportTicketUserRoutes(authenticated, h, settingService)
+		registerInvitationUserRoutes(authenticated, h.Invitation)
 
 		// 卡密兑换
 		redeem := authenticated.Group("/redeem")

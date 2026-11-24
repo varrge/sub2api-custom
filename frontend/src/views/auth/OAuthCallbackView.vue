@@ -54,7 +54,7 @@
               @keyup.enter="handleSubmitRegistration"
             />
           </div>
-          <div v-if="invitationRequired">
+          <div v-if="invitationRequired || savedInvitationCode">
             <label class="input-label">{{ t('auth.invitationCodeLabel') }}</label>
             <input
               v-model="invitationCode"
@@ -146,6 +146,7 @@
 </template>
 
 <script setup lang="ts">
+import { clearRegistrationInvitation, loadRegistrationInvitation } from '@/utils/registrationInvitation'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -177,7 +178,8 @@ const invitationRequired = ref(false)
 const registrationEmail = ref('')
 const password = ref('')
 const confirmPassword = ref('')
-const invitationCode = ref('')
+const savedInvitationCode = loadRegistrationInvitation()
+const invitationCode = ref(savedInvitationCode)
 const registrationError = ref('')
 const pendingProvider = ref<'github' | 'google'>('github')
 const redirectTo = ref('/dashboard')
@@ -278,6 +280,7 @@ async function finalizeTokenResponse(tokenResponse: OAuthTokenResponse, redirect
     window.sessionStorage.removeItem(EMAIL_OAUTH_PENDING_PROVIDER_KEY)
   }
   clearAllAffiliateReferralCodes()
+  clearRegistrationInvitation()
   appStore.showSuccess(t('auth.loginSuccess'))
   await router.replace(sanitizeRedirectPath(redirect))
 }
@@ -344,10 +347,8 @@ async function handleSubmitRegistration() {
   try {
     const payload: { password: string; invitation_code?: string; aff_code?: string } = {
       password: password.value,
+      invitation_code: invitationRequired.value || savedInvitationCode ? code : undefined,
       ...oauthAffiliatePayload(loadOAuthAffiliateCode())
-    }
-    if (invitationRequired.value) {
-      payload.invitation_code = code
     }
     const { data } = await apiClient.post<OAuthTokenResponse>(
       `/auth/oauth/${pendingProvider.value}/complete-registration`,

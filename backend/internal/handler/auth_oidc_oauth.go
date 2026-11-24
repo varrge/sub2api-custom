@@ -147,6 +147,10 @@ func (h *AuthHandler) OIDCOAuthStart(c *gin.Context) {
 	intent := normalizeOAuthIntent(c.Query("intent"))
 	oidcSetCookie(c, oidcOAuthIntentCookieName, encodeCookieValue(intent), oidcOAuthCookieMaxAgeSec, secureCookie)
 	captureOAuthPromoCode(c, secureCookie)
+	if err := h.captureOAuthInvitationCode(c, "oidc", state, secureCookie); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 	setOAuthPendingBrowserCookie(c, browserSessionKey, secureCookie)
 	clearOAuthPendingSessionCookie(c, secureCookie)
 	if intent == oauthIntentBindCurrentUser {
@@ -223,6 +227,7 @@ func (h *AuthHandler) OIDCOAuthCallback(c *gin.Context) {
 	}
 
 	secureCookie := isRequestHTTPS(c)
+	clearOAuthInvitationCodeCookie(c, "oidc", secureCookie)
 	defer func() {
 		oidcClearCookie(c, oidcOAuthStateCookieName, secureCookie)
 		oidcClearCookie(c, oidcOAuthVerifierCookie, secureCookie)
@@ -236,6 +241,10 @@ func (h *AuthHandler) OIDCOAuthCallback(c *gin.Context) {
 	expectedState, err := readCookieDecoded(c, oidcOAuthStateCookieName)
 	if err != nil || expectedState == "" || state != expectedState {
 		redirectOAuthError(c, frontendCallback, "invalid_state", "invalid oauth state", "")
+		return
+	}
+	if err := h.restoreOAuthInvitationCode(c, "oidc", state); err != nil {
+		redirectOAuthError(c, frontendCallback, "invalid_state", "invalid oauth invitation context", "")
 		return
 	}
 
@@ -605,10 +614,10 @@ func (h *AuthHandler) createOIDCOAuthChoicePendingSession(
 }
 
 type completeOIDCOAuthRequest struct {
-	InvitationCode   string `json:"invitation_code" binding:"required"`
-	AffCode          string `json:"aff_code,omitempty"`
-	AdoptDisplayName *bool  `json:"adopt_display_name,omitempty"`
-	AdoptAvatar      *bool  `json:"adopt_avatar,omitempty"`
+	InvitationCode   *string `json:"invitation_code,omitempty"`
+	AffCode          string  `json:"aff_code,omitempty"`
+	AdoptDisplayName *bool   `json:"adopt_display_name,omitempty"`
+	AdoptAvatar      *bool   `json:"adopt_avatar,omitempty"`
 }
 
 // CompleteOIDCOAuthRegistration completes a pending OAuth registration by validating
@@ -694,7 +703,7 @@ func (h *AuthHandler) CompleteOIDCOAuthRegistration(c *gin.Context) {
 		c.Request.Context(),
 		email,
 		username,
-		req.InvitationCode,
+		pendingOAuthInvitationCode(session, req.InvitationCode),
 		req.AffCode,
 		pendingOAuthPromoCode(session),
 		"oidc",
@@ -1274,7 +1283,7 @@ func (h *AuthHandler) tryOIDCVerifiedEmailFastPath(
 	tokenPair, _, err := h.authService.LoginOrRegisterVerifiedEmailOAuthWithSignupCodes(
 		ctx,
 		input,
-		"",
+		readOAuthInvitationCode(c),
 		"",
 		readOAuthPromoCode(c),
 	)

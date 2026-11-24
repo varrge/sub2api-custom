@@ -108,6 +108,8 @@ func TestRecordUsageGPT62PromotionWithFreeTiers(t *testing.T) {
 							FastMultiplier: pricingMultiplier(2.5)}
 						if source == "group" {
 							group.ModelPricing = []ChannelModelPricing{card}
+							// Account statistics need a channel; keep its customer pricing empty.
+							svc.channelService = newChannelServiceWithPricings(group.ID, nil)
 						} else {
 							svc.channelService = newChannelServiceWithPricings(group.ID, []ChannelModelPricing{card})
 						}

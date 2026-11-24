@@ -100,6 +100,7 @@ func TestGeminiToolMediaPreservesNativeAndOpenAIFormats(t *testing.T) {
 		require.NoError(t, err)
 		var request struct {
 			Contents []struct {
+				Role  string           `json:"role"`
 				Parts []map[string]any `json:"parts"`
 			} `json:"contents"`
 		}
@@ -109,7 +110,14 @@ func TestGeminiToolMediaPreservesNativeAndOpenAIFormats(t *testing.T) {
 		if preserveIDs {
 			require.Equal(t, "call-image", response["id"])
 			require.NotContains(t, response, "parts")
-			require.Len(t, parts, 2)
+			require.Len(t, parts, 1)
+			// The Gemini converter splits trailing media into the next user
+			// turn so a functionResponse is never followed by other part types.
+			require.Len(t, request.Contents, 3)
+			require.Equal(t, "user", request.Contents[2].Role)
+			require.Equal(t, []map[string]any{{
+				"inlineData": map[string]any{"mimeType": "image/png", "data": "aGk="},
+			}}, request.Contents[2].Parts)
 			for _, protocol := range []string{GeminiUpstreamResponses, GeminiUpstreamChatCompletions} {
 				adapted, err := apicompat.GeminiToOpenAIRequest(converted, "gemini-3-flash", false, protocol)
 				require.NoError(t, err)
@@ -117,6 +125,7 @@ func TestGeminiToolMediaPreservesNativeAndOpenAIFormats(t *testing.T) {
 				require.Contains(t, string(adapted), "call-image")
 			}
 		} else {
+			require.Len(t, request.Contents, 2)
 			require.NotContains(t, response, "id")
 			require.Len(t, parts, 1)
 			require.Len(t, response["parts"], 1)

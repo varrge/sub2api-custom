@@ -73,7 +73,7 @@ func TestPostgresSecurityAccessEventsDeliverMetadataOnlyAndRespectSettings(t *te
 	require.NoError(t, s.Collect(ctx))
 	rows, err := db.Query(`SELECT event,body FROM push_notification_deliveries ORDER BY event`)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() { require.NoError(t, rows.Close()) }()
 	kinds := []string{}
 	for rows.Next() {
 		var kind, body string

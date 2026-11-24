@@ -253,5 +253,44 @@ func TestFailedLoginAuditRetainsTrustedAttributionWithSpoofedHeaders(t *testing.
 	require.Equal(t, "203.0.113.4", repo.logs[0].Extra["security_client_ip"])
 	require.Equal(t, "203.0.113.4", repo.logs[0].Extra["peer_ip"])
 	require.Nil(t, repo.logs[0].ActorUserID)
+	require.Equal(t, "claimed@example.test", repo.logs[0].Extra["login_target_email"])
+	require.NotContains(t, repo.logs[0].Extra, "login_target_user_id")
 	require.NotContains(t, repo.logs[0].RequestBody, "secret-password")
+}
+
+func TestLoginAuditTargetEmailIsOnlyALookupHintOnPasswordRoutes(t *testing.T) {
+	for _, route := range []string{
+		"/api/v1/auth/login", "/api/v1/auth/oauth/oidc/bind-login",
+		"/api/v1/auth/login/2fa", "/api/v1/auth/passkey/login/finish", "/api/v1/auth/register",
+	} {
+		t.Run(route, func(t *testing.T) {
+			repo := &auditCaptureRepository{}
+			audit := service.NewAuditLogService(repo, nil)
+			audit.Start()
+			r := gin.New()
+			r.Use(gin.HandlerFunc(NewAuditLogMiddleware(audit)))
+			r.POST(route, func(c *gin.Context) {
+				SetAuditExtra(c, map[string]any{"login_target_user_id": int64(1), "login_target_email": "forged@example.test"})
+				c.Status(http.StatusTooManyRequests)
+			})
+			body := `{"email":" ADMIN@example.test ","password":"secret-password","role":"admin","user_id":1,"login_target_user_id":1}`
+			req := httptest.NewRequest("POST", route, strings.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			r.ServeHTTP(httptest.NewRecorder(), req)
+			audit.Stop()
+			require.Len(t, repo.logs, 1)
+			entry := repo.logs[0]
+			require.Nil(t, entry.ActorUserID)
+			require.NotContains(t, entry.Extra, "login_target_user_id")
+			if route == "/api/v1/auth/login" || strings.HasSuffix(route, "/bind-login") {
+				require.Equal(t, "admin@example.test", entry.Extra["login_target_email"])
+			} else {
+				require.NotContains(t, entry.Extra, "login_target_email")
+			}
+			require.NotContains(t, entry.RequestBody, "secret-password")
+			if strings.Contains(route, "passkey") {
+				require.Equal(t, "<credential-bearing body omitted>", entry.RequestBody)
+			}
+		})
+	}
 }

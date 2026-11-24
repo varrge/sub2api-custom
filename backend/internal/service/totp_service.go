@@ -450,6 +450,7 @@ func (s *TotpService) GetLoginSession(ctx context.Context, tempToken string) (*T
 	if err != nil {
 		return nil, err
 	}
+	recordLoginAuditTarget(ctx, user.ID)
 	if session.CredentialVersion == nil || *session.CredentialVersion != resolvedTokenVersion(user) || !user.IsActive() || time.Now().After(session.TokenExpiry) {
 		_ = s.cache.DeleteLoginSession(ctx, tempToken)
 		return nil, ErrInvalidToken

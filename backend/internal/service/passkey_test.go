@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -109,4 +112,61 @@ func TestPasskeyEnrollmentAndRevocationRequireAccountPassword(t *testing.T) {
 
 	require.NoError(t, svc.Delete(context.Background(), user.ID, 1, "correct-password"))
 	require.True(t, repo.deleteCalled)
+}
+
+type passkeyAuditRepo struct {
+	PasskeyRepository
+	record *PasskeyCredentialRecord
+}
+
+func (r *passkeyAuditRepo) GetByCredentialID(context.Context, []byte) (*PasskeyCredentialRecord, error) {
+	return r.record, nil
+}
+
+func (r *passkeyAuditRepo) ListByUserID(context.Context, int64) ([]PasskeyCredentialRecord, error) {
+	return []PasskeyCredentialRecord{*r.record}, nil
+}
+
+type passkeyAuditSessions struct {
+	PasskeySessionStore
+	session *PasskeySession
+}
+
+func (s *passkeyAuditSessions) Consume(context.Context, string) (*PasskeySession, error) {
+	return s.session, nil
+}
+
+func TestFailedPasskeyAssertionRecordsOnlyServerResolvedTarget(t *testing.T) {
+	user := &User{ID: 7, Role: RoleAdmin, Email: "admin@example.test", Status: StatusActive}
+	svc, _ := newPasskeyPwService(t, user)
+	record := &PasskeyCredentialRecord{
+		UserID: user.ID, UserHandle: []byte("user-handle"), Credential: webauthn.Credential{ID: []byte("credential-id")},
+	}
+	repo := &passkeyAuditRepo{record: record}
+	svc.repo = repo
+	svc.sessions = &passkeyAuditSessions{session: &PasskeySession{
+		Kind: passkeySessionLogin, WebAuthn: webauthn.SessionData{Challenge: "expected-challenge", Expires: time.Now().Add(time.Minute)},
+	}}
+	encode := base64.RawURLEncoding.EncodeToString
+	body, err := json.Marshal(map[string]any{
+		"id": encode(record.Credential.ID), "rawId": encode(record.Credential.ID), "type": "public-key",
+		"response": map[string]string{
+			"clientDataJSON":    encode([]byte(`{"type":"webauthn.get","challenge":"wrong-challenge","origin":"https://sub2api.example.com"}`)),
+			"authenticatorData": encode(make([]byte, 37)), "signature": encode([]byte("invalid-signature")),
+			"userHandle": encode(record.UserHandle),
+		},
+	})
+	require.NoError(t, err)
+	ctx := WithLoginAuditTarget(context.Background())
+	authenticated, err := svc.FinishLogin(ctx, "session", httptest.NewRequest("POST", "/", strings.NewReader(string(body))))
+	require.ErrorIs(t, err, ErrPasskeyVerify)
+	require.Nil(t, authenticated)
+	require.Equal(t, user.ID, LoginAuditTargetUserID(ctx))
+
+	repo.record = nil
+	ctx = WithLoginAuditTarget(context.Background())
+	authenticated, err = svc.FinishLogin(ctx, "session", httptest.NewRequest("POST", "/", strings.NewReader(string(body))))
+	require.ErrorIs(t, err, ErrPasskeyVerify)
+	require.Nil(t, authenticated)
+	require.Zero(t, LoginAuditTargetUserID(ctx))
 }

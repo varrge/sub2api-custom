@@ -28,12 +28,12 @@ var (
 )
 
 var Events = []string{"payment.recharged", "subscription.purchased", "monthcard.purchased", "team.full", "ops.alert", "shared_credit.low", "admin.activity", "security.login_failed", "security.suspicious_ip"}
-var Variables = []string{"site_name", "event_name", "event_id", "occurred_at", "summary", "details", "user_id", "order_id", "amount", "currency", "product_name", "team_code", "remaining_quota", "action", "method", "path", "client_ip", "actor_email", "auth_method", "status_code", "request_id", "peer_ip", "ip_source", "reason", "request_count"}
+var Variables = []string{"site_name", "event_name", "event_id", "occurred_at", "summary", "details", "user_id", "order_id", "amount", "currency", "product_name", "team_code", "remaining_quota", "action", "method", "path", "client_ip", "actor_email", "auth_method", "status_code", "request_id", "peer_ip", "ip_source", "reason", "request_count", "target_user_id", "target_email"}
 var eventNames = map[string]string{
 	"payment.recharged": "充值成功", "subscription.purchased": "订阅购买成功", "monthcard.purchased": "月卡购买成功",
 	"team.full": "拼团已满", "ops.alert": "运行告警", "shared_credit.low": "共享额度不足",
 	"admin.activity":        "管理员操作",
-	"security.login_failed": "登录失败", "security.suspicious_ip": "异常 IP／未授权访问",
+	"security.login_failed": "管理员账号登录失败", "security.suspicious_ip": "异常 IP／未授权访问",
 }
 
 type Config struct {
@@ -254,9 +254,10 @@ func Sample(kind string) Event {
 			"reason": "repeated_unknown_api", "request_count": "3", "request_id": "preview-request",
 		}
 		if kind == "security.login_failed" {
-			event.Values["summary"], event.Values["action"] = "登录失败，请核对来源。", "auth.login"
+			event.Values["summary"], event.Values["action"] = "管理员账号登录失败，请核对来源。", "auth.login"
 			event.Values["method"], event.Values["path"], event.Values["status_code"] = "POST", "/api/v1/auth/login", "401"
 			event.Values["reason"], event.Values["request_count"] = "login_failed", "1"
+			event.Values["target_user_id"], event.Values["target_email"] = "1", "admin@example.com"
 		}
 		decorateEvent(&event)
 	}

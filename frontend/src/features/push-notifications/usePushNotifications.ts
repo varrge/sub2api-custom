@@ -4,7 +4,7 @@ import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { pushNotificationsApi, type PushChannel, type PushConfig, type PushDelivery, type PushEvent, type PushPreview } from '@/api/admin/pushNotifications'
 
-export const pushVariables = ['site_name', 'event_name', 'event_id', 'occurred_at', 'summary', 'details', 'user_id', 'order_id', 'amount', 'currency', 'product_name', 'team_code', 'remaining_quota', 'action', 'method', 'path', 'client_ip', 'actor_email', 'auth_method', 'status_code', 'request_id', 'peer_ip', 'ip_source', 'reason', 'request_count']
+export const pushVariables = ['site_name', 'event_name', 'event_id', 'occurred_at', 'summary', 'details', 'user_id', 'order_id', 'amount', 'currency', 'product_name', 'team_code', 'remaining_quota', 'action', 'method', 'path', 'client_ip', 'actor_email', 'auth_method', 'status_code', 'request_id', 'peer_ip', 'ip_source', 'reason', 'request_count', 'target_user_id', 'target_email']
 const events: [PushEvent, string, string, string, string][] = [
   ['payment.recharged', '充值成功', 'Recharge completed', '在线充值到账后通知', 'After an online recharge is fulfilled'],
   ['subscription.purchased', '订阅购买成功', 'Subscription purchased', '订阅订单完成后通知', 'After a subscription order is fulfilled'],
@@ -13,7 +13,7 @@ const events: [PushEvent, string, string, string, string][] = [
   ['ops.alert', '运行告警', 'Operations alert', '监控规则产生告警时通知，请先配置运行监控规则', 'When configured monitoring rules raise an alert'],
   ['shared_credit.low', '共享额度不足', 'Shared credit low', '活动可用额度低于或等于阈值；每个活动配置版本提醒一次', 'Available activity credit reaches the threshold; once per pool revision'],
   ['admin.activity', '管理员操作', 'Admin action', '导出、恢复、改密、删除、推送设置等敏感管理员操作', 'Sensitive admin actions such as exports, restores, key changes, deletions and push settings'],
-  ['security.login_failed', '登录失败', 'Failed login', '密码、二次验证或通行密钥登录失败，含限流拒绝；记录可信代理解析的客户端 IP', 'Failed password, 2FA or passkey login, including rate limits; records the trusted-proxy client IP'],
+  ['security.login_failed', '管理员账号登录失败', 'Failed administrator login', '仅通知已识别为管理员账号的失败登录；含密码、二次验证、通行密钥及 OAuth 绑定，普通用户不通知', 'Failed login attempts targeting an identified administrator: password, 2FA, passkey or OAuth binding; excludes regular users'],
   ['security.suspicious_ip', '异常 IP／未授权访问', 'Suspicious IP / unauthorized access', '敏感路径探测，或一分钟内 3 次未知 API、5 次管理/模型接口未授权访问', 'Sensitive-path probes, 3 unknown API requests or 5 unauthorized admin/model requests within a minute'],
 ]
 export function usePushNotifications() {

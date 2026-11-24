@@ -528,6 +528,7 @@ func (s *AuthService) ValidatePasswordCredentials(ctx context.Context, email, pa
 		}
 		return nil, ErrServiceUnavailable
 	}
+	recordLoginAuditTarget(ctx, user.ID)
 	if !user.IsActive() {
 		return nil, ErrUserNotActive
 	}

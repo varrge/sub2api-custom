@@ -305,6 +305,7 @@ func (s *PasskeyService) FinishLogin(
 		if lookupErr != nil || record == nil || !bytes.Equal(record.UserHandle, userHandle) {
 			return nil, ErrPasskeyVerify
 		}
+		recordLoginAuditTarget(ctx, record.UserID)
 		account, lookupErr := s.userRepo.GetByID(ctx, record.UserID)
 		if lookupErr != nil || account == nil || !account.IsActive() {
 			return nil, ErrPasskeyVerify

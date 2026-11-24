@@ -279,7 +279,7 @@ func decorateEvent(e *Event) {
 		fields = [][2]string{{"action", "操作"}, {"actor_email", "账号"}, {"client_ip", "来源 IP"}, {"auth_method", "认证方式"}, {"method", "方法"}, {"path", "接口"}, {"status_code", "状态码"}, {"request_id", "请求 ID"}}
 	}
 	if strings.HasPrefix(e.Kind, "security.") {
-		fields = [][2]string{{"action", "事件"}, {"client_ip", "客户端 IP"}, {"peer_ip", "连接对端 IP"}, {"ip_source", "IP 解析来源"}, {"user_id", "关联用户 ID"}, {"actor_email", "关联账号"}, {"reason", "触发原因"}, {"request_count", "触发时请求次数"}, {"method", "方法"}, {"path", "接口"}, {"status_code", "状态码"}, {"request_id", "请求 ID"}}
+		fields = [][2]string{{"action", "事件"}, {"client_ip", "客户端 IP"}, {"peer_ip", "连接对端 IP"}, {"ip_source", "IP 解析来源"}, {"target_user_id", "目标管理员 ID"}, {"target_email", "目标管理员账号"}, {"user_id", "关联用户 ID"}, {"actor_email", "关联账号"}, {"reason", "触发原因"}, {"request_count", "触发时请求次数"}, {"method", "方法"}, {"path", "接口"}, {"status_code", "状态码"}, {"request_id", "请求 ID"}}
 	}
 	for _, pair := range fields {
 		if value := e.Values[pair[0]]; value != "" {
@@ -288,7 +288,9 @@ func decorateEvent(e *Event) {
 	}
 	if strings.HasPrefix(e.Kind, "security.") {
 		lines = append(lines, "- 同一 IP、同类事件每个 10 分钟窗口最多入队一次；每窗口最多入队 60 个安全事件，可投递多个渠道。")
-		if e.Values["user_id"] == "" {
+		if e.Kind == "security.login_failed" {
+			lines = append(lines, "- 目标账号是被尝试登录的管理员账号，不代表账号本人操作或成功登录。")
+		} else if e.Values["user_id"] == "" {
 			lines = append(lines, "- 未确认关联账号；失败尝试不代表成功登录。")
 		}
 	}

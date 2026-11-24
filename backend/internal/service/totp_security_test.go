@@ -86,12 +86,21 @@ func TestTotpLoginSessionRevokedByPasswordChange(t *testing.T) {
 	svc.cache = cache
 	token, err := svc.CreateLoginSession(context.Background(), 1, u.Email)
 	require.NoError(t, err)
-	_, err = svc.GetLoginSession(context.Background(), token)
+	ctx := WithLoginAuditTarget(context.Background())
+	_, err = svc.GetLoginSession(ctx, token)
 	require.NoError(t, err)
+	require.Equal(t, u.ID, LoginAuditTargetUserID(ctx))
 	u.TokenVersion = 2
-	_, err = svc.GetLoginSession(context.Background(), token)
+	ctx = WithLoginAuditTarget(context.Background())
+	_, err = svc.GetLoginSession(ctx, token)
 	require.Error(t, err)
+	require.Equal(t, u.ID, LoginAuditTargetUserID(ctx))
 	require.Nil(t, cache.login)
+	ctx = WithLoginAuditTarget(context.Background())
+	session, err := svc.GetLoginSession(ctx, "unknown-token")
+	require.NoError(t, err)
+	require.Nil(t, session)
+	require.Zero(t, LoginAuditTargetUserID(ctx))
 }
 func TestOAuthAdminOrEnrolledFactorRequiresIndependentLogin(t *testing.T) {
 	for _, u := range []*User{{ID: 1, Role: RoleAdmin, Email: "admin@example.test", Status: StatusActive}, {ID: 2, Role: RoleUser, Email: "user@example.test", Status: StatusActive, TotpEnabled: true}} {

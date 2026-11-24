@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -13,6 +14,27 @@ import (
 
 // ErrAuditLogNotFound 审计日志不存在。
 var ErrAuditLogNotFound = infraerrors.NotFound("AUDIT_LOG_NOT_FOUND", "audit log not found")
+
+type loginAuditTargetKey struct{}
+
+// WithLoginAuditTarget records the account being attempted, never an authenticated actor.
+func WithLoginAuditTarget(ctx context.Context) context.Context {
+	return context.WithValue(ctx, loginAuditTargetKey{}, &atomic.Int64{})
+}
+
+func LoginAuditTargetUserID(ctx context.Context) int64 {
+	if target, ok := ctx.Value(loginAuditTargetKey{}).(*atomic.Int64); ok {
+		return target.Load()
+	}
+	return 0
+}
+
+// Only account/session/credential lookups may supply this ID, not request fields.
+func recordLoginAuditTarget(ctx context.Context, userID int64) {
+	if target, ok := ctx.Value(loginAuditTargetKey{}).(*atomic.Int64); ok && userID > 0 {
+		target.Store(userID)
+	}
+}
 
 // 审计日志相关常量。
 const (

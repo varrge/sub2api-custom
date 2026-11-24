@@ -86,8 +86,10 @@ func TestAPIKeyModelGroupsWSFirstFrameUsesFreshSelections(t *testing.T) {
 	}
 	headers := http.Header{}
 	account.ApplyHeaderOverrides(c.Request.Context(), headers)
-	require.Equal(t, []string{"9:8:2"}, headers["x-gateway-identity"])
-	require.Equal(t, []string{"ws-first-frame"}, headers["x-gateway-request"])
+	require.Equal(t, map[string][]string{
+		"x-gateway-identity": {"9:8:2"},
+		"x-gateway-request":  {"ws-first-frame"},
+	}, map[string][]string(headers))
 	require.Equal(t, "ws-first-frame", c.Request.Context().Value(ctxkey.RequestID))
 }
 

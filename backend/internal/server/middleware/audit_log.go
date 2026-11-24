@@ -293,7 +293,11 @@ func NewAuditLogMiddleware(auditService *service.AuditLogService) AuditLogMiddle
 		// 请求头凭证掩码（仅保留首尾）。
 		entry.CredentialMasked = MaskedRequestCredential(c)
 
-		extra := map[string]any{}
+		client, peer, source := securityAccessIPs(c)
+		if status >= 400 && status < 500 && strings.HasPrefix(entry.Path, "/api/v1/auth/") {
+			entry.ClientIP = client
+		}
+		extra := map[string]any{"security_client_ip": client, "peer_ip": peer, "ip_source": source}
 		if value, ok := c.Get(auditCtxKeyExtra); ok {
 			if details, ok := value.(map[string]any); ok {
 				for key, item := range details {

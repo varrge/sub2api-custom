@@ -3,6 +3,14 @@ import { mount } from '@vue/test-utils'
 import PlazaModelPricingTable from '../PlazaModelPricingTable.vue'
 import type { PlazaModel } from '@/api/modelPlaza'
 
+const { copyToClipboard } = vi.hoisted(() => ({
+  copyToClipboard: vi.fn().mockResolvedValue(true)
+}))
+
+vi.mock('@/composables/useClipboard', () => ({
+  useClipboard: () => ({ copyToClipboard })
+}))
+
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
   return {
@@ -71,6 +79,27 @@ describe('PlazaModelPricingTable', () => {
     expect(cells[5].text()).toBe('$180.00')
     expect(cells[6].text()).toContain('$45.00')
     expect(cells[6].text()).toContain('$0.00')
+    wrapper.unmount()
+  })
+
+  it('copies the exact model ID from the clicked pricing row', async () => {
+    const model = tokenModel({
+      name: 'provider/Model-v2',
+      time_pricing: {
+        timezone: 'Asia/Shanghai',
+        periods: [{ start_time: '09:00', end_time: '12:00', multiplier: 0.5 }]
+      }
+    })
+    const wrapper = mountTable([tokenModel(), model], 1)
+    const rows = wrapper.findAll('tbody tr').filter(row => row.text().includes(model.name))
+    expect(rows).toHaveLength(2)
+
+    for (const row of rows) {
+      const button = row.get('button[aria-label="modelPlaza.table.copyModelId"]')
+      await button.trigger('click')
+    }
+
+    expect(copyToClipboard.mock.calls).toEqual([[model.name], [model.name]])
     wrapper.unmount()
   })
 

@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -14,6 +16,7 @@ import (
 const keyBillingInfoSchemaVersion = 1
 
 type keyBillingInfoResponse struct {
+	*service.BillingGroupInfo
 	Object                  string    `json:"object"`
 	SchemaVersion           int       `json:"schema_version"`
 	BillingScope            string    `json:"billing_scope"`
@@ -31,7 +34,7 @@ type keyBillingInfoResponse struct {
 }
 
 // KeyBillingInfo returns the token billing multiplier effective for the authenticated API key.
-// GET /v1/sub2api/billing
+// GET /v1/sub2api/billing (include=group also returns the group's display name and description).
 func (h *GatewayHandler) KeyBillingInfo(c *gin.Context) {
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
 	if !ok {
@@ -52,7 +55,7 @@ func (h *GatewayHandler) KeyBillingInfo(c *gin.Context) {
 				h.errorResponse(c, 503, "api_error", "Billing information is unavailable")
 				return
 			}
-			groups = append(groups, gin.H{"group_id": group.ID, "name": group.Name, "platform": group.Platform, "subscription_type": group.SubscriptionType, "billing": buildKeyBillingInfo(selected, rate, now)})
+			groups = append(groups, gin.H{"group_id": group.ID, "name": group.Name, "platform": group.Platform, "subscription_type": group.SubscriptionType, "billing": h.buildKeyBillingInfo(c, selected, rate, now)})
 		}
 		c.Header("Cache-Control", "no-store")
 		c.JSON(http.StatusOK, gin.H{"object": "sub2api.key_billing", "schema_version": 2, "billing_scope": "selected_group", "groups": groups, "group_ids": apiKey.ConfiguredGroupIDs(), "key_limits_scope": "all_groups", "observed_at": now.UTC()})
@@ -75,7 +78,36 @@ func (h *GatewayHandler) KeyBillingInfo(c *gin.Context) {
 	}
 
 	c.Header("Cache-Control", "no-store")
-	c.JSON(http.StatusOK, buildKeyBillingInfo(apiKey, resolvedRate, now))
+	c.JSON(http.StatusOK, h.buildKeyBillingInfo(c, apiKey, resolvedRate, now))
+}
+
+func (h *GatewayHandler) buildKeyBillingInfo(c *gin.Context, apiKey *service.APIKey, resolvedRate float64, now time.Time) keyBillingInfoResponse {
+	info := buildKeyBillingInfo(apiKey, resolvedRate, now)
+	if keyBillingIncludes(c, "group") {
+		group, err := h.apiKeyService.GetBillingGroupInfo(c.Request.Context(), *apiKey.GroupID, c.GetHeader("Accept-Language"))
+		if err != nil {
+			slog.WarnContext(c.Request.Context(), "billing group display text unavailable", "group_id", *apiKey.GroupID, "error", err)
+		} else {
+			info.BillingGroupInfo = group
+		}
+	}
+	return info
+}
+
+// keyBillingIncludes reports whether the caller asked for an optional response section.
+// include is a comma-separated list and may be repeated, so a client can request several
+// sections in one call (include=group,other or include=group&include=other); unknown sections
+// are ignored. An exact-match comparison would stop returning the group as soon as a second
+// section exists.
+func keyBillingIncludes(c *gin.Context, section string) bool {
+	for _, value := range c.QueryArray("include") {
+		for _, item := range strings.Split(value, ",") {
+			if strings.TrimSpace(item) == section {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (h *GatewayHandler) resolveKeyBillingRate(c *gin.Context, apiKey *service.APIKey, now time.Time) (float64, bool) {

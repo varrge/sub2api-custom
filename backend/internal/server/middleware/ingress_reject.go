@@ -31,6 +31,8 @@ const (
 	IngressRejectModelNotAllowed        IngressRejectReason = "model_not_allowed"
 
 	IngressRejectSubscriptionUnavailable IngressRejectReason = "subscription_unavailable"
+	// IngressRejectConflictingRequestFields：请求体同名字段重复声明（GHSA-p3r4-jcm3-2hph）。
+	IngressRejectConflictingRequestFields IngressRejectReason = "conflicting_request_fields"
 )
 
 const ingressRejectReasonContextKey = "ingress_reject_reason"

@@ -107,7 +107,7 @@ func TestOpenAIResponsesWebSocket_FirstFrameDuplicateModelKeysRejected(t *testin
 				group:                   wsAllowlistGroup(true, "gpt-5.4"),
 				ingressMode:             mode,
 				firstFrameCloseExpected: true,
-				closeReason:             "model is specified more than once",
+				closeReason:             `declares field "model" more than once`,
 			})
 		})
 	}
@@ -122,7 +122,7 @@ func TestOpenAIResponsesWebSocket_FirstFrameCaseVariantModelKeyRejected(t *testi
 		group:                   wsAllowlistGroup(true, "gpt-5.4"),
 		ingressMode:             service.OpenAIWSIngressModePassthrough,
 		firstFrameCloseExpected: true,
-		closeReason:             "model is specified more than once",
+		closeReason:             `declares field "Model" more than once`,
 	})
 }
 
@@ -136,31 +136,36 @@ func TestOpenAIResponsesWebSocket_SubsequentTurnDuplicateModelKeysRejected(t *te
 				group:                   wsAllowlistGroup(true, "gpt-5.4"),
 				ingressMode:             mode,
 				secondTurnCloseExpected: true,
-				closeReason:             "model is specified more than once",
+				closeReason:             `declares field "model" more than once`,
 			})
 		})
 	}
 }
 
-// Repeated controls are rejected even if they contain identical values.
+// Even identical repeated controls are rejected with the allowlist on or off.
 func TestOpenAIResponsesWebSocket_DuplicateIdenticalModelKeysRejected(t *testing.T) {
-	runOpenAIResponsesWebSocketUsageLogCase(t, openAIResponsesWSUsageLogCase{
-		firstPayload: `{"type":"response.create","model":"gpt-5.4","model":"gpt-5.4"}`,
-		group:        wsAllowlistGroup(false), firstFrameCloseExpected: true,
-		closeReason: "model is specified more than once",
-	})
+	for _, enabled := range []bool{false, true} {
+		runOpenAIResponsesWebSocketUsageLogCase(t, openAIResponsesWSUsageLogCase{
+			firstPayload:            `{"type":"response.create","model":"gpt-5.4","model":"gpt-5.4","stream":false}`,
+			group:                   wsAllowlistGroup(enabled, "gpt-5.4"),
+			firstFrameCloseExpected: true,
+			closeReason:             `declares field "model" more than once`,
+		})
+	}
 }
 
 func TestOpenAIResponsesWebSocket_SessionUpdateDuplicatesRejected(t *testing.T) {
-	for _, payload := range []string{
-		`{"type":"session.update","session":{"model":"gpt-5.4","Model":"gpt-5.4"}}`,
-		`{"type":"session.update","session":{"model":"gpt-5.4"},"Session":null}`,
+	for _, tc := range []struct{ payload, field string }{
+		{`{"type":"session.update","session":{"model":"gpt-5.4","Model":"gpt-5.4"}}`, "session.Model"},
+		{`{"type":"session.update","session":{"model":"gpt-5.4"},"Session":null}`, "Session"},
 	} {
 		runOpenAIResponsesWebSocketUsageLogCase(t, openAIResponsesWSUsageLogCase{
-			firstPayload:  `{"type":"response.create","model":"gpt-5.4"}`,
-			secondPayload: payload, group: wsAllowlistGroup(false),
+			firstPayload:            `{"type":"response.create","model":"gpt-5.4"}`,
+			secondPayload:           tc.payload,
+			group:                   wsAllowlistGroup(false),
 			ingressMode:             service.OpenAIWSIngressModePassthrough,
-			secondTurnCloseExpected: true, closeReason: "specified more than once",
+			secondTurnCloseExpected: true,
+			closeReason:             `declares field "` + tc.field + `" more than once`,
 		})
 	}
 }
@@ -189,5 +194,29 @@ func TestOpenAIResponsesWebSocket_SessionUpdateToAllowedModelStillWorks(t *testi
 	})
 	if len(got.clientEvents) < 2 {
 		t.Fatalf("expected at least two completed events, got %d", len(got.clientEvents))
+	}
+}
+
+func TestOpenAIResponsesWebSocket_MalformedFramesRejected(t *testing.T) {
+	for _, mode := range []string{service.OpenAIWSIngressModePassthrough, service.OpenAIWSIngressModeDedicated} {
+		t.Run(mode+"/first_frame", func(t *testing.T) {
+			runOpenAIResponsesWebSocketUsageLogCase(t, openAIResponsesWSUsageLogCase{
+				firstPayload:            `{"type":"response.create","model":`,
+				group:                   wsAllowlistGroup(false),
+				ingressMode:             mode,
+				firstFrameCloseExpected: true,
+				closeReason:             "invalid JSON payload",
+			})
+		})
+		t.Run(mode+"/subsequent_turn", func(t *testing.T) {
+			runOpenAIResponsesWebSocketUsageLogCase(t, openAIResponsesWSUsageLogCase{
+				firstPayload:            `{"type":"response.create","model":"gpt-5.4","stream":false}`,
+				secondPayload:           `{"type":"response.create","model":`,
+				group:                   wsAllowlistGroup(false),
+				ingressMode:             mode,
+				secondTurnCloseExpected: true,
+				closeReason:             "invalid websocket request payload",
+			})
+		})
 	}
 }

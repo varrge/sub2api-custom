@@ -164,3 +164,54 @@ func TestUltrafastCustomModelOverrideOnlyAppliesToUltrafast(t *testing.T) {
 		}
 	}
 }
+
+func TestGPT62UltrafastRequestTimePreservesCustomPricing(t *testing.T) {
+	before := time.Date(2027, 3, 1, 7, 59, 59, 0, time.UTC)
+	for _, model := range []string{"gpt-6.2-sol", "openai/gpt-6.2-astra-max"} {
+		for _, source := range []string{"channel", "group"} {
+			for name, override := range map[string]*float64{"default": nil, "override": pricingMultiplier(1.25)} {
+				t.Run(model+"/"+source+"/"+name, func(t *testing.T) {
+					svc := newTestBillingService()
+					card := ChannelModelPricing{Platform: PlatformOpenAI, Models: []string{model},
+						InputPrice: pricingMultiplier(1e-6), OutputPrice: pricingMultiplier(2e-6),
+						CacheReadPrice: pricingMultiplier(0.1e-6), CacheWritePrice: pricingMultiplier(0),
+						CacheWrite12hPrice: pricingMultiplier(0), UltrafastMultiplier: override,
+						FastMultiplier: pricingMultiplier(2.5), FlexMultiplier: pricingMultiplier(0.4),
+						Intervals: []PricingInterval{{MinTokens: 0, InputMultiplier: pricingMultiplier(2)}},
+					}
+					group := &Group{ID: 7, Platform: PlatformOpenAI}
+					channels := newChannelServiceWithPricings(group.ID, []ChannelModelPricing{card})
+					inputPrice := 2e-6
+					if source == "group" {
+						group.ModelPricing = []ChannelModelPricing{card}
+						channels = nil
+						inputPrice = 1e-6 // Group cards intentionally ignore channel-style intervals.
+					}
+					resolver := NewModelPricingResolver(channels, svc)
+					resolved := resolver.Resolve(context.Background(), PricingInput{Model: model, GroupID: &group.ID, Group: group})
+					input := CostInput{Model: model, Resolver: resolver, Resolved: resolved, RateMultiplier: 0.8,
+						Tokens: UsageTokens{InputTokens: 100, OutputTokens: 50, CacheReadTokens: 20,
+							CacheCreationTokens: 40, CacheCreation30mTokens: 10, CacheCreation12hTokens: 30}}
+					// Reuse the same resolved card across the cutoff, including delayed settlement.
+					for _, at := range []time.Time{before, before.Add(time.Second), before} {
+						input.PricingAt = at
+						wantUltra := openAIUltrafastMultiplier(model, at)
+						if override != nil {
+							wantUltra = *override
+						}
+						for tier, factor := range map[string]float64{"default": 1, "priority": 2.5, "flex": 0.4, "ultrafast": wantUltra} {
+							input.ServiceTier = tier
+							cost, err := svc.CalculateCostUnified(input)
+							require.NoError(t, err)
+							require.Zero(t, cost.CacheCreationCost)
+							require.InDelta(t, (100*inputPrice+50*2e-6+20*0.1e-6)*factor, cost.TotalCost, 1e-12)
+							require.InDelta(t, cost.TotalCost*0.8, cost.ActualCost, 1e-12)
+						}
+					}
+					require.Equal(t, override, resolved.BasePricing.UltrafastMultiplier)
+					require.Zero(t, svc.fallbackPrices[normalizeKnownOpenAICodexModel(model)].ultrafastDefaultMultiplier)
+				})
+			}
+		}
+	}
+}

@@ -73,9 +73,12 @@ func TestStatefulAdmissionRetainsSessionModelAndUsesFreshRestrictions(t *testing
 	t.Cleanup(billing.Stop)
 	h := &OpenAIGatewayHandler{billingCacheService: billing}
 	check := h.statefulAdmissionCheck(c, key, "public")
-	require.NoError(t, check(context.Background(), []byte(`{"type":"response.cancel","Type":"session.update","session":{"model":"next"}}`)))
+	err := check(context.Background(), []byte(`{"type":"response.cancel","Type":"session.update","session":{"model":"next"}}`))
+	require.Equal(t, http.StatusBadRequest, infraerrors.Code(err))
+	require.Contains(t, infraerrors.Message(err), "type is specified more than once")
+	require.NoError(t, check(context.Background(), []byte(`{"Type":"session.update","session":{"model":"next"}}`)))
 	fresh.ModelAllowlist.Models = []string{"public"}
-	err := check(context.Background(), []byte(`{"type":"input_audio_buffer.append","audio":"AA=="}`))
+	err = check(context.Background(), []byte(`{"type":"input_audio_buffer.append","audio":"AA=="}`))
 	require.Error(t, err)
 	require.Contains(t, infraerrors.Message(err), `Model "next" is not allowed`)
 	// A model-less turn must also reject revocation of the original public model.

@@ -1,98 +1,186 @@
 import { defineComponent } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import ChannelsView from '../ChannelsView.vue'
+import type { Channel, CreateChannelRequest, UpdateChannelRequest } from '@/api/admin/channels'
+import ChannelsView from '@/views/admin/ChannelsView.vue'
 import PricingEntryCard from '@/components/admin/channel/PricingEntryCard.vue'
 
-const { list, update, getAll, showError } = vi.hoisted(() => ({
-  list: vi.fn(), update: vi.fn(), getAll: vi.fn(), showError: vi.fn()
+const { list, create, update, getGroups, showError } = vi.hoisted(() => ({
+  list: vi.fn(), create: vi.fn(), update: vi.fn(), getGroups: vi.fn(), showError: vi.fn()
 }))
-vi.mock('@/api/admin', () => ({ adminAPI: {
-  channels: { list, update }, groups: { getAll },
-  settings: { getWebSearchEmulationConfig: vi.fn().mockResolvedValue({ enabled: false }) }
-} }))
-vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showError, showSuccess: vi.fn() }) }))
+
+vi.mock('@/api/admin', () => ({
+  adminAPI: {
+    channels: { list, create, update },
+    groups: { getAll: getGroups },
+    settings: { getWebSearchEmulationConfig: vi.fn().mockResolvedValue({ enabled: false }) }
+  }
+}))
+vi.mock('@/api/admin/channels', () => ({
+  default: { getModelDefaultPricing: vi.fn().mockResolvedValue({ found: false }) }
+}))
+vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showSuccess: vi.fn(), showError }) }))
 vi.mock('vue-i18n', async () => ({
   ...await vi.importActual<typeof import('vue-i18n')>('vue-i18n'),
   useI18n: () => ({ t: (key: string) => key })
 }))
 
 function mountView() {
-  return mount(ChannelsView, { global: { stubs: {
-    AppLayout: defineComponent({ template: '<main><slot /></main>' }),
-    TablePageLayout: defineComponent({ template: '<section><slot name="filters" /><slot name="table" /></section>' }),
-    BaseDialog: defineComponent({ props: ['show'], template: '<section v-if="show"><slot /><slot name="footer" /></section>' }),
-    DataTable: defineComponent({ props: ['data'], template: '<div><div v-for="row in data" :key="row.id"><slot name="cell-actions" :row="row" /></div></div>' }),
-    Pagination: true, ConfirmDialog: true, EmptyState: true, Select: true,
-    Icon: true, PlatformIcon: true, Toggle: true, ModelMappingEditor: true,
-    ModelTagInput: true, TimePricingSection: true
-  } } })
+  return mount(ChannelsView, {
+    global: {
+      stubs: {
+        AppLayout: defineComponent({ template: '<main><slot /></main>' }),
+        TablePageLayout: defineComponent({
+          template: '<section><slot name="filters" /><slot name="table" /><slot name="pagination" /></section>'
+        }),
+        BaseDialog: defineComponent({
+          props: ['show'], template: '<section v-if="show"><slot /><slot name="footer" /></section>'
+        }),
+        DataTable: defineComponent({
+          props: ['data'],
+          template: '<div v-for="row in data" :key="row.id"><slot name="cell-actions" :row="row" /></div>'
+        }),
+        Pagination: true, ConfirmDialog: true, EmptyState: true,
+        Select: true, Icon: true, PlatformIcon: true
+      }
+    }
+  })
 }
 
-async function editPricing(wrapper: ReturnType<typeof mountView>) {
+type View = ReturnType<typeof mountView>
+
+async function clickButton(wrapper: View, text: string) {
+  const button = wrapper.findAll('button').find(button => button.text() === text)
+  expect(button).toBeDefined()
+  await button!.trigger('click')
   await flushPromises()
-  await wrapper.findAll('button').find(b => b.text() === 'common.edit')!.trigger('click')
-  await flushPromises()
-  await wrapper.findAll('button.channel-tab').find(b => b.text() === 'admin.groups.platforms.openai')!.trigger('click')
-  const card = wrapper.findComponent(PricingEntryCard)
-  await card.get('.cursor-pointer').trigger('click')
-  return card.get<HTMLInputElement>('input[aria-label="admin.channels.form.ultrafastMultiplier"]')
 }
 
-describe('ChannelsView Ultrafast pricing', () => {
+function multiplierInput(wrapper: View) {
+  return wrapper.get<HTMLInputElement>('input[aria-label="admin.channels.form.ultrafastMultiplier"]').element
+}
+
+function makeChannel(): Channel {
+  return {
+    id: 1, name: 'Ultra Fast channel', description: '', status: 'active',
+    billing_model_source: 'channel_mapped', restrict_models: false,
+    features_config: {}, group_ids: [22], model_pricing: [], model_mapping: {},
+    apply_pricing_to_account_stats: false, account_stats_pricing_rules: [],
+    created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z'
+  }
+}
+
+describe('ChannelsView Ultra Fast pricing', () => {
+  let stored: Channel[]
+
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
-    const channel = {
-      id: 3, name: 'OpenAI', description: '', status: 'active', group_ids: [7],
-      model_mapping: {}, billing_model_source: 'requested', features_config: {},
-      account_stats_pricing_rules: [],
-      model_pricing: [{ platform: 'openai', models: ['gpt-6.1-sol'], billing_mode: 'token',
-        input_price: 2e-6, output_price: 10e-6, cache_write_price: 2.5e-6, cache_read_price: 0.1e-6,
-        fast_multiplier: 2.5, ultrafast_multiplier: 3.5, intervals: [] }]
-    }
-    list.mockResolvedValue({ items: [channel], total: 1 })
-    getAll.mockResolvedValue([{ id: 7, name: 'Codex', platform: 'openai', status: 'active' }])
-    update.mockImplementation(async (_id, payload) => {
-      const saved = { ...channel, ...payload }
-      list.mockResolvedValue({ items: [saved], total: 1 })
-      return saved
+    stored = []
+    list.mockImplementation(async () => ({ items: stored, total: stored.length }))
+    getGroups.mockResolvedValue([{ id: 22, name: 'OpenAI group', platform: 'openai', rate_multiplier: 1 }])
+    create.mockImplementation(async (request: CreateChannelRequest) => {
+      stored = [{ ...makeChannel(), ...request } as Channel]
+      return stored[0]
+    })
+    update.mockImplementation(async (_id: number, request: UpdateChannelRequest) => {
+      stored = [{ ...stored[0], ...request } as Channel]
+      return stored[0]
     })
   })
 
-  it('saves and reloads an independent Ultrafast multiplier and clears it to the default', async () => {
+  async function createPricingForm() {
     const wrapper = mountView()
-    let input = await editPricing(wrapper)
-    expect(input.element.value).toBe('3.5')
-    await input.setValue('1')
+    await flushPromises()
+    await clickButton(wrapper, 'admin.channels.createChannel')
+    await wrapper.get('input[required]').setValue('Ultra Fast channel')
+    await wrapper.findAll('label').find(label => label.text() === 'admin.groups.platforms.openai')!
+      .get('input[type="checkbox"]').setValue(true)
+    await clickButton(wrapper, 'admin.groups.platforms.openai')
+    await wrapper.findAll('label').find(label => label.text().includes('OpenAI group'))!
+      .get('input[type="checkbox"]').setValue(true)
+    await wrapper.findAll('button').filter(button => button.text() === '+ common.add').at(-1)!.trigger('click')
+    await flushPromises()
+    const modelInput = wrapper.get('input[placeholder="admin.channels.form.modelsPlaceholder"]')
+    await modelInput.setValue('gpt-6-astra')
+    await modelInput.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    return wrapper
+  }
+
+  async function setMultiplier(wrapper: View, value: string) {
+    multiplierInput(wrapper).value = value
+    multiplierInput(wrapper).dispatchEvent(new Event('input', { bubbles: true }))
+    await flushPromises()
+  }
+
+  it('persists, reopens, updates and clears the multiplier through the real pricing card', async () => {
+    const wrapper = await createPricingForm()
+    const card = wrapper.findComponent(PricingEntryCard)
+    card.vm.$emit('update', { ...card.props('entry'), fast_multiplier: 2.5 })
+    await flushPromises()
+    await setMultiplier(wrapper, '3')
     await wrapper.get('#channel-form').trigger('submit')
     await flushPromises()
-    expect(update).toHaveBeenLastCalledWith(3, expect.objectContaining({
-      model_pricing: [expect.objectContaining({ ultrafast_multiplier: 1, fast_multiplier: 2.5 })]
-    }))
-    input = await editPricing(wrapper)
-    expect(input.element.value).toBe('1')
-    await input.setValue('')
-    await wrapper.get('#channel-form').trigger('submit')
-    await flushPromises()
-    expect(update).toHaveBeenLastCalledWith(3, expect.objectContaining({
-      model_pricing: [expect.objectContaining({ ultrafast_multiplier: null, fast_multiplier: 2.5 })]
-    }))
-    input = await editPricing(wrapper)
-    expect(input.element.value).toBe('')
     expect(showError).not.toHaveBeenCalled()
+    expect(create).toHaveBeenCalledOnce()
+    expect(create.mock.calls[0][0].model_pricing[0].ultrafast_multiplier).toBe(3)
+    expect(create.mock.calls[0][0].model_pricing[0].fast_multiplier).toBe(2.5)
+
+    for (const [previous, next] of [['3', '1'], ['1', '1.25'], ['1.25', '']]) {
+      await clickButton(wrapper, 'common.edit')
+      await clickButton(wrapper, 'admin.groups.platforms.openai')
+      expect(multiplierInput(wrapper).value).toBe(previous)
+      await setMultiplier(wrapper, next)
+      await wrapper.get('#channel-form').trigger('submit')
+      await flushPromises()
+      expect(showError).not.toHaveBeenCalled()
+      expect(update.mock.lastCall![1].model_pricing[0].ultrafast_multiplier).toBe(next ? Number(next) : null)
+      expect(update.mock.lastCall![1].model_pricing[0].fast_multiplier).toBe(2.5)
+    }
+    await clickButton(wrapper, 'common.edit')
+    await clickButton(wrapper, 'admin.groups.platforms.openai')
+    expect(multiplierInput(wrapper).value).toBe('')
     wrapper.unmount()
   })
 
-  it('rejects zero and negative multipliers before saving', async () => {
-    const wrapper = mountView()
-    const input = await editPricing(wrapper)
+  it.each(['0', '-1'])('rejects a non-positive multiplier %s before sending a request', async value => {
+    const wrapper = await createPricingForm()
+    await setMultiplier(wrapper, value)
+    await wrapper.get('#channel-form').trigger('submit')
+    await flushPromises()
+    expect(showError).toHaveBeenCalledWith(expect.stringContaining('admin.channels.form.multiplierPositive'))
+    expect(create).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('rejects non-positive multipliers when editing an existing channel', async () => {
+    const wrapper = await createPricingForm()
+    await setMultiplier(wrapper, '3.5')
+    await wrapper.get('#channel-form').trigger('submit')
+    await flushPromises()
+    await clickButton(wrapper, 'common.edit')
+    await clickButton(wrapper, 'admin.groups.platforms.openai')
+
     for (const invalid of ['0', '-1']) {
-      await input.setValue(invalid)
+      await setMultiplier(wrapper, invalid)
       await wrapper.get('#channel-form').trigger('submit')
       await flushPromises()
       expect(update).not.toHaveBeenCalled()
       expect(showError).toHaveBeenLastCalledWith(expect.stringContaining('admin.channels.form.multiplierPositive'))
+    }
+    wrapper.unmount()
+  })
+
+  it('preserves cross-platform Ultra Fast overrides when tier multipliers are enabled', async () => {
+    const wrapper = await createPricingForm()
+    const entry = wrapper.findComponent(PricingEntryCard).props('entry')
+    for (const [platform, enabled, visible] of [
+      ['openai', true, true], ['composite', true, true], ['anthropic', true, true], ['openai', false, false]
+    ] as const) {
+      const card = mount(PricingEntryCard, { props: { entry, platform, enableTierMultipliers: enabled } })
+      expect(card.text().includes('admin.channels.form.ultrafastMultiplier')).toBe(visible)
+      card.unmount()
     }
     wrapper.unmount()
   })

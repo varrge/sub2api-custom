@@ -11,6 +11,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	"github.com/stretchr/testify/require"
 )
 
@@ -493,6 +494,22 @@ func TestPricingRequestToService_MultipliersGatedByFlag(t *testing.T) {
 	require.Nil(t, dropped[0].Intervals[0].CacheReadMultiplier)
 	// 非倍率字段不受开关影响
 	require.Equal(t, 272000, dropped[0].Intervals[0].MinTokens)
+}
+
+func TestPricingRequestAndResponse_UltrafastMultiplier(t *testing.T) {
+	var req channelModelPricingRequest
+	require.NoError(t, json.Unmarshal([]byte(`{"models":["gpt-6-astra"],"ultrafast_multiplier":1.25}`), &req))
+	pricing := pricingRequestToService([]channelModelPricingRequest{req}, true)
+	require.Equal(t, float64Ptr(1.25), pricing[0].UltrafastMultiplier)
+	got := pricingToResponse(&pricing[0])
+	require.Equal(t, float64Ptr(1.25), got.UltrafastMultiplier)
+	data, err := json.Marshal(got)
+	require.NoError(t, err)
+	require.Contains(t, string(data), `"ultrafast_multiplier":1.25`)
+
+	req = channelModelPricingRequest{}
+	require.NoError(t, json.Unmarshal([]byte(`{"models":["gpt-6-astra"],"ultrafast_multiplier":0}`), &req))
+	require.Error(t, binding.Validator.ValidateStruct(&req))
 }
 
 func TestPricingToResponse_TimePricing(t *testing.T) {

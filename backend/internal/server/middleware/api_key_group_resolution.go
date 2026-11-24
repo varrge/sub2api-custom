@@ -156,6 +156,9 @@ func ResolveDeferredAPIKeyGroup(c *gin.Context, key *service.APIKey, body []byte
 	}
 	c.Set(string(ContextKeyAPIKey), resolved)
 	setGroupContext(c, resolved.Group)
+	c.Request = c.Request.WithContext(service.WithHeaderOverrideRequestScope(
+		c.Request.Context(), resolved.User.ID, resolved.ID, resolved.GroupID,
+	))
 	SetOpsFallbackAPIKey(c, resolved)
 	return resolved, nil
 }

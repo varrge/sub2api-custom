@@ -135,6 +135,8 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 		if !groupResolved || !enforceAPIKeySelectedModelGroups(c, apiKey) {
 			return
 		}
+		c.Request = c.Request.WithContext(service.WithHeaderOverrideRequestScope(
+			c.Request.Context(), apiKey.User.ID, apiKey.ID, apiKey.GroupID))
 		if !SkipAPIKeyGroupEnforcement(c) && apiKey.User.IsEnterprise() && (apiKey.Group == nil || apiKey.Group.IsSubscriptionType()) {
 			abortWithGoogleError(c, 403, "Enterprise accounts cannot use subscription groups")
 			return

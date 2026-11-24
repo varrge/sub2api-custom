@@ -257,16 +257,16 @@ func TestFromBodyForRouteReturnsFirstCandidate(t *testing.T) {
 	}
 }
 
-func TestValidateBodyRejectsAmbiguousModelCarriers(t *testing.T) {
+func TestValidateBodyRejectsAmbiguousRequestFields(t *testing.T) {
 	for _, tc := range []struct{ name, route, body, want string }{
 		{"duplicate", "/v1/responses", `{"model":"a","model":"b"}`, "model is specified more than once"},
 		{"same value", "/v1/responses", `{"model":"a","model":"a"}`, "model is specified more than once"},
 		{"case and null", "/v1/responses", `{"model":"a","MODEL":null}`, "model is specified more than once"},
 		{"escaped", "/v1/responses", `{"model":"a","\u006dodel":123}`, "model is specified more than once"},
-		{"nested", "/v1/responses", `{"model":"a","input":[{"model":"b","model":"c"}],"stream":true,"stream":false}`, ""},
+		{"nested", "/v1/responses", `{"model":"a","input":[{"model":"b","model":"c"}],"stream":true,"stream":false}`, "input[0].model is specified more than once"},
 		{"live session", "/v1/live", `{"session":{"model":"a","Model":"b"}}`, "session.model is specified more than once"},
 		{"live carriers", "/backend-api/codex/realtime/calls", `{"session":{"model":"a"},"Session":null}`, "session is specified more than once"},
-		{"independent session", "/v1/responses", `{"model":"a","session":{"model":"b","model":"c"}}`, ""},
+		{"independent session", "/v1/responses", `{"model":"a","session":{"model":"b","model":"c"}}`, "session.model is specified more than once"},
 		{"malformed left to endpoint", "/v1/responses", `{"model":`, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -314,7 +314,7 @@ func TestValidateBodyMultipartModelAndSession(t *testing.T) {
 	}
 }
 
-func TestValidateStatefulFrameControlsOnly(t *testing.T) {
+func TestValidateStatefulFrameUsesSharedConflictRules(t *testing.T) {
 	for _, body := range []string{
 		`{"type":"response.create","response":{"model":"a","Model":null}}`,
 		`{"type":"session.update","session":{"model":"a"},"Session":{}}`,
@@ -323,7 +323,9 @@ func TestValidateStatefulFrameControlsOnly(t *testing.T) {
 	} {
 		require.ErrorContains(t, ValidateStatefulFrame([]byte(body)), "specified more than once")
 	}
-	require.NoError(t, ValidateStatefulFrame([]byte(`{"model":"a","input":[{"model":"b","model":"c"}]}`)))
+	require.EqualError(t, ValidateStatefulFrame([]byte(`{"model":"a","input":[{"model":"b","model":"c"}]}`)), "input[0].model is specified more than once")
+	require.NoError(t, ValidateStatefulFrame([]byte(`{"model":"a","arguments":{"id":"b","ID":"c"}}`)))
+	require.EqualError(t, ValidateStatefulFrame([]byte(`{"model":"a","arguments":{"id":"b","id":"c"}}`)), "arguments.id is specified more than once")
 }
 
 func TestValidateBodyLenientControlsBeforeRouting(t *testing.T) {
@@ -346,5 +348,62 @@ func TestGeminiCacheModelBoundaryPreservesAmbiguityChecks(t *testing.T) {
 		`{"model":"models/allowed","model":null}`,
 	} {
 		require.Error(t, ValidateBody("/v1beta/cachedContents", "application/json", []byte(body)))
+	}
+}
+
+// 回归：JSON handler 不看 Content-Type、宽容读取会剥掉 BOM，准入候选必须与之
+// 一致，否则把请求体标成 multipart 或加 BOM 就能让白名单拿不到任何模型而放行。
+func TestFromBodyCandidatesFollowsWhatJSONHandlersParse(t *testing.T) {
+	body := []byte(`{"model":"claude-opus-4-8","messages":[]}`)
+	cases := []struct {
+		name        string
+		contentType string
+		body        []byte
+	}{
+		{name: "multipart 标签", contentType: "multipart/form-data; boundary=zzz", body: body},
+		{name: "无 boundary 的 multipart 标签", contentType: "multipart/form-data", body: body},
+		{name: "UTF-8 BOM", contentType: "application/json", body: append([]byte{0xEF, 0xBB, 0xBF}, body...)},
+		{name: "BOM 加 multipart 标签", contentType: "multipart/form-data", body: append([]byte{0xEF, 0xBB, 0xBF}, body...)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := FromBodyCandidates("/v1/messages", tc.contentType, tc.body)
+			if len(got) != 1 || got[0] != "claude-opus-4-8" {
+				t.Fatalf("candidates = %v, want [claude-opus-4-8]", got)
+			}
+			if route := FromBodyForRoute("/v1/messages", tc.contentType, tc.body); route != "claude-opus-4-8" {
+				t.Fatalf("route model = %q", route)
+			}
+		})
+	}
+}
+
+// 回归：multipart handler 跳过首个 boundary 之前的前导内容，前导内容是 JSON 时
+// 白名单必须同时看到表单里的 model，不能只取 JSON 解读。
+func TestFromBodyCandidatesMultipartWithJSONPreamble(t *testing.T) {
+	body := []byte("{}\r\n--B\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\ngpt-image-2\r\n--B--\r\n")
+	got := FromBodyCandidates("/v1/images/edits", "multipart/form-data; boundary=B", body)
+	if len(got) != 1 || got[0] != "gpt-image-2" {
+		t.Fatalf("candidates = %v, want [gpt-image-2]", got)
+	}
+}
+
+func TestFromBodyCandidatesDefaultsSurviveBOMAndContentTypeVariants(t *testing.T) {
+	for _, tc := range []struct {
+		route, body string
+		want        []string
+	}{
+		{"/v1/live", `{"model":"hint"}`, []string{DefaultLiveModel}},
+		{"/v1/live", `{"session":{"Model":"hint"}}`, []string{DefaultLiveModel, "hint"}},
+		{"/v1/live", `{"Session":{"model":"explicit"}}`, []string{"explicit"}},
+		{"/v1/images/generations", `{"Model":"hint"}`, []string{DefaultOpenAIImagesModel, "hint"}},
+		{"/v1/images/edits", `{"model":"explicit"}`, []string{"explicit"}},
+		{"/v1/images/generations/async", `{}`, []string{DefaultOpenAIImagesModel}},
+	} {
+		for _, contentType := range []string{"application/json", "multipart/form-data", "multipart/form-data; boundary=none"} {
+			for _, prefix := range []string{"", "\xef\xbb\xbf"} {
+				require.Equal(t, tc.want, FromBodyCandidates(tc.route, contentType, []byte(prefix+tc.body)), "%s %s %q", tc.route, contentType, prefix)
+			}
+		}
 	}
 }

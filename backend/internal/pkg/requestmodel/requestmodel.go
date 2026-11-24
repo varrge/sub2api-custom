@@ -60,96 +60,22 @@ func HasDuplicateTopLevelKey(body []byte, name string) bool {
 	return count > 1
 }
 
-// ValidateBody rejects ambiguous model carriers before routing or rewriting.
-// JSON syntax validation remains with each endpoint (including lenient JSON).
-// Live's session is an effective model carrier; arbitrary nested objects are not.
-func ValidateBody(routePath, contentType string, body []byte) error {
-	live := liveRequestRoutes[strings.TrimSpace(routePath)]
-	if isMultipartContentType(contentType) {
-		_, params, err := mime.ParseMediaType(contentType)
-		if err != nil {
-			return err
-		}
-		reader := multipart.NewReader(bytes.NewReader(body), params["boundary"])
-		modelCount, sessionCount := 0, 0
-		for {
-			part, err := reader.NextPart()
-			if errors.Is(err, io.EOF) {
-				return nil
-			}
-			if err != nil {
-				return fmt.Errorf("read multipart model fields: %w", err)
-			}
-			if strings.TrimSpace(part.FileName()) != "" {
-				continue
-			}
-			switch {
-			case strings.EqualFold(strings.TrimSpace(part.FormName()), "model"):
-				modelCount++
-				if modelCount > 1 {
-					return errors.New("model is specified more than once")
-				}
-			case live && strings.EqualFold(strings.TrimSpace(part.FormName()), "session"):
-				sessionCount++
-				if sessionCount > 1 {
-					return errors.New("session is specified more than once")
-				}
-				session, err := io.ReadAll(part)
-				if err != nil {
-					return fmt.Errorf("read multipart session: %w", err)
-				}
-				if gjson.ValidBytes(session) && HasDuplicateTopLevelKey(session, "model") {
-					return errors.New("session.model is specified more than once")
-				}
-			}
-		}
+// ValidateBody rejects ambiguous request fields before routing or rewriting.
+// Syntax validation remains with each endpoint, including lenient JSON readers.
+func ValidateBody(_ string, contentType string, body []byte) error {
+	if field, conflict := ConflictingField(contentType, body); conflict {
+		return fmt.Errorf("%.64s is specified more than once", strings.ToLower(field))
 	}
-	// HTTP handlers accept a UTF-8 BOM and raw controls in strings. gjson's
-	// object iterator handles those controls without copying/expanding the body;
-	// strip only the BOM for this validation view. Endpoints retain syntax and
-	// normalized-size checks, including their configured 413 responses.
-	body = bytes.TrimPrefix(body, []byte{0xef, 0xbb, 0xbf})
-	if HasDuplicateTopLevelKey(body, "model") {
-		return errors.New("model is specified more than once")
-	}
-	if !live {
-		return nil
-	}
-	if HasDuplicateTopLevelKey(body, "session") {
-		return errors.New("session is specified more than once")
-	}
-	var sessionErr error
-	gjson.ParseBytes(body).ForEach(func(key, value gjson.Result) bool {
-		if strings.EqualFold(key.String(), "session") && HasDuplicateTopLevelKey([]byte(value.Raw), "model") {
-			sessionErr = errors.New("session.model is specified more than once")
-			return false
-		}
-		return true
-	})
-	return sessionErr
+	return nil
 }
 
-// ValidateStatefulFrame covers the model carriers used by Responses and realtime
-// relays without interpreting nested user content or tool arguments as controls.
+// ValidateStatefulFrame applies the same field rules to Responses and realtime
+// frames before model admission or a relay can interpret the payload.
 func ValidateStatefulFrame(body []byte) error {
 	if !gjson.ValidBytes(body) {
 		return errors.New("invalid websocket request payload")
 	}
-	for _, field := range []string{"model", "session", "response"} {
-		if HasDuplicateTopLevelKey(body, field) {
-			return fmt.Errorf("%s is specified more than once", field)
-		}
-	}
-	var err error
-	gjson.ParseBytes(body).ForEach(func(key, value gjson.Result) bool {
-		if (strings.EqualFold(key.String(), "session") || strings.EqualFold(key.String(), "response")) &&
-			HasDuplicateTopLevelKey([]byte(value.Raw), "model") {
-			err = fmt.Errorf("%s.model is specified more than once", strings.ToLower(key.String()))
-			return false
-		}
-		return true
-	})
-	return err
+	return ValidateBody("", "application/json", body)
 }
 
 // FromBodyCandidates 按入口返回所有可被下游解析器绑定的模型值：
@@ -161,24 +87,12 @@ func FromBodyCandidates(routePath, contentType string, body []byte) []string {
 	live := IsLiveRequestRoute(routePath)
 	liveHasExactModel := false
 	imageHasExactModel := false
-	if isMultipartContentType(contentType) {
-		// 声明为 multipart 的请求体只做 multipart 解析——gjson 的部分扫描
-		// 会在 multipart 字节流里误匹配 session JSON 内的 model 字段。
-		models, sessions := multipartModelCandidates(contentType, body)
-		topLevel = models
-		imageHasExactModel = len(models) > 0
-		session = sessionModelCandidates(sessions)
+	if doc := TrimUTF8BOM(body); LooksLikeJSON(doc) {
+		// JSON handlers accept bodies independently of Content-Type and strip a BOM.
+		topLevel = jsonModelCandidates(doc)
+		session = jsonSessionModelCandidates(doc)
 		if live {
-			for _, raw := range sessions {
-				model := gjson.Get(raw, "model")
-				liveHasExactModel = liveHasExactModel || model.Type == gjson.String && strings.TrimSpace(model.String()) != ""
-			}
-		}
-	} else {
-		topLevel = jsonModelCandidates(body)
-		session = jsonSessionModelCandidates(body)
-		if live {
-			gjson.ParseBytes(body).ForEach(func(key, value gjson.Result) bool {
+			gjson.ParseBytes(doc).ForEach(func(key, value gjson.Result) bool {
 				if strings.EqualFold(key.String(), "session") {
 					model := value.Get("model")
 					liveHasExactModel = liveHasExactModel || model.Type == gjson.String && strings.TrimSpace(model.String()) != ""
@@ -186,7 +100,21 @@ func FromBodyCandidates(routePath, contentType string, body []byte) []string {
 				return true
 			})
 		} else if isImagesRequestRoute(routePath) {
-			imageHasExactModel = strings.TrimSpace(gjson.GetBytes(body, "model").String()) != ""
+			imageHasExactModel = strings.TrimSpace(gjson.GetBytes(doc, "model").String()) != ""
+		}
+	}
+	if isMultipartContentType(contentType) {
+		// A multipart handler skips a JSON preamble; both interpretations must
+		// contribute candidates before the ambiguity check rejects the body.
+		models, sessions := multipartModelCandidates(contentType, body)
+		topLevel = append(topLevel, models...)
+		session = append(session, sessionModelCandidates(sessions)...)
+		imageHasExactModel = imageHasExactModel || len(models) > 0
+		if live {
+			for _, raw := range sessions {
+				model := gjson.Get(raw, "model")
+				liveHasExactModel = liveHasExactModel || model.Type == gjson.String && strings.TrimSpace(model.String()) != ""
+			}
 		}
 	}
 

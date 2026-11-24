@@ -248,7 +248,7 @@ func (s *OpenAIGatewayService) forwardSeedanceVideosJSON(ctx context.Context, c 
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	account.ApplyHeaderOverrides(req.Header)
+	account.ApplyHeaderOverrides(req.Context(), req.Header)
 	proxy := ""
 	if account.ProxyID != nil && account.Proxy != nil {
 		proxy = account.Proxy.URL()
@@ -362,7 +362,7 @@ func (s *OpenAIGatewayService) streamSeedanceVideosJSONContent(ctx context.Conte
 		}
 		if withCredentials {
 			req.Header.Set("Authorization", "Bearer "+token)
-			account.ApplyHeaderOverrides(req.Header)
+			account.ApplyHeaderOverrides(req.Context(), req.Header)
 		}
 		resp, err := s.httpUpstream.Do(req, proxy, account.ID, account.Concurrency)
 		if err != nil {

@@ -36,7 +36,7 @@ describe("groupsOpenAIFast", () => {
         tierUltrafast: expect.stringContaining("Ultra Fast"),
         hint: expect.stringContaining("service_tier"),
       });
-      for (const model of ["gpt-6-astra", "gpt-6.1-sol", "gpt-5.6-sol"]) {
+      for (const model of ["gpt-6.2-sol", "gpt-6.2-astra", "gpt-6-astra", "gpt-6.1-sol", "gpt-5.6-sol"]) {
         expect(locale.groups.openaiFast.hint).toContain(model);
       }
     }

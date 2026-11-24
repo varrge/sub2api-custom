@@ -1267,7 +1267,6 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		return
 	}
 	bindOpenAIReasoningEffortPolicyForMessagesRequest(c, apiKey, body)
-	routingModel := service.NormalizeOpenAICompatRequestedModel(reqModel)
 	preferredMappedModel := resolveOpenAIMessagesDispatchMappedModel(c, apiKey, reqModel)
 	reqStream := gjson.GetBytes(body, "stream").Bool()
 
@@ -1284,6 +1283,10 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 	// 解析渠道级模型映射
 	channelMappingMsg, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
 	mappedBodyForMessages := newOpenAIModelMappedBodyCache(body, h.gatewayService.ReplaceModelInBody)
+	// Schedule by the channel-mapped model, as the Responses and Chat Completions
+	// paths do: the forwarded body carries that model, so account model filters
+	// must judge it rather than the client's alias.
+	routingModel := service.NormalizeOpenAICompatRequestedModel(openAIChannelForwardModel(channelMappingMsg, reqModel))
 
 	// 绑定错误透传服务，允许 service 层在非 failover 错误场景复用规则。
 	if h.errorPassthroughService != nil {
@@ -2601,8 +2604,11 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "invalid JSON payload")
 		return
 	}
-	if err := requestmodel.ValidateStatefulFrame(firstMessage); err != nil {
-		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, err.Error())
+	// Reject before deferred group selection, model mapping or billing can use
+	// different interpretations of the same client frame.
+	if field, conflict := requestmodel.ConflictingField("application/json", firstMessage); conflict {
+		middleware2.MarkIngressRejected(c, middleware2.IngressRejectConflictingRequestFields)
+		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, fmt.Sprintf("response.create payload declares field %.64q more than once", field))
 		return
 	}
 	reqModel := strings.TrimSpace(gjson.GetBytes(firstMessage, "model").String())
@@ -2623,11 +2629,12 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	// 必须在合成路由解析和上游模型映射之前执行。
 	// 与 HTTP 准入一致：帧内重复 model 键/大小写变体可能被上游按末值绑定，
 	// 全部候选值逐一校验，任一未命中即拒绝。
-	if blocked := blockedAPIKeyModelCandidate(apiKey, requestmodel.FromBodyCandidates("", "application/json", firstMessage)); blocked != "" {
+	firstModelCandidates := requestmodel.FromBodyCandidates("", "application/json", firstMessage)
+	if blocked := blockedAPIKeyModelCandidate(apiKey, firstModelCandidates); blocked != "" {
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, fmt.Sprintf("Model %q is not allowed for this API key", blocked))
 		return
 	}
-	if blocked := blockedModelAllowlistCandidate(apiKey.Group, requestmodel.FromBodyCandidates("", "application/json", firstMessage)); blocked != "" {
+	if blocked := blockedModelAllowlistCandidate(apiKey.Group, firstModelCandidates); blocked != "" {
 		service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalModelConfiguration)
 		middleware2.MarkIngressRejected(c, middleware2.IngressRejectModelNotAllowed)
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, fmt.Sprintf("Model %q is not available for this group", blocked))
@@ -3088,8 +3095,12 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			ReasoningEffortMappings:     reasoningEffortMappings,
 			TurnStarted:                 recordTurnStart,
 			BeforeRequest: func(turn int, payload []byte, originalModel string) error {
-				if err := requestmodel.ValidateStatefulFrame(payload); err != nil {
-					return service.NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, err.Error(), err)
+				if !gjson.ValidBytes(payload) {
+					return service.NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", errors.New("invalid json"))
+				}
+				if field, conflict := requestmodel.ConflictingField("application/json", payload); conflict {
+					middleware2.MarkIngressRejected(c, middleware2.IngressRejectConflictingRequestFields)
+					return service.NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, fmt.Sprintf("websocket request payload declares field %.64q more than once", field), nil)
 				}
 				c.Set(securityAuditWSTurnContextKey, turn)
 				service.BeginOpsStreamTurn(c, turn)
@@ -3121,9 +3132,6 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				}
 				turnAdmission.Store(fresh)
 				turnSnapshots.set(turn, fresh)
-				if !gjson.ValidBytes(payload) {
-					return service.NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", errors.New("invalid json"))
-				}
 				model := strings.TrimSpace(originalModel)
 				if model == "" {
 					model = strings.TrimSpace(gjson.GetBytes(payload, "model").String())
@@ -3136,7 +3144,8 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				// 则关闭整条连接，与推理强度 deny 一致。实际生效模型始终参与校验；
 				// 帧内重复 model 键/大小写变体/嵌套 session.model 额外逐一校验，
 				// 防止候选集非空时掩盖被轮换掉的禁用模型。
-				candidates := append([]string{model}, requestmodel.FromBodyCandidates("", "application/json", payload)...)
+				frameModelCandidates := requestmodel.FromBodyCandidates("", "application/json", payload)
+				candidates := append([]string{model}, frameModelCandidates...)
 				if blocked := blockedAPIKeyModelCandidate(fresh.key, candidates); blocked != "" {
 					return service.NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, fmt.Sprintf("Model %q is not allowed for this API key", blocked), nil)
 				}

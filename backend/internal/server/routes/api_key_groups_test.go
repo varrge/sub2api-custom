@@ -379,15 +379,19 @@ func TestMultiGroupRoutingHonorsEachGroupsModelAllowlist(t *testing.T) {
 	require.Equal(t, int64(2), *selected.GroupID)
 	require.Equal(t, []int64{2}, p.seen)
 }
-func TestMultiGroupRoutingRejectsAmbiguousModelBeforeProbe(t *testing.T) {
-	for _, body := range []string{"\xef\xbb\xbf" + `{"model":"gpt-test","model":"other-model"}`, "{\"model\":\"gpt-test\",\"model\":\"other-model\",\"input\":\"line\nline\"}", `{"model":"gpt-test","Model":"other-model"}`, `{"model":"gpt-test","model":"gpt-test"}`, `{"model":"gpt-test","model":null}`} {
+func TestMultiGroupRoutingRejectsAmbiguousRequestFieldsBeforeProbe(t *testing.T) {
+	for _, body := range []string{"\xef\xbb\xbf" + `{"model":"gpt-test","model":"other-model"}`, "{\"model\":\"gpt-test\",\"model\":\"other-model\",\"input\":\"line\nline\"}", `{"model":"gpt-test","Model":"other-model"}`, `{"model":"gpt-test","model":"gpt-test"}`, `{"model":"gpt-test","model":null}`, `{"model":"gpt-test","service_tier":"default","service_tier":"priority"}`, `{"model":"gpt-test","reasoning":{"effort":"low","effort":"high"}}`} {
 		key := routingKey()
 		p := &routingProbe{available: map[int64]bool{1: true, 2: true}}
 		r := &apiKeyGroupRouting{prober: p}
-		selected, err := r.resolve(routingContext("POST", "/v1/responses", body), key)
+		c := routingContext("POST", "/v1/responses", body)
+		selected, err := r.resolve(c, key)
 		require.ErrorContains(t, err, "specified more than once")
 		require.Nil(t, selected)
 		require.Empty(t, p.seen)
+		reason, marked := middleware.GetIngressRejectReason(c)
+		require.True(t, marked)
+		require.Equal(t, middleware.IngressRejectConflictingRequestFields, reason)
 	}
 }
 
@@ -883,4 +887,19 @@ func TestMultiGroupRoutingAggregatesPermanentModelRejections(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMultiGroupRoutingNormalizesJSONBOMBeforeProbe(t *testing.T) {
+	key := routingKey()
+	p := &routingProbe{available: map[int64]bool{1: true}}
+	r := &apiKeyGroupRouting{prober: p}
+	body := `{"model":"gpt-test","input":"hello"}`
+	c := routingContext(http.MethodPost, "/v1/responses", "\xef\xbb\xbf"+body)
+	selected, err := r.resolve(c, key)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), *selected.GroupID)
+	require.Equal(t, []string{"gpt-test"}, p.models)
+	actual, err := io.ReadAll(c.Request.Body)
+	require.NoError(t, err)
+	require.Equal(t, body, string(actual))
 }

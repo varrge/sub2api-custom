@@ -89,3 +89,61 @@ func TestRecordUsageFreeUltrafastWithCustomPricing(t *testing.T) {
 		}
 	}
 }
+
+func TestRecordUsageGPT62PromotionWithFreeTiers(t *testing.T) {
+	for _, source := range []string{"channel", "group"} {
+		for _, tier := range []string{"priority", "ultrafast"} {
+			for _, at := range []time.Time{time.Date(2027, 3, 1, 7, 59, 59, 0, time.UTC), time.Date(2027, 3, 1, 8, 0, 0, 0, time.UTC)} {
+				t.Run(fmt.Sprintf("%s/%s/%s", source, tier, at.Format(time.RFC3339)), func(t *testing.T) {
+					var paidStats float64
+					for _, free := range []bool{false, true} {
+						logs := &openAIRecordUsageLogRepoStub{inserted: true}
+						users := &openAIRecordUsageUserRepoStub{}
+						svc := newOpenAIRecordUsageServiceForTest(logs, users, &openAIRecordUsageSubRepoStub{}, nil)
+						group := &Group{ID: 77, Platform: PlatformOpenAI, Status: StatusActive, Hydrated: true,
+							RateMultiplier: 0.5, FreeOpenAIFast: free, FreeOpenAIUltrafast: free}
+						card := ChannelModelPricing{Platform: PlatformOpenAI, Models: []string{"gpt-6.2-sol"},
+							InputPrice: pricingMultiplier(2e-6), OutputPrice: pricingMultiplier(10e-6),
+							CacheWritePrice: pricingMultiplier(3e-6), CacheWrite12hPrice: pricingMultiplier(6e-6),
+							FastMultiplier: pricingMultiplier(2.5)}
+						if source == "group" {
+							group.ModelPricing = []ChannelModelPricing{card}
+						} else {
+							svc.channelService = newChannelServiceWithPricings(group.ID, []ChannelModelPricing{card})
+						}
+						svc.resolver = NewModelPricingResolver(svc.channelService, svc.billingService)
+						err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+							Result: &OpenAIForwardResult{RequestID: fmt.Sprintf("%s/free=%t", t.Name(), free),
+								Model: "gpt-6.2-sol", ServiceTier: &tier, Usage: OpenAIUsage{
+									InputTokens: 1300, OutputTokens: 100, CacheCreationInputTokens: 300,
+									CacheCreation30mInputTokens: 200, CacheCreation12hInputTokens: 100}},
+							APIKey: &APIKey{ID: 1, GroupID: &group.ID, Group: group}, User: &User{ID: 2},
+							Account: &Account{ID: 3, Platform: PlatformOpenAI, Type: AccountTypeAPIKey}, PricingAt: at,
+						})
+						require.NoError(t, err)
+						const standard = 1000*2e-6 + 100*10e-6 + 200*3e-6 + 100*6e-6
+						factor := 2.5
+						if tier == "ultrafast" {
+							factor = openAIUltrafastMultiplier("gpt-6.2-sol", at)
+						}
+						log := logs.lastLog
+						require.NotNil(t, log)
+						require.Equal(t, free, log.ServiceTierFree)
+						require.InDelta(t, standard*factor, log.TotalCost, 1e-12)
+						if free {
+							factor = 1
+						}
+						require.InDelta(t, standard*factor*0.5, log.ActualCost, 1e-12)
+						require.InDelta(t, log.ActualCost, users.lastAmount, 1e-12)
+						require.NotNil(t, log.AccountStatsCost)
+						if free {
+							require.InDelta(t, paidStats, *log.AccountStatsCost, 1e-12)
+						} else {
+							paidStats = *log.AccountStatsCost
+						}
+					}
+				})
+			}
+		}
+	}
+}

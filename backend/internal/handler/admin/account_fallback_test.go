@@ -44,7 +44,7 @@ func TestAccountFallbackHTTPPayloadValidation(t *testing.T) {
 			t.Run(endpoint+value, func(t *testing.T) {
 				gin.SetMode(gin.TestMode)
 				repo := &fallbackAccountAPIRepo{account: &service.Account{ID: 1, Platform: service.PlatformAnthropic, Type: service.AccountTypeAPIKey, GroupIDs: []int64{1, 2}}}
-				svc := service.NewAdminService(nil, nil, nil, repo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+				svc := service.NewAdminService(nil, nil, nil, repo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 				h := NewAccountHandler(svc, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 				router := gin.New()
 				method, path := http.MethodPost, "/accounts"

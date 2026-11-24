@@ -148,6 +148,9 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 	// lookup, composite mapping, per-group probing or subscription admission.
 	if framePresent {
 		if err := requestmodel.ValidateStatefulFrame(frameBody); err != nil {
+			if gjson.ValidBytes(frameBody) {
+				middleware.MarkIngressRejected(c, middleware.IngressRejectConflictingRequestFields)
+			}
 			return nil, groupRoutingError(http.StatusBadRequest, "invalid_request_error", err.Error())
 		}
 	} else if c.Request.Body != nil && (c.Request.Method == http.MethodPost || c.Request.Method == http.MethodPut || c.Request.Method == http.MethodPatch) {
@@ -155,8 +158,12 @@ func (r *apiKeyGroupRouting) resolve(c *gin.Context, key *service.APIKey) (*serv
 		if err != nil {
 			return nil, groupBodyReadError(c, err)
 		}
+		if doc := requestmodel.TrimUTF8BOM(body); len(doc) != len(body) && requestmodel.LooksLikeJSON(doc) {
+			body = doc
+		}
 		requestmodel.ResetRequestBody(c.Request, body)
 		if err := requestmodel.ValidateBody(c.Request.URL.Path, c.GetHeader("Content-Type"), body); err != nil {
+			middleware.MarkIngressRejected(c, middleware.IngressRejectConflictingRequestFields)
 			return nil, groupRoutingError(http.StatusBadRequest, "invalid_request_error", err.Error())
 		}
 	}

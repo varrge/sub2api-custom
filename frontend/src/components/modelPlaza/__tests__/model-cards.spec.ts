@@ -7,6 +7,7 @@ import PlazaModelPricingTable from '../PlazaModelPricingTable.vue'
 
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isAuthenticated: true }) }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ cachedPublicSettings: null }) }))
+vi.mock('@/composables/useClipboard', () => ({ useClipboard: () => ({ copyToClipboard: vi.fn() }) }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string, params?: object) => `${key}${params ? JSON.stringify(params) : ''}` }) }))
 
 function model(overrides: Partial<PlazaModel> = {}): PlazaModel {

@@ -1294,7 +1294,7 @@ export default {
         tierStandard: 'Force Standard',
         tierFast: 'Force Fast',
         tierUltrafast: 'Force Ultra Fast',
-        hint: 'Follow request forwards the client service_tier unchanged. A forced tier overrides the request; the global Fast/Flex policy can still filter or block it. Forced Ultra Fast applies only to gpt-6-astra, gpt-6.1-sol and gpt-5.6-sol; other models pass through with the request value. New requests update immediately after saving; existing WebSocket sessions must reconnect.',
+        hint: 'Follow request forwards the client service_tier unchanged. A forced tier overrides the request; the global Fast/Flex policy can still filter or block it. Forced Ultra Fast applies to supported models, including gpt-6.2-sol, gpt-6.2-astra, gpt-6-astra, gpt-6.1-sol and gpt-5.6-sol. GPT-6.2 availability follows the upstream account: Pro 200 includes Sol, Pro 500 includes Sol and Astra, and other subscriptions use their advertised tiers. Unsupported models keep the requested tier. New requests update immediately after saving; existing WebSocket sessions must reconnect.',
         free: 'Free Fast',
         freeHint: 'Fast requests in this group still use the priority tier, but customers are charged the equivalent Standard price.',
         freeUltrafast: 'Free Ultra Fast',

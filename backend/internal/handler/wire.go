@@ -224,6 +224,7 @@ func ProvideHandlers(
 	batchImageHandler *BatchImageHandler,
 	supportTicketHandler *SupportTicketHandler,
 	invitationHandler *InvitationHandler,
+	ipBanHandler *IPBanHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 	_ *service.OpenAIQuotaAutoResetService,
@@ -258,6 +259,7 @@ func ProvideHandlers(
 		SupportTicket:       supportTicketHandler,
 		MCPOAuth:            mcpOAuthHandler,
 		Invitation:          invitationHandler,
+		IPBans:              ipBanHandler,
 	}
 }
 
@@ -275,6 +277,7 @@ var ProviderSet = wire.NewSet(
 	NewVotingHandler,
 	NewTutorialHandler,
 	ProvidePushNotificationHandler,
+	ProvideIPBanHandler,
 	NewRedeemHandler,
 	NewSubscriptionHandler,
 	NewAnnouncementHandler,

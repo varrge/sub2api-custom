@@ -269,6 +269,14 @@ func (s *Store) Collect(ctx context.Context) error {
 	return tx.Commit()
 }
 
+var ipBanReasonNames = map[string]string{
+	"honeypot_email":         "尝试登录诱饵账号",
+	"sensitive_path_probe":   "敏感路径探测",
+	"admin_login_failures":   "管理员账号多次登录失败",
+	"admin_api_unauthorized": "多次未认证访问管理接口",
+	"manual":                 "管理员手动封禁",
+}
+
 func decorateEvent(e *Event) {
 	if e.Values["summary"] == "" {
 		e.Values["summary"] = eventNames[e.Kind]
@@ -281,12 +289,20 @@ func decorateEvent(e *Event) {
 	if strings.HasPrefix(e.Kind, "security.") {
 		fields = [][2]string{{"action", "事件"}, {"client_ip", "客户端 IP"}, {"peer_ip", "连接对端 IP"}, {"ip_source", "IP 解析来源"}, {"target_user_id", "目标管理员 ID"}, {"target_email", "目标管理员账号"}, {"user_id", "关联用户 ID"}, {"actor_email", "关联账号"}, {"reason", "触发原因"}, {"request_count", "触发时请求次数"}, {"method", "方法"}, {"path", "接口"}, {"status_code", "状态码"}, {"request_id", "请求 ID"}}
 	}
+	if e.Kind == "security.ip_banned" {
+		fields = [][2]string{{"client_ip", "封禁 IP"}, {"reason", "封禁原因"}, {"target_email", "尝试的账号"}, {"path", "接口"}, {"request_count", "触发次数"}, {"actor_email", "操作管理员"}, {"ban_id", "封禁编号"}}
+		if label, ok := ipBanReasonNames[e.Values["reason"]]; ok {
+			e.Values["reason"] = label
+		}
+	}
 	for _, pair := range fields {
 		if value := e.Values[pair[0]]; value != "" {
 			lines = append(lines, "- **"+pair[1]+"**："+escapeMarkdown(value))
 		}
 	}
-	if strings.HasPrefix(e.Kind, "security.") {
+	if e.Kind == "security.ip_banned" {
+		lines = append(lines, "- 封禁永久有效，可在后台「IP 封禁」页面解除；每 10 分钟最多推送 60 条封禁通知。")
+	} else if strings.HasPrefix(e.Kind, "security.") {
 		lines = append(lines, "- 同一 IP、同类事件每个 10 分钟窗口最多入队一次；每窗口最多入队 60 个安全事件，可投递多个渠道。")
 		if e.Kind == "security.login_failed" {
 			lines = append(lines, "- 目标账号是被尝试登录的管理员账号，不代表账号本人操作或成功登录。")

@@ -156,6 +156,7 @@ func RegisterAdminRoutes(
 
 		// 操作审计日志
 		registerAuditLogRoutes(admin, h, stepUpAuth)
+		registerIPBanRoutes(admin, h)
 	}
 }
 
@@ -186,6 +187,22 @@ func registerPromptAuditRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		promptAudit.POST("/events/batch-delete", h.Admin.PromptAudit.BatchDelete)
 		promptAudit.POST("/events/delete-preview", h.Admin.PromptAudit.DeletePreview)
 		promptAudit.POST("/events/delete-by-filter", h.Admin.PromptAudit.DeleteByFilter)
+	}
+}
+
+func registerIPBanRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	if h.IPBans == nil {
+		return
+	}
+	bans := admin.Group("/ip-bans")
+	bans.Use(middleware.AdminOnly())
+	{
+		bans.GET("", h.IPBans.List)
+		bans.GET("/summary", h.IPBans.Summary)
+		bans.POST("", h.IPBans.Create)
+		bans.POST("/:id/revoke", h.IPBans.Revoke)
+		bans.GET("/settings", h.IPBans.GetSettings)
+		bans.PUT("/settings", h.IPBans.SaveSettings)
 	}
 }
 

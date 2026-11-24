@@ -85,6 +85,7 @@ func providePluginHostInfo(buildInfo handler.BuildInfo) service.PluginHostInfo {
 func provideCleanup(
 	activityCampaigns *handler.ActivityCampaignHandler,
 	pushNotifications *handler.PushNotificationHandler,
+	ipBans *handler.IPBanHandler,
 	entClient *ent.Client,
 	rdb *redis.Client,
 	opsMetricsCollector *service.OpsMetricsCollector,
@@ -232,6 +233,7 @@ func provideCleanup(
 			}},
 			{"ActivityCampaigns", func() error { activityCampaigns.Stop(); return nil }},
 			{"PushNotifications", func() error { pushNotifications.Stop(); return nil }},
+			{"IPBans", func() error { ipBans.Stop(); return nil }},
 			{"OpsCleanupService", func() error {
 				if opsCleanup != nil {
 					opsCleanup.Stop()

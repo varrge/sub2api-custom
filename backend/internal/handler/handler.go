@@ -76,6 +76,7 @@ type Handlers struct {
 	SupportTicket       *SupportTicketHandler
 	MCPOAuth            *MCPOAuthHandler
 	Invitation          *InvitationHandler
+	IPBans              *IPBanHandler
 }
 
 // BuildInfo contains build-time information

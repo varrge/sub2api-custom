@@ -1,0 +1,311 @@
+package ipban
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"net/netip"
+	"net/url"
+	"os"
+	"testing"
+	"time"
+
+	_ "github.com/lib/pq"
+	"github.com/stretchr/testify/require"
+)
+
+func TestBanKeyAndTargets(t *testing.T) {
+	a, ok := parseAddr("::ffff:203.0.113.9")
+	require.True(t, ok)
+	require.Equal(t, "203.0.113.9", banKey(a))
+	a, ok = parseAddr("[2001:db8:1:2:3:4:5:6]:443")
+	require.True(t, ok)
+	require.Equal(t, "2001:db8:1:2::/64", banKey(a))
+
+	for in, want := range map[string]string{
+		"203.0.113.9":       "203.0.113.9",
+		"203.0.113.0/24":    "203.0.113.0/24",
+		"203.0.113.9/32":    "203.0.113.9",
+		"2001:db8::1/48":    "2001:db8::/48",
+		" 198.51.100.7 ":    "198.51.100.7",
+		"::ffff:1.2.3.0/120": "1.2.3.0/24",
+	} {
+		got, err := normalizeTarget(in)
+		require.NoError(t, err, in)
+		require.Equal(t, want, got, in)
+	}
+	for _, bad := range []string{"", "x", "10.0.0.0/8", "2001:db8::/16", "1.2.3.4/abc"} {
+		_, err := normalizeTarget(bad)
+		require.ErrorIs(t, err, ErrInvalid, bad)
+	}
+}
+
+func TestProtectedAddressesAreNeverBanned(t *testing.T) {
+	s := New(nil, []string{"64.90.5.44", "173.245.48.0/20"})
+	for _, ip := range []string{"172.30.253.3", "127.0.0.1", "10.1.2.3", "192.168.1.1", "::1", "fd00::1", "64.90.5.44", "173.245.48.7", "", "garbage"} {
+		require.True(t, s.Protected(ip), ip)
+		require.False(t, s.Check(ip), ip)
+	}
+	require.False(t, s.Protected("203.0.113.9"))
+	s.settings.Store(compile(Settings{Allowlist: []string{"203.0.113.0/24"}}))
+	require.True(t, s.Protected("203.0.113.9"))
+}
+
+func TestSnapshotMatchesExactAndPrefix(t *testing.T) {
+	sn := &snapshot{exact: map[netip.Addr]int64{}}
+	sn.add("203.0.113.9", 1)
+	sn.add("2001:db8:1:2::/64", 2)
+	sn.add("198.51.100.0/24", 3)
+	for ip, want := range map[string]int64{"203.0.113.9": 1, "2001:db8:1:2::99": 2, "198.51.100.200": 3} {
+		a, _ := parseAddr(ip)
+		id, ok := sn.match(a)
+		require.True(t, ok, ip)
+		require.Equal(t, want, id, ip)
+	}
+	a, _ := parseAddr("2001:db8:1:3::1")
+	_, ok := sn.match(a)
+	require.False(t, ok)
+}
+
+func TestCounterThreshold(t *testing.T) {
+	s := New(nil, nil)
+	now := time.Now()
+	for i := 1; i < 5; i++ {
+		_, reached := s.count("k", 15*time.Minute, 5, now)
+		require.False(t, reached)
+	}
+	n, reached := s.count("k", 15*time.Minute, 5, now)
+	require.True(t, reached)
+	require.Equal(t, 5, n)
+	// A new window starts after expiry.
+	_, reached = s.count("k2", time.Minute, 2, now)
+	require.False(t, reached)
+	_, reached = s.count("k2", time.Minute, 2, now.Add(2*time.Minute))
+	require.False(t, reached)
+}
+
+func TestValidateSettings(t *testing.T) {
+	cfg := DefaultSettings()
+	require.NoError(t, validate(sanitize(cfg)))
+	cfg.Allowlist = []string{"not-an-ip"}
+	require.ErrorIs(t, validate(sanitize(cfg)), ErrInvalid)
+	cfg = DefaultSettings()
+	cfg.AdminLoginWindowMinutes = 0
+	require.ErrorIs(t, validate(cfg), ErrInvalid)
+	cfg = DefaultSettings()
+	cfg.HoneypotEmails = []string{" Admin@Sub2API.local ", "admin@sub2api.local", "nope"}
+	cfg = sanitize(cfg)
+	require.Equal(t, []string{"admin@sub2api.local", "nope"}, cfg.HoneypotEmails)
+	require.ErrorIs(t, validate(cfg), ErrInvalid)
+}
+
+// --- PostgreSQL-backed tests (set IP_BAN_TEST_DSN) ---
+
+func banDB(t *testing.T) *sql.DB {
+	t.Helper()
+	dsn := os.Getenv("IP_BAN_TEST_DSN")
+	if dsn == "" {
+		t.Skip("set IP_BAN_TEST_DSN for PostgreSQL tests")
+	}
+	admin, err := sql.Open("postgres", dsn)
+	require.NoError(t, err)
+	schema := fmt.Sprintf("ipban_test_%d", time.Now().UnixNano())
+	_, err = admin.Exec(`CREATE SCHEMA ` + schema)
+	require.NoError(t, err)
+	u, err := url.Parse(dsn)
+	require.NoError(t, err)
+	q := u.Query()
+	q.Set("search_path", schema)
+	u.RawQuery = q.Encode()
+	db, err := sql.Open("postgres", u.String())
+	require.NoError(t, err)
+	db.SetMaxOpenConns(4)
+	t.Cleanup(func() { _ = db.Close(); _, _ = admin.Exec(`DROP SCHEMA ` + schema + ` CASCADE`); _ = admin.Close() })
+	_, err = db.Exec(`CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE users(id BIGINT PRIMARY KEY, email TEXT NOT NULL, role TEXT NOT NULL, deleted_at TIMESTAMPTZ);
+INSERT INTO users VALUES (1,'owner@example.test','admin',NULL),(2,'user@example.test','user',NULL),(3,'admin@admin.com','user',NULL);
+CREATE TABLE push_notification_config(id BOOLEAN PRIMARY KEY DEFAULT TRUE, revision BIGINT NOT NULL DEFAULT 0, enabled BOOLEAN NOT NULL DEFAULT FALSE, channels JSONB NOT NULL DEFAULT '[]', updated_at TIMESTAMPTZ DEFAULT NOW());
+INSERT INTO push_notification_config(id) VALUES (TRUE);
+CREATE TABLE push_notification_events(event TEXT NOT NULL, event_key TEXT NOT NULL, occurred_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(), values JSONB NOT NULL DEFAULT '{}', PRIMARY KEY(event,event_key));`)
+	require.NoError(t, err)
+	raw, err := os.ReadFile("../../migrations/180_audit_logs.sql")
+	require.NoError(t, err)
+	_, err = db.Exec(string(raw))
+	require.NoError(t, err)
+	return db
+}
+
+func audit(t *testing.T, db *sql.DB, ip, path, body, role string, status int, at string) {
+	t.Helper()
+	_, err := db.Exec(`INSERT INTO audit_logs(created_at,actor_role,action,method,path,client_ip,request_body,status_code,actor_user_id)
+		VALUES($1::timestamptz,$2,'auth.login','POST',$3,$4,$5,$6,CASE WHEN $2='admin' THEN 1 END)`, at, role, path, ip, body, status)
+	require.NoError(t, err)
+}
+
+func applyMigration(t *testing.T, db *sql.DB) {
+	t.Helper()
+	raw, err := os.ReadFile("../../migrations/274_ip_bans.sql")
+	require.NoError(t, err)
+	_, err = db.Exec(string(raw))
+	require.NoError(t, err)
+}
+
+func TestMigrationBackfillsHoneypotSources(t *testing.T) {
+	db := banDB(t)
+	at := "2026-11-24T10:00:00Z"
+	audit(t, db, "57.181.38.31", "/api/v1/auth/login", `{"email":"admin@sub2api.local","password":"***"}`, "", 400, at)
+	audit(t, db, "57.181.38.31", "/api/v1/auth/login", `{"password":"***","username":"ADMIN@sub2api.local"}`, "", 401, at)
+	audit(t, db, "18.141.204.154", "/api/v1/auth/login", `{"email": "root@sub2api.local","password":"***"}`, "", 401, at)
+	audit(t, db, "2001:db8:1:2::7", "/api/v1/auth/login", `{"email":"admin@sub2api.local"}`, "", 401, at)
+	// Internal proxy address, bogus value and a source later used by the admin are skipped.
+	audit(t, db, "172.30.253.3", "/api/v1/auth/login", `{"email":"admin@sub2api.local"}`, "", 401, at)
+	audit(t, db, "not-an-ip", "/api/v1/auth/login", `{"email":"admin@sub2api.local"}`, "", 401, at)
+	audit(t, db, "198.51.100.5", "/api/v1/auth/login", `{"email":"admin@sub2api.local"}`, "", 401, at)
+	audit(t, db, "198.51.100.5", "/api/v1/admin/users", ``, "admin", 200, at)
+	// Other emails and non-auth paths are not backfilled.
+	audit(t, db, "203.0.113.50", "/api/v1/auth/login", `{"email":"admin@example.com"}`, "", 401, at)
+	audit(t, db, "203.0.113.51", "/api/v1/admin/settings", `{"email":"admin@sub2api.local"}`, "", 401, at)
+
+	applyMigration(t, db)
+	applyMigration(t, db) // idempotent
+
+	rows, err := db.Query(`SELECT ip, source, (detail->>'attempts')::int FROM ip_bans ORDER BY ip`)
+	require.NoError(t, err)
+	got := map[string]int{}
+	for rows.Next() {
+		var ip, source string
+		var n int
+		require.NoError(t, rows.Scan(&ip, &source, &n))
+		require.Equal(t, "backfill", source)
+		got[ip] = n
+	}
+	require.NoError(t, rows.Err())
+	require.Equal(t, map[string]int{"18.141.204.154": 1, "2001:db8:1:2::/64": 1, "57.181.38.31": 2}, got)
+	var queued int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM push_notification_events`).Scan(&queued))
+	require.Zero(t, queued, "backfill must not notify")
+}
+
+func TestServiceObserveManualRevokeAndPush(t *testing.T) {
+	db := banDB(t)
+	applyMigration(t, db)
+	_, err := db.Exec(`UPDATE push_notification_config SET enabled=TRUE, channels='[{"id":"c1","enabled":true,"events":["security.ip_banned"]}]'`)
+	require.NoError(t, err)
+	ctx := context.Background()
+	s := New(db, []string{"64.90.5.44"})
+	require.NoError(t, s.loadSettings(ctx))
+	require.NoError(t, s.loadBans(ctx))
+	var notified []Ban
+	s.OnBan(func(b Ban) { notified = append(notified, b) })
+
+	// Honeypot: immediate permanent ban.
+	require.True(t, s.IsHoneypotEmail(" Admin@Sub2API.local"))
+	require.True(t, s.Observe(ctx, Event{IP: "203.0.113.7", Reason: ReasonHoneypotEmail, Detail: map[string]any{"attempted_email": "admin@sub2api.local"}}))
+	require.True(t, s.Check("203.0.113.7"))
+	require.False(t, s.Observe(ctx, Event{IP: "203.0.113.7", Reason: ReasonHoneypotEmail}), "already banned")
+
+	// Protected addresses never banned.
+	require.False(t, s.Observe(ctx, Event{IP: "172.30.253.3", Reason: ReasonHoneypotEmail}))
+	require.False(t, s.Observe(ctx, Event{IP: "64.90.5.44", Reason: ReasonSensitiveProbe}))
+
+	// Recent administrator source is spared.
+	s.MarkAdmin("198.51.100.9")
+	for i := 0; i < 10; i++ {
+		require.False(t, s.Observe(ctx, Event{IP: "198.51.100.9", Reason: ReasonAdminLoginFailures}))
+	}
+
+	// Threshold rule: 5 failures.
+	for i := 0; i < 4; i++ {
+		require.False(t, s.Observe(ctx, Event{IP: "203.0.113.8", Reason: ReasonAdminLoginFailures}))
+	}
+	require.True(t, s.Observe(ctx, Event{IP: "203.0.113.8", Reason: ReasonAdminLoginFailures}))
+
+	// IPv6 bans the /64.
+	require.True(t, s.Observe(ctx, Event{IP: "2001:db8:5:6::1", Reason: ReasonSensitiveProbe}))
+	require.True(t, s.Check("2001:db8:5:6:ffff::2"))
+
+	// Admin detection.
+	ok, err := s.IsAdminAccount(ctx, 1, "")
+	require.NoError(t, err)
+	require.True(t, ok)
+	ok, err = s.IsAdminAccount(ctx, 0, " OWNER@example.test")
+	require.NoError(t, err)
+	require.True(t, ok)
+	ok, err = s.IsAdminAccount(ctx, 0, "user@example.test")
+	require.NoError(t, err)
+	require.False(t, ok)
+
+	// Decoy that is a real account is reported as a conflict.
+	conflicts, err := s.HoneypotConflicts(ctx, s.Current().HoneypotEmails)
+	require.NoError(t, err)
+	require.Equal(t, []string{"admin@admin.com"}, conflicts)
+	exists, err := s.AccountExists(ctx, "admin@admin.com")
+	require.NoError(t, err)
+	require.True(t, exists)
+
+	// Manual ban validation.
+	_, err = s.ManualBan(ctx, "172.30.0.0/16", "", "owner")
+	require.ErrorIs(t, err, ErrInvalid)
+	b, err := s.ManualBan(ctx, "192.0.2.0/24", "scanner", "owner@example.test")
+	require.NoError(t, err)
+	require.True(t, s.Check("192.0.2.77"))
+	_, err = s.ManualBan(ctx, "192.0.2.0/24", "", "owner")
+	require.ErrorIs(t, err, ErrExists)
+
+	// Hits are persisted.
+	s.flushHits(ctx)
+	var hits int64
+	require.NoError(t, db.QueryRow(`SELECT hits FROM ip_bans WHERE id=$1`, b.ID).Scan(&hits))
+	require.Equal(t, int64(1), hits)
+
+	// Listing and stats.
+	items, total, err := s.List(ctx, ListQuery{})
+	require.NoError(t, err)
+	require.Equal(t, int64(4), total)
+	require.Len(t, items, 4)
+	items, total, err = s.List(ctx, ListQuery{Search: "sub2api.local"})
+	require.NoError(t, err)
+	require.Equal(t, int64(1), total)
+	require.Equal(t, "203.0.113.7", items[0].IP)
+	stats, err := s.Stats(ctx)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), stats[ReasonManual])
+
+	// Revoke lifts the ban everywhere and allows a fresh ban later.
+	require.NoError(t, s.Revoke(ctx, b.ID, "mistake", "owner@example.test"))
+	require.False(t, s.Check("192.0.2.77"))
+	require.ErrorIs(t, s.Revoke(ctx, b.ID, "", "x"), ErrNotFound)
+	_, err = s.ManualBan(ctx, "192.0.2.0/24", "again", "owner")
+	require.NoError(t, err)
+	_, total, err = s.List(ctx, ListQuery{Status: "revoked"})
+	require.NoError(t, err)
+	require.Equal(t, int64(1), total)
+
+	// Another instance sees the same list after reload.
+	other := New(db, nil)
+	require.NoError(t, other.loadBans(ctx))
+	require.True(t, other.Check("203.0.113.7"))
+	require.True(t, other.Check("192.0.2.1"))
+
+	// Push events: one per ban created (4 auto/manual + 1 re-ban).
+	var queued int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM push_notification_events WHERE event='security.ip_banned'`).Scan(&queued))
+	require.Equal(t, 5, queued)
+	require.Len(t, notified, 5)
+	var summary, email string
+	require.NoError(t, db.QueryRow(`SELECT values->>'summary', values->>'target_email' FROM push_notification_events WHERE values->>'client_ip'='203.0.113.7'`).Scan(&summary, &email))
+	require.Equal(t, "已自动永久封禁可疑 IP", summary)
+	require.Equal(t, "admin@sub2api.local", email)
+
+	// Settings round trip and disable switch.
+	cfg := s.Current()
+	cfg.Enabled = false
+	_, err = s.SaveSettings(ctx, cfg)
+	require.NoError(t, err)
+	require.False(t, s.IsHoneypotEmail("admin@sub2api.local"))
+	require.False(t, s.Observe(ctx, Event{IP: "203.0.113.99", Reason: ReasonSensitiveProbe}))
+	require.True(t, s.Check("203.0.113.7"), "existing bans stay enforced when auto-ban is off")
+	stored, err := s.GetSettings(ctx)
+	require.NoError(t, err)
+	require.False(t, stored.Enabled)
+}

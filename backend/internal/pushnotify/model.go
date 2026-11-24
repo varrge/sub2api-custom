@@ -27,8 +27,8 @@ var (
 	channelID   = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 )
 
-var Events = []string{"payment.recharged", "subscription.purchased", "monthcard.purchased", "team.full", "ops.alert", "shared_credit.low", "admin.activity", "security.login_failed", "security.suspicious_ip"}
-var Variables = []string{"site_name", "event_name", "event_id", "occurred_at", "summary", "details", "user_id", "order_id", "amount", "currency", "product_name", "team_code", "remaining_quota", "action", "method", "path", "client_ip", "actor_email", "auth_method", "status_code", "request_id", "peer_ip", "ip_source", "reason", "request_count", "target_user_id", "target_email"}
+var Events = []string{"payment.recharged", "subscription.purchased", "monthcard.purchased", "team.full", "ops.alert", "shared_credit.low", "admin.activity", "security.login_failed", "security.suspicious_ip", "security.ip_banned"}
+var Variables = []string{"site_name", "event_name", "event_id", "occurred_at", "summary", "details", "user_id", "order_id", "amount", "currency", "product_name", "team_code", "remaining_quota", "action", "method", "path", "client_ip", "actor_email", "auth_method", "status_code", "request_id", "peer_ip", "ip_source", "reason", "request_count", "target_user_id", "target_email", "ban_id"}
 var eventNames = map[string]string{
 	"payment.recharged": "充值成功", "subscription.purchased": "订阅购买成功", "monthcard.purchased": "月卡购买成功",
 	"team.full": "拼团已满", "ops.alert": "运行告警", "shared_credit.low": "共享额度不足",
@@ -252,6 +252,13 @@ func Sample(kind string) Event {
 			"method": "GET", "path": "/api/user/login", "status_code": "404",
 			"client_ip": "203.0.113.10", "peer_ip": "172.30.253.3", "ip_source": "trusted_proxy_chain",
 			"reason": "repeated_unknown_api", "request_count": "3", "request_id": "preview-request",
+		}
+		if kind == "security.ip_banned" {
+			event.Values = map[string]string{
+				"summary": "已自动永久封禁可疑 IP", "action": "security.ip_banned",
+				"client_ip": "203.0.113.10", "reason": "honeypot_email", "target_email": "admin@sub2api.local",
+				"path": "/api/v1/auth/login", "request_count": "1", "ban_id": "42",
+			}
 		}
 		if kind == "security.login_failed" {
 			event.Values["summary"], event.Values["action"] = "管理员账号登录失败，请核对来源。", "auth.login"

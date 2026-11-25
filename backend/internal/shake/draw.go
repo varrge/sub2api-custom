@@ -316,9 +316,10 @@ func validRequestID(id string) bool {
 		return false
 	}
 	for _, r := range id {
-		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == ':' || r == '.') {
-			return false
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == ':' || r == '.' {
+			continue
 		}
+		return false
 	}
 	return true
 }
@@ -380,9 +381,10 @@ func (s *Store) Draw(ctx context.Context, userID int64, requestID, campaignID, t
 		if err != nil {
 			return err
 		}
-		var amount any
+		var amount *string
 		if prize.Type == "balance" && prize.Amount != nil {
-			amount = decimal.NewFromFloat(*prize.Amount).Round(8).String()
+			value := decimal.NewFromFloat(*prize.Amount).Round(8).String()
+			amount = &value
 		}
 		var drawID int64
 		if err := tx.QueryRowContext(ctx, `INSERT INTO shake_draws(request_id,campaign_id,config_version,user_id,card_tier,prize_id,prize_name,prize_type,prize_amount,prize_rarity)
@@ -396,7 +398,7 @@ func (s *Store) Draw(ctx context.Context, userID int64, requestID, campaignID, t
 		credited := false
 		switch prize.Type {
 		case "balance":
-			if err := creditBalance(ctx, tx, userID, amount.(string), fmt.Sprintf("摇摇乐奖励：%s / %s / #%d", c.Config.Name, prize.Name, drawID)); err != nil {
+			if err := creditBalance(ctx, tx, userID, *amount, fmt.Sprintf("摇摇乐奖励：%s / %s / #%d", c.Config.Name, prize.Name, drawID)); err != nil {
 				return err
 			}
 			credited = true

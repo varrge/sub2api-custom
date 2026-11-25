@@ -199,7 +199,7 @@ func TestActivityWaveTwoPoolMustCoverRecruitmentAndRetryPeriod(t *testing.T) {
 func TestActivityCampaignDoesNotReissueDeliveredLegacyReward(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	expectRewardSource(mock, "low", 1, true, time.Now())
 	// No native grant or update is expected, even after changing the delivery backend.
 	h := NewActivityCampaignHandler(db, nil)

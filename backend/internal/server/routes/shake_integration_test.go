@@ -31,7 +31,7 @@ func TestShakeHTTPFlowWithProductionMigrations(t *testing.T) {
 	}
 	admin, err := sql.Open("postgres", dsn)
 	require.NoError(t, err)
-	defer admin.Close()
+	defer func() { _ = admin.Close() }()
 	name := fmt.Sprintf("shake_http_%d", time.Now().UnixNano())
 	_, err = admin.Exec(`CREATE DATABASE ` + name)
 	require.NoError(t, err)
@@ -61,7 +61,8 @@ func TestShakeHTTPFlowWithProductionMigrations(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	// Identity and second-factor verification are stubbed; all handlers, storage,
-	// route placement and migration code below are the production implementations.
+	// migration code and admin route registration are production implementations;
+	// user routes use a test harness.
 	identity := func(c *gin.Context) {
 		uid := int64(1)
 		switch c.GetHeader("X-Test-Identity") {

@@ -641,7 +641,7 @@ func TestNaturalEndDoesNotCloseConcurrentExtension(t *testing.T) {
 	c := activeCampaign(t, s, baseConfig())
 	blocker, err := db.BeginTx(ctx, nil)
 	require.NoError(t, err)
-	defer blocker.Rollback()
+	defer func() { _ = blocker.Rollback() }()
 	var pid int
 	require.NoError(t, blocker.QueryRow(`SELECT pg_backend_pid()`).Scan(&pid))
 	_, err = blocker.Exec(`SELECT pg_advisory_xact_lock(hashtext('shake_sync'),hashtext($1))`, c.ID)
@@ -680,7 +680,7 @@ func TestRecoverWaitsForInFlightDrawAcrossDeadline(t *testing.T) {
 	require.NoError(t, err)
 	blocker, err := db.BeginTx(ctx, nil)
 	require.NoError(t, err)
-	defer blocker.Rollback()
+	defer func() { _ = blocker.Rollback() }()
 	var pid int
 	require.NoError(t, blocker.QueryRow(`SELECT pg_backend_pid() FROM users WHERE id=1 FOR NO KEY UPDATE`).Scan(&pid))
 	drawDone := make(chan error, 1)
@@ -708,7 +708,7 @@ func TestRecoverWaitsForConcurrentExtension(t *testing.T) {
 	c := activeCampaign(t, s, baseConfig())
 	extension, err := db.BeginTx(ctx, nil)
 	require.NoError(t, err)
-	defer extension.Rollback()
+	defer func() { _ = extension.Rollback() }()
 	var pid int
 	require.NoError(t, extension.QueryRow(`SELECT pg_backend_pid() FROM shake_campaigns WHERE id=$1 FOR UPDATE`, c.ID).Scan(&pid))
 	cfg := c.Config

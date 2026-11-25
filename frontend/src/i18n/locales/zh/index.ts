@@ -4,6 +4,7 @@ import votingEntry from './votingEntry'
 import tutorial from './tutorial'
 import activityLeaderboard from './activityLeaderboard'
 import luckyBox from './luckyBox'
+import shakeAdmin from './shakeAdmin'
 import groupBuy from './groupBuy'
 import adminAccessKeys from './adminAccessKeys'
 import mcp from './mcp'
@@ -32,6 +33,7 @@ export default {
   sharedCredit,
   ...activityLeaderboard,
   ...luckyBox,
+  ...shakeAdmin,
   ...activityCampaigns,
   activityCampaignsNav: '双十一活动',
   activityCampaignsDescription: '签到答题领摇摇卡',

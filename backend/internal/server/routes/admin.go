@@ -55,6 +55,7 @@ func RegisterAdminRoutes(
 			admin.PUT("/activities/campaigns/:id", h.ActivityCampaigns.AdminSave)
 			admin.GET("/activities/campaigns/:id/rewards/:userID/:task", h.ActivityCampaigns.Source)
 		}
+		registerShakeAdminRoutes(admin, h.Shake, stepUpAuth)
 		// Private activity identities and award exports use administrator authentication.
 		admin.GET("/activities/leaderboard", panelRateLimiter.Heavy(), h.ActivityLeaderboard.GetAdmin)
 		admin.GET("/activities/leaderboard/config", h.ActivityLeaderboard.Config)

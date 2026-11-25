@@ -41,15 +41,16 @@ type State struct {
 	Treasures     []Treasure `json:"treasures"`
 }
 type SourceReward struct {
-	CampaignID    string    `json:"campaign_id"`
-	UserID        int64     `json:"user_id"`
-	Task          string    `json:"task"`
-	BoxCampaignID string    `json:"box_campaign_id"`
-	ConnectionID  string    `json:"connection_id"`
-	EarnedAt      time.Time `json:"earned_at"`
-	CardTier      string    `json:"card_tier"`
-	Quantity      int       `json:"quantity"`
-	Enabled       bool      `json:"enabled"`
+	CampaignID    string     `json:"campaign_id"`
+	UserID        int64      `json:"user_id"`
+	Task          string     `json:"task"`
+	BoxCampaignID string     `json:"box_campaign_id"`
+	ConnectionID  string     `json:"connection_id"`
+	EarnedAt      time.Time  `json:"earned_at"`
+	CardTier      string     `json:"card_tier"`
+	Quantity      int        `json:"quantity"`
+	Enabled       bool       `json:"enabled"`
+	DeliveredAt   *time.Time `json:"delivered_at"`
 }
 
 func readConfig(ctx context.Context, q queryer, id, lock string) (Config, error) {
@@ -103,8 +104,24 @@ func (s *Store) Save(ctx context.Context, c Config) (Config, error) {
 	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM activity_campaign_participants WHERE campaign_id=$1)`, c.ID).Scan(&started); err != nil {
 		return c, err
 	}
-	if started && (old.BoxCampaignID != c.BoxCampaignID || !old.StartsAt.Equal(c.StartsAt) || !old.EndsAt.Equal(c.EndsAt)) {
+	nativeRebind := false
+	if s.connectionID == "native" && old.BoxCampaignID != c.BoxCampaignID {
+		var oldNative, newNative bool
+		// KaWang IDs also start with "shake-"; existence, not the prefix, identifies native pools.
+		if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM shake_campaigns WHERE id=$1),
+			EXISTS(SELECT 1 FROM shake_campaigns WHERE id=$2)`, old.BoxCampaignID, c.BoxCampaignID).Scan(&oldNative, &newNative); err != nil {
+			return c, err
+		}
+		nativeRebind = !oldNative && newNative
+	}
+	if started && ((!nativeRebind && old.BoxCampaignID != c.BoxCampaignID) || !old.StartsAt.Equal(c.StartsAt) || !old.EndsAt.Equal(c.EndsAt)) {
 		return c, ErrConflict
+	}
+	if nativeRebind {
+		if _, err = tx.ExecContext(ctx, `UPDATE activity_campaign_rewards SET box_campaign_id=$2,connection_id='native'
+			WHERE campaign_id=$1 AND box_campaign_id=$3 AND delivered_at IS NULL`, c.ID, c.BoxCampaignID, old.BoxCampaignID); err != nil {
+			return c, err
+		}
 	}
 	c.Revision++
 	raw, err := json.Marshal(c)
@@ -293,7 +310,7 @@ func (s *Store) Source(ctx context.Context, id string, userID int64, task string
 		return r, err
 	}
 	var orderID sql.NullInt64
-	err = tx.QueryRowContext(ctx, `SELECT box_campaign_id,connection_id,earned_at,card_tier,quantity,order_id FROM activity_campaign_rewards WHERE campaign_id=$1 AND user_id=$2 AND task=$3`, id, userID, task).Scan(&r.BoxCampaignID, &r.ConnectionID, &r.EarnedAt, &r.CardTier, &r.Quantity, &orderID)
+	err = tx.QueryRowContext(ctx, `SELECT box_campaign_id,connection_id,earned_at,card_tier,quantity,order_id,delivered_at FROM activity_campaign_rewards WHERE campaign_id=$1 AND user_id=$2 AND task=$3`, id, userID, task).Scan(&r.BoxCampaignID, &r.ConnectionID, &r.EarnedAt, &r.CardTier, &r.Quantity, &orderID, &r.DeliveredAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return r, ErrNotFound
 	}

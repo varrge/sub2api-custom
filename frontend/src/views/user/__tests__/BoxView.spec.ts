@@ -581,4 +581,31 @@ describe('BoxView', () => {
     await flushPromises()
     expect(recoverMock.mock.calls.at(-1)?.[0].requestId).toBe('box-alice-pending')
   })
+
+  it('explains each card rule with progress toward the next card', async () => {
+    bootstrapMock.mockResolvedValue(bootstrapFixture({
+      progress: [
+        { source: 'order', orderType: 'subscription', mode: 'per_order', groupId: 10, groupName: 'Claude', cardTier: 'medium', quantity: 2, amount: 0, remaining: 0, cardsEarned: 4 },
+        { source: 'usage', billing: 'balance', mode: 'threshold', cardTier: 'low', quantity: 1, threshold: 10, amount: 2.5, remaining: 7.5, cardsEarned: 3 },
+        { source: 'order', orderType: 'month_card', mode: 'threshold', cardTier: 'high', quantity: 1, threshold: 200, amount: 198, remaining: 2, cardsEarned: 0 },
+      ],
+    }))
+    const view = await mountView()
+    const rules = view.get('[data-testid="box-rules"]')
+    expect(view.get('[data-testid="box-rule-0"]').text()).toContain('每完成一笔「Claude」分组订阅购买，获得 2 张中级卡')
+    expect(view.get('[data-testid="box-rule-0"]').text()).toContain('本活动已获得 4 张')
+    const usage = view.get('[data-testid="box-rule-1"]').text()
+    expect(usage).toContain('余额实际消耗每满 $10，获得 1 张低级卡')
+    expect(usage).toContain('当前进度 $2.5 / $10，还差 $7.5；已获得 3 张')
+    expect(rules.find('[style*="width: 25%"]').exists()).toBe(true)
+    const monthCard = view.get('[data-testid="box-rule-2"]').text()
+    expect(monthCard).toContain('月卡购买累计每满 ¥200')
+    expect(monthCard).toContain('当前进度 ¥198 / ¥200，还差 ¥2')
+  })
+
+  it('hides the rules section when the campaign has no card rules', async () => {
+    bootstrapMock.mockResolvedValue(bootstrapFixture({ progress: [] }))
+    const view = await mountView()
+    expect(view.find('[data-testid="box-rules"]').exists()).toBe(false)
+  })
 })

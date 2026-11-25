@@ -84,6 +84,7 @@ func providePluginHostInfo(buildInfo handler.BuildInfo) service.PluginHostInfo {
 
 func provideCleanup(
 	activityCampaigns *handler.ActivityCampaignHandler,
+	shakeBox *handler.ShakeHandler,
 	pushNotifications *handler.PushNotificationHandler,
 	ipBans *handler.IPBanHandler,
 	entClient *ent.Client,
@@ -232,6 +233,7 @@ func provideCleanup(
 				return nil
 			}},
 			{"ActivityCampaigns", func() error { activityCampaigns.Stop(); return nil }},
+			{"ShakeWorker", func() error { shakeBox.Stop(); return nil }},
 			{"PushNotifications", func() error { pushNotifications.Stop(); return nil }},
 			{"IPBans", func() error { ipBans.Stop(); return nil }},
 			{"OpsCleanupService", func() error {

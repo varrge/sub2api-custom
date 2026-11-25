@@ -129,13 +129,11 @@ func RegisterUserRoutes(
 			authenticated.POST("/activities/campaigns/:id/treasure/visit", h.ActivityCampaigns.TreasureVisit)
 			authenticated.POST("/activities/campaigns/:id/treasure/find", panelRateLimiter.Heavy(), h.ActivityCampaigns.TreasureFind)
 		}
-		nativeBox := handler.NewNativeBoxHandler()
-		if h.ActivityCampaigns != nil {
-			nativeBox = h.ActivityCampaigns.NativeBox()
+		if h.Shake != nil {
+			authenticated.GET("/activities/box/bootstrap", panelRateLimiter.Heavy(), h.Shake.Bootstrap)
+			authenticated.POST("/activities/box/draws", panelRateLimiter.Heavy(), h.Shake.Draw)
+			authenticated.POST("/activities/box/draws/recover", panelRateLimiter.Heavy(), h.Shake.Recover)
 		}
-		authenticated.GET("/activities/box/bootstrap", panelRateLimiter.Heavy(), nativeBox.Bootstrap)
-		authenticated.POST("/activities/box/draws", panelRateLimiter.Heavy(), nativeBox.Draw)
-		authenticated.POST("/activities/box/draws/recover", panelRateLimiter.Heavy(), nativeBox.Recover)
 		authenticated.GET("/activities/double-festival/leaderboard", panelRateLimiter.Heavy(), h.ActivityLeaderboard.Get)
 
 		// 使用记录（聚合统计属重查询，叠加更严格的按用户限流）

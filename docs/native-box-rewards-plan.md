@@ -1,5 +1,7 @@
 # Native Box and Daily Rewards
 
+> **已被取代（2026-11-24）：** 摇摇乐已改为 Sub 原生实现，不再连接卡网，`NATIVE_BOX_*` 环境变量已移除。当前说明见 [native-shake/implementation.md](native-shake/implementation.md)。下文保留作历史记录。
+
 ## Scope
 
 Native Vue opening page in the Sub2API fork; KaWang remains the sole owner of

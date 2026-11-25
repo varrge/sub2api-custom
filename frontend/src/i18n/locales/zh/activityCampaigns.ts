@@ -147,7 +147,7 @@ export default {
       endsAt: '结束时间（不含）',
       timeHint: '按北京时间填写，与浏览器所在时区无关。',
       boxCampaignId: '目标摇摇卡活动 ID',
-      boxCampaignIdHint: '三弹使用同一个覆盖活动时间的摇摇卡卡池。第二弹还需覆盖最长招募期及额外24小时补发期；启用前必填。',
+      boxCampaignIdHint: '填写「摇摇乐管理」中已启用活动的 ID（shake- 开头）。三弹使用同一个覆盖活动时间的摇摇乐活动；第二弹还需覆盖最长招募期及额外24小时补发期；启用前必填。',
       rewardsTitle: '奖励规则（固定）',
       rewardsFrozen: '三项任务各奖励 1 张普通摇摇卡，每账号最多 3 张，本弹活动不可修改。',
       quizTitle: '答题配置',

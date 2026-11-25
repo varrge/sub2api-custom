@@ -10,11 +10,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/campaign"
 )
 
-func ProvideActivityCampaignHandler(db *sql.DB) *ActivityCampaignHandler {
-	h := NewActivityCampaignHandler(db)
-	if !h.box.configured() {
-		return h
-	}
+func ProvideActivityCampaignHandler(db *sql.DB, box *ShakeHandler) *ActivityCampaignHandler {
+	h := NewActivityCampaignHandler(db, box.Store())
 	ctx, cancel := context.WithCancel(context.Background())
 	h.stopWorker = cancel
 	h.workerDone = make(chan struct{})

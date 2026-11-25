@@ -822,6 +822,12 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/shake',
+    name: 'AdminShake',
+    component: () => import('@/views/admin/ShakeView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Lucky Box', titleKey: 'shakeAdmin.title', descriptionKey: 'shakeAdmin.description' }
+  },
+  {
     path: '/admin/invitations',
     name: 'AdminInvitations',
     component: () => import('@/views/admin/InvitationsView.vue'),

@@ -687,8 +687,9 @@ func redeemCodeFromServiceBase(rc *service.RedeemCode) RedeemCode {
 	}
 
 	// For admin_balance/admin_concurrency types, include notes so users can see
-	// why they were charged or credited by admin
-	if (rc.Type == "admin_balance" || rc.Type == "admin_concurrency") && rc.Notes != "" {
+	// why they were charged or credited by admin. Lucky-box prize rows carry the
+	// campaign, prize and draw number (or the void reason).
+	if (rc.Type == "admin_balance" || rc.Type == "admin_concurrency" || rc.Type == "shake_balance") && rc.Notes != "" {
 		out.Notes = &rc.Notes
 	}
 

@@ -135,6 +135,7 @@ deploy/docker-compose.override.yml
 .gocache/
 vite.config.js
 docs/*
+!docs/native-shake/
 !docs/VOTING.md
 !docs/adr/
 !docs/ANTIGRAVITY_ATTRIBUTION_429.md

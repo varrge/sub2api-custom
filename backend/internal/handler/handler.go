@@ -49,6 +49,7 @@ type AdminHandlers struct {
 type Handlers struct {
 	ActivityLeaderboard *ActivityLeaderboardHandler
 	ActivityCampaigns   *ActivityCampaignHandler
+	Shake               *ShakeHandler
 	Voting              *VotingHandler
 	Tutorial            *TutorialHandler
 	PushNotifications   *PushNotificationHandler

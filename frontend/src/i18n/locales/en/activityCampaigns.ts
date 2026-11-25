@@ -147,7 +147,7 @@ export default {
       endsAt: 'Ends at (exclusive)',
       timeHint: 'Enter times in Beijing time, regardless of the browser timezone.',
       boxCampaignId: 'Target box campaign ID',
-      boxCampaignIdHint: 'Use one shared reward pool covering all three waves. Wave two also requires the longest recruitment period plus 24 hours for delivery retries. Required before enabling.',
+      boxCampaignIdHint: 'Enter the ID (starting with shake-) of an enabled campaign from Lucky Box admin. Use one shared reward pool covering all three waves. Wave two also requires the longest recruitment period plus 24 hours for delivery retries. Required before enabling.',
       rewardsTitle: 'Reward rules (fixed)',
       rewardsFrozen: 'Each of the three tasks grants 1 low-tier box card, at most 3 per account. These rules are fixed for this wave.',
       quizTitle: 'Quiz configuration',

@@ -8,29 +8,26 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/campaign"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/internal/shake"
 	"github.com/gin-gonic/gin"
 )
 
 type ActivityCampaignHandler struct {
 	store      *campaign.Store
-	box        *NativeBoxHandler
+	shake      *shake.Store
 	stopWorker context.CancelFunc
 	workerDone chan struct{}
 }
 
 var errActivityDelivery = errors.New("activity reward delivery not confirmed")
 
-func NewActivityCampaignHandler(db *sql.DB) *ActivityCampaignHandler {
-	box := NewNativeBoxHandler(db)
-	return &ActivityCampaignHandler{store: campaign.NewStore(db, box.connectionID), box: box}
+// Task cards are issued into the native lucky box (internal/shake).
+func NewActivityCampaignHandler(db *sql.DB, box *shake.Store) *ActivityCampaignHandler {
+	return &ActivityCampaignHandler{store: campaign.NewStore(db, shake.ConnectionID), shake: box}
 }
-
-// NativeBox shares the same trusted identity exchange for the user's box page.
-func (h *ActivityCampaignHandler) NativeBox() *NativeBoxHandler { return h.box }
 func activityResult(c *gin.Context, value any, err error) {
 	c.Header("Cache-Control", "private, no-store")
 	switch {
@@ -125,7 +122,7 @@ func (h *ActivityCampaignHandler) AdminSave(c *gin.Context) {
 		activityResult(c, nil, err)
 		return
 	}
-	if cfg.Enabled && !h.box.configured() {
+	if cfg.Enabled && h.shake == nil {
 		activityResult(c, nil, campaign.ErrNotReady)
 		return
 	}
@@ -134,34 +131,26 @@ func (h *ActivityCampaignHandler) AdminSave(c *gin.Context) {
 		activityResult(c, nil, err)
 		return
 	}
-	if cfg.Enabled && (!old.Enabled || old.BoxCampaignID != cfg.BoxCampaignID ||
-		!old.StartsAt.Equal(cfg.StartsAt) || !old.EndsAt.Equal(cfg.EndsAt)) {
-		session, ok := h.box.session(c)
-		if !ok {
+	targetChanged := old.BoxCampaignID != cfg.BoxCampaignID && cfg.BoxCampaignID != ""
+	if targetChanged || (cfg.Enabled && (!old.Enabled ||
+		!old.StartsAt.Equal(cfg.StartsAt) || !old.EndsAt.Equal(cfg.EndsAt))) {
+		if h.shake == nil {
+			activityResult(c, nil, campaign.ErrNotReady)
 			return
 		}
-		var token string
-		if json.Unmarshal(session["sessionToken"], &token) != nil || token == "" {
-			response.Error(c, http.StatusBadGateway, "无法验证摇摇卡连接")
-			return
-		}
-		target, _, err := h.box.call(c.Request.Context(), "/api/public/sub2api/shake/activity-target", token, map[string]string{"campaignId": cfg.BoxCampaignID})
-		var pool struct {
-			ID      string    `json:"id"`
-			StartAt time.Time `json:"startAt"`
-			EndAt   time.Time `json:"endAt"`
-			Status  string    `json:"status"`
-		}
-		raw, _ := json.Marshal(target)
 		requiredEnd, coverageErr := h.store.RequiredPoolEnd(c.Request.Context(), cfg)
 		if coverageErr != nil {
 			activityResult(c, nil, coverageErr)
 			return
 		}
-		if err != nil || json.Unmarshal(raw, &pool) != nil || pool.ID != cfg.BoxCampaignID ||
-			(pool.Status != "active" && pool.Status != "scheduled") || pool.StartAt.After(cfg.StartsAt) || pool.EndAt.Before(requiredEnd) ||
-			pool.StartAt.IsZero() || pool.EndAt.IsZero() {
-			response.Error(c, http.StatusBadRequest, "摇摇卡卡池不可用或有效期不足；第二弹还需覆盖最长招募期及额外24小时补发期，请检查连接和卡池")
+		pool, err := h.shake.Pool(c.Request.Context(), cfg.BoxCampaignID)
+		if err != nil && !errors.Is(err, shake.ErrNotFound) {
+			activityResult(c, nil, err)
+			return
+		}
+		if err != nil || (pool.Status != "active" && pool.Status != "scheduled") ||
+			pool.StartsAt.After(cfg.StartsAt) || pool.EndsAt.Before(requiredEnd) {
+			response.Error(c, http.StatusBadRequest, "摇摇乐活动不可用或有效期不足：须已启用、覆盖本活动时间；第二弹还需覆盖最长招募期及额外24小时补发期")
 			return
 		}
 	}
@@ -169,8 +158,7 @@ func (h *ActivityCampaignHandler) AdminSave(c *gin.Context) {
 	activityResult(c, result, err)
 }
 
-// Source is administrator-only. KaWang uses the existing connection's stored
-// Sub admin credential to verify an earned entitlement before issuing a card.
+// Source is administrator-only: it shows the entitlement behind a task reward.
 func (h *ActivityCampaignHandler) Source(c *gin.Context) {
 	userID, err := strconv.ParseInt(c.Param("userID"), 10, 64)
 	if err != nil || userID <= 0 {
@@ -199,35 +187,24 @@ func (h *ActivityCampaignHandler) deliver(ctx context.Context, id string, userID
 	if err != nil {
 		return err
 	}
+	if r.DeliveredAt != nil {
+		return nil
+	}
 	if !r.Enabled {
 		return campaign.ErrClosed
 	}
-	if r.ConnectionID != h.box.connectionID {
+	if h.shake == nil {
 		return campaign.ErrNotReady
 	}
-	session, err := h.box.sessionForUser(ctx, userID)
-	if err != nil {
-		return errors.Join(errActivityDelivery, err)
-	}
-	var token string
-	if json.Unmarshal(session["sessionToken"], &token) != nil || token == "" {
-		return errActivityDelivery
-	}
-	payload, _, err := h.box.call(ctx, "/api/public/sub2api/shake/activity-rewards/claim", token, map[string]string{"activityId": r.CampaignID, "task": r.Task})
-	if err != nil {
-		return errors.Join(errActivityDelivery, err)
-	}
-	expected := map[string]string{"activityId": r.CampaignID, "userId": strconv.FormatInt(userID, 10), "task": r.Task, "connectionId": r.ConnectionID, "campaignId": r.BoxCampaignID, "cardTier": r.CardTier}
-	for k, want := range expected {
-		var got string
-		if json.Unmarshal(payload[k], &got) != nil || got != want {
-			return errActivityDelivery
+	// Idempotent per activity/user/task; a retry after a lost response is safe.
+	if err := h.shake.GrantActivityTask(ctx, r.BoxCampaignID, r.CampaignID, userID, r.Task, r.CardTier, r.Quantity); err != nil {
+		if errors.Is(err, shake.ErrClosed) || errors.Is(err, shake.ErrNotFound) {
+			return campaign.ErrClosed
 		}
-	}
-	var granted bool
-	var quantity int
-	if json.Unmarshal(payload["granted"], &granted) != nil || !granted || json.Unmarshal(payload["quantity"], &quantity) != nil || quantity != r.Quantity {
-		return errActivityDelivery
+		if errors.Is(err, shake.ErrIneligible) {
+			return campaign.ErrIneligible
+		}
+		return errors.Join(errActivityDelivery, err)
 	}
 	return h.store.Delivered(ctx, r.CampaignID, userID, r.Task)
 }

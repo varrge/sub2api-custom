@@ -936,6 +936,8 @@ export default {
     balanceAddedRedeem: '余额充值（兑换）',
     balanceAddedAffiliate: '余额充值（返利转入）',
     balanceAddedAdmin: '余额充值（管理员）',
+    balanceAddedShake: '余额奖励（摇摇乐）',
+    balanceDeductedShake: '奖励扣回（摇摇乐作废）',
     balanceDeductedAdmin: '余额扣除（管理员）',
     concurrencyAddedRedeem: '并发增加（兑换）',
     concurrencyAddedAdmin: '并发增加（管理员）',

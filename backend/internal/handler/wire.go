@@ -197,6 +197,7 @@ func ProvideAdminSettingHandler(settingService *service.SettingService, emailSer
 func ProvideHandlers(
 	activityLeaderboardHandler *ActivityLeaderboardHandler,
 	activityCampaignHandler *ActivityCampaignHandler,
+	shakeHandler *ShakeHandler,
 	votingHandler *VotingHandler,
 	tutorialHandler *TutorialHandler,
 	pushNotificationHandler *PushNotificationHandler,
@@ -231,6 +232,7 @@ func ProvideHandlers(
 	return &Handlers{
 		ActivityLeaderboard: activityLeaderboardHandler,
 		ActivityCampaigns:   activityCampaignHandler,
+		Shake:               shakeHandler,
 		Voting:              votingHandler,
 		Tutorial:            tutorialHandler,
 		PushNotifications:   pushNotificationHandler,
@@ -272,6 +274,7 @@ var ProviderSet = wire.NewSet(
 	NewUsageHandler,
 	NewActivityLeaderboardHandler,
 	ProvideActivityCampaignHandler,
+	ProvideShakeHandler,
 	NewVotingHandler,
 	NewTutorialHandler,
 	ProvidePushNotificationHandler,

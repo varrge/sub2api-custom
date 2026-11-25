@@ -436,6 +436,44 @@ func TestEnhanceCSPPolicy(t *testing.T) {
 	})
 }
 
+func TestSecurityHeadersVideoPlayback(t *testing.T) {
+	for name, policy := range map[string]string{
+		"default":        "",
+		"legacy_config":  "default-src 'self'; script-src 'self'; frame-ancestors 'none'",
+		"existing_media": "default-src 'self'; media-src 'self' blob: https:; frame-ancestors 'none'",
+		"custom_media":   "default-src 'self'; media-src https://videos.example.com; frame-ancestors 'none'",
+	} {
+		t.Run(name, func(t *testing.T) {
+			router := gin.New()
+			router.Use(SecurityHeaders(config.CSPConfig{Enabled: true, Policy: policy}, nil))
+			router.GET("/image-generation", func(c *gin.Context) {
+				c.Status(http.StatusOK)
+			})
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/image-generation?tab=video", nil))
+
+			csp := w.Header().Get("Content-Security-Policy")
+			// Authenticated videos use object URLs; native Ark results use HTTPS CDN URLs.
+			for _, source := range []string{"'self'", "blob:", "https:"} {
+				assert.Equal(t, 1, countDirectiveValue(csp, "media-src", source), "missing or duplicate media source %s", source)
+			}
+			for _, source := range []string{"*", "http:", "data:"} {
+				assert.Zero(t, countDirectiveValue(csp, "media-src", source))
+			}
+			for _, source := range []string{"blob:", "https:", "'unsafe-inline'"} {
+				assert.Zero(t, countDirectiveValue(csp, "script-src", source), "video playback must not broaden script execution")
+			}
+			assert.Contains(t, csp, "'nonce-")
+			assert.Equal(t, 1, countDirectiveValue(csp, "frame-ancestors", "'none'"))
+			assert.Equal(t, "DENY", w.Header().Get("X-Frame-Options"))
+			assert.Equal(t, "nosniff", w.Header().Get("X-Content-Type-Options"))
+			if name == "custom_media" {
+				assert.Equal(t, 1, countDirectiveValue(csp, "media-src", "https://videos.example.com"))
+			}
+		})
+	}
+}
+
 func countDirectiveValue(policy, directive, value string) int {
 	for _, rawDirective := range strings.Split(policy, ";") {
 		fields := strings.Fields(strings.TrimSpace(rawDirective))

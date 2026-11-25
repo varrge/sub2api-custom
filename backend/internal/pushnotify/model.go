@@ -27,12 +27,13 @@ var (
 	channelID   = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 )
 
-var Events = []string{"payment.recharged", "subscription.purchased", "monthcard.purchased", "team.full", "ops.alert", "shared_credit.low", "admin.activity"}
-var Variables = []string{"site_name", "event_name", "event_id", "occurred_at", "summary", "details", "user_id", "order_id", "amount", "currency", "product_name", "team_code", "remaining_quota", "action", "method", "path", "client_ip", "actor_email", "auth_method", "status_code", "request_id"}
+var Events = []string{"payment.recharged", "subscription.purchased", "monthcard.purchased", "team.full", "ops.alert", "shared_credit.low", "admin.activity", "security.login_failed", "security.suspicious_ip"}
+var Variables = []string{"site_name", "event_name", "event_id", "occurred_at", "summary", "details", "user_id", "order_id", "amount", "currency", "product_name", "team_code", "remaining_quota", "action", "method", "path", "client_ip", "actor_email", "auth_method", "status_code", "request_id", "peer_ip", "ip_source", "reason", "request_count"}
 var eventNames = map[string]string{
 	"payment.recharged": "充值成功", "subscription.purchased": "订阅购买成功", "monthcard.purchased": "月卡购买成功",
 	"team.full": "拼团已满", "ops.alert": "运行告警", "shared_credit.low": "共享额度不足",
-	"admin.activity": "管理员操作",
+	"admin.activity":        "管理员操作",
+	"security.login_failed": "登录失败", "security.suspicious_ip": "异常 IP／未授权访问",
 }
 
 type Config struct {
@@ -239,10 +240,25 @@ func Sample(kind string) Event {
 	if !slices.Contains(Events, kind) {
 		kind = Events[0]
 	}
-	return Event{ID: "preview", Kind: kind, At: time.Now(), Values: map[string]string{
+	event := Event{ID: "preview", Kind: kind, At: time.Now(), Values: map[string]string{
 		"summary": "这是一条推送预览，实际发送时将替换为真实事件内容。",
 		"details": "- **用户 ID**：10001\n- **订单号**：202611040001\n- **金额**：58.00",
 		"user_id": "10001", "order_id": "202611040001", "amount": "58.00", "currency": "CNY", "product_name": "轻享月卡", "team_code": "T-preview", "remaining_quota": "20.00",
 		"action": "admin.accounts.export", "method": "GET", "path": "/api/v1/admin/accounts/data", "client_ip": "203.0.113.10", "actor_email": "admin@example.com", "auth_method": "jwt", "status_code": "200", "request_id": "preview-request",
 	}}
+	if strings.HasPrefix(kind, "security.") {
+		event.Values = map[string]string{
+			"summary": "检测到疑似接口探测，请核对来源。", "action": "security.ip_probe",
+			"method": "GET", "path": "/api/user/login", "status_code": "404",
+			"client_ip": "203.0.113.10", "peer_ip": "172.30.253.3", "ip_source": "trusted_proxy_chain",
+			"reason": "repeated_unknown_api", "request_count": "3", "request_id": "preview-request",
+		}
+		if kind == "security.login_failed" {
+			event.Values["summary"], event.Values["action"] = "登录失败，请核对来源。", "auth.login"
+			event.Values["method"], event.Values["path"], event.Values["status_code"] = "POST", "/api/v1/auth/login", "401"
+			event.Values["reason"], event.Values["request_count"] = "login_failed", "1"
+		}
+		decorateEvent(&event)
+	}
+	return event
 }

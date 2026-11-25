@@ -26,6 +26,25 @@ beforeEach(() => {
 })
 
 describe('Push notification settings', () => {
+  it('saves security event selections and previews trusted IP metadata', async () => {
+    vi.mocked(pushNotificationsApi.preview).mockResolvedValue({ title: '登录失败', body: '客户端 IP：203.0.113.10\n\n连接对端 IP：172.30.253.3', tags: '安全' })
+    const w = await view()
+    await w.get('[id="evt-security.login_failed"]').setValue(true)
+    await w.get('[id="evt-security.suspicious_ip"]').setValue(true)
+    expect(w.get('[data-testid="security-notification-help"]').text()).toContain('10 分钟')
+    expect(w.text()).toContain('peer_ip')
+    await button(w, '保存修改').trigger('click')
+    await flushPromises()
+    expect(pushNotificationsApi.save).toHaveBeenCalledWith(expect.objectContaining({
+      channels: [expect.objectContaining({ events: ['payment.recharged', 'security.login_failed', 'security.suspicious_ip'] })],
+    }))
+    await w.get('#preview-event-select').setValue('security.login_failed')
+    await button(w, '生成预览').trigger('click')
+    await flushPromises()
+    expect(pushNotificationsApi.preview).toHaveBeenCalledWith(expect.objectContaining({ credential: '' }), 'security.login_failed')
+    expect(w.get('[data-testid="push-preview"]').text()).toContain('203.0.113.10')
+  })
+
   it('preserves masked secrets, supports multiple events and keeps saving independent from the parent form', async () => {
     const w = await view()
     expect(w.find('form').exists()).toBe(false)

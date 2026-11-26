@@ -26,7 +26,7 @@ const (
 
 // ErrSeedanceResolutionRequired marks a client-side request error, not a
 // pricing configuration error, so callers can answer with HTTP 400.
-var ErrSeedanceResolutionRequired = errors.New("Seedance per-second billing requires an explicit resolution: 480p, 720p or 1080p")
+var ErrSeedanceResolutionRequired = errors.New("seedance per-second billing requires an explicit resolution: 480p, 720p or 1080p")
 
 func (e GrokMediaEndpoint) IsSeedance() bool {
 	return e == SeedanceEndpointCreate || e == SeedanceEndpointStatus || e == SeedanceEndpointDelete || e == SeedanceEndpointContent

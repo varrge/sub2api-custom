@@ -41,6 +41,16 @@ func TestFilterSchedulerCredentialsKeepsGeminiExplicitCacheKeys(t *testing.T) {
 	require.NotContains(t, filtered, "service_account_json")
 }
 
+func TestFilterSchedulerCredentialsKeepsSeedanceFirstFrameField(t *testing.T) {
+	filtered := filterSchedulerCredentials(map[string]any{
+		service.SeedanceUpstreamProtocolCredentialKey: "videos_json",
+		service.SeedanceFirstFrameFieldCredentialKey:  "image_url",
+	})
+
+	require.Equal(t, "videos_json", filtered[service.SeedanceUpstreamProtocolCredentialKey])
+	require.Equal(t, "image_url", filtered[service.SeedanceFirstFrameFieldCredentialKey])
+}
+
 func TestSchedulerMetadataAccountKeepsOpenAISubscriptionIdentity(t *testing.T) {
 	account := service.Account{
 		ID:       24,

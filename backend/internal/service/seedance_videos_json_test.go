@@ -119,6 +119,49 @@ func TestSeedanceVideosJSONCreateUsesConfiguredProtocol(t *testing.T) {
 	require.Equal(t, "vid-1", gjson.Get(w.Body.String(), "id").String())
 }
 
+func TestSeedanceVideosJSONFirstFrameFieldMapping(t *testing.T) {
+	body := `{"model":"video","content":[{"type":"text","text":"waves"},{"type":"image_url","image_url":{"url":"https://images.example/first.png"},"role":"first_frame"}],"duration":5,"resolution":"720p"}`
+
+	t.Run("default first_frame object", func(t *testing.T) {
+		upstream := &grokMediaContentUpstreamStub{response: grokMediaContentStatusResponse(`{"id":"vid-1","status":"queued"}`)}
+		svc := &OpenAIGatewayService{httpUpstream: upstream}
+		c, _ := grokMediaContentTestContext(http.MethodPost, "/api/v3/contents/generations/tasks", nil)
+		_, err := svc.ForwardSeedance(t.Context(), c, videosJSONTestAccount(), SeedanceEndpointCreate, "", []byte(body))
+		require.NoError(t, err)
+		forwarded, err := io.ReadAll(upstream.request.Body)
+		require.NoError(t, err)
+		require.Equal(t, "https://images.example/first.png", gjson.GetBytes(forwarded, "first_frame.image_url").String())
+		require.False(t, gjson.GetBytes(forwarded, "image_url").Exists())
+	})
+
+	t.Run("image_url upstream", func(t *testing.T) {
+		account := videosJSONTestAccount()
+		account.Credentials[SeedanceFirstFrameFieldCredentialKey] = SeedanceFirstFrameFieldImageURL
+		upstream := &grokMediaContentUpstreamStub{response: grokMediaContentStatusResponse(`{"id":"vid-1","status":"queued"}`)}
+		svc := &OpenAIGatewayService{httpUpstream: upstream}
+		c, _ := grokMediaContentTestContext(http.MethodPost, "/api/v3/contents/generations/tasks", nil)
+		_, err := svc.ForwardSeedance(t.Context(), c, account, SeedanceEndpointCreate, "", []byte(body))
+		require.NoError(t, err)
+		forwarded, err := io.ReadAll(upstream.request.Body)
+		require.NoError(t, err)
+		require.Equal(t, "https://images.example/first.png", gjson.GetBytes(forwarded, "image_url").String())
+		require.False(t, gjson.GetBytes(forwarded, "first_frame").Exists())
+	})
+
+	t.Run("image_url upstream rejects last_frame before sending", func(t *testing.T) {
+		account := videosJSONTestAccount()
+		account.Credentials[SeedanceFirstFrameFieldCredentialKey] = SeedanceFirstFrameFieldImageURL
+		upstream := &grokMediaContentUpstreamStub{}
+		svc := &OpenAIGatewayService{httpUpstream: upstream}
+		c, w := grokMediaContentTestContext(http.MethodPost, "/api/v3/contents/generations/tasks", nil)
+		_, err := svc.ForwardSeedance(t.Context(), c, account, SeedanceEndpointCreate, "", []byte(`{"model":"video","content":[{"type":"text","text":"waves"},{"type":"image_url","image_url":{"url":"https://images.example/a.png"},"role":"first_frame"},{"type":"image_url","image_url":{"url":"https://images.example/b.png"},"role":"last_frame"}]}`))
+		require.Error(t, err)
+		require.Equal(t, http.StatusBadRequest, w.Code)
+		require.Contains(t, w.Body.String(), "last_frame")
+		require.Empty(t, upstream.requests)
+	})
+}
+
 func TestSeedanceVideosJSONCompletedWithoutURLIsBillable(t *testing.T) {
 	upstream := &grokMediaContentUpstreamStub{response: grokMediaContentStatusResponse(`{"id":"vid-1","status":"completed","duration":5,"resolution":"720p"}`)}
 	svc := &OpenAIGatewayService{httpUpstream: upstream}

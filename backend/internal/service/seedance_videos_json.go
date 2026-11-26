@@ -28,6 +28,9 @@ const (
 	SeedanceUpstreamProtocolCredentialKey = "seedance_upstream_protocol"
 	SeedanceProtocolArk                   = "ark"
 	SeedanceProtocolVideosJSON            = "videos_json"
+	SeedanceFirstFrameFieldCredentialKey  = "seedance_first_frame_field"
+	SeedanceFirstFrameFieldFirst          = "first_frame"
+	SeedanceFirstFrameFieldImageURL       = "image_url"
 )
 
 func (a *Account) SeedanceUpstreamProtocol() string {
@@ -37,9 +40,18 @@ func (a *Account) SeedanceUpstreamProtocol() string {
 	return SeedanceProtocolArk
 }
 
+// Some Videos JSON proxies reject first_frame and condition the first frame
+// through a top-level image_url instead.
+func (a *Account) SeedanceFirstFrameField() string {
+	if strings.TrimSpace(a.GetCredential(SeedanceFirstFrameFieldCredentialKey)) == SeedanceFirstFrameFieldImageURL {
+		return SeedanceFirstFrameFieldImageURL
+	}
+	return SeedanceFirstFrameFieldFirst
+}
+
 // The Videos JSON contract has different content fields from Ark. Reject
 // unsupported fields instead of silently changing the requested generation.
-func seedanceVideosJSONBody(body []byte, model string) ([]byte, error) {
+func seedanceVideosJSONBody(body []byte, model, firstFrameField string) ([]byte, error) {
 	out := map[string]any{"model": model}
 	for key, value := range gjson.ParseBytes(body).Map() {
 		switch key {
@@ -80,6 +92,16 @@ func seedanceVideosJSONBody(body []byte, model string) ([]byte, error) {
 		}
 		value := map[string]string{kind: raw}
 		if kind == "image_url" && (role == "first_frame" || role == "last_frame") {
+			if firstFrameField == SeedanceFirstFrameFieldImageURL {
+				if role == "last_frame" {
+					return nil, fmt.Errorf("this upstream accepts a single image_url frame; last_frame is not supported")
+				}
+				if _, exists := out["image_url"]; exists {
+					return nil, fmt.Errorf("only one image_url is supported")
+				}
+				out["image_url"] = raw
+				continue
+			}
 			if _, exists := out[role]; exists {
 				return nil, fmt.Errorf("only one %s is supported", role)
 			}
@@ -94,7 +116,7 @@ func seedanceVideosJSONBody(body []byte, model string) ([]byte, error) {
 	if _, hasLast := out["last_frame"]; hasLast && out["first_frame"] == nil {
 		return nil, fmt.Errorf("last_frame requires first_frame")
 	}
-	if out["first_frame"] != nil && len(refs) > 0 {
+	if (out["first_frame"] != nil || out["image_url"] != nil) && len(refs) > 0 {
 		return nil, fmt.Errorf("first/last frames cannot be combined with reference media")
 	}
 	for field, values := range refs {
@@ -108,7 +130,7 @@ func seedanceVideosJSONBody(body []byte, model string) ([]byte, error) {
 		out[field] = values
 	}
 	prompt := strings.TrimSpace(strings.Join(texts, "\n"))
-	if prompt == "" && len(refs) == 0 && out["first_frame"] == nil {
+	if prompt == "" && len(refs) == 0 && out["first_frame"] == nil && out["image_url"] == nil {
 		return nil, fmt.Errorf("a prompt or reference media is required")
 	}
 	if prompt != "" {
@@ -245,7 +267,7 @@ func (s *OpenAIGatewayService) forwardSeedanceVideosJSON(ctx context.Context, c 
 		info, err = ParseSeedanceRequest(body)
 		if err == nil {
 			upstreamModel = account.GetMappedModel(info.Model)
-			body, err = seedanceVideosJSONBody(body, upstreamModel)
+			body, err = seedanceVideosJSONBody(body, upstreamModel, account.SeedanceFirstFrameField())
 		}
 		if err == nil {
 			body, err = s.storeSeedanceReferenceImages(ctx, body)

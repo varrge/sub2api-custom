@@ -3701,6 +3701,14 @@
               <option value="videos_json">{{ t('admin.accounts.openai.seedanceProtocolVideos') }}</option>
             </select>
             <p class="input-hint">{{ t('admin.accounts.openai.seedanceProtocolHint') }}</p>
+            <div v-if="openAISeedanceProtocol === 'videos_json'" class="mt-3">
+              <label for="seedance-first-frame-field" class="input-label">{{ t('admin.accounts.openai.seedanceFirstFrameField') }}</label>
+              <select id="seedance-first-frame-field" v-model="openAISeedanceFirstFrameField" class="input" data-testid="seedance-first-frame-field">
+                <option value="first_frame">{{ t('admin.accounts.openai.seedanceFirstFrameFieldDefault') }}</option>
+                <option value="image_url">{{ t('admin.accounts.openai.seedanceFirstFrameFieldImageUrl') }}</option>
+              </select>
+              <p class="input-hint">{{ t('admin.accounts.openai.seedanceFirstFrameFieldHint') }}</p>
+            </div>
           </div>
         </div>
       </div>
@@ -4848,6 +4856,7 @@ const openAIResponsesMode = ref<OpenAIResponsesMode>('auto')
 // Images 非流式响应缺 b64_json 时由网关下载 url 回填（仅 OpenAI API Key）。
 const openAIImagesUrlToB64JsonEnabled = ref(false)
 const openAISeedanceProtocol = ref('ark')
+const openAISeedanceFirstFrameField = ref<'first_frame' | 'image_url'>('first_frame')
 const openAIImageSizeTiers = ref<OpenAIImageSizeTier[]>([...OPENAI_IMAGE_SIZE_TIERS])
 const openAIEndpointCapabilities = ref<OpenAIEndpointCapability[]>(['chat_completions', 'embeddings'])
 const openaiOAuthResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
@@ -4988,6 +4997,11 @@ const toggleOpenAIEndpointCapability = (capability: OpenAIEndpointCapability, ev
 const applyOpenAIEndpointCapabilities = (credentials: Record<string, unknown>) => {
   const capabilities = normalizeOpenAIEndpointCapabilities(openAIEndpointCapabilities.value)
   if (capabilities.includes('seedance')) credentials.seedance_upstream_protocol = openAISeedanceProtocol.value
+  if (capabilities.includes('seedance') && openAISeedanceProtocol.value === 'videos_json' && openAISeedanceFirstFrameField.value === 'image_url') {
+    credentials.seedance_first_frame_field = 'image_url'
+  } else {
+    delete credentials.seedance_first_frame_field
+  }
   if (capabilities.length === 2 && !capabilities.includes('seedance')) {
     delete credentials.openai_capabilities
     return
@@ -5355,6 +5369,7 @@ watch(
       openaiFlattenNamespacesEnabled.value = false
       openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
       openAISeedanceProtocol.value = 'ark'
+  openAISeedanceFirstFrameField.value = 'first_frame'
       openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
       openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
       codexCLIOnlyEnabled.value = false
@@ -5826,6 +5841,7 @@ const resetForm = () => {
   openAIResponsesMode.value = 'auto'
   openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
   openAISeedanceProtocol.value = 'ark'
+  openAISeedanceFirstFrameField.value = 'first_frame'
   openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
   openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
   codexCLIOnlyEnabled.value = false

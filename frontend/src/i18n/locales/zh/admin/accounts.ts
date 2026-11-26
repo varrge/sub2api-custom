@@ -841,6 +841,10 @@ export default {
         seedanceProtocolVideos: 'Videos JSON（/v1/videos）',
         seedanceProtocolUnchanged: '保持原协议',
         seedanceProtocolHint: '按上游文档选择。Videos JSON 使用按秒定价及公网素材链接；已有任务沿用创建时的协议。',
+        seedanceFirstFrameField: '首帧图片字段',
+        seedanceFirstFrameFieldDefault: 'first_frame（文档默认）',
+        seedanceFirstFrameFieldImageUrl: 'image_url（TT 等代理）',
+        seedanceFirstFrameFieldHint: '上游拒绝 first_frame 时选 image_url；TT 系列模型只接受顶层 image_url，且不支持尾帧。',
         endpointCapabilitiesDesc:
           '用于调度筛选。文本端点会跟随上方 Responses API 支持显示为 Responses、Chat Completions 或自动模式；Embeddings 独立控制 /v1/embeddings。',
         capabilityResponses: 'Responses',

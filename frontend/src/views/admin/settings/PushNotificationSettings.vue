@@ -41,7 +41,7 @@
               </span>
             </div>
             <p class="text-xs text-neutral-500 dark:text-neutral-400">
-              {{ localText('支持通过 Server酱 或通用自定义 Webhook 发送系统管理与计费事件提醒', 'Send administrative and billing alerts via Server酱 or Custom Webhooks.') }}
+              {{ localText('支持通过 Server酱 或通用自定义 Webhook 发送管理、安全与计费事件提醒', 'Send administrative, security and billing alerts via Server酱 or Custom Webhooks.') }}
             </p>
           </div>
         </div>
@@ -334,6 +334,14 @@
                   </div>
                 </label>
               </div>
+
+              <p
+                v-if="selectedChannel.events.some(event => event.startsWith('security.'))"
+                class="mt-3 text-xs leading-relaxed text-neutral-500 dark:text-neutral-400"
+                data-testid="security-notification-help"
+              >
+                {{ localText('安全通知记录客户端 IP 和连接对端 IP。同一 IP、同类事件每个 10 分钟窗口最多入队一次，每窗口最多入队 60 个安全事件，可投递多个渠道。依赖正确的可信代理配置；VPN/代理出口不等于使用者身份。反代已拦截、未到达应用的请求仅保留入口日志。', 'Security alerts include client and peer IPs. Each IP and event type queues at most once per 10-minute window, with at most 60 security events per window; each event may reach multiple channels. Configure trusted proxies correctly; a VPN/proxy exit does not identify a person. Requests blocked before the application remain in edge logs only.') }}
+              </p>
 
               <!-- Special Field for shared_credit.low -->
               <div

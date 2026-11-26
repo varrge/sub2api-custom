@@ -197,6 +197,7 @@ func ProvideAdminSettingHandler(settingService *service.SettingService, emailSer
 func ProvideHandlers(
 	activityLeaderboardHandler *ActivityLeaderboardHandler,
 	activityCampaignHandler *ActivityCampaignHandler,
+	shakeHandler *ShakeHandler,
 	votingHandler *VotingHandler,
 	tutorialHandler *TutorialHandler,
 	pushNotificationHandler *PushNotificationHandler,
@@ -224,6 +225,7 @@ func ProvideHandlers(
 	batchImageHandler *BatchImageHandler,
 	supportTicketHandler *SupportTicketHandler,
 	invitationHandler *InvitationHandler,
+	ipBanHandler *IPBanHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 	_ *service.OpenAIQuotaAutoResetService,
@@ -231,6 +233,7 @@ func ProvideHandlers(
 	return &Handlers{
 		ActivityLeaderboard: activityLeaderboardHandler,
 		ActivityCampaigns:   activityCampaignHandler,
+		Shake:               shakeHandler,
 		Voting:              votingHandler,
 		Tutorial:            tutorialHandler,
 		PushNotifications:   pushNotificationHandler,
@@ -258,6 +261,7 @@ func ProvideHandlers(
 		SupportTicket:       supportTicketHandler,
 		MCPOAuth:            mcpOAuthHandler,
 		Invitation:          invitationHandler,
+		IPBans:              ipBanHandler,
 	}
 }
 
@@ -272,9 +276,11 @@ var ProviderSet = wire.NewSet(
 	NewUsageHandler,
 	NewActivityLeaderboardHandler,
 	ProvideActivityCampaignHandler,
+	ProvideShakeHandler,
 	NewVotingHandler,
 	NewTutorialHandler,
 	ProvidePushNotificationHandler,
+	ProvideIPBanHandler,
 	NewRedeemHandler,
 	NewSubscriptionHandler,
 	NewAnnouncementHandler,

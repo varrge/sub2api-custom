@@ -304,12 +304,12 @@
                   {{ formatHistoryValue(item) }}
                 </p>
                 <p
-                  v-if="!isAdminAdjustment(item.type)"
+                  v-if="!isAdminAdjustment(item.type) && item.type !== 'shake_balance'"
                   class="font-mono text-xs text-gray-400 dark:text-dark-500"
                 >
                   {{ item.code.slice(0, 8) }}...
                 </p>
-                <p v-else class="text-xs text-gray-400 dark:text-dark-500">
+                <p v-else-if="isAdminAdjustment(item.type)" class="text-xs text-gray-400 dark:text-dark-500">
                   {{ t('redeem.adminAdjustment') }}
                 </p>
                 <!-- Display notes for admin adjustments -->
@@ -408,7 +408,7 @@ const contactInfo = ref('')
 
 // Helper functions for history display
 const isBalanceType = (type: string) => {
-  return type === 'balance' || type === 'admin_balance'
+  return type === 'balance' || type === 'admin_balance' || type === 'shake_balance'
 }
 
 const isSubscriptionType = (type: string) => {
@@ -424,6 +424,8 @@ const getHistoryItemTitle = (item: RedeemHistoryItem) => {
     return t('redeem.balanceAddedRedeem')
   } else if (item.type === 'admin_balance') {
     return item.value >= 0 ? t('redeem.balanceAddedAdmin') : t('redeem.balanceDeductedAdmin')
+  } else if (item.type === 'shake_balance') {
+    return item.value >= 0 ? t('redeem.balanceAddedShake') : t('redeem.balanceDeductedShake')
   } else if (item.type === 'concurrency') {
     return t('redeem.concurrencyAddedRedeem')
   } else if (item.type === 'admin_concurrency') {

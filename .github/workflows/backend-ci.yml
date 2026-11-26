@@ -91,6 +91,13 @@ jobs:
           PUSH_NOTIFICATION_TEST_DSN: postgres://monthcard_test:isolated-test-password@127.0.0.1:55439/monthcard_test?sslmode=disable
         run: go test -race ./internal/pushnotify -count=1
 
+      - name: Native shake PostgreSQL issuance, draws and activity rewards
+        working-directory: backend
+        env:
+          SHAKE_TEST_DSN: postgres://monthcard_test:isolated-test-password@127.0.0.1:55439/monthcard_test?sslmode=disable
+          ACTIVITY_CAMPAIGN_TEST_DSN: postgres://monthcard_test:isolated-test-password@127.0.0.1:55439/monthcard_test?sslmode=disable
+        run: go test -race ./internal/shake ./internal/campaign ./internal/server/routes -count=1
+
       - name: EasyPay PostgreSQL webhook security and replay protection
         working-directory: backend
         env:

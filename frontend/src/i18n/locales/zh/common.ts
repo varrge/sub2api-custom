@@ -228,6 +228,7 @@ export default {
     contentModeration: '内容审计',
     promptAudit: '提示词审计',
     auditLogs: '操作日志',
+    ipBans: 'IP 封禁',
   },
 
   // Auth

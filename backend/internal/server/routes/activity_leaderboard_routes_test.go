@@ -15,7 +15,7 @@ import (
 func TestActivityLeaderboardSettingsRoutesRequireAdminAuthentication(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	handlers := &handler.Handlers{ActivityCampaigns: handler.NewActivityCampaignHandler(nil), Admin: &handler.AdminHandlers{Setting: adminhandler.NewSettingHandler(nil, nil, nil, nil, nil, nil, nil)}}
+	handlers := &handler.Handlers{ActivityCampaigns: handler.NewActivityCampaignHandler(nil, nil), Shake: handler.NewShakeHandler(nil, nil, nil, nil), Admin: &handler.AdminHandlers{Setting: adminhandler.NewSettingHandler(nil, nil, nil, nil, nil, nil, nil)}}
 	adminAuth := servermiddleware.AdminAuthMiddleware(func(c *gin.Context) {
 		if c.GetHeader("Authorization") == "" {
 			servermiddleware.AbortWithError(c, http.StatusUnauthorized, "UNAUTHORIZED", "Authorization required")
@@ -37,6 +37,12 @@ func TestActivityLeaderboardSettingsRoutesRequireAdminAuthentication(t *testing.
 		{http.MethodGet, "/api/v1/admin/activities/campaigns/double11-2026-wave1"},
 		{http.MethodPut, "/api/v1/admin/activities/campaigns/double11-2026-wave1"},
 		{http.MethodGet, "/api/v1/admin/activities/campaigns/double11-2026-wave1/rewards/1/quiz"},
+		{http.MethodGet, "/api/v1/admin/shake/campaigns"},
+		{http.MethodPost, "/api/v1/admin/shake/campaigns"},
+		{http.MethodPut, "/api/v1/admin/shake/campaigns/x"},
+		{http.MethodPost, "/api/v1/admin/shake/campaigns/x/grants"},
+		{http.MethodPost, "/api/v1/admin/shake/draws/1/void"},
+		{http.MethodPost, "/api/v1/admin/shake/reward-jobs"},
 	} {
 		method, path := endpoint.method, endpoint.path
 		for _, tc := range []struct {

@@ -181,6 +181,38 @@
           </ul>
         </section>
 
+        <!-- How to earn cards: one row per configured rule -->
+        <section v-if="progress.length > 0" data-testid="box-rules">
+          <h2 class="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-500 dark:text-dark-400">
+            <Icon name="gift" size="sm" />
+            {{ t('luckyBox.rulesTitle') }}
+          </h2>
+          <ul class="space-y-2">
+            <li
+              v-for="(rule, index) in progress"
+              :key="index"
+              class="rounded-lg bg-gray-50 p-3 text-sm dark:bg-dark-800"
+              :data-testid="`box-rule-${index}`"
+            >
+              <p class="text-gray-900 dark:text-white">{{ ruleText(rule) }}</p>
+              <template v-if="rule.mode === 'threshold' && rule.threshold">
+                <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
+                  <div
+                    class="h-full rounded-full bg-amber-500 transition-all duration-300"
+                    :style="{ width: `${Math.min(100, (rule.amount / rule.threshold) * 100)}%` }"
+                  ></div>
+                </div>
+                <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">
+                  {{ t('luckyBox.ruleProgress', { amount: money(rule, rule.amount), threshold: money(rule, rule.threshold), remaining: money(rule, rule.remaining), earned: rule.cardsEarned }) }}
+                </p>
+              </template>
+              <p v-else class="mt-1 text-xs text-gray-500 dark:text-dark-400">
+                {{ t('luckyBox.ruleEarned', { earned: rule.cardsEarned }) }}
+              </p>
+            </li>
+          </ul>
+        </section>
+
         <!-- History -->
         <section>
           <div class="mb-3 flex items-center justify-between">
@@ -290,6 +322,7 @@ import {
   type BoxCardTier,
   type BoxDraw,
   type BoxPrize,
+  type BoxProgressEntry,
   type BoxRarity,
   type BoxDrawRequest,
   type BoxDrawResponse,
@@ -314,6 +347,20 @@ const campaign = computed(() => bootstrap.value?.campaign ?? null)
 const availableCards = ref(0)
 const availableCardsByTier = ref<Record<BoxCardTier, number>>({ low: 0, medium: 0, high: 0 })
 const prizes = computed<BoxPrize[]>(() => bootstrap.value?.prizes ?? [])
+const progress = computed<BoxProgressEntry[]>(() => bootstrap.value?.progress ?? [])
+const money = (rule: BoxProgressEntry, value: number) => `${rule.source === 'order' && rule.orderType === 'month_card' ? '¥' : '$'}${Number(value).toFixed(2).replace(/\.?0+$/, '')}`
+const tierName = (tier: BoxCardTier) => t(`luckyBox.tier${capitalize(tier)}`)
+const ruleText = (rule: BoxProgressEntry) => {
+  const group = rule.groupId ? t('luckyBox.ruleGroup', { name: rule.groupName || `#${rule.groupId}` }) : ''
+  const reward = t('luckyBox.ruleReward', { quantity: rule.quantity, tier: tierName(rule.cardTier) })
+  if (rule.source === 'order') {
+    const order = t(`luckyBox.ruleOrder_${rule.orderType ?? 'subscription'}`)
+    return rule.mode === 'per_order'
+      ? t('luckyBox.rulePerOrder', { group, order, reward })
+      : t('luckyBox.ruleOrderThreshold', { group, order, threshold: money(rule, rule.threshold ?? 0), reward })
+  }
+  return t('luckyBox.ruleUsage', { group, billing: t(`luckyBox.ruleBilling_${rule.billing ?? 'balance'}`), threshold: money(rule, rule.threshold ?? 0), reward })
+}
 const draws = ref<BoxDraw[]>([])
 
 const selectedTier = ref<BoxCardTier>('low')

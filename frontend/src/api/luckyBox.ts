@@ -53,9 +53,21 @@ export interface BoxCampaign {
   activeConfigVersionId: string | null
 }
 
-export type BoxProgressEntry =
-  | { source: 'subscription_purchase'; mode: 'per_purchase'; subscriptionGroupId: number; cardTier: BoxCardTier; cardQuantity: number }
-  | { source: 'subscription_purchase' | 'balance_consumption'; subscriptionGroupId?: number; cardTier: BoxCardTier; threshold: number; amount: number; remaining: number; cardsEarned: number }
+/** One configured card rule with the user's progress toward its next card. */
+export interface BoxProgressEntry {
+  source: 'order' | 'usage'
+  orderType?: 'subscription' | 'month_card' | 'balance'
+  billing?: 'balance' | 'subscription'
+  mode: 'per_order' | 'threshold'
+  groupId?: number
+  groupName?: string
+  cardTier: BoxCardTier
+  quantity: number
+  threshold?: number
+  amount: number
+  remaining: number
+  cardsEarned: number
+}
 
 export interface BoxBootstrap {
   campaign: BoxCampaign | null

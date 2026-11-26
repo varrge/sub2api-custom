@@ -558,6 +558,7 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (string
 		return "", nil, ErrServiceUnavailable
 	}
 
+	recordLoginAuditTarget(ctx, user.ID)
 	// 验证密码
 	if !s.CheckPassword(password, user.PasswordHash) {
 		return "", nil, ErrInvalidCredentials

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -22,6 +23,10 @@ const (
 	SeedanceEndpointContent          GrokMediaEndpoint        = "seedance_content"
 	OpenAIEndpointCapabilitySeedance OpenAIEndpointCapability = "seedance"
 )
+
+// ErrSeedanceResolutionRequired marks a client-side request error, not a
+// pricing configuration error, so callers can answer with HTTP 400.
+var ErrSeedanceResolutionRequired = errors.New("Seedance per-second billing requires an explicit resolution: 480p, 720p or 1080p")
 
 func (e GrokMediaEndpoint) IsSeedance() bool {
 	return e == SeedanceEndpointCreate || e == SeedanceEndpointStatus || e == SeedanceEndpointDelete || e == SeedanceEndpointContent
@@ -199,7 +204,7 @@ func (s *OpenAIGatewayService) SnapshotSeedancePricing(ctx context.Context, key 
 	if !configuredToken && (resolved.Mode == BillingModeVideo || seedanceGroupResolutionPrice(key.Group, model, resolution) != nil) {
 		tier, ok := LookupVideoBillingResolution(resolution)
 		if !ok {
-			return nil, fmt.Errorf("seedance per-second pricing requires an explicit supported resolution")
+			return nil, ErrSeedanceResolutionRequired
 		}
 		snapshot := &GrokVideoPricingSnapshot{
 			PerSecond: true, RateMultiplier: s.ResolveVideoRateMultiplierAt(ctx, key, key.UserID, at),

@@ -49,6 +49,7 @@ type AdminHandlers struct {
 type Handlers struct {
 	ActivityLeaderboard *ActivityLeaderboardHandler
 	ActivityCampaigns   *ActivityCampaignHandler
+	Shake               *ShakeHandler
 	Voting              *VotingHandler
 	Tutorial            *TutorialHandler
 	PushNotifications   *PushNotificationHandler
@@ -76,6 +77,7 @@ type Handlers struct {
 	SupportTicket       *SupportTicketHandler
 	MCPOAuth            *MCPOAuthHandler
 	Invitation          *InvitationHandler
+	IPBans              *IPBanHandler
 }
 
 // BuildInfo contains build-time information

@@ -161,6 +161,7 @@ func TestSeedanceVideosJSONPreservesFailedTasksAndRejectsAmbiguousResponses(t *t
 		{`{"request_id":"request-trace-id"}`, 502, "missing task status"},
 		{`<html>proxy error</html>`, 502, "invalid task response"},
 		{`{"error":{"message":"business error"}}`, 502, "invalid task response"},
+		{`{"id":"vid-1","status":"bogus"}`, 502, "unsupported task status"},
 	} {
 		upstream := &grokMediaContentUpstreamStub{response: grokMediaContentStatusResponse(tc.body)}
 		svc := &OpenAIGatewayService{httpUpstream: upstream}
@@ -176,6 +177,74 @@ func TestSeedanceVideosJSONPreservesFailedTasksAndRejectsAmbiguousResponses(t *t
 			require.Error(t, err)
 		}
 	}
+}
+
+func TestSeedanceVideosJSONNormalizesDocumentedTaskStatuses(t *testing.T) {
+	for _, tc := range []struct {
+		upstream string
+		want     string
+	}{
+		{"queued", "queued"},
+		{"pending", "queued"},
+		{"submitted", "queued"},
+		{"created", "queued"},
+		{"processing", "running"},
+		{"in_progress", "running"},
+		{"running", "running"},
+		{"completed", "succeeded"},
+		{"succeeded", "succeeded"},
+		{"success", "succeeded"},
+		{"done", "succeeded"},
+		{"failed", "failed"},
+		{"error", "failed"},
+		{"cancelled", "cancelled"},
+		{"canceled", "cancelled"},
+		{"expired", "expired"},
+	} {
+		t.Run(tc.upstream, func(t *testing.T) {
+			upstream := &grokMediaContentUpstreamStub{response: grokMediaContentStatusResponse(
+				`{"id":"vid-1","status":"` + tc.upstream + `","duration":5,"resolution":"720p"}`)}
+			svc := &OpenAIGatewayService{httpUpstream: upstream}
+			c, w := grokMediaContentTestContext(http.MethodGet, "/api/v3/contents/generations/tasks/vid-1", nil)
+			result, err := svc.ForwardSeedance(t.Context(), c, videosJSONTestAccount(), SeedanceEndpointStatus, "seedance:vid-1", nil)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+			require.Equal(t, tc.want, gjson.Get(w.Body.String(), "status").String())
+			if tc.want == "succeeded" {
+				require.Equal(t, 1, result.VideoCount)
+				require.NotEmpty(t, gjson.Get(w.Body.String(), "content.video_url").String())
+			} else {
+				require.Zero(t, result.VideoCount, "only completed tasks may bill")
+			}
+		})
+	}
+}
+
+func TestSeedanceVideosJSONAcceptsErrorObjectOnTerminalFailureStatuses(t *testing.T) {
+	for _, status := range []string{"failed", "error", "cancelled", "expired"} {
+		t.Run(status, func(t *testing.T) {
+			upstream := &grokMediaContentUpstreamStub{response: grokMediaContentStatusResponse(
+				`{"id":"vid-1","status":"` + status + `","error":{"message":"upstream stopped"}}`)}
+			svc := &OpenAIGatewayService{httpUpstream: upstream}
+			c, w := grokMediaContentTestContext(http.MethodGet, "/api/v3/contents/generations/tasks/vid-1", nil)
+			result, err := svc.ForwardSeedance(t.Context(), c, videosJSONTestAccount(), SeedanceEndpointStatus, "seedance:vid-1", nil)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+			require.Contains(t, w.Body.String(), "upstream stopped")
+			require.Zero(t, result.VideoCount)
+		})
+	}
+}
+
+func TestSeedanceVideosJSONAcceptsStateField(t *testing.T) {
+	upstream := &grokMediaContentUpstreamStub{response: grokMediaContentStatusResponse(`{"id":"vid-1","state":"in_progress"}`)}
+	svc := &OpenAIGatewayService{httpUpstream: upstream}
+	c, w := grokMediaContentTestContext(http.MethodGet, "/api/v3/contents/generations/tasks/vid-1", nil)
+	result, err := svc.ForwardSeedance(t.Context(), c, videosJSONTestAccount(), SeedanceEndpointStatus, "seedance:vid-1", nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	require.Equal(t, "running", gjson.Get(w.Body.String(), "status").String())
+	require.Zero(t, result.VideoCount)
 }
 
 func TestSeedanceVideosJSONContentPreservesRangeAndCompletion(t *testing.T) {

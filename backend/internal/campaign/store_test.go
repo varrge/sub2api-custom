@@ -190,3 +190,42 @@ func TestValidationRejectsBadQuestionsAndDates(t *testing.T) {
 	c.EndsAt = c.StartsAt
 	require.ErrorIs(t, c.Validate(), ErrInvalid)
 }
+
+func TestNativeCutoverRebindsOnlyPendingRewardsOnce(t *testing.T) {
+	s, db := campaignDB(t)
+	ctx := context.Background()
+	cfg := enable(t, s, db)
+	cfg.BoxCampaignID = "shake-campaign-legacy"
+	cfg, err := s.Save(ctx, cfg)
+	require.NoError(t, err)
+	require.NoError(t, s.Participate(ctx, WaveOne, 1, false, 0, nil))
+	require.NoError(t, s.Participate(ctx, WaveOne, 1, true, cfg.Revision, map[string]int{"whale-race": 1, "weight": 2, "emoji": 1}))
+	require.NoError(t, s.Delivered(ctx, WaveOne, 1, "quiz"))
+	_, err = db.Exec(`CREATE TABLE shake_campaigns(id TEXT PRIMARY KEY); INSERT INTO shake_campaigns VALUES('shake-native'),('shake-other')`)
+	require.NoError(t, err)
+	native := NewStore(db, "native")
+	changed := cfg
+	changed.BoxCampaignID = "shake-native"
+	changed.EndsAt = changed.EndsAt.Add(time.Hour)
+	_, err = native.Save(ctx, changed)
+	require.ErrorIs(t, err, ErrConflict)
+	pending, err := s.Source(ctx, WaveOne, 1, "first_checkin")
+	require.NoError(t, err)
+	require.Equal(t, cfg.BoxCampaignID, pending.BoxCampaignID)
+	changed.EndsAt = cfg.EndsAt
+	updated, err := native.Save(ctx, changed)
+	require.NoError(t, err)
+	pending, err = native.Source(ctx, WaveOne, 1, "first_checkin")
+	require.NoError(t, err)
+	require.Equal(t, "shake-native", pending.BoxCampaignID)
+	require.Equal(t, "native", pending.ConnectionID)
+	require.Nil(t, pending.DeliveredAt)
+	delivered, err := native.Source(ctx, WaveOne, 1, "quiz")
+	require.NoError(t, err)
+	require.Equal(t, cfg.BoxCampaignID, delivered.BoxCampaignID)
+	require.Equal(t, "test-connection", delivered.ConnectionID)
+	require.NotNil(t, delivered.DeliveredAt)
+	updated.BoxCampaignID = "shake-other"
+	_, err = native.Save(ctx, updated)
+	require.ErrorIs(t, err, ErrConflict, "native-to-native retargeting stays forbidden after participation")
+}

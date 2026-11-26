@@ -1,6 +1,6 @@
 import { apiClient } from '@/api/client'
 
-export type PushEvent = 'payment.recharged' | 'subscription.purchased' | 'monthcard.purchased' | 'team.full' | 'ops.alert' | 'shared_credit.low' | 'admin.activity'
+export type PushEvent = 'payment.recharged' | 'subscription.purchased' | 'monthcard.purchased' | 'team.full' | 'ops.alert' | 'shared_credit.low' | 'admin.activity' | 'security.login_failed' | 'security.suspicious_ip' | 'security.ip_banned'
 export interface PushChannel {
   id: string
   name: string

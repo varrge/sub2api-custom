@@ -2,7 +2,9 @@ package middleware
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -212,6 +214,11 @@ func NewAuditLogMiddleware(auditService *service.AuditLogService) AuditLogMiddle
 		// 捕获请求体（读出后回填，避免影响后续 ShouldBindJSON）。
 		// 只读取脱敏解析上限内的字节，超出部分与已读部分拼接回填，
 		// 避免大体积导入请求被完整复制进内存两次。
+		loginAttempt := isAuditedLoginAttempt(c.Request.Method, c.FullPath())
+		var loginEmail string
+		if loginAttempt {
+			c.Request = c.Request.WithContext(service.WithLoginAuditTarget(c.Request.Context()))
+		}
 		var bodyRedacted string
 		if _, omit := auditBodyOmittedRoutes[routeKey]; omit {
 			bodyRedacted = "<credential-bearing body omitted>"
@@ -224,6 +231,15 @@ func NewAuditLogMiddleware(auditService *service.AuditLogService) AuditLogMiddle
 					closer: orig,
 				}
 				bodyRedacted = service.RedactAuditBody(raw, c.GetHeader("Content-Type"))
+				if loginAttempt && len(raw) <= service.AuditRequestBodyCaptureLimit &&
+					(c.FullPath() == "/api/v1/auth/login" || strings.HasSuffix(c.FullPath(), "/bind-login")) {
+					var claimed struct {
+						Email string `json:"email"`
+					}
+					if json.Unmarshal(raw, &claimed) == nil && len(claimed.Email) <= 255 {
+						loginEmail = strings.ToLower(strings.TrimSpace(claimed.Email))
+					}
+				}
 			}
 		}
 
@@ -293,7 +309,19 @@ func NewAuditLogMiddleware(auditService *service.AuditLogService) AuditLogMiddle
 		// 请求头凭证掩码（仅保留首尾）。
 		entry.CredentialMasked = MaskedRequestCredential(c)
 
-		extra := map[string]any{}
+		client, peer, source := securityAccessIPs(c)
+		if status >= 400 && status < 500 && strings.HasPrefix(entry.Path, "/api/v1/auth/") {
+			entry.ClientIP = client
+		}
+		extra := map[string]any{"security_client_ip": client, "peer_ip": peer, "ip_source": source}
+		if loginAttempt && status >= 400 && status < 500 {
+			if target := service.LoginAuditTargetUserID(c.Request.Context()); target > 0 {
+				extra["login_target_user_id"] = target
+			} else if loginEmail != "" {
+				// Unverified email is only a lookup hint; the DB trigger checks the account's role.
+				extra["login_target_email"] = loginEmail
+			}
+		}
 		if value, ok := c.Get(auditCtxKeyExtra); ok {
 			if details, ok := value.(map[string]any); ok {
 				for key, item := range details {
@@ -317,6 +345,15 @@ func NewAuditLogMiddleware(auditService *service.AuditLogService) AuditLogMiddle
 
 		auditService.Record(entry)
 	})
+}
+
+func isAuditedLoginAttempt(method, route string) bool {
+	if method != http.MethodPost {
+		return false
+	}
+	return route == "/api/v1/auth/login" || route == "/api/v1/auth/login/2fa" ||
+		route == "/api/v1/auth/passkey/login/finish" ||
+		(strings.HasPrefix(route, "/api/v1/auth/oauth/") && strings.HasSuffix(route, "/bind-login"))
 }
 
 // restoredBody 把审计中间件按上限读出的前缀与未读完的原始 body 拼接回填，

@@ -719,6 +719,10 @@ export default {
         seedanceProtocolVideos: 'Videos JSON (/v1/videos)',
         seedanceProtocolUnchanged: 'Keep existing protocol',
         seedanceProtocolHint: 'Follow the upstream documentation. Videos JSON requires per-second pricing and public media URLs. Existing tasks retain their original protocol.',
+        seedanceFirstFrameField: 'First-frame image field',
+        seedanceFirstFrameFieldDefault: 'first_frame (documented default)',
+        seedanceFirstFrameFieldImageUrl: 'image_url (TT and similar proxies)',
+        seedanceFirstFrameFieldHint: 'Choose image_url when the upstream rejects first_frame; TT models only accept a top-level image_url and do not support last_frame.',
         endpointCapabilitiesDesc:
           'Used by account routing. The text endpoint follows the Responses API support setting above and is shown as Responses, Chat Completions, or auto mode; Embeddings independently controls /v1/embeddings.',
         capabilityResponses: 'Responses',

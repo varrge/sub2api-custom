@@ -125,6 +125,30 @@ func validateSeedanceMediaURL(raw string) error {
 	return nil
 }
 
+// Upstream documents several aliases per task stage; normalize them before
+// status checks and completion billing.
+func normalizeSeedanceTaskStatus(raw string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "queued", "pending", "submitted", "created":
+		return "queued", true
+	case "processing", "in_progress", "running":
+		return "running", true
+	case "completed", "succeeded", "success", "done":
+		return "succeeded", true
+	case "failed", "error":
+		return "failed", true
+	case "cancelled", "canceled":
+		return "cancelled", true
+	case "expired":
+		return "expired", true
+	}
+	return "", false
+}
+
+func isSeedanceFailureStatus(status string) bool {
+	return status == "failed" || status == "cancelled" || status == "expired"
+}
+
 // Convert uploaded first/reference frames only after validating the full request.
 // Public URLs and native Ark uploads do not need object storage.
 func (s *OpenAIGatewayService) storeSeedanceReferenceImages(ctx context.Context, body []byte) ([]byte, error) {
@@ -274,7 +298,16 @@ func (s *OpenAIGatewayService) forwardSeedanceVideosJSON(ctx context.Context, c 
 		c.JSON(http.StatusBadGateway, gin.H{"error": gin.H{"type": "invalid_upstream_response", "message": message}})
 		return nil, fmt.Errorf("%s", message)
 	}
-	if !gjson.ValidBytes(responseBody) || !gjson.ParseBytes(responseBody).IsObject() || (gjson.GetBytes(responseBody, "error").Type != gjson.Null && gjson.GetBytes(responseBody, "status").String() != "failed") {
+	if !gjson.ValidBytes(responseBody) || !gjson.ParseBytes(responseBody).IsObject() {
+		return invalid("Videos JSON upstream returned an invalid task response")
+	}
+	rawStatus := strings.TrimSpace(gjson.GetBytes(responseBody, "status").String())
+	if rawStatus == "" {
+		rawStatus = strings.TrimSpace(gjson.GetBytes(responseBody, "state").String())
+	}
+	status, statusOK := normalizeSeedanceTaskStatus(rawStatus)
+	hasError := gjson.GetBytes(responseBody, "error").Type != gjson.Null
+	if hasError && (rawStatus == "" || (statusOK && !isSeedanceFailureStatus(status))) {
 		return invalid("Videos JSON upstream returned an invalid task response")
 	}
 	responseID := gjson.GetBytes(responseBody, "id")
@@ -286,21 +319,13 @@ func (s *OpenAIGatewayService) forwardSeedanceVideosJSON(ctx context.Context, c 
 	} else if responseID.Exists() && (responseID.Type != gjson.String || responseID.String() != id) {
 		return invalid("Videos JSON upstream returned a different task ID")
 	}
-	status := gjson.GetBytes(responseBody, "status").String()
-	switch status {
-	case "queued":
-	case "processing":
-		status = "running"
-	case "completed":
-		status = "succeeded"
-	case "failed":
-	case "":
+	if rawStatus == "" {
 		if endpoint == SeedanceEndpointCreate {
 			status = "queued"
 		} else {
 			return invalid("Videos JSON response is missing task status")
 		}
-	default:
+	} else if !statusOK {
 		return invalid("Videos JSON upstream returned an unsupported task status")
 	}
 	result := &OpenAIForwardResult{Model: info.Model, BillingModel: info.Model, UpstreamModel: upstreamModel,

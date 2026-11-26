@@ -186,6 +186,10 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 		}
 		if err != nil {
 			reqLog.Warn("grok_media.video_pricing_snapshot_failed", zap.Error(err))
+			if errors.Is(err, service.ErrSeedanceResolutionRequired) {
+				h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", err.Error())
+				return
+			}
 			message := "Video pricing is unavailable"
 			if endpoint == service.SeedanceEndpointCreate {
 				message = "Seedance pricing is unavailable; configure token pricing or a per-second video price for the requested model and resolution"

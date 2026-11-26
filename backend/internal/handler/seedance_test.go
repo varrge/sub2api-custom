@@ -141,8 +141,8 @@ func TestSeedanceSecondsValidationBeforeUpstream(t *testing.T) {
 		status       int
 	}{
 		{name: "frames", mode: service.BillingModeVideo, fields: `,"resolution":"720p","frames":129`, status: http.StatusBadRequest},
-		{name: "missing resolution", mode: service.BillingModeVideo, status: http.StatusServiceUnavailable},
-		{name: "unsupported resolution", mode: service.BillingModeVideo, fields: `,"resolution":"4k"`, status: http.StatusServiceUnavailable},
+		{name: "missing resolution", mode: service.BillingModeVideo, status: http.StatusBadRequest},
+		{name: "unsupported resolution", mode: service.BillingModeVideo, fields: `,"resolution":"4k"`, status: http.StatusBadRequest},
 		{name: "missing tier", mode: service.BillingModeVideo, fields: `,"resolution":"1080p"`, status: http.StatusServiceUnavailable},
 		{name: "token frames unchanged", mode: service.BillingModeToken, fields: `,"frames":129`, status: http.StatusOK},
 	} {
@@ -426,6 +426,26 @@ func TestSeedanceCreateRejectsUnpricedModelBeforeUpstream(t *testing.T) {
 	h.SeedanceTasks(c)
 	require.Equal(t, http.StatusServiceUnavailable, w.Code, w.Body.String())
 	require.Contains(t, w.Body.String(), "pricing_unavailable")
+	require.Zero(t, upstream.calls)
+	slots.assertReleased(t)
+}
+
+func TestSeedanceCreateRejectsMissingResolutionForPerSecondPricing(t *testing.T) {
+	h, slots, _, upstream := newGrokMediaSlotHandler(t, false, false, service.PlatformOpenAI)
+	c, w := grokMediaSlotContext(t.Context(), true)
+	key, _ := middleware.GetAPIKeyFromContext(c)
+	key.Group.Platform = service.PlatformOpenAI
+	price := 0.25
+	key.Group.ModelPricing = []service.ChannelModelPricing{{
+		Models: []string{"seedance-2.5"}, BillingMode: service.BillingModeVideo,
+		Intervals: []service.PricingInterval{{TierLabel: "720p", PerRequestPrice: &price}},
+	}}
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/v3/contents/generations/tasks",
+		strings.NewReader(`{"model":"seedance-2.5","content":[{"type":"text","text":"waves"}],"duration":5}`))
+	h.SeedanceTasks(c)
+	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	require.Contains(t, w.Body.String(), "resolution")
+	require.NotContains(t, w.Body.String(), "pricing_unavailable")
 	require.Zero(t, upstream.calls)
 	slots.assertReleased(t)
 }

@@ -27,6 +27,11 @@ func RegisterUserRoutes(
 	authenticated.Use(panelRateLimiter.Global())
 	// 用户管理面变更类操作入审计（含 TOTP 启用/禁用、step-up 验证、密码修改等安全事件）
 	authenticated.Use(gin.HandlerFunc(auditLog))
+	if h.GroupEvaluation != nil {
+		evaluations := authenticated.Group("/group-evaluations", h.GroupEvaluation.Guard, panelRateLimiter.Heavy())
+		evaluations.GET("", h.GroupEvaluation.List)
+		evaluations.GET("/:group_id", h.GroupEvaluation.Get)
+	}
 	if h.Tutorial != nil {
 		authenticated.GET("/tutorial", h.Tutorial.Get)
 	}

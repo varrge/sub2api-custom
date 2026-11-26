@@ -48,7 +48,7 @@ vi.mock('vue-i18n', async (importOriginal) => {
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import RelayPulseMatrix from '../RelayPulseMatrix.vue'
-import type { MonitorHealth, MonitorMetric } from '@/api/channelMonitorV2'
+import type { MonitorHealth, MonitorMatrixRow, MonitorMetric } from '@/api/channelMonitorV2'
 
 const health: MonitorHealth = {
   overall: 'warning',
@@ -174,5 +174,46 @@ describe('RelayPulseMatrix axis range', () => {
     })
     // 5 minutes @ 60s buckets → 5 cells spanning the selected range
     expect(wrapper.findAll('.pulse-cell')).toHaveLength(5)
+  })
+})
+
+describe('RelayPulseMatrix group evaluation actions', () => {
+  it('shows buttons only for explicitly authorized numeric group IDs and emits that ID', async () => {
+    const row = (overrides: Partial<MonitorMatrixRow>): MonitorMatrixRow => ({
+      platform: 'openai', metrics: metrics(10), health, buckets: [], ...overrides,
+    })
+    const wrapper = mount(RelayPulseMatrix, {
+      props: {
+        rows: [
+          row({ group_id: 7, group_name: 'Visible group' }),
+          row({ group_id: 7, group_name: 'Visible group', model: 'model-a' }),
+          row({ group_id: 8, group_name: 'Visible group', model: 'model-b' }),
+          row({ group_name: 'Visible group' }),
+          row({ group_id: 0, group_name: 'Zero group' }),
+        ],
+        coverage: {
+          requested_start: '2026-08-01T00:00:00Z',
+          data_through: '2026-08-01T00:01:00Z',
+          coverage_start: '2026-08-01T00:00:00Z',
+          computed_at: '2026-08-01T00:01:00Z',
+          aggregation_lag_seconds: 0,
+          coverage_complete: true,
+          bucket_seconds: 60,
+        },
+        healthMode: 'overall',
+        evaluationGroupIds: [7, 0],
+      },
+    })
+
+    const buttons = wrapper.findAll('.dimension-cell button')
+    expect(buttons).toHaveLength(2)
+    await buttons[0].trigger('click')
+    await buttons[1].trigger('click')
+    expect(wrapper.emitted('evaluate')).toEqual([[7], [7]])
+    expect(wrapper.findAll('.dimension-cell').slice(2).every(cell => !cell.find('button').exists())).toBe(true)
+
+    await wrapper.setProps({ evaluationGroupIds: [] })
+    expect(wrapper.findAll('.dimension-cell button')).toHaveLength(0)
+    wrapper.unmount()
   })
 })

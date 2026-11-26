@@ -257,6 +257,8 @@
         />
       </section>
 
+      <GroupEvaluationEntries ref="evaluationEntries" @groups-loaded="groups => evaluationGroupIds = groups.map(group => group.group_id)" />
+
       <div class="relative min-h-[320px]">
         <MonitorTrendChart
           v-if="trendView === 'line'"
@@ -270,6 +272,8 @@
           :coverage="matrix.coverage"
           :health-mode="healthMode"
           :show-throughput="showThroughput"
+          :evaluation-group-ids="evaluationGroupIds"
+          @evaluate="evaluationEntries?.openGroup($event)"
         />
         <div
           v-else-if="loading"
@@ -480,6 +484,7 @@ import MetricCell from '@/features/channel-monitor-v2/MetricCell.vue'
 import MonitorRankBadge from '@/features/channel-monitor-v2/MonitorRankBadge.vue'
 import MonitorTrendChart from '@/features/channel-monitor-v2/MonitorTrendChart.vue'
 import RelayPulseMatrix from '@/features/channel-monitor-v2/RelayPulseMatrix.vue'
+import GroupEvaluationEntries from '@/features/group-evaluations/GroupEvaluationEntries.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
@@ -522,6 +527,8 @@ const authStore = useAuthStore()
 const isEnterprise = computed(() => authStore.isEnterprise)
 const appStore = useAppStore()
 const { t, te, locale } = useI18n()
+const evaluationEntries = ref<InstanceType<typeof GroupEvaluationEntries> | null>(null)
+const evaluationGroupIds = ref<number[]>([])
 const isAdmin = computed(() => authStore.isAdmin)
 /** Admins always see RPM/TPM; users honor the hide-throughput system setting. */
 const showThroughput = computed(() => isAdmin.value || !isChannelMonitorThroughputHidden())

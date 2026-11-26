@@ -131,6 +131,7 @@ func provideCleanup(
 	paymentOrderExpiry *service.PaymentOrderExpiryService,
 	channelMonitorRunner *service.ChannelMonitorRunner,
 	channelMonitorV2Aggregator *service.ChannelMonitorV2Aggregator,
+	groupEvaluationHandler *handler.GroupEvaluationHandler,
 	quotaFlusher *service.UserPlatformQuotaUsageFlusher,
 	upstreamBillingProbe *service.UpstreamBillingProbeService,
 	ollamaCloudUsage *service.OllamaCloudUsageService,
@@ -164,6 +165,10 @@ func provideCleanup(
 
 		// 应用层清理步骤可并行执行，基础设施资源（Redis/Ent）最后按顺序关闭。
 		parallelSteps := []cleanupStep{
+			{"GroupEvaluation", func() error {
+				groupEvaluationHandler.Stop()
+				return nil
+			}},
 			{"InvitationAutoApprove", func() error {
 				stopInvitationAutoApprove()
 				return nil

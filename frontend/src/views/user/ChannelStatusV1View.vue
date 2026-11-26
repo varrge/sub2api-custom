@@ -20,6 +20,8 @@
       @refresh="refresh()"
     />
 
+    <GroupEvaluationEntries />
+
     <MonitorCardGrid
       :items="items"
       :window="currentWindow"
@@ -57,6 +59,7 @@ import MonitorHero, {
 } from '@/components/user/monitor/MonitorHero.vue'
 import MonitorCardGrid from '@/components/user/monitor/MonitorCardGrid.vue'
 import MonitorDetailDialog from '@/components/user/MonitorDetailDialog.vue'
+import GroupEvaluationEntries from '@/features/group-evaluations/GroupEvaluationEntries.vue'
 import { DEFAULT_INTERVAL_SECONDS, STATUS_OPERATIONAL } from '@/constants/channelMonitor'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
 

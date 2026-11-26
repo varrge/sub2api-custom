@@ -14,15 +14,18 @@
           {{ t('channelMonitorV2.settings.description') }}
         </p>
       </div>
-      <button
-        type="button"
-        class="btn btn-primary"
-        :disabled="saving || !dirty"
-        @click="save"
-      >
-        <Icon name="check" size="sm" />
-        {{ t('channelMonitorV2.settings.save') }}
-      </button>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="btn btn-secondary" @click="emit('open-evaluations')">{{ t('groupEvaluations.admin.title') }}</button>
+        <button
+          type="button"
+          class="btn btn-primary"
+          :disabled="saving || !dirty"
+          @click="save"
+        >
+          <Icon name="check" size="sm" />
+          {{ t('channelMonitorV2.settings.save') }}
+        </button>
+      </div>
     </header>
 
     <div
@@ -297,6 +300,7 @@ import {
 import { adminAPI } from '@/api/admin'
 import type { AdminGroup } from '@/types'
 
+const emit = defineEmits<{ 'open-evaluations': [] }>()
 const { t, te } = useI18n()
 const appStore = useAppStore()
 const loading = ref(true)

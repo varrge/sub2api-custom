@@ -77,7 +77,7 @@ func TestPostgresEnterpriseInvitationsQuotaAndNoRebate(t *testing.T) {
 	_, total, err = f.store.ListRebates(ctx, owner, "", 1, 10, true)
 	require.NoError(t, err)
 	require.Zero(t, total)
-	migration, err := migrations.FS.ReadFile("276_enterprise_registration_invitations.sql")
+	migration, err := migrations.FS.ReadFile("277_enterprise_registration_invitations.sql")
 	require.NoError(t, err)
 	_, err = f.db.Exec(string(migration))
 	require.NoError(t, err)

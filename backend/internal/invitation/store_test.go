@@ -104,7 +104,7 @@ func newFixture(t *testing.T) *fixture {
 	require.NoError(t, err)
 	_, err = db.Exec(string(migration))
 	require.NoError(t, err)
-	enterpriseMigration, err := migrations.FS.ReadFile("276_enterprise_registration_invitations.sql")
+	enterpriseMigration, err := migrations.FS.ReadFile("277_enterprise_registration_invitations.sql")
 	require.NoError(t, err)
 	for range 2 {
 		_, err = db.Exec(string(enterpriseMigration))

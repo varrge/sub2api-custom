@@ -22,7 +22,7 @@
 
 ## 数据库与验证
 
-新增迁移 `276_enterprise_registration_invitations.sql`，给 `native_invitations` 添加返利资格字段。已有记录默认保留资格；新企业码显式关闭资格。迁移重复执行不会重置已有标记。
+新增迁移 `277_enterprise_registration_invitations.sql`，给 `native_invitations` 添加返利资格字段。已有记录默认保留资格；新企业码显式关闭资格。迁移重复执行不会重置已有标记。
 
 验证覆盖企业菜单和路由、申请与复制、额度和开关、管理员指定等级、一次性注册、充值、旧返利抑制、OAuth 失败回滚、账号转换以及并发转换。数据库测试使用本地独立 PostgreSQL；不读取或写入生产数据。
 

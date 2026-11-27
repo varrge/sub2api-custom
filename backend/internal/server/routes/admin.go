@@ -32,6 +32,13 @@ func RegisterAdminRoutes(
 	admin.Use(middleware.AdminComplianceGuard(settingService))
 	// 受限密钥的账户操作走独立资源校验，普通管理员保持原处理器。
 	admin.Use(h.Admin.Account.ScopedAdminKeyAccounts)
+	if h.GroupEvaluation != nil {
+		evaluations := admin.Group("/group-evaluations", h.GroupEvaluation.Guard, panelRateLimiter.Heavy())
+		evaluations.GET("", h.GroupEvaluation.AdminList)
+		evaluations.GET("/:group_id", h.GroupEvaluation.AdminGet)
+		evaluations.PUT("/:group_id", adminSensitiveAction([]middleware.StepUpAuthMiddleware{stepUpAuth}), h.GroupEvaluation.Save)
+		evaluations.POST("/:group_id/run", adminSensitiveAction([]middleware.StepUpAuthMiddleware{stepUpAuth}), h.GroupEvaluation.Run)
+	}
 	if h.Tutorial != nil {
 		admin.GET("/tutorial", h.Tutorial.AdminGet)
 		admin.PUT("/tutorial", panelRateLimiter.Heavy(), h.Tutorial.Save)

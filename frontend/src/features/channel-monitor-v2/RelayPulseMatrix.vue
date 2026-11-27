@@ -56,9 +56,18 @@
             class="matrix-row border-b border-gray-100/80 dark:border-dark-700/60"
             :class="showThroughput ? 'matrix-row--with-tps' : ''"
           >
-            <div class="dimension-cell flex min-w-0 items-center gap-2 bg-white dark:bg-dark-800" :title="rowLabel(entry.row)">
+            <div class="dimension-cell flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 bg-white py-1.5 dark:bg-dark-800" :title="rowLabel(entry.row)">
               <span :class="['status-dot', cellClass(entry.row.health, entry.row.metrics.request_count)]"></span>
-              <strong class="truncate text-xs font-semibold text-gray-800 dark:text-gray-100">{{ rowLabel(entry.row) }}</strong>
+              <strong class="min-w-0 flex-1 truncate text-xs font-semibold text-gray-800 dark:text-gray-100">{{ rowLabel(entry.row) }}</strong>
+              <button
+                v-if="canEvaluate(entry.row)"
+                type="button"
+                class="shrink-0 rounded-md border border-primary-200 px-1.5 py-1 text-[10px] font-medium text-primary-600 hover:bg-primary-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:border-primary-800 dark:text-primary-300 dark:hover:bg-primary-900/20"
+                :aria-label="`${entry.row.group_name || `#${entry.row.group_id}`} · ${t('groupEvaluations.entryLabel')}`"
+                @click="requestEvaluation(entry.row)"
+              >
+                {{ t('groupEvaluations.entryLabel') }}
+              </button>
             </div>
             <strong class="summary-value bg-white text-xs font-medium tabular-nums text-gray-600 dark:bg-dark-800 dark:text-gray-300">
               {{ successRate(entry.row.metrics) }}
@@ -208,9 +217,21 @@ const props = withDefaults(
     healthMode: HealthMode
     /** When false, RPM/TPM are omitted from tooltips (user scale privacy). */
     showThroughput?: boolean
+    /** Exact IDs from the authenticated evaluation summary API. */
+    evaluationGroupIds?: number[]
   }>(),
-  { showThroughput: true },
+  { showThroughput: true, evaluationGroupIds: () => [] },
 )
+const emit = defineEmits<{ evaluate: [groupId: number] }>()
+const evaluationGroupIds = computed(() => new Set(props.evaluationGroupIds))
+
+function canEvaluate(row: MonitorMatrixRow) {
+  return typeof row.group_id === 'number' && row.group_id > 0 && evaluationGroupIds.value.has(row.group_id)
+}
+
+function requestEvaluation(row: MonitorMatrixRow) {
+  if (canEvaluate(row) && row.group_id !== undefined) emit('evaluate', row.group_id)
+}
 
 type AlignedSlot = { start: string; bucket?: MonitorMatrixBucket }
 

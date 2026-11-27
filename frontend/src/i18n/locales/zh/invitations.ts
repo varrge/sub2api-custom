@@ -30,6 +30,7 @@ export default {
       current: '当前'
     },
     quota: {
+      title: '邀请额度',
       lifetime: '累计已申请',
       unused: '当前未使用',
       count: '{used} / {limit}',

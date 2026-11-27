@@ -30,6 +30,7 @@ export default {
       current: 'Current'
     },
     quota: {
+      title: 'Invitation quota',
       lifetime: 'Issued in total',
       unused: 'Unused right now',
       count: '{used} / {limit}',

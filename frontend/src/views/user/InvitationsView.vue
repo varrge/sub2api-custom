@@ -72,7 +72,7 @@
             </div>
           </section>
 
-          <InvitationOverviewPanel class="lg:col-span-2" :overview="overview" :show-rebates="rebatesEnabled" />
+          <InvitationOverviewPanel class="lg:col-span-2" :class="{ 'self-start': !rebatesEnabled }" :overview="overview" :show-level="rebatesEnabled" :show-rebates="rebatesEnabled" />
         </div>
 
         <section v-if="rebatesEnabled" class="card overflow-hidden" data-testid="invitation-rewards">

@@ -1,6 +1,6 @@
 <template>
   <section class="card p-5 sm:p-6" data-testid="invitation-level">
-    <div class="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+    <div v-if="showLevel" class="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
       <div class="min-w-0">
         <p class="text-sm text-gray-500 dark:text-dark-400">{{ t('invitations.level.title') }}</p>
         <p class="mt-1 flex flex-wrap items-center gap-2">
@@ -18,7 +18,7 @@
       </div>
     </div>
 
-    <div class="mt-5">
+    <div v-if="showLevel" class="mt-5">
       <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
         <span class="text-gray-700 dark:text-gray-200">
           {{ t('invitations.level.rechargeTotal') }}
@@ -46,7 +46,8 @@
       <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">{{ t('invitations.level.rechargeHint') }}</p>
     </div>
 
-    <dl class="mt-5 grid gap-4 border-t border-gray-100 pt-5 dark:border-dark-700 sm:grid-cols-2">
+    <h2 v-if="!showLevel" class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('invitations.quota.title') }}</h2>
+    <dl class="mt-5 grid gap-4 sm:grid-cols-2" :class="{ 'border-t border-gray-100 pt-5 dark:border-dark-700': showLevel }">
       <div v-for="meter in meters" :key="meter.key" :data-testid="`invitation-quota-${meter.key}`">
         <dt class="text-sm text-gray-500 dark:text-dark-400">{{ t(`invitations.quota.${meter.key}`) }}</dt>
         <dd class="mt-1">
@@ -61,7 +62,7 @@
     </dl>
     <p class="mt-3 text-xs text-gray-500 dark:text-dark-400">{{ t('invitations.quota.hint') }}</p>
 
-    <div v-if="showLadder && ladder.length > 1" class="mt-5 border-t border-gray-100 pt-5 dark:border-dark-700" data-testid="invitation-ladder">
+    <div v-if="showLevel && showLadder && ladder.length > 1" class="mt-5 border-t border-gray-100 pt-5 dark:border-dark-700" data-testid="invitation-ladder">
       <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('invitations.level.ladder') }}</h3>
       <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">{{ t('invitations.level.ladderHint') }}</p>
       <ol class="mt-2 max-h-80 divide-y divide-gray-100 overflow-y-auto dark:divide-dark-700">
@@ -94,10 +95,11 @@ import { formatMoney, formatRate } from '@/utils/invitationFormat'
 
 const props = withDefaults(defineProps<{
   overview: InvitationOverview
+  showLevel?: boolean
   /** The admin panel sits next to the rules editor, where the same ladder would be noise. */
   showLadder?: boolean
   showRebates?: boolean
-}>(), { showLadder: true, showRebates: true })
+}>(), { showLevel: true, showLadder: true, showRebates: true })
 const { t } = useI18n()
 const rebatesEnabled = computed(() => props.showRebates && props.overview.rebate_enabled !== false)
 

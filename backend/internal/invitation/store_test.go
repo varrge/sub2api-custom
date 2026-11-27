@@ -104,6 +104,12 @@ func newFixture(t *testing.T) *fixture {
 	require.NoError(t, err)
 	_, err = db.Exec(string(migration))
 	require.NoError(t, err)
+	enterpriseMigration, err := migrations.FS.ReadFile("276_enterprise_registration_invitations.sql")
+	require.NoError(t, err)
+	for range 2 {
+		_, err = db.Exec(string(enterpriseMigration))
+		require.NoError(t, err)
+	}
 	client := dbent.NewClient(dbent.Driver(entsql.OpenDB(dialect.Postgres, db)))
 	f := &fixture{t: t, db: db, client: client, store: NewStore(client)}
 	f.admin = f.user("admin")
@@ -424,7 +430,7 @@ func TestPostgresLevelsOverrideAndPersonalOnly(t *testing.T) {
 	_, err = f.db.Exec(`UPDATE users SET account_type='enterprise' WHERE id=$1`, owner)
 	require.NoError(t, err)
 	_, err = f.store.Apply(ctx, owner, uuid.NewString())
-	require.ErrorIs(t, err, ErrPersonalOnly)
+	require.NoError(t, err)
 	_, _, err = f.store.ListRebates(ctx, 0, "", 1, 10, false)
 	require.ErrorIs(t, err, ErrInvalid)
 	_, err = f.store.SaveSettings(ctx, cfg, owner)

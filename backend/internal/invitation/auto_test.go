@@ -377,7 +377,7 @@ func TestPostgresOverridesListAndOverviewLadder(t *testing.T) {
 
 func TestPostgresOverridesCanBeClearedAfterAccountBecomesIneligible(t *testing.T) {
 	for _, change := range []string{
-		"status='disabled'", "account_type='enterprise'", "deleted_at=NOW()",
+		"status='disabled'", "deleted_at=NOW()",
 	} {
 		t.Run(change, func(t *testing.T) {
 			f := newFixture(t)

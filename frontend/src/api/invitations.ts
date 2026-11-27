@@ -20,6 +20,8 @@ export interface InvitationSettings {
 
 export interface InvitationOverview {
   enabled: boolean
+  /** False for enterprise accounts; optional for clients loading an older response. */
+  rebate_enabled?: boolean
   validity_days: number
   auto_approve_hours: number
   level: InvitationLevel
@@ -38,6 +40,7 @@ export type InviteStatus = 'unused' | 'used' | 'expired' | 'disabled'
 
 export interface InvitationCode {
   id: number
+  rebate_eligible?: boolean
   code: string
   inviter_id: number
   inviter_email: string

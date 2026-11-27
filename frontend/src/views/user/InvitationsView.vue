@@ -11,6 +11,9 @@
       </div>
 
       <template v-if="overview">
+        <p v-if="!rebatesEnabled" class="rounded-xl bg-primary-50 px-5 py-4 text-sm text-primary-900 dark:bg-primary-900/20 dark:text-primary-200" data-testid="invitation-enterprise-note">
+          {{ t('invitations.enterprise.note') }}
+        </p>
         <div class="grid gap-6 lg:grid-cols-5">
           <section class="card p-5 sm:p-6 lg:col-span-3" data-testid="invitation-issue">
             <div
@@ -69,10 +72,10 @@
             </div>
           </section>
 
-          <InvitationOverviewPanel class="lg:col-span-2" :overview="overview" />
+          <InvitationOverviewPanel class="lg:col-span-2" :overview="overview" :show-rebates="rebatesEnabled" />
         </div>
 
-        <section class="card overflow-hidden" data-testid="invitation-rewards">
+        <section v-if="rebatesEnabled" class="card overflow-hidden" data-testid="invitation-rewards">
           <dl class="grid divide-y divide-gray-100 dark:divide-dark-700 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
             <div v-for="item in rewards" :key="item.key" class="px-5 py-4 sm:px-6">
               <dt class="text-sm text-gray-500 dark:text-dark-400">{{ t(`invitations.rewards.${item.key}`) }}</dt>
@@ -109,13 +112,14 @@ import { beginApply, clearPendingApply, isUncertainApplyError, loadPendingApply 
 import { invitationErrorMessage } from '@/utils/invitationErrors'
 import { formatMoney, formatRate, waitingPeriod } from '@/utils/invitationFormat'
 
-const kinds = ['codes', 'rebates'] as const
-type Kind = typeof kinds[number]
+type Kind = 'codes' | 'rebates'
 
 const { t } = useI18n()
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const overview = ref<InvitationOverview | null>(null)
+const rebatesEnabled = computed(() => !authStore.isEnterprise && overview.value?.rebate_enabled !== false)
+const kinds = computed<Kind[]>(() => rebatesEnabled.value ? ['codes', 'rebates'] : ['codes'])
 const latest = ref<InvitationCode | null>(null)
 const loading = ref(false)
 const applying = ref(false)
@@ -142,7 +146,7 @@ const blocked = computed(() => !overview.value?.enabled || lifetimeFull.value ||
 const issueNote = computed(() => {
   const o = overview.value
   if (!o) return ''
-  if (!o.enabled) return t('invitations.issue.paused')
+  if (!o.enabled) return t(rebatesEnabled.value ? 'invitations.issue.paused' : 'invitations.enterprise.paused')
   if (lifetimeFull.value) return t('invitations.quota.lifetimeFull')
   if (unusedFull.value) return t('invitations.quota.unusedFull')
   return t('invitations.issue.validity', { days: o.validity_days })
@@ -155,18 +159,19 @@ const rewards = computed(() => {
     { key: 'declined', amount: s?.rejected_or_revoked ?? 0, tone: 'text-gray-500 dark:text-dark-400' }
   ]
 })
-const steps = computed(() => [
-  t('invitations.steps.one'),
-  t('invitations.steps.two'),
-  t('invitations.steps.three', { rate: formatRate(overview.value?.level.rebate_rate ?? 0) })
-])
+const steps = computed(() => {
+  const items = [t('invitations.steps.one'), t('invitations.steps.two')]
+  if (rebatesEnabled.value) items.push(t('invitations.steps.three', { rate: formatRate(overview.value?.level.rebate_rate ?? 0) }))
+  return items
+})
 const autoNote = computed(() => {
+  if (!rebatesEnabled.value) return ''
   const hours = overview.value?.auto_approve_hours ?? 0
   if (hours <= 0) return ''
   const { unit, count } = waitingPeriod(hours)
   return t(unit === 'days' ? 'invitations.steps.autoDays' : 'invitations.steps.autoHours', { count })
 })
-const tabs = computed(() => kinds.map((key) => ({ key, label: t(`invitations.tabs.${key}`) })))
+const tabs = computed(() => kinds.value.map((key) => ({ key, label: t(`invitations.tabs.${key}`) })))
 
 async function loadOverview() {
   const version = ++loadVersion
@@ -233,6 +238,7 @@ function discardPending() {
 }
 
 watch(tab, (value) => visited.add(value))
+watch(rebatesEnabled, (enabled) => { if (!enabled) tab.value = 'codes' })
 watch(storageOwner, (owner) => { pendingRequest.value = loadPendingApply(owner) }, { immediate: true })
 onMounted(loadOverview)
 </script>

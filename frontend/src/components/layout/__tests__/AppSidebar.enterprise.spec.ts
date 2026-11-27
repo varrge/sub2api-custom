@@ -132,12 +132,12 @@ describe('AppSidebar enterprise navigation', () => {
     host = undefined
   })
 
-  it('renders six first-level entries in order when payment and tickets are enabled', () => {
+  it('renders enterprise invitation and existing first-level entries in order when payment and tickets are enabled', () => {
     state.isEnterprise = true
     const view = mountSidebar()
 
     expect(view.find('[data-testid="enterprise-nav-section"]').exists()).toBe(true)
-    expect(navPaths(view)).toEqual(['/usage', '/monitor', '/keys', '/purchase', '/profile', '/tickets'])
+    expect(navPaths(view)).toEqual(['/usage', '/monitor', '/keys', '/purchase', '/invitations', '/profile', '/tickets'])
   })
 
   it('excludes orders, model plaza, dashboard and admin entries for enterprise users', () => {
@@ -159,14 +159,14 @@ describe('AppSidebar enterprise navigation', () => {
     state.isSimpleMode = true
     const view = mountSidebar()
 
-    expect(navPaths(view)).toEqual(['/usage', '/monitor', '/keys', '/purchase', '/profile', '/tickets'])
+    expect(navPaths(view)).toEqual(['/usage', '/monitor', '/keys', '/purchase', '/invitations', '/profile', '/tickets'])
   })
 
   it.each([
-    [false, true, ['/usage', '/monitor', '/keys', '/profile', '/tickets']],
-    [true, false, ['/usage', '/monitor', '/keys', '/purchase', '/profile']],
-    [false, false, ['/usage', '/monitor', '/keys', '/profile']],
-    [true, undefined, ['/usage', '/monitor', '/keys', '/purchase', '/profile']],
+    [false, true, ['/usage', '/monitor', '/keys', '/invitations', '/profile', '/tickets']],
+    [true, false, ['/usage', '/monitor', '/keys', '/purchase', '/invitations', '/profile']],
+    [false, false, ['/usage', '/monitor', '/keys', '/invitations', '/profile']],
+    [true, undefined, ['/usage', '/monitor', '/keys', '/purchase', '/invitations', '/profile']],
   ])('filters enterprise navigation for payment=%s and tickets=%s', (payment, tickets, expected) => {
     state.isEnterprise = true
     featureSettings.payment_enabled = payment as boolean
@@ -183,12 +183,12 @@ describe('AppSidebar enterprise navigation', () => {
     featureSettings.payment_enabled = false
     featureSettings.support_ticket_enabled = false
     await nextTick()
-    expect(navPaths(view)).toEqual(['/usage', '/monitor', '/keys', '/profile'])
+    expect(navPaths(view)).toEqual(['/usage', '/monitor', '/keys', '/invitations', '/profile'])
 
     featureSettings.payment_enabled = true
     featureSettings.support_ticket_enabled = true
     await nextTick()
-    expect(navPaths(view)).toEqual(['/usage', '/monitor', '/keys', '/purchase', '/profile', '/tickets'])
+    expect(navPaths(view)).toEqual(['/usage', '/monitor', '/keys', '/purchase', '/invitations', '/profile', '/tickets'])
   })
 
   it('does not render the enterprise nav for regular users', () => {

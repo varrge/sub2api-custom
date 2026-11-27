@@ -11,7 +11,7 @@ import (
 
 var (
 	ErrNotFound     = infraerrors.NotFound("INVITATION_NOT_FOUND", "邀请记录不存在")
-	ErrPersonalOnly = infraerrors.Forbidden("INVITATION_PERSONAL_ONLY", "仅个人账户可以参与注册邀请")
+	ErrPersonalOnly = infraerrors.Forbidden("INVITATION_PERSONAL_ONLY", "仅个人账户可以参与邀请返利")
 	ErrDisabled     = infraerrors.Forbidden("INVITATION_DISABLED", "暂未开放新邀请码申请")
 	ErrQuota        = infraerrors.Conflict("INVITATION_QUOTA_EXCEEDED", "邀请码申请额度已用完")
 	ErrInvalid      = infraerrors.BadRequest("INVITATION_INVALID", "邀请参数无效")
@@ -49,8 +49,9 @@ type Summary struct {
 }
 
 type Overview struct {
-	Enabled      bool `json:"enabled"`
-	ValidityDays int  `json:"validity_days"`
+	Enabled       bool `json:"enabled"`
+	RebateEnabled bool `json:"rebate_enabled"`
+	ValidityDays  int  `json:"validity_days"`
 	// AutoApproveHours mirrors the setting so the inviter knows how long a reward can wait.
 	AutoApproveHours int   `json:"auto_approve_hours"`
 	Level            Level `json:"level"`
@@ -66,16 +67,17 @@ type Overview struct {
 }
 
 type Invite struct {
-	ID           int64      `json:"id"`
-	Code         string     `json:"code"`
-	InviterID    int64      `json:"inviter_id"`
-	InviterEmail string     `json:"inviter_email"`
-	InviteeID    *int64     `json:"invitee_id"`
-	InviteeEmail string     `json:"invitee_email"`
-	Status       string     `json:"status"`
-	CreatedAt    time.Time  `json:"created_at"`
-	ExpiresAt    time.Time  `json:"expires_at"`
-	UsedAt       *time.Time `json:"used_at"`
+	ID             int64      `json:"id"`
+	RebateEligible bool       `json:"rebate_eligible"`
+	Code           string     `json:"code"`
+	InviterID      int64      `json:"inviter_id"`
+	InviterEmail   string     `json:"inviter_email"`
+	InviteeID      *int64     `json:"invitee_id"`
+	InviteeEmail   string     `json:"invitee_email"`
+	Status         string     `json:"status"`
+	CreatedAt      time.Time  `json:"created_at"`
+	ExpiresAt      time.Time  `json:"expires_at"`
+	UsedAt         *time.Time `json:"used_at"`
 }
 
 type Rebate struct {

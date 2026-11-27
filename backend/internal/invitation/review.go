@@ -60,6 +60,14 @@ func (s *Store) review(ctx context.Context, rebateID int64, action, reason strin
 		}
 		switch action {
 		case "approve":
+			var eligible bool
+			if err := queryOne(ctx, c, `SELECT i.rebate_eligible FROM native_invitations i
+				JOIN native_invitation_rebates r ON r.invite_id=i.id WHERE r.id=$1`, []any{rebateID}, &eligible); err != nil {
+				return err
+			}
+			if !eligible {
+				return ErrConflict
+			}
 			// Match payment/refund locking: accounts, then settings and payment.
 			first, second := inviterID, inviteeID
 			if first > second {
@@ -152,9 +160,11 @@ func (s *Store) AutoApprove(ctx context.Context, limit int) ([]Rebate, error) {
 		return nil, nil
 	}
 	rows, err := s.client.QueryContext(ctx, `SELECT r.id FROM native_invitation_rebates r
+		JOIN native_invitations i ON i.id=r.invite_id
 		JOIN users u ON u.id=r.inviter_id JOIN users e ON e.id=r.invitee_id
 		LEFT JOIN payment_orders po ON r.source_type='payment' AND po.id=r.source_id
 		WHERE r.status='pending' AND r.created_at<=NOW()-$1*INTERVAL '1 hour'
+		AND i.rebate_eligible
 		AND u.deleted_at IS NULL AND u.status='active' AND u.account_type='personal'
 		AND e.deleted_at IS NULL AND e.status='active' AND e.account_type='personal'
 		AND (r.source_type<>'payment' OR po.status='COMPLETED')

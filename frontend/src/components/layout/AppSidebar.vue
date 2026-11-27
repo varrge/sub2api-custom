@@ -791,6 +791,7 @@ const enterpriseNavItems = computed((): NavItem[] => applyFeatureFlags([
   { path: '/keys', label: t('enterpriseNav.apiKeys'), icon: KeyIcon },
   { path: '/tutorial', label: t('tutorial.title'), icon: FolderIcon, featureFlag: flagTutorial },
   { path: '/purchase', label: t('enterpriseNav.recharge'), icon: RechargeSubscriptionIcon, featureFlag: flagPayment },
+  { path: '/invitations', label: t('invitations.title'), icon: UsersIcon },
   { path: '/profile', label: t('enterpriseNav.profile'), icon: UserIcon },
   { path: '/tickets', label: t('enterpriseNav.tickets'), icon: TicketIcon, featureFlag: flagSupportTicket, badge: () => supportTicketStore.userUnreadCount },
 ]))

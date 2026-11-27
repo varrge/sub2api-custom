@@ -339,7 +339,7 @@ describe('admin InvitationsView', () => {
     await wrapper.get('[data-testid="invitation-user-search"]').setValue(' inviter ')
     await wrapper.get('[data-testid="invitation-user-level"] form').trigger('submit')
     await flushPromises()
-    expect(listUsers).toHaveBeenCalledWith(1, 20, { search: 'inviter', account_type: 'personal' })
+    expect(listUsers).toHaveBeenCalledWith(1, 20, { search: 'inviter' })
 
     await wrapper.get('[data-testid="invitation-user-7"]').trigger('click')
     await flushPromises()
@@ -391,6 +391,38 @@ describe('admin InvitationsView', () => {
     expect(wrapper.get('[data-testid="invitation-level-0-lifetime_invite_limit-issue"]').text()).toBe('invitations.issues.required')
     expect(wrapper.get('[data-testid="invitation-validity"]').attributes('aria-invalid')).toBe('true')
     expect(wrapper.get('[data-testid="invitation-settings-issues"]').text()).toContain('"count":2')
+  })
+
+  it('can manage enterprise invitation quotas without offering rebate controls', async () => {
+    listUsers.mockResolvedValue(page([{ id: 9, email: 'enterprise@example.com' }]))
+    const overview = {
+      enabled: true, rebate_enabled: false, validity_days: 30, auto_approve_hours: 0,
+      levels: settings().levels, level: settings().levels[0], recharge_total: 10,
+      next_level: settings().levels[1], next_level_remaining: 90, override_level_id: '',
+      lifetime_used: 1, unused_count: 1, summary: { pending: 0, paid: 0, rejected_or_revoked: 0 }
+    }
+    api.userOverview.mockResolvedValue(overview)
+    api.setLevel.mockResolvedValue({ ...overview, level: settings().levels[1], override_level_id: 'vip' })
+    const wrapper = await mountView()
+    await openTab(wrapper, 'users')
+    await wrapper.get('[data-testid="invitation-user-search"]').setValue('enterprise')
+    await wrapper.get('[data-testid="invitation-user-level"] form').trigger('submit')
+    await flushPromises()
+    expect(listUsers).toHaveBeenCalledWith(1, 20, { search: 'enterprise' })
+    await wrapper.get('[data-testid="invitation-user-9"]').trigger('click')
+    await flushPromises()
+    const panel = wrapper.get('[data-testid="invitation-user-level"]')
+    expect(panel.find('[data-testid="invitation-user-rebates"]').exists()).toBe(false)
+    expect(panel.find('[data-testid="invitation-rate"]').exists()).toBe(false)
+    expect(panel.text()).toContain('invitations.enterprise.note')
+    expect(panel.get('select').text()).not.toContain('%')
+    await panel.get('select').setValue('vip')
+    await panel.findAll('form')[1].trigger('submit')
+    await flushPromises()
+    expect(api.setLevel).toHaveBeenCalledWith(9, 'vip')
+    await panel.get('[data-testid="invitation-user-codes"]').trigger('click')
+    await flushPromises()
+    expect(api.codes).toHaveBeenCalledWith({ page: 1, page_size: 20, user_id: 9 }, true)
   })
 
   it('opens the inviter from a record and reports a missing account', async () => {

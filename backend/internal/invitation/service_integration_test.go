@@ -208,6 +208,55 @@ func TestNativeInvitationServiceLifecycle(t *testing.T) {
 		}
 		cancelRequest()
 	}
+
+	t.Run("enterprise registration and topup have no native or legacy rebate", func(t *testing.T) {
+		enterprise := makeUser(service.RoleUser)
+		_, err := db.ExecContext(ctx, `UPDATE users SET account_type='enterprise' WHERE id=$1`, enterprise.ID)
+		require.NoError(t, err)
+		code, err := store.Apply(ctx, enterprise.ID, uuid.NewString())
+		require.NoError(t, err)
+		require.False(t, code.RebateEligible)
+		_, registered, err := auth.RegisterWithVerification(ctx, uuid.NewString()+"@example.test",
+			"Password123!", "", "", code.Code, "")
+		require.NoError(t, err)
+		persisted, err := users.GetByID(ctx, registered.ID)
+		require.NoError(t, err)
+		require.Equal(t, service.AccountTypePersonal, persisted.AccountType)
+		_, _, err = auth.RegisterWithVerification(ctx, uuid.NewString()+"@example.test",
+			"Password123!", "", "", code.Code, "")
+		require.Error(t, err)
+		bound, err := invitation.HasInviter(ctx, client, registered.ID)
+		require.NoError(t, err)
+		require.True(t, bound)
+		balanceCode := createBalanceCode(25)
+		_, err = redeemer.Redeem(ctx, registered.ID, balanceCode.Code)
+		require.NoError(t, err)
+		_, total, err := store.ListRebates(ctx, enterprise.ID, "", 1, 20, true)
+		require.NoError(t, err)
+		require.Zero(t, total)
+		_, err = affiliates.EnsureUserAffiliate(ctx, enterprise.ID)
+		require.NoError(t, err)
+		applied, err := affiliates.AccrueQuota(ctx, enterprise.ID, registered.ID, 5, 0, nil)
+		require.NoError(t, err)
+		require.False(t, applied)
+		updated, err := users.GetByID(ctx, enterprise.ID)
+		require.NoError(t, err)
+		require.Zero(t, updated.Balance)
+
+		// Failed OAuth registration must still release enterprise invitation bindings.
+		oauthCode, err := store.Apply(ctx, enterprise.ID, uuid.NewString())
+		require.NoError(t, err)
+		_, unfinishedUser, err := auth.RegisterWithVerification(ctx, uuid.NewString()+"@example.test",
+			"Password123!", "", "", oauthCode.Code, "")
+		require.NoError(t, err)
+		require.NoError(t, auth.RollbackOAuthEmailAccountCreation(ctx, unfinishedUser.ID, oauthCode.Code))
+		bound, err = invitation.HasInviter(ctx, client, unfinishedUser.ID)
+		require.NoError(t, err)
+		require.False(t, bound)
+		released, err := codes.GetByCode(ctx, oauthCode.Code)
+		require.NoError(t, err)
+		require.Equal(t, service.StatusUnused, released.Status)
+	})
 }
 
 type invitationTokenCache struct{ service.RefreshTokenCache }

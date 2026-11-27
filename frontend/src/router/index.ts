@@ -977,7 +977,7 @@ function isBackendModePublicRouteAllowed(path: string, hasPendingAuthSession: bo
   return false
 }
 
-const enterprisePaths = ['/tutorial', '/usage', '/keys', '/monitor', '/purchase', '/orders', '/payment', '/profile', '/tickets', '/model-plaza']
+const enterprisePaths = ['/tutorial', '/usage', '/keys', '/monitor', '/purchase', '/orders', '/payment', '/profile', '/tickets', '/model-plaza', '/invitations']
 const enterprisePathAllowed = (path: string) => enterprisePaths.some((allowed) => path === allowed || path.startsWith(allowed + '/'))
 let watchingEnterpriseIdentity = false
 

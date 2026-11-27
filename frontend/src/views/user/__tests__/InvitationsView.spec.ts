@@ -7,7 +7,7 @@ const { api, copyToClipboard, showSuccess, auth } = vi.hoisted(() => ({
   api: { overview: vi.fn(), apply: vi.fn(), codes: vi.fn(), rebates: vi.fn() },
   copyToClipboard: vi.fn(),
   showSuccess: vi.fn(),
-  auth: { user: { id: 7 } as { id: number } | null }
+  auth: { user: { id: 7 } as { id: number } | null, isEnterprise: false }
 }))
 
 vi.mock('@/api/invitations', () => ({ invitationsAPI: api }))
@@ -71,6 +71,7 @@ describe('user InvitationsView', () => {
     vi.clearAllMocks()
     localStorage.clear()
     auth.user = { id: 7 }
+    auth.isEnterprise = false
     api.overview.mockResolvedValue(overview())
     api.codes.mockResolvedValue(page([invite()]))
     api.apply.mockResolvedValue(invite({ id: 2, code: 'NIAAAABBBBCCCCDDDD' }))
@@ -94,6 +95,56 @@ describe('user InvitationsView', () => {
     expect(rewards).toContain('$1.00')
     expect(wrapper.get('[data-testid="invitation-ticket-code"]').attributes('aria-label')).toBe('NI0123456789ABCDEF')
     expect(wrapper.get('[data-testid="invitation-issue-note"]').text()).toContain('invitations.issue.validity')
+  })
+
+  it('lets enterprise users apply and share codes without rebate UI or requests', async () => {
+    auth.isEnterprise = true
+    // Even an old/stale response advertising a rate must not expose enterprise rebates.
+    api.overview.mockResolvedValue(overview({ auto_approve_hours: 24 }))
+    api.codes.mockResolvedValue(page([invite({ rebate_eligible: false })]))
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.get('[data-testid="invitation-enterprise-note"]').text()).toBe('invitations.enterprise.note')
+    expect(wrapper.get('[data-testid="invitation-no-rebate"]').text()).toBe('invitations.enterprise.noRebate')
+    expect(wrapper.get('[data-testid="invitation-quota-unused"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="invitation-rate"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="invitation-rewards"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="invitation-tab-rebates"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="records-rebates"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="invitation-auto-note"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('invitations.steps.three')
+    expect(wrapper.text()).not.toContain('invitations.level.nextRate')
+    expect(wrapper.text()).not.toContain('10%')
+    expect(wrapper.text()).not.toContain('15%')
+    await wrapper.get('[data-testid="copy-invitation-link"]').trigger('click')
+    expect(copyToClipboard).toHaveBeenCalled()
+    await wrapper.get('[data-testid="apply-invitation"]').trigger('click')
+    await flushPromises()
+    expect(api.apply).toHaveBeenCalledOnce()
+    expect(api.rebates).not.toHaveBeenCalled()
+  })
+
+  it('honors server rebate eligibility even before enterprise identity refresh', async () => {
+    api.overview.mockResolvedValue(overview({ rebate_enabled: false }))
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="invitation-rewards"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="invitation-tab-rebates"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="apply-invitation"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('keeps enterprise code requests subject to the same quotas and feature switch', async () => {
+    auth.isEnterprise = true
+    for (const patch of [{ enabled: false }, { unused_count: 2 }, { lifetime_used: 5 }]) {
+      api.overview.mockResolvedValue(overview({ ...patch, rebate_enabled: false }))
+      const wrapper = mountView()
+      await flushPromises()
+      expect(wrapper.get('[data-testid="apply-invitation"]').attributes('disabled')).toBeDefined()
+      expect(wrapper.get('[data-testid="records-codes"]').exists()).toBe(true)
+      if (patch.enabled === false) expect(wrapper.get('[data-testid="invitation-issue-note"]').text()).toBe('invitations.enterprise.paused')
+      wrapper.unmount()
+    }
+    expect(api.apply).not.toHaveBeenCalled()
   })
 
   it('copies the code and a same-origin registration link', async () => {

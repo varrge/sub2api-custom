@@ -48,17 +48,28 @@ func (s *Store) withTx(ctx context.Context, f func(*dbent.Client) error) error {
 	return tx.Commit()
 }
 
-func personalUser(ctx context.Context, c *dbent.Client, userID int64, lock bool) error {
+func activeUserType(ctx context.Context, c *dbent.Client, userID int64, lock bool) (string, error) {
 	q := `SELECT account_type FROM users WHERE id=$1 AND deleted_at IS NULL AND status='active'`
 	if lock {
 		// No key columns change, so do not block foreign-key checks that reference this user.
-		q += ` FOR NO KEY UPDATE`
+		q += postgresLock(c, " FOR NO KEY UPDATE")
 	}
 	var kind string
 	err := queryOne(ctx, c, q, []any{userID}, &kind)
 	if errors.Is(err, sql.ErrNoRows) {
-		return ErrNotFound
+		return "", ErrNotFound
 	}
+	if err != nil {
+		return "", err
+	}
+	if kind != "personal" && kind != "enterprise" {
+		return "", ErrInvalid
+	}
+	return kind, nil
+}
+
+func personalUser(ctx context.Context, c *dbent.Client, userID int64, lock bool) error {
+	kind, err := activeUserType(ctx, c, userID, lock)
 	if err != nil {
 		return err
 	}
@@ -230,7 +241,8 @@ func inviteCounts(ctx context.Context, c *dbent.Client, userID int64) (int64, in
 }
 
 func (s *Store) Overview(ctx context.Context, userID int64) (*Overview, error) {
-	if err := personalUser(ctx, s.client, userID, false); err != nil {
+	kind, err := activeUserType(ctx, s.client, userID, false)
+	if err != nil {
 		return nil, err
 	}
 	cfg, err := s.Settings(ctx)
@@ -244,6 +256,18 @@ func (s *Store) Overview(ctx context.Context, userID int64) (*Overview, error) {
 	o.LifetimeUsed, o.UnusedCount, err = inviteCounts(ctx, s.client, userID)
 	if err != nil {
 		return nil, err
+	}
+	o.RebateEnabled = kind == "personal"
+	if !o.RebateEnabled {
+		o.AutoApproveHours = 0
+		o.Level.RebateRate = 0
+		for i := range o.Levels {
+			o.Levels[i].RebateRate = 0
+		}
+		if o.NextLevel != nil {
+			o.NextLevel.RebateRate = 0
+		}
+		return o, nil
 	}
 	err = queryOne(ctx, s.client, `SELECT
 		COALESCE(SUM(rebate_amount) FILTER (WHERE status='pending'),0),
@@ -261,11 +285,12 @@ func (s *Store) Apply(ctx context.Context, userID int64, requestID string) (*Inv
 	}
 	var out *Invite
 	err = s.withTx(ctx, func(c *dbent.Client) error {
-		if err := personalUser(ctx, c, userID, true); err != nil {
+		kind, err := activeUserType(ctx, c, userID, true)
+		if err != nil {
 			return err
 		}
 		var id int64
-		err := queryOne(ctx, c, `SELECT id FROM native_invitations WHERE inviter_id=$1 AND request_id=$2`, []any{userID, request.String()}, &id)
+		err = queryOne(ctx, c, `SELECT id FROM native_invitations WHERE inviter_id=$1 AND request_id=$2`, []any{userID, request.String()}, &id)
 		if err == nil {
 			out, err = getInvite(ctx, c, id)
 			return err
@@ -312,8 +337,8 @@ func (s *Store) Apply(ctx context.Context, userID int64, requestID string) (*Inv
 		if redeemID == 0 {
 			return ErrConflict
 		}
-		err = queryOne(ctx, c, `INSERT INTO native_invitations(redeem_id,inviter_id,request_id,expires_at)
-			SELECT id,$2,$3,expires_at FROM redeem_codes WHERE id=$1 RETURNING id`, []any{redeemID, userID, request.String()}, &id)
+		err = queryOne(ctx, c, `INSERT INTO native_invitations(redeem_id,inviter_id,request_id,expires_at,rebate_eligible)
+			SELECT id,$2,$3,expires_at,$4 FROM redeem_codes WHERE id=$1 RETURNING id`, []any{redeemID, userID, request.String(), kind == "personal"}, &id)
 		if err != nil {
 			return err
 		}
@@ -338,7 +363,7 @@ func (s *Store) SetOverride(ctx context.Context, userID int64, levelID string, a
 				return notFound(err)
 			}
 		} else {
-			if err := personalUser(ctx, c, userID, true); err != nil {
+			if _, err := activeUserType(ctx, c, userID, true); err != nil {
 				return err
 			}
 		}

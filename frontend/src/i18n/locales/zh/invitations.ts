@@ -1,7 +1,12 @@
 export default {
   invitations: {
     title: '注册邀请',
-    description: '申请一次性邀请码邀请新用户，对方首次余额到账后可获得审核返利。',
+    description: '申请一次性邀请码邀请新用户，查看邀请码状态和邀请记录。',
+    enterprise: {
+      note: '企业账户可以申请和分享注册邀请码。企业账户申请的邀请码不参与返利，后续转换账户类型也不会补发返利。',
+      noRebate: '仅注册 · 无返利',
+      paused: '暂停申请新邀请码。已有的邀请码和邀请关系不受影响。'
+    },
     adminTitle: '注册邀请管理',
     adminDescription: '配置邀请等级与额度，查看邀请码和首充记录，审核邀请奖励。',
     unlimited: '不限',
@@ -189,12 +194,12 @@ export default {
       tooMany: '最多 100 个等级。'
     },
     users: {
-      search: '查找个人账户',
+      search: '查找账户',
       searchPlaceholder: '邮箱或用户名',
       searchButton: '查找',
       searching: '查找中…',
       searchFailed: '查找失败',
-      noUsers: '没有匹配的个人账户',
+      noUsers: '没有匹配的账户',
       pick: '查找一个账户，查看邀请等级或为其指定等级。',
       selected: '用户 #{id}',
       loadFailed: '用户邀请信息加载失败',
@@ -216,7 +221,7 @@ export default {
     errors: {
       INVITATION_DISABLED: '暂未开放新邀请码申请。',
       INVITATION_QUOTA_EXCEEDED: '邀请码申请额度已用完。',
-      INVITATION_PERSONAL_ONLY: '只有个人账户可以参与注册邀请。',
+      INVITATION_PERSONAL_ONLY: '只有个人账户可以参与邀请返利。',
       INVITATION_INVALID: '提交的内容无效，请检查后重试。',
       INVITATION_CONFLICT: '记录状态已经变化，请刷新后重试。',
       INVITATION_LEVEL_IN_USE: '仍有用户被指定为要删除的等级。先在“用户等级”里把他们恢复为自动等级。',

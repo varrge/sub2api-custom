@@ -39,7 +39,7 @@
         <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('invitations.users.selected', { id: userId }) }}</h3>
         <div class="flex flex-wrap gap-2">
           <button type="button" class="btn btn-secondary btn-sm" data-testid="invitation-user-codes" @click="emit('records', 'codes', userId)">{{ t('invitations.users.viewCodes') }}</button>
-          <button type="button" class="btn btn-secondary btn-sm" data-testid="invitation-user-rebates" @click="emit('records', 'review', userId)">{{ t('invitations.users.viewRebates') }}</button>
+          <button v-if="overview?.rebate_enabled !== false" type="button" class="btn btn-secondary btn-sm" data-testid="invitation-user-rebates" @click="emit('records', 'review', userId)">{{ t('invitations.users.viewRebates') }}</button>
         </div>
       </div>
 
@@ -51,6 +51,7 @@
         <button type="button" class="btn btn-secondary btn-sm" @click="load">{{ t('invitations.records.retry') }}</button>
       </div>
       <template v-else-if="overview">
+        <p v-if="overview.rebate_enabled === false" class="text-sm text-gray-600 dark:text-dark-300">{{ t('invitations.enterprise.note') }}</p>
         <InvitationOverviewPanel :overview="overview" :show-ladder="false" />
         <form class="rounded-xl border border-gray-200 p-4 dark:border-dark-700" @submit.prevent="saveLevel">
           <div class="flex flex-wrap items-end gap-3">
@@ -167,7 +168,7 @@ let overridesVersion = 0
 
 const levelOptions = computed(() => [
   { value: '', label: t('invitations.users.automatic') },
-  ...props.levels.map((level) => ({ value: level.id, label: `${level.name} (${formatRate(level.rebate_rate)})` }))
+  ...props.levels.map((level) => ({ value: level.id, label: overview.value?.rebate_enabled === false ? level.name : `${level.name} (${formatRate(level.rebate_rate)})` }))
 ])
 
 function levelName(id: string): string {
@@ -201,7 +202,7 @@ async function search() {
   searching.value = true
   searchError.value = ''
   try {
-    const result = await listUsers(1, 20, { search: term, account_type: 'personal' })
+    const result = await listUsers(1, 20, { search: term })
     results.value = (result.items || []).map((user) => ({ id: user.id, email: user.email }))
     searched.value = true
   } catch (error) {

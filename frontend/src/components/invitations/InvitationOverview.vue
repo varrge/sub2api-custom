@@ -10,7 +10,7 @@
           </span>
         </p>
       </div>
-      <div class="text-right">
+      <div v-if="rebatesEnabled" class="text-right">
         <p class="text-sm text-gray-500 dark:text-dark-400">{{ t('invitations.level.rate') }}</p>
         <p class="mt-1 text-2xl font-semibold tabular-nums text-primary-700 dark:text-primary-300" data-testid="invitation-rate">
           {{ formatRate(overview.level.rebate_rate) }}
@@ -40,7 +40,7 @@
       >
         <div class="h-full rounded-full bg-primary-500" :style="{ width: `${progress}%` }"></div>
       </div>
-      <p v-if="overview.next_level" class="mt-2 text-xs text-gray-500 dark:text-dark-400">
+      <p v-if="rebatesEnabled && overview.next_level" class="mt-2 text-xs text-gray-500 dark:text-dark-400">
         {{ t('invitations.level.nextRate', { rate: formatRate(overview.next_level.rebate_rate) }) }}
       </p>
       <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">{{ t('invitations.level.rechargeHint') }}</p>
@@ -79,7 +79,7 @@
             </p>
             <p class="mt-0.5 text-xs text-gray-500 dark:text-dark-400">{{ item.detail }}</p>
           </div>
-          <p class="shrink-0 text-sm font-semibold tabular-nums" :class="item.current ? 'text-primary-700 dark:text-primary-300' : 'text-gray-700 dark:text-gray-200'">{{ item.rate }}</p>
+          <p v-if="rebatesEnabled" class="shrink-0 text-sm font-semibold tabular-nums" :class="item.current ? 'text-primary-700 dark:text-primary-300' : 'text-gray-700 dark:text-gray-200'">{{ item.rate }}</p>
         </li>
       </ol>
     </div>
@@ -96,8 +96,10 @@ const props = withDefaults(defineProps<{
   overview: InvitationOverview
   /** The admin panel sits next to the rules editor, where the same ladder would be noise. */
   showLadder?: boolean
-}>(), { showLadder: true })
+  showRebates?: boolean
+}>(), { showLadder: true, showRebates: true })
 const { t } = useI18n()
+const rebatesEnabled = computed(() => props.showRebates && props.overview.rebate_enabled !== false)
 
 const progress = computed(() => {
   const next = props.overview.next_level

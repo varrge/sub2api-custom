@@ -20,7 +20,7 @@ const inviteFrom = ` FROM native_invitations i JOIN redeem_codes rc ON rc.id=i.r
 	LEFT JOIN users e ON e.id=b.invitee_id`
 
 const inviteSelect = `SELECT i.id,rc.code,i.inviter_id,u.email,b.invitee_id,COALESCE(e.email,''),` + inviteStatus + `,
-	i.created_at,i.expires_at,rc.used_at` + inviteFrom
+	i.created_at,i.expires_at,rc.used_at,i.rebate_eligible` + inviteFrom
 
 // ListFilter narrows list results. Query matches the code for everyone; only the
 // admin view may also match account emails, otherwise search would defeat masking.
@@ -66,7 +66,7 @@ type scanner interface{ Scan(...any) error }
 func scanInvite(row scanner) (*Invite, error) {
 	i := new(Invite)
 	err := row.Scan(&i.ID, &i.Code, &i.InviterID, &i.InviterEmail, &i.InviteeID, &i.InviteeEmail,
-		&i.Status, &i.CreatedAt, &i.ExpiresAt, &i.UsedAt)
+		&i.Status, &i.CreatedAt, &i.ExpiresAt, &i.UsedAt, &i.RebateEligible)
 	return i, err
 }
 
@@ -106,7 +106,7 @@ func (s *Store) SearchInvites(ctx context.Context, f ListFilter, page, pageSize 
 		return nil, 0, err
 	}
 	if !admin {
-		if err := personalUser(ctx, s.client, f.UserID, false); err != nil {
+		if _, err := activeUserType(ctx, s.client, f.UserID, false); err != nil {
 			return nil, 0, err
 		}
 	}

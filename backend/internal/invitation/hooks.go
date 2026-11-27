@@ -37,7 +37,8 @@ func BindRegistration(ctx context.Context, c *dbent.Client, redeemID, userID int
 	if !valid || inviterID == userID {
 		return ErrConflict
 	}
-	if err := personalUser(ctx, c, inviterID, false); err != nil {
+	kind, err := activeUserType(ctx, c, inviterID, true)
+	if err != nil {
 		return err
 	}
 	if err := personalUser(ctx, c, userID, false); err != nil {
@@ -53,6 +54,11 @@ func BindRegistration(ctx context.Context, c *dbent.Client, redeemID, userID int
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return err
+	}
+	if kind == "enterprise" {
+		if _, err := c.ExecContext(ctx, `UPDATE native_invitations SET rebate_eligible=FALSE WHERE id=$1`, inviteID); err != nil {
+			return err
+		}
 	}
 	res, err := c.ExecContext(ctx, `INSERT INTO native_invitation_bindings(invitee_id,invite_id,inviter_id)
 		VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, userID, inviteID, inviterID)
@@ -111,6 +117,13 @@ func CaptureAcquisition(ctx context.Context, c *dbent.Client, redeemID, userID i
 	if err != nil {
 		return err
 	}
+	var eligible bool
+	if err := queryOne(ctx, c, `SELECT rebate_eligible FROM native_invitations WHERE id=$1`, []any{inviteID}, &eligible); err != nil {
+		return err
+	}
+	if !eligible {
+		return nil
+	}
 	var exists bool
 	if err := queryOne(ctx, c, `SELECT EXISTS(SELECT 1 FROM native_invitation_rebates WHERE invitee_id=$1)`, []any{userID}, &exists); err != nil {
 		return err
@@ -129,8 +142,7 @@ func CaptureAcquisition(ctx context.Context, c *dbent.Client, redeemID, userID i
 	if err != nil {
 		return err
 	}
-	// Keep the consumed first acquisition even after an account conversion.
-	// Review checks current account types before crediting any reward.
+	// Resolve the first acquisition before deciding rebate eligibility.
 	source, sourceID, currency := "redeem_code", redeemID, "USD"
 	var paymentID int64
 	var paymentUser int64
@@ -153,6 +165,17 @@ func CaptureAcquisition(ctx context.Context, c *dbent.Client, redeemID, userID i
 	if len(currency) != 3 || strings.Trim(currency, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") != "" {
 		// Same fallback as the payment module: bookkeeping must not fail a paid top-up.
 		currency = "CNY"
+	}
+	var personalAccounts bool
+	// The caller already locks the credited invitee; hold the inviter's type until commit too.
+	if err := queryOne(ctx, c, `SELECT u.account_type='personal' AND e.account_type='personal'
+		FROM users u JOIN users e ON e.id=$2 WHERE u.id=$1`+postgresLock(c, " FOR NO KEY UPDATE OF u"), []any{inviterID, userID}, &personalAccounts); err != nil {
+		return err
+	}
+	if !personalAccounts {
+		// Consume eligibility at the first acquisition; conversion cannot turn a later top-up into a first rebate.
+		_, err := c.ExecContext(ctx, `UPDATE native_invitations SET rebate_eligible=FALSE WHERE id=$1`, inviteID)
+		return err
 	}
 	cfg, err := readSettings(ctx, c, postgresLock(c, " FOR SHARE"))
 	if err != nil {

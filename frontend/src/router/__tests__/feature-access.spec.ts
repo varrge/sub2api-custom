@@ -263,7 +263,7 @@ describe('feature route guard', () => {
     expect(next).toHaveBeenCalledWith('/usage')
   })
 
-  it.each(['/usage','/monitor','/keys','/purchase','/profile','/tickets/42','/orders','/payment/result','/model-plaza'])('preserves enterprise navigation and auxiliary flow %s',async(path)=>{
+  it.each(['/usage','/monitor','/keys','/purchase','/profile','/tickets/42','/orders','/payment/result','/model-plaza','/invitations'])('preserves enterprise navigation and auxiliary flow %s',async(path)=>{
     authStore.isEnterprise=true
     const {navigation,next}=runGuard({},path)
     await navigation

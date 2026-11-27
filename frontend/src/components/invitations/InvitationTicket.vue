@@ -2,6 +2,7 @@
   <div class="rounded-2xl border border-primary-300 bg-primary-50 dark:border-primary-800 dark:bg-primary-900/20" data-testid="invitation-ticket">
     <div class="px-5 pb-5 pt-5 sm:px-6">
       <p class="text-sm text-primary-900/80 dark:text-primary-200/80">{{ t('invitations.issue.current') }}</p>
+      <span v-if="invite.rebate_eligible === false" class="badge badge-primary mt-2" data-testid="invitation-no-rebate">{{ t('invitations.enterprise.noRebate') }}</span>
       <p class="mt-3 flex flex-wrap gap-x-2.5 gap-y-1 font-mono text-lg font-semibold text-primary-950 dark:text-primary-50 sm:text-xl" :aria-label="invite.code" data-testid="invitation-ticket-code">
         <span v-for="(group, index) in groups" :key="index" aria-hidden="true">{{ group }}</span>
       </p>

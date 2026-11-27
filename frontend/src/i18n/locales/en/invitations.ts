@@ -1,7 +1,12 @@
 export default {
   invitations: {
     title: 'Registration invitations',
-    description: 'Invite a new user with a single-use code and earn a reviewed rebate on their first balance top-up.',
+    description: 'Invite new users with single-use codes and track your codes and registrations.',
+    enterprise: {
+      note: 'Enterprise accounts can request and share registration codes. Codes issued by enterprise accounts never earn rebates, including after an account type change.',
+      noRebate: 'Registration only · No rebate',
+      paused: 'New code requests are paused. Existing codes and invitation links remain valid.'
+    },
     adminTitle: 'Registration invitation management',
     adminDescription: 'Configure invitation levels and quotas, inspect records, and review first-top-up rebates.',
     unlimited: 'Unlimited',
@@ -189,12 +194,12 @@ export default {
       tooMany: 'At most 100 levels.'
     },
     users: {
-      search: 'Find a personal account',
+      search: 'Find an account',
       searchPlaceholder: 'Email or username',
       searchButton: 'Find',
       searching: 'Finding…',
       searchFailed: 'Search failed',
-      noUsers: 'No personal account matches',
+      noUsers: 'No account matches',
       pick: 'Find an account to see its invitation level or set one.',
       selected: 'User #{id}',
       loadFailed: 'This user’s invitation details did not load',
@@ -216,7 +221,7 @@ export default {
     errors: {
       INVITATION_DISABLED: 'New invitation codes are not available right now.',
       INVITATION_QUOTA_EXCEEDED: 'Your invitation code quota is used up.',
-      INVITATION_PERSONAL_ONLY: 'Only personal accounts can take part in registration invitations.',
+      INVITATION_PERSONAL_ONLY: 'Only personal accounts can take part in invitation rebates.',
       INVITATION_INVALID: 'Some of the submitted values are invalid. Check them and try again.',
       INVITATION_CONFLICT: 'This record has changed. Refresh and try again.',
       INVITATION_LEVEL_IN_USE: 'Some users are still set to a level you are removing. Return them to automatic under “User levels” first.',

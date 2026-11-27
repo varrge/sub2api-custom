@@ -44,6 +44,7 @@
         </template>
         <template #cell-code="{ row }">
           <code class="block break-all font-mono text-xs text-gray-900 dark:text-gray-100" :class="admin ? 'max-w-[9.5rem] whitespace-normal' : ''">{{ row.code }}</code>
+          <span v-if="row.rebate_eligible === false" class="badge badge-primary mt-1">{{ t('invitations.enterprise.noRebate') }}</span>
         </template>
         <template #cell-inviter="{ row }">
           <button type="button" class="max-w-[9rem] whitespace-normal 2xl:max-w-[16rem] text-left text-primary-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-primary-300" :title="t('invitations.records.viewUser', { id: row.inviter_id })" @click="emit('user', row.inviter_id)">
